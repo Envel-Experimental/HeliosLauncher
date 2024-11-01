@@ -23,7 +23,7 @@ newsErrorNoneSpan = "Новостей нет"
 loginCancelText = "Отмена"
 loginSubheader = "ВХОД В MINECRAFT"
 loginEmailError = "* Неверное значение"
-loginEmailPlaceholder = "ЭЛ.ПОЧТА ИЛИ ИМЯ ПОЛЬЗОВАТЕЛЯ"
+loginEmailPlaceholder = "ИМЯ ПОЛЬЗОВАТЕЛЯ"
 loginPasswordError = "* Обязательно"
 loginPasswordPlaceholder = "ПАРОЛЬ"
 loginForgotPasswordLink = "https://minecraft.net/password/forgot/"
@@ -32,7 +32,7 @@ loginRememberMeText = "запомнить меня?"
 loginButtonText = "ВХОД"
 loginNeedAccountLink = "https://minecraft.net/store/minecraft-java-edition/"
 loginNeedAccountText = "Нужен аккаунт?"
-loginPasswordDisclaimer1 = "Ваш пароль отправляется напрямую Mojang и не сохраняется."
+loginPasswordDisclaimer1 = "Имя пользователя должно состоять из английских букв и может содержать цифры и нижнее подчеркивание. От 4 до 16 символов."
 loginPasswordDisclaimer2 = "{appName} не связан с Mojang AB."
 
 [ejs.loginOptions]
@@ -145,8 +145,8 @@ success = "УСПЕХ"
 tryAgain = "Попробовать снова"
 
 [js.login.error]
-invalidValue = "* Неверное значение"
-requiredValue = "* Обязательно"
+invalidValue = "* Недопустимое значение"
+requiredValue = "* Обязательное поле"
 
 [js.login.error.unknown]
 title = "Неизвестная ошибка при входе"
@@ -180,7 +180,7 @@ javaDownloadPrepare = "Подготовка загрузки Java.."
 javaDownloadFailureTitle = "Ошибка при загрузке Java"
 javaDownloadFailureText = "Смотрите консоль (CTRL + Shift + i) для получения деталей."
 javaRequired = "Требуется Java<br>для запуска"
-javaRequiredMessage = 'Для запуска требуется действительная x64 установка Java {major}.<br><br>Смотрите <a href="https://github.com/dscalzi/HeliosLauncher/wiki/Java-Management#manually-installing-a-valid-version-of-java">руководство по установке Java</a> для инструкций по установке.'
+javaRequiredMessage = 'Для запуска требуется действительная x64 установка Java {major}.<br><br>Смотрите <a href="https://github.com/Envel-Experimental/HeliosLauncher/wiki/Java-Management#manually-installing-a-valid-version-of-java">руководство по установке Java</a> для инструкций по установке.'
 javaRequiredDismiss = "Понял"
 javaRequiredCancel = "Вернуться назад"
 
@@ -203,8 +203,8 @@ downloadingFiles = "Загрузка файлов.."
 errorDuringFileDownloadTitle = "Ошибка при загрузке файлов"
 preparingToLaunch = "Подготовка к запуску.."
 launchingGame = "Запуск игры.."
-launchWrapperNotDownloaded = "Основной файл, LaunchWrapper, не удалось скачать корректно. В результате игра не может запуститься.<br><br>Чтобы устранить эту проблему, временно отключите антивирусное программное обеспечение и повторите запуск игры.<br><br>Если у вас есть время, пожалуйста, <a href=\"https://github.com/dscalzi/HeliosLauncher/issues\">сообщите об этом</a> и укажите, каким антивирусом вы пользуетесь. Мы свяжемся с ними и попытаемся устранить проблему."
-doneEnjoyServer = "Готово. Наслаждайтесь сервером!"
+launchWrapperNotDownloaded = "Основной файл, LaunchWrapper, не удалось скачать корректно. В результате игра не может запуститься.<br><br>Чтобы устранить эту проблему, временно отключите антивирусное программное обеспечение и повторите запуск игры.<br><br>Если у вас есть время, пожалуйста, <a href=\"https://github.com/Envel-Experimental/HeliosLauncher/issues\">сообщите об этом</a> и укажите, каким антивирусом вы пользуетесь. Мы свяжемся с ними и попытаемся устранить проблему."
+doneEnjoyServer = "Готово. Запускаю..."
 checkConsoleForDetails = "Пожалуйста, смотрите консоль (CTRL + Shift + i) для получения деталей."
 
 [js.landing.news]

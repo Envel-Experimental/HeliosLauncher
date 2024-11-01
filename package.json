@@ -7,7 +7,7 @@
   "license": "UNLICENSED",
   "homepage": "https://github.com/dscalzi/HeliosLauncher",
   "bugs": {
-    "url": "https://github.com/dscalzi/HeliosLauncher/issues"
+    "url": "https://github.com/Envel-Experimental/HeliosLauncher/issues"
   },
   "private": true,
   "main": "index.js",
