@@ -1,10 +1,13 @@
-name: Build
+name: Build and Release
 
 on:
   push:
     branches:
       - master
   workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
 
 jobs:
   release:
@@ -50,3 +53,14 @@ jobs:
             dist/*.AppImage
             dist/*.exe
           if-no-files-found: warn
+
+      - name: Create Release
+        uses: ncipollo/release-action@v1.14.0
+        with:
+          tag: ${{ github.ref }}
+          artifacts: |
+            dist/*.dmg
+            dist/*.AppImage
+            dist/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
