@@ -7,12 +7,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  release:
+  build:
     runs-on: ${{ matrix.os }}
-
-    permissions:
-      contents: write
-
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
@@ -44,22 +40,42 @@ jobs:
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: build-artifacts
+          name: build-artifacts-${{ matrix.os }}
           path: |
             dist/*.dmg
             dist/*.AppImage
             dist/*.exe
           if-no-files-found: warn
 
+  create_release:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download Artifacts from macOS
+        uses: actions/download-artifact@v3
+        with:
+          name: build-artifacts-macos-latest
+          path: artifacts/macos
+
+      - name: Download Artifacts from Ubuntu
+        uses: actions/download-artifact@v3
+        with:
+          name: build-artifacts-ubuntu-latest
+          path: artifacts/ubuntu
+
+      - name: Download Artifacts from Windows
+        uses: actions/download-artifact@v3
+        with:
+          name: build-artifacts-windows-latest
+          path: artifacts/windows
+
       - name: Create Release
         uses: ncipollo/release-action@v1.14.0
         with:
           tag: release-${{ github.run_id }}
           artifacts: |
-            dist/*.dmg
-            dist/*.AppImage
-            dist/*.exe
+            artifacts/macos/*.dmg
+            artifacts/ubuntu/*.AppImage
+            artifacts/windows/*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      
