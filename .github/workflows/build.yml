@@ -45,5 +45,8 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: build-artifacts
-          path: dist/**
+          path: |
+            dist/*.dmg
+            dist/*.AppImage
+            dist/*.exe
           if-no-files-found: warn
