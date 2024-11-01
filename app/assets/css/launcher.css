@@ -1,5 +1,7 @@
 /* Github Code Highlighting. */
 @import "../../../node_modules/github-syntax-dark/lib/github-dark.css";
+@import url('https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100;0,300;0,400;0,500;0,700;0,900;1,100;1,300;1,400;1,500;1,700;1,900&display=swap');
+
 
 /*******************************************************************************
  *                                                                             *
@@ -8,12 +10,16 @@
  ******************************************************************************/
 
 @font-face {
-    font-family: 'Avenir Book';
+    font-family: "Roboto", serif;
+    font-weight: 500;
+    font-style: normal;
     src: url('../fonts/Avenir-Book.ttf');
 }
 
 @font-face {
-    font-family: 'Avenir Medium';
+    font-family: "Roboto", serif;
+    font-weight: 500;
+    font-style: normal;
     src: url('../fonts/Avenir-Medium.ttf');
 }
 
@@ -42,7 +48,9 @@ p {
 
 /* Set default font and color. */
 body, button {
-    font-family: 'Avenir Book';
+    font-family: "Roboto", serif;
+    font-weight: 500;
+    font-style: normal;
     color: white;
 }
 
@@ -110,7 +118,9 @@ body, button {
 }
 #frameTitleText {
     font-size: 14px;
-    font-family: 'Avenir Medium';
+    font-family: "Roboto", serif;
+    font-weight: 500;
+    font-style: normal;
     letter-spacing: 0.5px;
 }
 
@@ -284,7 +294,9 @@ body, button {
 }
 
 #welcomeHeader {
-    font-family: 'Avenir Medium';
+    font-family: "Roboto", serif;
+    font-weight: 500;
+    font-style: normal;
     text-align: center;
     color: white;
     margin-bottom: 25px;
@@ -497,7 +509,9 @@ body, button {
 
 /* Header on login view. */
 #loginSubheader {
-    font-family: 'Avenir Medium';
+    font-family: "Roboto", serif;
+    font-weight: 500;
+    font-style: normal;
     margin-bottom: 25px;
     font-size: 12px;
     letter-spacing: 1px;
@@ -522,8 +536,9 @@ body, button {
 
 /* Span which displays errors related to login field content. */
 .loginErrorSpan {
-    font-family: 'Avenir Medium';
-    font-weight: bold;
+    font-family: "Roboto", serif;
+    font-weight: 500;
+    font-style: bold;
     font-size: 8px;
     color: #ff1b0c;
     width: 100%;
@@ -558,7 +573,9 @@ body, button {
 
 /* Login text input styles. */
 .loginField {
-    font-family: 'Avenir Book';
+    font-family: "Roboto", serif;
+    font-weight: 500;
+    font-style: normal;
     background: none;
     border-width: 1.5px 0px 0px 0px;
     border-style: solid;
@@ -1222,7 +1239,9 @@ body, button {
 }
 .settingsTabHeaderText {
     font-size: 20px;
-    font-family: 'Avenir Medium';
+    font-family: "Roboto", serif;
+    font-weight: 500;
+    font-style: normal;
 }
 .settingsTabHeaderDesc {
     font-size: 12px;
@@ -1261,7 +1280,9 @@ body, button {
     background: none;
     font-size: 12px;
     border-radius: 3px;
-    font-family: 'Avenir Medium';
+    font-family: "Roboto", serif;
+    font-weight: 500;
+    font-style: normal;
     transition: 0.25s ease;
     cursor: pointer;
     outline: none;
@@ -1293,7 +1314,9 @@ body, button {
     background: rgba(0, 0, 0, 0.25);
     border-radius: 3px;
     border: 1px solid rgba(126, 126, 126, 0.57);
-    font-family: 'Avenir Book';
+    font-family: "Roboto", serif;
+    font-weight: 500;
+    font-style: normal;
     transition: 0.25s ease;
 }
 #settingsContainer input[type=number]:focus,
@@ -1322,7 +1345,9 @@ body, button {
 }
 .settingsFieldTitle {
     font-size: 14px;
-    font-family: 'Avenir Medium';
+    font-family: "Roboto", serif;
+    font-weight: 500;
+    font-style: normal;
     color: rgba(255, 255, 255, 0.95);
 }
 .settingsFieldDesc {
@@ -1485,7 +1510,9 @@ input:checked + .toggleSwitchSlider:before {
     width: 89%;
 }
 .settingsFileSelDesc strong {
-    font-family: 'Avenir Medium';
+    font-family: "Roboto", serif;
+    font-weight: 500;
+    font-style: normal;
 }
 
 /* * *
@@ -1593,7 +1620,9 @@ input:checked + .toggleSwitchSlider:before {
     font-size: 12px;
     color: grey;
     font-weight: bold;
-    font-family: 'Avenir Medium';
+    font-family: "Roboto", serif;
+    font-weight: 500;
+    font-style: normal;
 }
 .settingsAuthAccountDetailValue {
     font-size: 14px;
@@ -1615,7 +1644,9 @@ input:checked + .toggleSwitchSlider:before {
     border: none;
     white-space: nowrap;
     background: none;
-    font-family: 'Avenir Medium';
+    font-family: "Roboto", serif;
+    font-weight: 500;
+    font-style: normal;
     outline: none;
     transition: 0.25s ease;
 }
@@ -1640,7 +1671,9 @@ input:checked + .toggleSwitchSlider:before {
     background: none;
     font-size: 12px;
     border-radius: 3px;
-    font-family: 'Avenir Medium';
+    font-family: "Roboto", serif;
+    font-weight: 500;
+    font-style: normal;
     transition: 0.25s ease;
     cursor: pointer;
     outline: none;
@@ -2195,7 +2228,9 @@ input:checked + .toggleSwitchSlider:before {
 /* Release type text. */
 #settingsAboutCurrentVersionTitle {
     font-size: 12px;
-    font-family: 'Avenir Medium';
+    font-family: "Roboto", serif;
+    font-weight: 500;
+    font-style: normal;
     color: #23aa23;
     font-weight: bold;
 }
@@ -2284,7 +2319,9 @@ input:checked + .toggleSwitchSlider:before {
     background-color: rgba(255, 255, 255, 0.25);
     color: white;
     border-radius: 3px;
-    font-family: 'Avenir Book';
+    font-family: "Roboto", serif;
+    font-weight: 500;
+    font-style: normal;
 }
 .settingsChangelogText li+li {
     margin-top: .25em;
@@ -2394,7 +2431,9 @@ input:checked + .toggleSwitchSlider:before {
 /* Release type text. */
 #settingsUpdateVersionTitle {
     font-size: 12px;
-    font-family: 'Avenir Medium';
+    font-family: "Roboto", serif;
+    font-weight: 500;
+    font-style: normal;
     color: #23aa23;
     font-weight: bold;
 }
@@ -2593,7 +2632,9 @@ input:checked + .toggleSwitchSlider:before {
 #newsArticleTitle {
     font-size: 18px;
     font-weight: bold;
-    font-family: 'Avenir Medium';
+    font-family: "Roboto", serif;
+    font-weight: 500;
+    font-style: normal;
     color: white;
     text-decoration: none;
     transition: 0.25s ease;
@@ -2858,9 +2899,7 @@ input:checked + .toggleSwitchSlider:before {
     height: 70px;
     width: auto;
     position: relative;
-    border: 2px solid white;
     box-sizing: border-box;
-    border-radius: 50%;
 }
 
 /* Logo container styles. */
@@ -2910,7 +2949,9 @@ input:checked + .toggleSwitchSlider:before {
     z-index: 1;
     top: 115%;
     left: -17.5px;
-    font-family: 'Avenir Medium';
+    font-family: "Roboto", serif;
+    font-weight: 500;
+    font-style: normal;
     font-size: 12px;
     transition: visibility 0s linear 0.25s, opacity 0.25s ease;
 }
@@ -3102,40 +3143,6 @@ input:checked + .toggleSwitchSlider:before {
     height: 23px;
 }
 
-/* Settings tooltip styles. */
-#settingsTooltip {
-    visibility: hidden;
-    opacity: 0;
-    width: 75px;
-    height: 20px;
-    background-color: rgba(0, 0, 0, 0.75);
-    text-align: center;
-    border-radius: 4px;
-    position: absolute;
-    z-index: 1;
-    right: 130%;
-    font-size: 12px;
-    line-height: 20px;
-    transition: visibility 0s linear 0.25s, opacity 0.25s ease;
-}
-#settingsTooltip::after {
-    content: " ";
-    position: absolute;
-    top: 50%;
-    left: 100%;
-    margin-top: -5px;
-    border-width: 5px;
-    border-style: solid;
-    border-color: transparent transparent transparent rgba(0, 0, 0, 0.75);
-}
-.mediaButton:hover #settingsTooltip,
-.mediaButton:focus #settingsTooltip,
-.mediaButton:active #settingsTooltip {
-    visibility: visible;
-    opacity: 1;
-    transition-delay:0s;
-}
-
 /* Twitter icon colors. */
 #twitterSVG:hover,
 #twitterURL:focus #twitterSVG {
@@ -3242,7 +3249,9 @@ input:checked + .toggleSwitchSlider:before {
     border-radius: 4px;
     padding: 5px 10px;
     z-index: 1;
-    font-family: 'Avenir Medium';
+    font-family: "Roboto", serif;
+    font-weight: 500;
+    font-style: normal;
     font-size: 12px;
     transition: visibility 0s linear 0.25s, opacity 0.25s ease;
     bottom: calc(100% + 15px);
@@ -3420,6 +3429,35 @@ input:checked + .toggleSwitchSlider:before {
     pointer-events: none;
 }
 
+
+/* The settings button. */
+#settingsMediaButton {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-weight: 900;
+    letter-spacing: 2px;
+    text-shadow: 0px 0px 0px #bebcbb;
+    font-size: 20px;
+    padding: 0px;
+    transition: 0.25s ease;
+    outline: none;
+}
+#settingsMediaButton:hover,
+#settingsMediaButton:focus {
+    text-shadow: 0px 0px 20px #fff, 0px 0px 20px #fff;
+}
+#settingsMediaButton:active {
+    color: #c7c7c7;
+    text-shadow: 0px 0px 20px #c7c7c7, 0px 0px 20px #c7c7c7;
+}
+#settingsMediaButton:disabled {
+    color: #c7c7c7;
+    cursor: default;
+    pointer-events: none;
+}
+
+
 /* Launch details main container, hidden until launch processing begins. */
 #launch_details {
     position: relative;
@@ -3557,7 +3595,9 @@ input:checked + .toggleSwitchSlider:before {
 
 /* Overlay title styles. */
 #overlayTitle {
-    font-family: 'Avenir Medium';
+    font-family: "Roboto", serif;
+    font-weight: 500;
+    font-style: normal;
     font-size: 20px;
     font-weight: bold;
     letter-spacing: 1px;
@@ -3583,7 +3623,9 @@ input:checked + .toggleSwitchSlider:before {
     background: none;
     border: 1px solid #ffffff;
     color: white;
-    font-family: 'Avenir Medium';
+    font-family: "Roboto", serif;
+    font-weight: 500;
+    font-style: normal;
     font-weight: bold;
     border-radius: 2px;
     padding: 0px 8.1px;
@@ -3635,7 +3677,9 @@ input:checked + .toggleSwitchSlider:before {
 /* Server selection header. */
 #serverSelectHeader,
 #accountSelectHeader {
-    font-family: 'Avenir Medium';
+    font-family: "Roboto", serif;
+    font-weight: 500;
+    font-style: normal;
     font-size: 20px;
     font-weight: bold;
     color: #fff;
@@ -3858,7 +3902,9 @@ input:checked + .toggleSwitchSlider:before {
     background: none;
     border: 1px solid #ffffff;
     color: white;
-    font-family: 'Avenir Medium';
+    font-family: "Roboto", serif;
+    font-weight: 500;
+    font-style: normal;
     font-weight: bold;
     border-radius: 2px;
     padding: 0px 8.1px;
