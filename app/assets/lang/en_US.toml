@@ -38,7 +38,7 @@ loginPasswordDisclaimer2 = "{appName} не связан с Mojang AB."
 [ejs.loginOptions]
 loginOptionsTitle = "Опции входа"
 loginWithMicrosoft = "Войти через Microsoft"
-loginWithMojang = "Войти"
+loginWithMojang = "Создать аккаунт"
 cancelButton = "Отмена"
 
 [ejs.overlay]

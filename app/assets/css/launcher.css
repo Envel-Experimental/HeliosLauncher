@@ -236,6 +236,9 @@ body, button {
 }
 
 #welcomeContent {
+    font-family: "Roboto", serif;
+    font-weight: 500;
+    font-style: normal;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -301,21 +304,21 @@ body, button {
     color: white;
     margin-bottom: 25px;
     letter-spacing: 1px;
-    font-size: 20px;
+    font-size: 24px;
     text-shadow: white 0px 0px 0px;
 }
 
 #welcomeDescription {
-    text-align: justify;
-    font-size: 13px;
-    font-weight: 100;
+    text-align: center;
+    font-size: 18px;
+    font-weight: 400;
     text-shadow: rgba(255, 255, 255, 0.75) 0px 0px 20px
 }
 
 #welcomeDescCTA {
     text-align: center;
-    font-size: 14px;
-    font-weight: 100;
+    font-size: 18px;
+    font-weight: 400;
     text-shadow: rgba(255, 255, 255, 0.75) 0px 0px 20px
 }
 
@@ -501,11 +504,11 @@ body, button {
 /* Logo on login form. */
 #loginImageSeal {
     border-radius: 50%;
-    border: 2px solid #cad7e1;
-    background: rgba(1, 2, 1, 0.5);
+    /*border: 2px solid #cad7e1;
+    box-shadow: 0px 0px 10px 0px rgb(0, 0, 0);
+    background: rgba(1, 2, 1, 0.5);*/
     height: 125px;
     width: 125px;
-    box-shadow: 0px 0px 10px 0px rgb(0, 0, 0);
     margin-bottom: 20px;
 }
 
@@ -1027,6 +1030,7 @@ body, button {
     border-radius: 3px;
     height: 50px;
     width: 100%;
+    font-size: 16px;
     text-align: left;
     padding: 0px 25px;
     cursor: pointer;
@@ -3209,7 +3213,6 @@ input:checked + .toggleSwitchSlider:before {
 
 /* Divider used on the bottom of the landing view. */
 .bot_divider {
-    height: 25px;
     width: 2px;
     background: rgba(107, 105, 105, 0.7);
     margin-left: 20px;
@@ -3423,7 +3426,7 @@ input:checked + .toggleSwitchSlider:before {
     font-weight: 900;
     letter-spacing: 2px;
     text-shadow: 0px 0px 0px #bebcbb;
-    font-size: 20px;
+    font-size: 24px;
     padding: 0px;
     transition: 0.25s ease;
     outline: none;
@@ -3451,7 +3454,7 @@ input:checked + .toggleSwitchSlider:before {
     font-weight: 900;
     letter-spacing: 2px;
     text-shadow: 0px 0px 0px #bebcbb;
-    font-size: 20px;
+    font-size: 24px;
     padding: 0px;
     transition: 0.25s ease;
     outline: none;
