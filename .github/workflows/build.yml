@@ -54,7 +54,7 @@ jobs:
       - name: Create Release
         uses: ncipollo/release-action@v1.14.0
         with:
-          tag: release-${{ github.sha }}
+          tag: release-${{ github.run_id }}
           artifacts: |
             dist/*.dmg
             dist/*.AppImage
