@@ -266,8 +266,6 @@ const refreshServerStatus = async (fade = false) => {
     
 }
 
-refreshMojangStatuses()
-
 /**
  * Shows an error overlay, toggles off the launch area.
  * 
