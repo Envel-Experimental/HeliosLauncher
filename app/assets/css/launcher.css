@@ -3922,6 +3922,7 @@ input:checked + .toggleSwitchSlider:before {
     font-weight: 500;
     font-style: normal;
     font-weight: bold;
+    font-size: 20px;
     border-radius: 2px;
     padding: 0px 8.1px;
     cursor: pointer;
