@@ -39,7 +39,28 @@ mac:
 
 # Linux Configuration
 linux: 
-  target: 'AppImage'
+  target:
+    - target: 'AppImage'
+      arch: 
+        - 'x64'
+        - 'arm64'
+    - target: 'deb'
+      arch: 
+        - 'x64'
+        - 'arm64'
+    - target: 'rpm'
+      arch: 
+        - 'x64'
+        - 'arm64'
+    - target: 'snap'
+      arch: 
+        - 'x64'
+    - target: 'flatpak'
+      arch: 
+        - 'x64'
+    - target: 'tar.gz'
+      arch: 
+        - 'x64'
   maintainer: 'Nikita Gutsenkov'
   vendor: 'Nikita Gutsenkov'
   synopsis: 'Modded Minecraft Launcher'
