@@ -48,6 +48,11 @@ jobs:
             dist/*.dmg
             dist/*.AppImage
             dist/*.exe
+            dist/*.deb
+            dist/*.rpm
+            dist/*.snap
+            dist/*.flatpak
+            dist/*.tar.gz
           if-no-files-found: warn
 
   create_release:
@@ -79,6 +84,11 @@ jobs:
           artifacts: |
             artifacts/macos/*.dmg
             artifacts/ubuntu/*.AppImage
+            artifacts/ubuntu/*.deb
+            artifacts/ubuntu/*.rpm
+            artifacts/ubuntu/*.snap
+            artifacts/ubuntu/*.flatpak
+            artifacts/ubuntu/*.tar.gz
             artifacts/windows/*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
