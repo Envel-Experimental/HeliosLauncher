@@ -42,7 +42,7 @@ loginWithMojang = "Создать аккаунт"
 cancelButton = "Отмена"
 
 [ejs.overlay]
-serverSelectHeader = "Доступные серверы"
+serverSelectHeader = "Выбор курса"
 serverSelectConfirm = "Выбрать"
 serverSelectCancel = "Отмена"
 accountSelectHeader = "Выбрать аккаунт"
