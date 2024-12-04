@@ -3205,11 +3205,18 @@ input:checked + .toggleSwitchSlider:before {
 
 /* Style for a general label on the bottom of the landing view. */
 .bot_label {
+    width: 140px;
+    max-width: 90%;
     font-size: 9px;
     letter-spacing: 1px;
     font-weight: bold;
     text-shadow: 0px 0px 0px #bebcbb;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
 }
+
 
 /* Divider used on the bottom of the landing view. */
 .bot_divider {
@@ -3696,7 +3703,7 @@ input:checked + .toggleSwitchSlider:before {
     font-family: "Roboto", serif;
     font-weight: 500;
     font-style: normal;
-    font-size: 20px;
+    font-size: 30px;
     font-weight: bold;
     color: #fff;
     margin-bottom: 25px;
@@ -3737,8 +3744,8 @@ input:checked + .toggleSwitchSlider:before {
 .serverListing {
     border: none;
     padding: 0px;
-    width: 375px;
-    min-height: 60px;
+    width: 550px;
+    min-height: 100px;
     display: flex;
     justify-content: flex-start;
     align-items: center;
@@ -3823,7 +3830,7 @@ input:checked + .toggleSwitchSlider:before {
 
 /* The name of the server listing. */
 .serverListingName {
-    font-size: 14px;
+    font-size: 20px;
     font-weight: bold;
 }
 
@@ -3922,7 +3929,7 @@ input:checked + .toggleSwitchSlider:before {
     font-weight: 500;
     font-style: normal;
     font-weight: bold;
-    font-size: 20px;
+    font-size: 30px;
     border-radius: 2px;
     padding: 0px 8.1px;
     cursor: pointer;
@@ -3948,7 +3955,7 @@ input:checked + .toggleSwitchSlider:before {
     font-weight: bold;
     font-size: 10px;
     text-decoration: none;
-    padding-top: 2.5px;
+    padding-top: 10px;
     color: rgba(202, 202, 202, 0.75);
     transition: 0.25s ease;
     background: none;

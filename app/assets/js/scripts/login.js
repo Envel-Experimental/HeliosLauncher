@@ -173,6 +173,10 @@ loginButton.addEventListener('click', () => {
                 loginLoading(false);
                 loginButton.innerHTML = loginButton.innerHTML.replace(Lang.queryJS('login.success'), Lang.queryJS('login.login'));
                 formDisabled(false);
+
+                if(ConfigManager.isFirstLaunch()){
+                    toggleServerSelection(true);
+                }
             });
         }, 1000);
     }).catch((displayableError) => {
