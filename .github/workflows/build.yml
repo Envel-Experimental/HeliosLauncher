@@ -15,6 +15,7 @@ jobs:
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
+        arch: [x64, arm64]  # Добавляем архитектуры для Linux
 
     steps:
       - name: Check out Git repository
@@ -37,13 +38,13 @@ jobs:
       - name: Build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run dist
+        run: npm run dist -- --arch ${{ matrix.arch }}
         shell: bash
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: build-artifacts-${{ matrix.os }}
+          name: build-artifacts-${{ matrix.os }}-${{ matrix.arch }}
           path: |
             dist/*.dmg
             dist/*.AppImage
