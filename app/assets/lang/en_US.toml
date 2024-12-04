@@ -180,7 +180,7 @@ javaDownloadPrepare = "Подготовка загрузки Java.."
 javaDownloadFailureTitle = "Ошибка при загрузке Java"
 javaDownloadFailureText = "Смотрите консоль (CTRL + Shift + i) для получения деталей."
 javaRequired = "Требуется Java<br>для запуска"
-javaRequiredMessage = 'Для запуска требуется действительная x64 установка Java {major}.<br><br>Смотрите <a href="https://github.com/Envel-Experimental/HeliosLauncher/wiki/Java-Management#manually-installing-a-valid-version-of-java">руководство по установке Java</a> для инструкций по установке.'
+javaRequiredMessage = 'Для запуска требуется действительная x64 установка Java {major}.<br><br>Смотрите <a href="https://envel-experimental.github.io/Site/java.html">руководство по установке Java</a> для инструкций по установке.'
 javaRequiredDismiss = "Понял"
 javaRequiredCancel = "Вернуться назад"
 
