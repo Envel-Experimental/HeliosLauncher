@@ -40,9 +40,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
-            npm run dist -- --arch ${{ matrix.arch }}
-          else
-            npm run dist
+            npm run dist -- --linux --arch ${{ matrix.arch }}
+          elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            npm run dist -- --mac
+          elif [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            npm run dist -- --win
           fi
         shell: bash
 
