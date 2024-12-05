@@ -1,197 +1,94 @@
-name: Build and Release
+name: Build
 
 on:
   push:
     branches:
-      - main
-  release:
-    types: [published]
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
-  build-windows:
-    name: Build Windows x64
-    runs-on: windows-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '23.3'
-          cache: 'npm'
-
-      - name: Install Dependencies
-        run: npm ci
-
-      - name: Build Application
-        run: npm run build
-
-      - name: Build with Electron Builder
-        run: npx electron-builder --win --x64
-
-      - name: Upload Windows Artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: Foxford-Windows-x64
-          path: dist/
-
-  build-macos:
-    name: Build macOS
-    runs-on: macos-latest
+  build:
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        arch: [x64, arm64, universal]
+        os: [macos-latest, ubuntu-latest, windows-latest]
+
     steps:
-      - name: Checkout Repository
+      - name: Check out Git repository
         uses: actions/checkout@v3
 
-      - name: Setup Node.js
+      - name: Set up Node
         uses: actions/setup-node@v3
         with:
-          node-version: '23.3'
-          cache: 'npm'
+          node-version: 20
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.x
 
       - name: Install Dependencies
         run: npm ci
+        shell: bash
 
-      - name: Build Application
-        run: npm run build
+      - name: Build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run dist
+        shell: bash
 
-      - name: Build macOS with Electron Builder
-        run: |
-          if [ "${{ matrix.arch }}" == "universal" ]; then
-            npx electron-builder --mac --x64 --arm64 --universal
-          else
-            npx electron-builder --mac --${{ matrix.arch }}
-          fi
-
-      - name: Upload macOS Artifact
+      - name: Upload Build Artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: Foxford-macOS-${{ matrix.arch }}
-          path: dist/
+          name: build-artifacts-${{ matrix.os }}
+          path: |
+            dist/*.dmg
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.rpm
+            dist/*.snap
+            dist/*.flatpak
+            dist/*.tar.gz
+            dist/*.exe
+          if-no-files-found: warn
 
-  build-linux:
-    name: Build Linux
+  create_release:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        arch: [x64, arm64]
+    needs: build
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '23.3'
-          cache: 'npm'
-
-      - name: Install Dependencies
-        run: npm ci
-
-      - name: Build Application
-        run: npm run build
-
-      - name: Build Linux with Electron Builder
-        run: npx electron-builder --linux --${{ matrix.arch }}
-
-      - name: Upload Linux Artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: Foxford-Linux-${{ matrix.arch }}
-          path: dist/
-
-  release:
-    name: Create GitHub Release
-    needs: [build-windows, build-macos, build-linux]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download Windows Artifact
+      - name: Download Artifacts from macOS
         uses: actions/download-artifact@v3
         with:
-          name: Foxford-Windows-x64
-          path: releases/windows/
+          name: build-artifacts-macos-latest
+          path: artifacts/macos
 
-      - name: Download macOS Artifacts
+      - name: Download Artifacts from Ubuntu
         uses: actions/download-artifact@v3
         with:
-          name: Foxford-macOS-x64
-          path: releases/macos/x64/
-      - uses: actions/download-artifact@v3
-        with:
-          name: Foxford-macOS-arm64
-          path: releases/macos/arm64/
-      - uses: actions/download-artifact@v3
-        with:
-          name: Foxford-macOS-universal
-          path: releases/macos/universal/
+          name: build-artifacts-ubuntu-latest
+          path: artifacts/ubuntu
 
-      - name: Download Linux Artifacts
+      - name: Download Artifacts from Windows
         uses: actions/download-artifact@v3
         with:
-          name: Foxford-Linux-x64
-          path: releases/linux/x64/
-      - uses: actions/download-artifact@v3
-        with:
-          name: Foxford-Linux-arm64
-          path: releases/linux/arm64/
+          name: build-artifacts-windows-latest
+          path: artifacts/windows
 
-      - name: Create GitHub Release
-        id: create_release
-        uses: actions/create-release@v1
+      - name: Create Release
+        uses: ncipollo/release-action@v1.14.0
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
-          draft: false
-          prerelease: false
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Windows Artifact to Release
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: releases/windows/
-          asset_name: Foxford-Windows-x64.zip
-          asset_content_type: application/zip
-
-      - name: Upload macOS x64 Artifact to Release
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: releases/macos/x64/
-          asset_name: Foxford-macOS-x64.dmg
-          asset_content_type: application/x-diskimage
-
-      - name: Upload macOS arm64 Artifact to Release
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: releases/macos/arm64/
-          asset_name: Foxford-macOS-arm64.dmg
-          asset_content_type: application/x-diskimage
-
-      - name: Upload macOS Universal Artifact to Release
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: releases/macos/universal/
-          asset_name: Foxford-macOS-universal.dmg
-          asset_content_type: application/x-diskimage
-
-      - name: Upload Linux x64 Artifact to Release
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: releases/linux/x64/
-          asset_name: Foxford-Linux-x64.AppImage
-          asset_content_type: application/octet-stream
-
-      - name: Upload Linux arm64 Artifact to Release
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: releases/linux/arm64/
-          asset_name: Foxford-Linux-arm64.AppImage
-          asset_content_type: application/octet-stream
+          tag: release-${{ github.run_id }}
+          artifacts: |
+            artifacts/macos/*.dmg
+            artifacts/ubuntu/*.AppImage
+            artifacts/ubuntu/*.deb
+            artifacts/ubuntu/*.rpm
+            artifacts/ubuntu/*.snap
+            artifacts/ubuntu/*.flatpak
+            artifacts/ubuntu/*.tar.gz
+            artifacts/windows/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
