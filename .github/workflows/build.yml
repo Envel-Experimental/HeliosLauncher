@@ -49,7 +49,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '16' # Укажите вашу версию Node.js
+          node-version: '23.3'
           cache: 'npm'
 
       - name: Install Dependencies
@@ -85,7 +85,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '16' # Укажите вашу версию Node.js
+          node-version: '23.3'
           cache: 'npm'
 
       - name: Install Dependencies
