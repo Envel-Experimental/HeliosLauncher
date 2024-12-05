@@ -15,7 +15,7 @@ jobs:
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
-        arch: [x64, arm64]  # Добавляем архитектуры для Linux
+        arch: [x64, arm64]
 
     steps:
       - name: Check out Git repository
@@ -38,7 +38,12 @@ jobs:
       - name: Build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run dist -- --arch ${{ matrix.arch }}
+        run: |
+          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+            npm run dist -- --arch ${{ matrix.arch }}
+          else
+            npm run dist
+          fi
         shell: bash
 
       - name: Upload Build Artifacts
