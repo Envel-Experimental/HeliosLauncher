@@ -56,8 +56,12 @@ linux:
       arch: 
         - 'x64'
     - target: 'flatpak'
-      arch: 
+      arch:
         - 'x64'
+      flatpak:
+        app-id: app.foxford.Launcher
+        runtime: org.freedesktop.Platform
+        sdk: org.freedesktop.Sdk
     - target: 'tar.gz'
       arch: 
         - 'x64'
