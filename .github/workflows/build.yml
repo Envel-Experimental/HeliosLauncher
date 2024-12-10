@@ -41,7 +41,6 @@ jobs:
           sudo apt-get install -y flatpak flatpak-builder
           flatpak --version || (echo "Flatpak installation failed"; exit 1)
 
-
       - name: Build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
