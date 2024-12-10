@@ -34,6 +34,17 @@ jobs:
         run: npm ci
         shell: bash
 
+      - name: Install Flatpak and Flatpak Builder (for Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder gnome-software-plugin-flatpak
+          flatpak --version || (echo "Flatpak installation failed"; exit 1)
+
+      - name: Check Flatpak Version (Linux)
+        if: runner.os == 'Linux'
+        run: flatpak --version
+
       - name: Build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -47,9 +58,14 @@ jobs:
           path: |
             dist/*.dmg
             dist/*.AppImage
+            dist/*.deb
+            dist/*.rpm
+            dist/*.snap
+            dist/*.flatpak
+            dist/*.tar.gz
             dist/*.exe
           if-no-files-found: warn
-
+          
   create_release:
     runs-on: ubuntu-latest
     needs: build
@@ -79,6 +95,11 @@ jobs:
           artifacts: |
             artifacts/macos/*.dmg
             artifacts/ubuntu/*.AppImage
+            artifacts/ubuntu/*.deb
+            artifacts/ubuntu/*.rpm
+            artifacts/ubuntu/*.snap
+            artifacts/ubuntu/*.flatpak
+            artifacts/ubuntu/*.tar.gz
             artifacts/windows/*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
