@@ -16,6 +16,16 @@ const LangLoader                        = require('./app/assets/js/langloader')
 // Setup Lang
 LangLoader.setupLanguage()
 
+try {
+    const Sentry = require('@sentry/electron/main');
+    Sentry.init({
+        dsn: 'https://f02442d2a0733ac2c810b8d8d7f4a21e@o4508545424359424.ingest.de.sentry.io/4508545432027216',
+    });
+} catch (error) {
+    console.error("Sentry failed to initialize:", error);
+}
+
+
 // Setup auto updater.
 function initAutoUpdater(event, data) {
 
