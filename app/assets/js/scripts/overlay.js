@@ -177,7 +177,6 @@ document.getElementById('serverSelectConfirm').addEventListener('click', async (
         if(listings[i].hasAttribute('selected')){
             const serv = (await DistroAPI.getDistribution()).getServerById(listings[i].getAttribute('servid'))
             updateSelectedServer(serv)
-            refreshServerStatus(true)
             toggleOverlay(false)
             return
         }

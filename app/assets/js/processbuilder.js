@@ -7,6 +7,7 @@ const { getMojangOS, isLibraryCompatible, mcVersionAtLeast }  = require('helios-
 const { Type }              = require('helios-distribution-types')
 const os                    = require('os')
 const path                  = require('path')
+const { sendToSentry }      = require('./preloader'); 
 
 const ConfigManager            = require('./configmanager')
 
@@ -94,6 +95,25 @@ class ProcessBuilder {
         })
         child.on('close', (code, signal) => {
             logger.info('Exited with code', code)
+            if(code != 0){
+
+
+                const exitMessage = `Process exited with code: ${code}`;
+                sendToSentry(exitMessage, 'error');
+
+                setOverlayContent(
+                    Lang.queryJS('processbuilder.exit.exitErrorHeader'),
+                    Lang.queryJS('processbuilder.exit.message') + code,
+                    Lang.queryJS('uibinder.startup.closeButton')
+                )
+                setOverlayHandler(() => {
+                    toggleOverlay(false)
+                })
+                setDismissHandler(() => {
+                    toggleOverlay(false)
+                })
+                toggleOverlay(true, true)
+            }
             fs.remove(tempNativePath, (err) => {
                 if(err){
                     logger.warn('Error while deleting temp dir', err)

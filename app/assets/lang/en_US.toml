@@ -342,3 +342,8 @@ gameNotPurchasedTitle = "Ошибка при входе:<br>Игра не куп
 gameNotPurchasedDesc = "Аккаунт, с которым вы пытаетесь войти, не имеет купленной копии Minecraft. Вы можете купить её на <a href=\"https://minecraft.net/\">Minecraft.net</a>"
 unknownErrorTitle = "Неизвестная ошибка при входе"
 unknownErrorDesc = "Произошла неизвестная ошибка. Пожалуйста, смотрите консоль для получения деталей."
+
+
+[js.processbuilder.exit]
+exitErrorHeader = "ОШИБКА ИГРЫ. ЕСЛИ ПОВТОРИТСЯ, ОБРАТИТЕСЬ В ПОДДЕРЖКУ."
+message = "Игра завершилась с кодом ошибки: "
