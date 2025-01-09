@@ -88,10 +88,10 @@ jobs:
           name: build-artifacts-windows-latest
           path: artifacts/windows
 
-      - name: Create Release
+      - name: Create Release or Pre-release
         uses: ncipollo/release-action@v1.14.0
         with:
-          tag: release-${{ github.run_id }}
+          tag: ${{ github.event.head_commit.message == 'release' && 'release' || 'prerelease' }}-${{ github.run_id }}
           artifacts: |
             artifacts/macos/*.dmg
             artifacts/ubuntu/*.AppImage
@@ -101,5 +101,6 @@ jobs:
             artifacts/ubuntu/*.flatpak
             artifacts/ubuntu/*.tar.gz
             artifacts/windows/*.exe
+          prerelease: ${{ github.event.head_commit.message == 'release' && 'false' || 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
