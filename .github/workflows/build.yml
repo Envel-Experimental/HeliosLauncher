@@ -50,6 +50,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run dist
         shell: bash
+      
+      - name: List files in dist (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: ls -la dist
+
+      - name: List files in dist (Windows)
+        if: runner.os == 'Windows'
+        run: Get-ChildItem dist
+        shell: pwsh
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v3
@@ -64,6 +73,11 @@ jobs:
             dist/*.flatpak
             dist/*.tar.gz
             dist/*.exe
+            dist/*.dmg.blockmap
+            dist/latest-mac.yml
+            dist/latest-linux.yml
+            dist/latest.yml
+            dist/*.exe.blockmap
           if-no-files-found: warn
           
   create_release:
@@ -101,6 +115,11 @@ jobs:
             artifacts/ubuntu/*.flatpak
             artifacts/ubuntu/*.tar.gz
             artifacts/windows/*.exe
+            artifacts/macos/latest-mac.yml
+            artifacts/windows/latest-linux.yml
+            artifacts/windows/latest.yml
+            artifacts/macos/*.dmg.blockmap
+            artifacts/windows/*.exe.blockmap
           prerelease: ${{ github.event.head_commit.message == 'release' && 'false' || 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
