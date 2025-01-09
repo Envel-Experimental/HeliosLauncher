@@ -91,7 +91,7 @@ This section details the setup of a basic developmentment environment.
 **Clone and Install Dependencies**
 
 ```console
-> git clone https://github.com/dscalzi/HeliosLauncher.git
+> git clone https://github.com/Envel-Experimental/HeliosLauncher.git
 > cd HeliosLauncher
 > npm install
 ```
@@ -207,5 +207,5 @@ The best way to contact the developers is on Discord.
 [chromedebugger]: https://marketplace.visualstudio.com/items?itemName=msjsdiag.debugger-for-chrome 'Debugger for Chrome'
 [discord]: https://discord.gg/zNWUXdt 'Discord'
 [wiki]: https://github.com/Envel-Experimental/HeliosLauncher/wiki 'wiki'
-[nebula]: https://github.com/dscalzi/Nebula 'dscalzi/Nebula'
+[nebula]: https://github.com/Envel-Experimental/Nebula 'dscalzi/Nebula'
 [v2branch]: https://github.com/Envel-Experimental/HeliosLauncher/tree/ts-refactor 'v2 branch'
