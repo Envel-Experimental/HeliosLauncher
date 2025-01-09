@@ -51,13 +51,14 @@ jobs:
         run: npm run dist
         shell: bash
       
-      - name: List files in dist
-        run: |
-          if [ "${{ runner.os }}" == "Windows" ]; then
-            dir dist
-          else
-            ls -la dist
-          fi
+      - name: List files in dist (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: ls -la dist
+
+      - name: List files in dist (Windows)
+        if: runner.os == 'Windows'
+        run: Get-ChildItem dist
+        shell: pwsh
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v3
