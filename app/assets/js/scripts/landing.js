@@ -364,12 +364,18 @@ async function asyncSystemScan(effectiveJavaOptions, launchAfter = true){
 
 async function downloadJava(effectiveJavaOptions, launchAfter = true) {
 
+
+    const minecraftVersion = this.server.rawServer.minecraftVersion;
+    const isVersionBelow120 = mcVersionAtLeast('1.20', minecraftVersion) === false;
+
     // TODO Error handling.
     // asset can be null.
     const asset = await latestOpenJDK(
         effectiveJavaOptions.suggestedMajor,
         ConfigManager.getDataDirectory(),
-        effectiveJavaOptions.distribution)
+        effectiveJavaOptions.distribution,
+        isVersionBelow120
+    );
 
     if(asset == null) {
         throw new Error(Lang.queryJS('landing.downloadJava.findJdkFailure'))
