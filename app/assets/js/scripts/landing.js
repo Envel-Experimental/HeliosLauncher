@@ -10,7 +10,8 @@ const {
 const {
     RestResponseStatus,
     isDisplayableError,
-    validateLocalFile
+    validateLocalFile,
+    mcVersionAtLeast
 }                             = require('helios-core/common')
 const {
     FullRepair,
@@ -363,7 +364,6 @@ async function asyncSystemScan(effectiveJavaOptions, launchAfter = true){
 }
 
 async function downloadJava(effectiveJavaOptions, launchAfter = true) {
-
 
     const minecraftVersion = this.server.rawServer.minecraftVersion;
     const isVersionBelow120 = mcVersionAtLeast('1.20', minecraftVersion) === false;
