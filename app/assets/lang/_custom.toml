@@ -1,10 +1,10 @@
 # Custom Language File for Launcher Customizer
 
 [ejs.app]
-title = "ФОКСФОРД"
+title = "ФЛАЙНЧЕР"
 
 [ejs.landing]
-mediaGitHubURL = "#"
+mediaGitHubURL = "https://github.com/Envel-Experimental/HeliosLauncher"
 mediaTwitterURL = "#"
 mediaInstagramURL = "#"
 mediaYouTubeURL = "#"
@@ -12,9 +12,9 @@ mediaDiscordURL = "#"
 
 [ejs.settings]
 sourceGithubLink = "https://github.com/Envel-Experimental/HeliosLauncher"
-supportLink = "#"
+supportLink = "https://github.com/Envel-Experimental/HeliosLauncher/issues"
 
 [ejs.welcome]
-welcomeHeader = "Добро пожаловать в Фоксфорд!"
+welcomeHeader = "Добро пожаловать в ФЛАЙНЧЕР!"
 welcomeDescription = "Далее мы создадим тебе аккаунт в Minecraft. Придумай игровое имя из больших и/или маленьких английских букв, можно использовать цифры и символ нижнего подчеркивания. От 4 до 16 символов."
 welcomeDescCTA = 'На следующей странице нажми "Создать аккаунт" и введи игровое имя.'
