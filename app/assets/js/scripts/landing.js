@@ -6,18 +6,19 @@ const { URL }                 = require('url')
 const {
     MojangRestAPI,
     getServerStatus
-}                             = require('helios-core/mojang')
+}                             = require('@envel/helios-core/mojang')
 const {
     RestResponseStatus,
     isDisplayableError,
-    validateLocalFile
-}                             = require('helios-core/common')
+    validateLocalFile,
+    mcVersionAtLeast
+}                             = require('@envel/helios-core/common')
 const {
     FullRepair,
     DistributionIndexProcessor,
     MojangIndexProcessor,
     downloadFile
-}                             = require('helios-core/dl')
+}                             = require('@envel/helios-core/dl')
 const {
     validateSelectedJvm,
     ensureJavaDirIsRoot,
@@ -25,7 +26,7 @@ const {
     discoverBestJvmInstallation,
     latestOpenJDK,
     extractJdk
-}                             = require('helios-core/java')
+}                             = require('@envel/helios-core/java')
 
 // Internal Requirements
 const ProcessBuilder          = require('./assets/js/processbuilder')
@@ -364,12 +365,17 @@ async function asyncSystemScan(effectiveJavaOptions, launchAfter = true){
 
 async function downloadJava(effectiveJavaOptions, launchAfter = true) {
 
+    const minecraftVersion = this.server.rawServer.minecraftVersion;
+    const isVersionBelow120 = mcVersionAtLeast('1.20', minecraftVersion) === false;
+
     // TODO Error handling.
     // asset can be null.
     const asset = await latestOpenJDK(
         effectiveJavaOptions.suggestedMajor,
         ConfigManager.getDataDirectory(),
-        effectiveJavaOptions.distribution)
+        effectiveJavaOptions.distribution,
+        isVersionBelow120
+    );
 
     if(asset == null) {
         throw new Error(Lang.queryJS('landing.downloadJava.findJdkFailure'))
