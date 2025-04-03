@@ -1,6 +1,6 @@
 # Microsoft Authentication
 
-Authenticating with Microsoft is fully supported by Foxford.
+Authenticating with Microsoft is fully supported by Flauncher.
 
 ## Acquiring an Azure Client ID
 
@@ -28,7 +28,7 @@ Authenticating with Microsoft is fully supported by Foxford.
 9. Copy **Application (client) ID**.
 
 
-## Adding the Azure Client ID to Foxford.
+## Adding the Azure Client ID to Flauncher.
 
 In `app/assets/js/ipcconstants.js` you'll find **`AZURE_CLIENT_ID`**. Set it to your application's id.
 
