@@ -1,5 +1,5 @@
-appId: 'foxford'
-productName: 'Foxford'
+appId: 'flauncher'
+productName: 'Flauncher'
 artifactName: '${productName}-setup-${version}-${arch}.${ext}'
 
 copyright: 'Copyright © 2018-2024 Nikita Gutsenkov'
