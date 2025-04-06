@@ -2937,10 +2937,10 @@ input:checked + .toggleSwitchSlider:before {
     cursor: pointer;
     position: absolute;
     content: '';
-    height: 100%;
-    width: 100%;
-    top: 0%;
-    left: 0%;
+    height: calc(100% + 20px);
+    width: calc(100% + 20px);
+    top: -10px;
+    left: -16px;
     border-radius: 50%;
     box-shadow: 0 0 15px #43c628;
     animation: glow-grow 4s ease-out infinite;
@@ -2950,38 +2950,38 @@ input:checked + .toggleSwitchSlider:before {
     animation-delay: 2s;
 }
 
+
 /* Update available tooltip styles. */
 #updateAvailableTooltip {
     cursor: pointer;
     visibility: hidden;
     opacity: 0;
-    width: 100px;
-    height: 15px;
-    background-color: rgb(0, 0, 0);
+    width: 200px;
+    height: auto;
+    background-color: rgba(0, 0, 0, 0.8);
     color: #fff;
     text-align: center;
-    border-radius: 4px;
-    padding: 2px;
-    position: absolute;
-    z-index: 1;
-    top: 115%;
-    left: -17.5px;
+    border-radius: 8px;
+    padding: 10px;
+    z-index: 1000;
     font-family: "Roboto", serif;
     font-weight: 500;
     font-style: normal;
-    font-size: 12px;
+    font-size: 16px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
     transition: visibility 0s linear 0.25s, opacity 0.25s ease;
 }
 #updateAvailableTooltip::after {
-    content: " ";
+    content: "";
     position: absolute;
     left: 50%;
     bottom: 100%;
     margin-left: -5px;
     border-width: 5px;
     border-style: solid;
-    border-color: transparent transparent rgb(0, 0, 0) transparent;
+    border-color: transparent transparent rgba(0, 0, 0, 0.8) transparent;
 }
+
 #image_seal_container[update]:hover #updateAvailableTooltip {
     visibility: visible;
     opacity: 1;
