@@ -4,9 +4,6 @@
 
 [<p align="center"><img src="https://img.shields.io/github/actions/workflow/status/Envel-Experimental/HeliosLauncher/build.yml?branch=master&style=for-the-badge" alt="gh actions">](https://github.com/Envel-Experimental/HeliosLauncher/actions) [<img src="https://img.shields.io/github/downloads/Envel-Experimental/HeliosLauncher/total.svg?style=for-the-badge" alt="downloads">](https://github.com/Envel-Experimental/HeliosLauncher/releases) <img src="https://forthebadge.com/images/badges/winter-is-coming.svg"  height="28px" alt="winter-is-coming"></p>
 
-![Screenshot 1](https://i.imgur.com/6o7SmH6.png)
-![Screenshot 2](https://i.imgur.com/x3B34n1.png)
-
 ## Downloads
 
 You can download from [GitHub Releases](https://github.com/Envel-Experimental/HeliosLauncher/releases)
@@ -43,7 +40,6 @@ Ensure that you have the console tab selected. Do not paste anything into the co
 
 If you want to export the console output, simply right click anywhere on the console and click **Save as..**
 
-![console example](https://i.imgur.com/T5e73jP.png)
 
 
 ## Development
