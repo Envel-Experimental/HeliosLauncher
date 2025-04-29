@@ -47,25 +47,33 @@ exports.getAbsoluteMinRAM = function(ram){
     if(ram?.minimum != null) {
         return ram.minimum / 1024
     } else {
-        // Legacy behavior
         const mem = os.totalmem()
-        return mem >= (6*1073741824) ? 3 : 1
+        return mem <= (8*1073741824) ? 1 : 3
     }
-}
+};
 
 exports.getAbsoluteMaxRAM = function(ram){
-    const mem = os.totalmem()
-    const gT16 = mem-(16*1073741824)
-    return Math.floor((mem-(gT16 > 0 ? (Number.parseInt(gT16/8) + (16*1073741824)/4) : mem/4))/1073741824)
-}
+    const mem = os.totalmem();
+    if (mem <= (16*1073741824)) {
+        return Math.floor((mem * 3) / (4 * 1073741824))
+    } else {
+        const excess = mem - (16*1073741824)
+        return Math.floor((12*1073741824 + excess / 8) / 1073741824)
+    }
+};
 
 function resolveSelectedRAM(ram) {
-    if(ram?.recommended != null) {
+    if (ram?.recommended != null) {
         return `${ram.recommended}M`
     } else {
-        // Legacy behavior
-        const mem = os.totalmem()
-        return mem >= (8*1073741824) ? '4G' : (mem >= (6*1073741824) ? '3G' : '1G')
+        const totalMem = os.totalmem()
+        const freeMem = os.freemem()
+
+        if (totalMem <= (8 * 1073741824)) {
+            return freeMem > (2 * 1073741824) ? '2G' : '1G'
+        } else {
+            return '3G'
+        }
     }
 }
 
