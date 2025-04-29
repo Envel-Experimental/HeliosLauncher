@@ -43,15 +43,21 @@ const configPath = path.join(exports.getLauncherDirectory(), 'config.json')
 const configPathLEGACY = path.join(dataPath, 'config.json')
 const firstLaunch = !fs.existsSync(configPath) && !fs.existsSync(configPathLEGACY)
 
-exports.getAbsoluteMinRAM = function(ram){
-    if(ram?.minimum != null) {
-        return ram.minimum/1024
+exports.getAbsoluteMinRAM = function(ram) {
+    if (ram?.minimum != null) {
+        return ram.minimum / 1024;
     } else {
-        // Legacy behavior
-        const mem = os.totalmem()
-        return mem >= (6*1073741824) ? 3 : 2
+        const totalMemGB = os.totalmem() / 1073741824;
+        const freeMemGB = os.freemem() / 1073741824;
+        
+        if (firstLaunch) {
+            return Math.max(1, freeMemGB);
+        } else {
+            return totalMemGB >= 8 ? 2 : 1;
+        }
     }
-}
+};
+
 
 exports.getAbsoluteMaxRAM = function(ram){
     const mem = os.totalmem()
