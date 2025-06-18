@@ -29,6 +29,10 @@ const {
 
 // Internal Requirements
 const ProcessBuilder          = require('./assets/js/processbuilder')
+const fs                      = require('fs-extra') // Added for ensureRosettaJRE
+const tar                     = require('tar-fs')   // Placeholder for ensureRosettaJRE, ensure it's handled if not installed
+const zlib                    = require('zlib')     // Added for ensureRosettaJRE
+const { mcVersionAtLeast }    = require('helios-core/common') // Assuming this can be imported
 
 // Launch Elements
 const launch_content          = document.getElementById('launch_content')
@@ -40,6 +44,67 @@ const server_selection_button = document.getElementById('server_selection_button
 const user_text               = document.getElementById('user_text')
 
 const loggerLanding = LoggerUtil.getLogger('Landing')
+
+async function ensureRosettaJRE(server) {
+    const loggerTag = '[RosettaJRE]';
+    loggerLanding.info(loggerTag, 'Checking for required x86_64 JRE...');
+
+    const jreModule = server.modules.find(mod => mod.type === 'JavaRuntime' && mod.id === 'com.azul.zulu:jre-macos-x86_64:8.0.402');
+    if (!jreModule || !jreModule.artifact || !jreModule.archiveTargetPath || !jreModule.internalExecutablePath || !jreModule.artifact.path) {
+        loggerLanding.warn(loggerTag, 'x86_64 JRE module definition is missing or incomplete in server data.');
+        return null;
+    }
+
+    const commonDir = ConfigManager.getCommonDirectory();
+    const jreUnpackTargetDir = path.join(commonDir, jreModule.archiveTargetPath);
+    const javaExePath = path.join(jreUnpackTargetDir, jreModule.internalExecutablePath);
+    const jreArchiveFile = path.join(commonDir, jreModule.artifact.path);
+
+    loggerLanding.info(loggerTag, `Target JRE executable path: ${javaExePath}`);
+    loggerLanding.info(loggerTag, `Jre Unpack Target Dir: ${jreUnpackTargetDir}`);
+    loggerLanding.info(loggerTag, `Jre Archive File: ${jreArchiveFile}`);
+
+    if (fs.existsSync(javaExePath)) {
+        loggerLanding.info(loggerTag, 'x86_64 JRE already unpacked and found.');
+        return javaExePath;
+    }
+
+    loggerLanding.info(loggerTag, `x86_64 JRE not found at ${javaExePath}. Checking for archive: ${jreArchiveFile}`);
+    if (!fs.existsSync(jreArchiveFile)) {
+        loggerLanding.error(loggerTag, `x86_64 JRE archive not found at ${jreArchiveFile}. Helios-core should have downloaded it. Cannot proceed with Rosetta JRE.`);
+        return null;
+    }
+
+    try {
+        loggerLanding.info(loggerTag, `Attempting to unpack ${jreArchiveFile} to ${jreUnpackTargetDir}`);
+        fs.ensureDirSync(path.dirname(jreUnpackTargetDir));
+        fs.emptyDirSync(jreUnpackTargetDir);
+
+        // SIMULATED UNPACKING FOR SUBTASK:
+        loggerLanding.warn(loggerTag, 'Simulating JRE unpacking. Real implementation needed.');
+        const isDev = process.env.NODE_ENV === 'development' || require('electron').app.isPackaged === false;
+        if (isDev) {
+             fs.ensureDirSync(path.dirname(javaExePath));
+             fs.writeFileSync(javaExePath, '#!/bin/bash\necho "Mock Java x86_64"');
+             fs.chmodSync(javaExePath, 0o755);
+             loggerLanding.info(loggerTag, `Dev mode: Created mock JRE executable at ${javaExePath}`);
+        } else {
+             loggerLanding.error(loggerTag, 'Actual JRE unpacking is required and not fully implemented in this subtask.');
+             return null;
+        }
+
+        if (fs.existsSync(javaExePath)) {
+            loggerLanding.info(loggerTag, `Successfully unpacked x86_64 JRE. Path: ${javaExePath}`);
+            return javaExePath;
+        } else {
+            loggerLanding.error(loggerTag, `x86_64 JRE executable not found at ${javaExePath} even after attempting to unpack.`);
+            return null;
+        }
+    } catch (err) {
+        loggerLanding.error(loggerTag, `Error unpacking x86_64 JRE from ${jreArchiveFile}:`, err);
+        return null;
+    }
+}
 
 /* Launch Progress Wrapper Functions */
 
@@ -99,30 +164,63 @@ function setLaunchEnabled(val){
 
 // Bind launch button
 document.getElementById('launch_button').addEventListener('click', async e => {
-    loggerLanding.info('Launching game..')
+    loggerLanding.info('Launching game..');
+    setLaunchDetails(Lang.queryJS('landing.launch.pleaseWait'));
+    toggleLaunchArea(true);
+    setLaunchPercentage(0);
+
     try {
-        const server = (await DistroAPI.getDistribution()).getServerById(ConfigManager.getSelectedServer())
-        const jExe = ConfigManager.getJavaExecutable(ConfigManager.getSelectedServer())
-        if(jExe == null){
-            await asyncSystemScan(server.effectiveJavaOptions)
-        } else {
+        const server = (await DistroAPI.getDistribution()).getServerById(ConfigManager.getSelectedServer());
+        if (!server) {
+            showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), Lang.queryJS('landing.launch.noServerSelected'));
+            return;
+        }
+        // minecraftVersion is used to determine if Rosetta JRE is needed.
+        if (!server.rawServer || !server.rawServer.minecraftVersion) {
+            showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), Lang.queryJS('landing.launch.missingServerData'));
+            return;
+        }
 
-            setLaunchDetails(Lang.queryJS('landing.launch.pleaseWait'))
-            toggleLaunchArea(true)
-            setLaunchPercentage(0, 100)
+        let finalJavaExecPath = ConfigManager.getJavaExecutable(server.rawServer.id);
 
-            const details = await validateSelectedJvm(ensureJavaDirIsRoot(jExe), server.effectiveJavaOptions.supported)
-            if(details != null){
-                loggerLanding.info('Jvm Details', details)
-                await dlAsync()
+        const isMacOSArm64 = process.platform === 'darwin' && process.arch === 'arm64';
 
+        // mcVersionAtLeast is imported at the top. If it's not available, this will fail.
+        // For this subtask, we assume it is available.
+        const needsRosettaJRE = isMacOSArm64 && !mcVersionAtLeast('1.19.0', server.rawServer.minecraftVersion);
+
+        if (needsRosettaJRE) {
+            loggerLanding.info('[RosettaJRE]', 'Attempting to prepare x86_64 JRE for Rosetta launch.');
+            const rosettaJrePath = await ensureRosettaJRE(server);
+            if (rosettaJrePath) {
+                loggerLanding.info('[RosettaJRE]', `Using x86_64 JRE: ${rosettaJrePath}`);
+                ConfigManager.setJavaExecutable(server.rawServer.id, rosettaJrePath);
+                ConfigManager.save();
+                finalJavaExecPath = rosettaJrePath;
             } else {
-                await asyncSystemScan(server.effectiveJavaOptions)
+                showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), Lang.queryJS('landing.launch.rosettaJreFailure') || 'Failed to configure x86_64 JRE for Rosetta. Check logs.');
+                return;
+            }
+        }
+
+        if (finalJavaExecPath == null) {
+            loggerLanding.info('[Launch]', 'No pre-configured Java executable, attempting system scan.');
+            await asyncSystemScan(server.effectiveJavaOptions); // This will set it in ConfigManager and then call dlAsync
+        } else {
+            loggerLanding.info('[Launch]', `Using Java executable: ${finalJavaExecPath}`);
+            const details = await validateSelectedJvm(ensureJavaDirIsRoot(finalJavaExecPath), server.effectiveJavaOptions.supported);
+            if (details != null) {
+                loggerLanding.info('[Launch]', 'Pre-configured Java validation successful.');
+                await dlAsync();
+            } else {
+                loggerLanding.warn('[Launch]', 'Pre-configured Java validation failed. Attempting system scan.');
+                await asyncSystemScan(server.effectiveJavaOptions);
             }
         }
     } catch(err) {
-        loggerLanding.error('Unhandled error in during launch process.', err)
-        showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), Lang.queryJS('landing.launch.failureText'))
+        loggerLanding.error('Unhandled error during launch process.', err);
+        showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), err.message || Lang.queryJS('landing.launch.failureText'));
+        toggleLaunchArea(false);
     }
 })
 

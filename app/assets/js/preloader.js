@@ -108,58 +108,73 @@ DistroAPI.getDistribution()
                             }
                         };
 
-                        // Define LWJGLX Module (using placeholder URL)
-                        const lwjglxModule = {
-                            id: 'org.lwjglx:lwjglx-macos-arm64:0.1.0', // Custom ID
-                            name: 'LWJGLX for macOS ARM64 (Hotfix)',
-                            type: 'Library',
-                            artifact: {
-                                url: 'https://f-launcher.ru/fox/new/libs/lwjglx-macos-arm64-0.1.0.jar', // Placeholder URL
-                                path: 'org/lwjglx/lwjglx-macos-arm64/0.1.0/lwjglx-macos-arm64-0.1.0.jar'
-                            }
-                        };
-                        addModuleIfNotExists(lwjglxModule);
+                        // LWJGLX Module has been removed.
 
-                        // Define LWJGL 3 Modules
-                        const lwjgl3Version = '3.3.1';
-                        const lwjgl3BaseUrl = 'https://repo1.maven.org/maven2'; // Standard Maven Central URL
-                        const lwjgl3Modules = [
-                            { name: 'lwjgl', natives: true }, { name: 'lwjgl-glfw', natives: true },
-                            { name: 'lwjgl-jemalloc', natives: true }, { name: 'lwjgl-openal', natives: true },
-                            { name: 'lwjgl-opengl', natives: true }, { name: 'lwjgl-stb', natives: true }
-                        ];
-
-                        lwjgl3Modules.forEach(modInfo => {
-                            // Main JAR
-                            addModuleIfNotExists({
-                                id: `org.lwjgl:${modInfo.name}:${lwjgl3Version}`,
-                                name: `LWJGL 3 - ${modInfo.name} (macOS ARM64 Hotfix)`,
-                                type: 'Library',
-                                artifact: {
-                                    url: `${lwjgl3BaseUrl}/org/lwjgl/${modInfo.name}/${lwjgl3Version}/${modInfo.name}-${lwjgl3Version}.jar`,
-                                    path: `org/lwjgl/${modInfo.name}/${lwjgl3Version}/${modInfo.name}-${lwjgl3Version}.jar`
-                                }
-                            });
-
-                            // Native JAR (if applicable)
-                            if (modInfo.natives) {
-                                const classifier = 'natives-macos-arm64';
-                                addModuleIfNotExists({
-                                    id: `org.lwjgl:${modInfo.name}:${lwjgl3Version}:${classifier}`, // ID includes classifier
-                                    name: `LWJGL 3 - ${modInfo.name} ${classifier} (macOS ARM64 Hotfix)`,
-                                    type: 'Library',
-                                    artifact: {
-                                        url: `${lwjgl3BaseUrl}/org/lwjgl/${modInfo.name}/${lwjgl3Version}/${modInfo.name}-${lwjgl3Version}-${classifier}.jar`,
-                                        path: `org/lwjgl/${modInfo.name}/${lwjgl3Version}/${modInfo.name}-${lwjgl3Version}-${classifier}.jar`,
-                                        classifier: classifier
-                                    }
-                                });
-                            }
-                        });
-                        logger.info(`[Preloader ARM64Patch] Finished modifying modules for server: ${server.rawServer.id}`);
+                        // LWJGL 3 Modules have been removed.
+                        logger.info(`[Preloader ARM64Patch] Finished (now only JRE) modifying modules for server: ${server.rawServer.id}`);
                     }
                 }
             }
+
+            // Rosetta JRE Injection (still within isMacOSArm64 block)
+            logger.info('[Preloader RosettaJRE] Starting JRE check for macOS ARM64 servers.');
+            // Temporary mcVersionAtLeast helper - IMPORTANT: This is defined *within* the ARM64Patch block for LWJGL,
+            // ensure it's available here or redefine if this JRE block is fully separate.
+            // For this replacement, we assume it might have been part of the shared scope or needs redefinition.
+            const localMcVersionAtLeast = (version, comparisonVersion) => {
+                const vParts = version.split('.').map(Number);
+                const cParts = comparisonVersion.split('.').map(Number);
+                for (let i = 0; i < Math.max(vParts.length, cParts.length); i++) {
+                    const v = vParts[i] || 0;
+                    const c = cParts[i] || 0;
+                    if (v < c) return false;
+                    if (v > c) return true;
+                }
+                return true;
+            };
+
+            for (const server of heliosDistro.servers) {
+                if (server && server.rawServer && server.rawServer.minecraftVersion) {
+                    const mcVersion = server.rawServer.minecraftVersion;
+                    const needsRosettaJRE = !localMcVersionAtLeast('1.19', mcVersion);
+                    logger.info(`[Preloader RosettaJRE] Server: ${server.rawServer.id}, MC Version: ${mcVersion}, needsRosettaJRE=${needsRosettaJRE}`);
+
+                    if (needsRosettaJRE) {
+                        logger.info(`[Preloader RosettaJRE] Modifying modules for server: ${server.rawServer.id} to include x86_64 Java 8 JRE.`);
+                        server.modules = server.modules || [];
+
+                        const addModuleIfNotExists = (mod) => {
+                            // Remove any other JavaRuntime module first to ensure only one is present if switching versions
+                            server.modules = server.modules.filter(existingMod => existingMod.type !== 'JavaRuntime' || existingMod.id === mod.id);
+                            if (!server.modules.find(existingMod => existingMod.id === mod.id)) {
+                                server.modules.push(mod);
+                                logger.info(`[Preloader RosettaJRE] Added module: ${mod.id}`);
+                            } else {
+                                logger.info(`[Preloader RosettaJRE] Module already exists or was updated: ${mod.id}`);
+                            }
+                        };
+
+                        const x86JREModule = {
+                            id: 'com.azul.zulu:jre-macos-x86_64:8.0.402',
+                            name: 'Azul Zulu JRE 8u402 (x86_64 for Rosetta)',
+                            type: 'JavaRuntime',
+                            archiveTargetPath: 'java/zulu8.0.402-jre-macosx_x64',
+                            internalExecutablePath: 'zulu8.76.0.17-ca-jre8.0.402-macosx_x64/Contents/Home/bin/java', // VERIFY THIS PATH
+                            artifact: {
+                                url: 'https://cdn.azul.com/zulu/bin/zulu8.76.0.17-ca-jre8.0.402-macosx_x64.tar.gz',
+                                MD5: null,
+                                size: null,
+                                path: 'java-archives/zulu8.76.0.17-ca-jre8.0.402-macosx_x64.tar.gz'
+                            }
+                        };
+                        addModuleIfNotExists(x86JREModule);
+                        // logger.info within addModuleIfNotExists covers the addition.
+                    }
+                } else {
+                    logger.warn('[Preloader RosettaJRE] Server or server.rawServer or server.rawServer.minecraftVersion is undefined, skipping JRE check for this server.');
+                }
+            }
+            logger.info('[Preloader RosettaJRE] Finished JRE checks for all servers.');
         }
     }
 

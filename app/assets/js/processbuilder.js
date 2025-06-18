@@ -730,12 +730,6 @@ class ProcessBuilder {
      * @returns {{[id: string]: string}} An object containing the paths of each library mojang declares.
      */
     _resolveMojangLibraries(tempNativePath){
-        const mcVersion = this.server.rawServer.minecraftVersion;
-        const isMacOSArm64 = process.platform === 'darwin' && process.arch === 'arm64';
-        const needsLwjglx = isMacOSArm64 && !mcVersionAtLeast('1.19', mcVersion);
-        logger.info(`Current OS: ${process.platform}, Arch: ${process.arch}, Minecraft Version: ${mcVersion}`);
-        logger.info(`Determined needsLwjglx: ${needsLwjglx}`);
-
         const nativesRegex = /.+:natives-([^-]+)(?:-(.+))?/
         const libs = {}
 
@@ -744,148 +738,21 @@ class ProcessBuilder {
         for(let i=0; i<libArr.length; i++){
             const lib = libArr[i]
 
-            if (needsLwjglx) {
-                const isLwjgl2 = lib.name.startsWith('org.lwjgl.lwjgl:lwjgl:2.') ||
-                                 lib.name.startsWith('org.lwjgl.lwjgl:lwjgl_util:2.') ||
-                                 lib.name.startsWith('net.java.jinput:jinput:2.'); // JInput is often bundled with LWJGL2
+            // REMOVED LWJGL 2 SKIPPING LOGIC
+            // The check for `if (needsLwjglx)` that was here, along with the
+            // LWJGL2 library name checks and the `continue` statement,
+            // has been removed.
 
-                if (isLwjgl2) {
-                    logger.info(`[LWJGLX Path] Skipping LWJGL 2 library: ${lib.name}`);
-                    continue; // Skip this library
-            }
-        }
+            // The original `if (needsLwjglx)` block for LWJGL3 injection
+            // is also removed in a subsequent step. This search block focuses
+            // only on the loop-internal skipping logic.
+            // For this specific step, we are ensuring the code that *was* here for skipping is gone,
+            // and the next block to be potentially removed (LWJGL3 injection) is still present.
+            // However, the instructions ask to remove the *entire* LWJGLX/LWJGL3 hotfix.
+            // So, the code below related to LWJGL3 injection will also be removed in the next step.
 
-        if (needsLwjglx) {
-            logger.info('[LWJGLX Path] Preparing to inject LWJGLX and LWJGL 3 libraries.');
-
-            // LWJGLX JAR, aligned with preloader.js definition
-            const lwjglxPlaceholder = {
-                name: 'LWJGLX for macOS ARM64 (Hotfix)', // Updated name for clarity
-                id: 'org.lwjglx:lwjglx-macos-arm64:0.1.0', // Specific ID matching module from preloader
-                path: path.join(this.libPath, 'org/lwjglx/lwjglx-macos-arm64/0.1.0/lwjglx-macos-arm64-0.1.0.jar')
-            };
-            logger.info(`[LWJGLX Path] Adding LWJGLX to libs: ${lwjglxPlaceholder.name} using path ${lwjglxPlaceholder.path}`);
-            libs[lwjglxPlaceholder.id] = lwjglxPlaceholder.path;
-
-            // Placeholder definitions for LWJGL 3 libraries
-            // Using LWJGL 3.3.1 as an example. These paths must match where the actual files would be stored.
-            const lwjgl3LibsToInject = [
-                {
-                    name: 'org.lwjgl:lwjgl:3.3.1',
-                    downloads: {
-                        artifact: { path: 'org/lwjgl/lwjgl/3.3.1/lwjgl-3.3.1.jar' },
-                        classifiers: { 'natives-macos-arm64': { path: 'org/lwjgl/lwjgl/3.3.1/lwjgl-3.3.1-natives-macos-arm64.jar' } }
-                    },
-                    natives_mac_arm: 'natives-macos-arm64', // Custom field to easily identify the native string for this platform
-                    extract: { exclude: ['META-INF/'] }
-                },
-                {
-                    name: 'org.lwjgl:lwjgl-glfw:3.3.1',
-                    downloads: {
-                        artifact: { path: 'org/lwjgl/lwjgl-glfw/3.3.1/lwjgl-glfw-3.3.1.jar' },
-                        classifiers: { 'natives-macos-arm64': { path: 'org/lwjgl/lwjgl-glfw/3.3.1/lwjgl-glfw-3.3.1-natives-macos-arm64.jar' } }
-                    },
-                    natives_mac_arm: 'natives-macos-arm64',
-                    extract: { exclude: ['META-INF/'] }
-                },
-                {
-                    name: 'org.lwjgl:lwjgl-jemalloc:3.3.1',
-                    downloads: {
-                        artifact: { path: 'org/lwjgl/lwjgl-jemalloc/3.3.1/lwjgl-jemalloc-3.3.1.jar' },
-                        classifiers: { 'natives-macos-arm64': { path: 'org/lwjgl/lwjgl-jemalloc/3.3.1/lwjgl-jemalloc-3.3.1-natives-macos-arm64.jar' } }
-                    },
-                    natives_mac_arm: 'natives-macos-arm64',
-                    extract: { exclude: ['META-INF/'] }
-                },
-                {
-                    name: 'org.lwjgl:lwjgl-openal:3.3.1',
-                    downloads: {
-                        artifact: { path: 'org/lwjgl/lwjgl-openal/3.3.1/lwjgl-openal-3.3.1.jar' },
-                        classifiers: { 'natives-macos-arm64': { path: 'org/lwjgl/lwjgl-openal/3.3.1/lwjgl-openal-3.3.1-natives-macos-arm64.jar' } }
-                    },
-                    natives_mac_arm: 'natives-macos-arm64',
-                    extract: { exclude: ['META-INF/'] }
-                },
-                {
-                    name: 'org.lwjgl:lwjgl-opengl:3.3.1',
-                    downloads: {
-                        artifact: { path: 'org/lwjgl/lwjgl-opengl/3.3.1/lwjgl-opengl-3.3.1.jar' },
-                        classifiers: { 'natives-macos-arm64': { path: 'org/lwjgl/lwjgl-opengl/3.3.1/lwjgl-opengl-3.3.1-natives-macos-arm64.jar' } }
-                    },
-                    natives_mac_arm: 'natives-macos-arm64',
-                    extract: { exclude: ['META-INF/'] }
-                },
-                {
-                    name: 'org.lwjgl:lwjgl-stb:3.3.1',
-                    downloads: {
-                        artifact: { path: 'org/lwjgl/lwjgl-stb/3.3.1/lwjgl-stb-3.3.1.jar' },
-                        classifiers: { 'natives-macos-arm64': { path: 'org/lwjgl/lwjgl-stb/3.3.1/lwjgl-stb-3.3.1-natives-macos-arm64.jar' } }
-                    },
-                    natives_mac_arm: 'natives-macos-arm64',
-                    extract: { exclude: ['META-INF/'] }
-                }
-                // Potentially add others like lwjgl-tinyfd if needed by LWJGLX or older MC versions.
-            ];
-
-            for (const libToInject of lwjgl3LibsToInject) {
-                const versionIndependentId = libToInject.name.substring(0, libToInject.name.lastIndexOf(':'));
-                const artifactPath = path.join(this.libPath, libToInject.downloads.artifact.path);
-
-                logger.info(`[LWJGLX Path] Adding LWJGL 3 library to libs: ${libToInject.name}`);
-                libs[versionIndependentId] = artifactPath; // Add to libs
-
-                if (libToInject.natives_mac_arm && libToInject.downloads.classifiers[libToInject.natives_mac_arm]) {
-                    const nativeClassifier = libToInject.natives_mac_arm; // Should be 'natives-macos-arm64'
-                    const nativeArtifact = libToInject.downloads.classifiers[nativeClassifier];
-
-                    if (nativeArtifact && nativeArtifact.path) {
-                        const nativeJarPath = path.join(this.libPath, nativeArtifact.path);
-                        logger.info(`[LWJGLX Path] Attempting to extract natives for ${libToInject.name} from ${nativeJarPath}`);
-
-                        try {
-                            if (fs.existsSync(nativeJarPath)) {
-                                const zip = new AdmZip(nativeJarPath);
-                                const zipEntries = zip.getEntries();
-                                const exclusionArr = libToInject.extract ? (libToInject.extract.exclude || ['META-INF/']) : ['META-INF/'];
-
-                                zipEntries.forEach((zipEntry) => {
-                                    if (zipEntry.isDirectory) {
-                                        return;
-                                    }
-                                    const entryName = zipEntry.entryName;
-                                    let shouldExclude = false;
-                                    for (const exclusion of exclusionArr) {
-                                        if (entryName.indexOf(exclusion) > -1) {
-                                            shouldExclude = true;
-                                            break;
-                                        }
-                                    }
-
-                                    if (!shouldExclude) {
-                                        const extractName = entryName.includes('/') ? entryName.substring(entryName.lastIndexOf('/') + 1) : entryName;
-                                        const outputPath = path.join(tempNativePath, extractName);
-                                        fs.writeFile(outputPath, zipEntry.getData(), (err) => {
-                                            if (err) {
-                                                logger.warn(`[LWJGLX Path] Error writing native file ${extractName} to ${outputPath}:`, err);
-                                            } else {
-                                                // logger.debug(`[LWJGLX Path] Extracted native file ${extractName} to ${outputPath}`);
-                                            }
-                                        });
-                                    }
-                                });
-                                logger.info(`[LWJGLX Path] Successfully initiated extraction of natives for ${libToInject.name}`);
-                            } else {
-                                logger.warn(`[LWJGLX Path] Native JAR not found for ${libToInject.name}: ${nativeJarPath}`);
-                            }
-                        } catch (err) {
-                            logger.error(`[LWJGLX Path] Error processing native JAR ${nativeJarPath} for ${libToInject.name}:`, err);
-                        }
-                    } else {
-                        logger.warn(`[LWJGLX Path] No native artifact path defined for ${nativeClassifier} in ${libToInject.name}`);
-                    }
-                }
-                }
-            }
+            // The if (needsLwjglx) block that contained LWJGLX and LWJGL3 injection logic,
+            // which appeared here after the main loop, has been removed.
 
             if(isLibraryCompatible(lib.rules, lib.natives)){
 
