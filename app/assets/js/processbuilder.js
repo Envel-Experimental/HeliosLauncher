@@ -758,14 +758,14 @@ class ProcessBuilder {
         if (needsLwjglx) {
             logger.info('[LWJGLX Path] Preparing to inject LWJGLX and LWJGL 3 libraries.');
 
-            // Placeholder for LWJGLX JAR
+            // LWJGLX JAR, aligned with preloader.js definition
             const lwjglxPlaceholder = {
-                name: 'org.lwjglx:lwjglx:0.1.0-SNAPSHOT', // Example coordinates
-                id: 'org.lwjglx:lwjglx', // Version-independent ID
-                path: path.join(this.libPath, 'org', 'lwjglx', 'lwjglx', '0.1.0-SNAPSHOT', 'lwjglx-0.1.0-SNAPSHOT.jar')
+                name: 'LWJGLX for macOS ARM64 (Hotfix)', // Updated name for clarity
+                id: 'org.lwjglx:lwjglx-macos-arm64:0.1.0', // Specific ID matching module from preloader
+                path: path.join(this.libPath, 'org/lwjglx/lwjglx-macos-arm64/0.1.0/lwjglx-macos-arm64-0.1.0.jar')
             };
-            logger.info(`[LWJGLX Path] Adding LWJGLX to libs: ${lwjglxPlaceholder.name}`);
-            libs[lwjglxPlaceholder.id] = lwjglxPlaceholder.path; // Add to libs
+            logger.info(`[LWJGLX Path] Adding LWJGLX to libs: ${lwjglxPlaceholder.name} using path ${lwjglxPlaceholder.path}`);
+            libs[lwjglxPlaceholder.id] = lwjglxPlaceholder.path;
 
             // Placeholder definitions for LWJGL 3 libraries
             // Using LWJGL 3.3.1 as an example. These paths must match where the actual files would be stored.
