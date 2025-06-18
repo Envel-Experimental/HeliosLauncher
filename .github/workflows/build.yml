@@ -1,9 +1,10 @@
 name: Build
 
 on:
+  # Запуск на любой пуш (любая ветка) + ручной запуск
   push:
     branches:
-      - master
+      - '**'
   workflow_dispatch:
 
 permissions:
@@ -102,10 +103,27 @@ jobs:
           name: build-artifacts-windows-latest
           path: artifacts/windows
 
-      - name: Create Release or Pre-release
+      # Определяем тип релиза: release (только main + commit 'release'),
+      # prerelease (main, но без commit 'release'), или beta (любая другая ветка)
+      - name: Decide tag and prerelease flag
+        id: vars
+        run: |
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          if [[ "$BRANCH" == "main" && "${{ github.event.head_commit.message }}" == "release" ]]; then
+            echo "tag_name=release-${{ github.run_id }}" >> $GITHUB_OUTPUT
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+          elif [[ "$BRANCH" == "main" ]]; then
+            echo "tag_name=prerelease-${{ github.run_id }}" >> $GITHUB_OUTPUT
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "tag_name=beta-${BRANCH}-${{ github.run_id }}" >> $GITHUB_OUTPUT
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release / Pre-release
         uses: ncipollo/release-action@v1.14.0
         with:
-          tag: ${{ github.event.head_commit.message == 'release' && 'release' || 'prerelease' }}-${{ github.run_id }}
+          tag: ${{ steps.vars.outputs.tag_name }}
           artifacts: |
             artifacts/macos/*.dmg
             artifacts/ubuntu/*.AppImage
@@ -116,10 +134,10 @@ jobs:
             artifacts/ubuntu/*.tar.gz
             artifacts/windows/*.exe
             artifacts/macos/latest-mac.yml
-            artifacts/windows/latest-linux.yml
+            artifacts/ubuntu/latest-linux.yml
             artifacts/windows/latest.yml
             artifacts/macos/*.dmg.blockmap
             artifacts/windows/*.exe.blockmap
-          prerelease: ${{ github.event.head_commit.message == 'release' && 'false' || 'true' }}
+          prerelease: ${{ steps.vars.outputs.prerelease }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
