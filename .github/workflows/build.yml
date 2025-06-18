@@ -1,14 +1,17 @@
-name: Build
+name: Build and Release
 
 on:
-  # Запуск на любой пуш (любая ветка) + ручной запуск
   push:
     branches:
-      - '**'
-  workflow_dispatch:
+      - '**'          # любая ветка
+  workflow_dispatch:   # ручной запуск
 
 permissions:
   contents: write
+
+env:
+  BRANCH_NAME: ${{ github.ref_name }}
+  COMMIT_SHA:  ${{ github.sha }}
 
 jobs:
   build:
@@ -20,6 +23,9 @@ jobs:
     steps:
       - name: Check out Git repository
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}   # ← ключевая строчка
 
       - name: Set up Node
         uses: actions/setup-node@v3
@@ -29,115 +35,107 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.9
+          python-version: '3.9'
 
-      - name: Install Dependencies
+      - name: Install dependencies
         run: npm ci
-        shell: bash
 
-      - name: Install Flatpak and Flatpak Builder (for Linux)
+      - name: Install Flatpak toolchain (Linux only)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y flatpak flatpak-builder gnome-software-plugin-flatpak
-          flatpak --version || (echo "Flatpak installation failed"; exit 1)
-
-      - name: Check Flatpak Version (Linux)
-        if: runner.os == 'Linux'
-        run: flatpak --version
+          flatpak --version
 
       - name: Build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GIT_BRANCH: ${{ env.BRANCH_NAME }}
+          GIT_SHA:    ${{ env.COMMIT_SHA }}
         run: npm run dist
-        shell: bash
       
-      - name: List files in dist (Linux/macOS)
+      - name: List dist (Linux/macOS)
         if: runner.os != 'Windows'
         run: ls -la dist
 
-      - name: List files in dist (Windows)
+      - name: List dist (Windows)
         if: runner.os == 'Windows'
         run: Get-ChildItem dist
         shell: pwsh
 
-      - name: Upload Build Artifacts
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: build-artifacts-${{ matrix.os }}
           path: |
-            dist/*.dmg
-            dist/*.AppImage
-            dist/*.deb
-            dist/*.rpm
-            dist/*.snap
-            dist/*.flatpak
-            dist/*.tar.gz
-            dist/*.exe
-            dist/*.dmg.blockmap
-            dist/latest-mac.yml
-            dist/latest-linux.yml
-            dist/latest.yml
-            dist/*.exe.blockmap
+            dist/**/*.dmg
+            dist/**/*.AppImage
+            dist/**/*.deb
+            dist/**/*.rpm
+            dist/**/*.snap
+            dist/**/*.flatpak
+            dist/**/*.tar.gz
+            dist/**/*.exe
+            dist/**/*.blockmap
+            dist/**/*.yml
           if-no-files-found: warn
           
   create_release:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - name: Download Artifacts from macOS
+      - name: Download artifacts from all jobs
         uses: actions/download-artifact@v4
         with:
-          name: build-artifacts-macos-latest
-          path: artifacts/macos
+          path: artifacts
 
-      - name: Download Artifacts from Ubuntu
-        uses: actions/download-artifact@v4
-        with:
-          name: build-artifacts-ubuntu-latest
-          path: artifacts/ubuntu
-
-      - name: Download Artifacts from Windows
-        uses: actions/download-artifact@v4
-        with:
-          name: build-artifacts-windows-latest
-          path: artifacts/windows
-
-      # Определяем тип релиза: release (только main + commit 'release'),
-      # prerelease (main, но без commit 'release'), или beta (любая другая ветка)
-      - name: Decide tag and prerelease flag
+      - name: Decide tag / prerelease / names
         id: vars
         run: |
-          BRANCH="${GITHUB_REF#refs/heads/}"
+          BRANCH="${GITHUB_REF_NAME}"
+          COMMIT="${GITHUB_SHA}"
+
+          # главный релиз: ветка main + коммит со словом release
           if [[ "$BRANCH" == "main" && "${{ github.event.head_commit.message }}" == "release" ]]; then
             echo "tag_name=release-${{ github.run_id }}" >> $GITHUB_OUTPUT
-            echo "prerelease=false" >> $GITHUB_OUTPUT
+            echo "prerelease=false"                    >> $GITHUB_OUTPUT
+            echo "release_name=Release build"          >> $GITHUB_OUTPUT
+          # pre-release: ветка main, но без commit 'release'
           elif [[ "$BRANCH" == "main" ]]; then
             echo "tag_name=prerelease-${{ github.run_id }}" >> $GITHUB_OUTPUT
-            echo "prerelease=true" >> $GITHUB_OUTPUT
+            echo "prerelease=true"                         >> $GITHUB_OUTPUT
+            echo "release_name=Prerelease build from main" >> $GITHUB_OUTPUT
+          # beta-релиз со сторонней ветки
           else
             echo "tag_name=beta-${BRANCH}-${{ github.run_id }}" >> $GITHUB_OUTPUT
-            echo "prerelease=true" >> $GITHUB_OUTPUT
+            echo "prerelease=true"                              >> $GITHUB_OUTPUT
+            echo "release_name=Beta build from ${BRANCH}"       >> $GITHUB_OUTPUT
           fi
 
-      - name: Create Release / Pre-release
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          echo "commit=$COMMIT" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
         uses: ncipollo/release-action@v1.14.0
         with:
-          tag: ${{ steps.vars.outputs.tag_name }}
-          artifacts: |
-            artifacts/macos/*.dmg
-            artifacts/ubuntu/*.AppImage
-            artifacts/ubuntu/*.deb
-            artifacts/ubuntu/*.rpm
-            artifacts/ubuntu/*.snap
-            artifacts/ubuntu/*.flatpak
-            artifacts/ubuntu/*.tar.gz
-            artifacts/windows/*.exe
-            artifacts/macos/latest-mac.yml
-            artifacts/ubuntu/latest-linux.yml
-            artifacts/windows/latest.yml
-            artifacts/macos/*.dmg.blockmap
-            artifacts/windows/*.exe.blockmap
+          tag:  ${{ steps.vars.outputs.tag_name }}
+          name: ${{ steps.vars.outputs.release_name }}
           prerelease: ${{ steps.vars.outputs.prerelease }}
+          body: |
+            **Branch**:  ${{ steps.vars.outputs.branch }}
+            **Commit**:  ${{ steps.vars.outputs.commit }}
+            
+            Built automatically by workflow run ${{ github.run_id }}.
+          artifacts: |
+            artifacts/**/*.dmg
+            artifacts/**/*.AppImage
+            artifacts/**/*.deb
+            artifacts/**/*.rpm
+            artifacts/**/*.snap
+            artifacts/**/*.flatpak
+            artifacts/**/*.tar.gz
+            artifacts/**/*.exe
+            artifacts/**/*.blockmap
+            artifacts/**/*.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
