@@ -159,6 +159,19 @@ function syncModConfigurations(data){
             const mods = {}
 
             for(let mdl of mdls){
+
+                // Skip JavaRuntime modules in this function as they don't follow typical mod structure for configuration.
+                if (mdl.type === 'JavaRuntime') {
+                    // loggerLanding.debug(`Skipping JavaRuntime module ${mdl.id} in syncModConfigurations.`);
+                    continue;
+                }
+
+                // Ensure rawModule and its type property exist before trying to access them.
+                if (!mdl.rawModule || typeof mdl.rawModule.type === 'undefined') {
+                    // loggerLanding.warn(`Module ${mdl.id} is missing rawModule or rawModule.type, skipping in syncModConfigurations.`);
+                    continue;
+                }
+
                 const type = mdl.rawModule.type
 
                 if(type === Type.ForgeMod || type === Type.LiteMod || type === Type.LiteLoader || type === Type.FabricMod){
@@ -195,6 +208,17 @@ function syncModConfigurations(data){
             const mods = {}
 
             for(let mdl of mdls){
+                // Skip JavaRuntime modules in this function as they don't follow typical mod structure for configuration.
+                if (mdl.type === 'JavaRuntime') {
+                    // loggerLanding.debug(`Skipping JavaRuntime module ${mdl.id} in syncModConfigurations.`);
+                    continue;
+                }
+
+                // Ensure rawModule and its type property exist before trying to access them.
+                if (!mdl.rawModule || typeof mdl.rawModule.type === 'undefined') {
+                    // loggerLanding.warn(`Module ${mdl.id} is missing rawModule or rawModule.type, skipping in syncModConfigurations.`);
+                    continue;
+                }
                 const type = mdl.rawModule.type
                 if(type === Type.ForgeMod || type === Type.LiteMod || type === Type.LiteLoader || type === Type.FabricMod){
                     if(!mdl.getRequired().value){
