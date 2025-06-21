@@ -295,9 +295,13 @@ async function asyncSystemScan(effectiveJavaOptions, launchAfter = true){
     toggleLaunchArea(true)
     setLaunchPercentage(0, 100)
 
+    const server = (await DistroAPI.getDistribution()).getServerById(ConfigManager.getSelectedServer())
+    const minecraftVersion = server.rawServer.minecraftVersion
+
     const jvmDetails = await discoverBestJvmInstallation(
         ConfigManager.getDataDirectory(),
-        effectiveJavaOptions.supported
+        effectiveJavaOptions.supported,
+        minecraftVersion
     )
 
     if(jvmDetails == null) {
@@ -366,10 +370,14 @@ async function downloadJava(effectiveJavaOptions, launchAfter = true) {
 
     // TODO Error handling.
     // asset can be null.
+    const server = (await DistroAPI.getDistribution()).getServerById(ConfigManager.getSelectedServer())
+    const minecraftVersion = server.rawServer.minecraftVersion
     const asset = await latestOpenJDK(
         effectiveJavaOptions.suggestedMajor,
         ConfigManager.getDataDirectory(),
-        effectiveJavaOptions.distribution)
+        effectiveJavaOptions.distribution,
+        minecraftVersion
+    )
 
     if(asset == null) {
         throw new Error(Lang.queryJS('landing.downloadJava.findJdkFailure'))
