@@ -1,144 +1,190 @@
-const { expect } = require('chai'); // Or your preferred assertion library
-const { setupLiteLoader } = require('../../../../app/assets/js/processbuilder/liteloader'); // Adjust path
-const ConfigManager = require('../../../../app/assets/js/configmanager'); // Mock or use actual
-const { Type } = require('helios-distribution-types');
-const fs = require('fs-extra'); // For mocking fs.existsSync
+// eslint-disable-next-line no-unused-vars
+// const { expect } = require('chai'); // Removed Chai expect, using Jest's global expect
+// const { setupLiteLoader } = require('../../../../app/assets/js/processbuilder/liteloader'); // Loaded by proxyquire
+const ConfigManager = require('../../../../app/assets/js/configmanager')
+const { Type } = require('helios-distribution-types')
+const fs = require('fs-extra') // For mocking fs.existsSync
+const ProcessConfiguration = require('../../../../app/assets/js/processbuilder/modules/config')
 
-// Mock isModEnabled if it's complex or to isolate tests
-// const { isModEnabled } = require('../../../../app/assets/js/processbuilder/utils');
 const mockUtils = {
     isModEnabled: (modCfg, required) => {
-        // Simplified mock logic for testing liteloader
         if (modCfg === null || typeof modCfg === 'undefined') {
-            return required ? required.def : true;
+            return required ? required.def : true
         }
         if (typeof modCfg === 'boolean') {
-            return modCfg;
+            return modCfg
         }
-        return typeof modCfg.value !== 'undefined' ? modCfg.value : true;
+        return typeof modCfg.value !== 'undefined' ? modCfg.value : true
     }
-};
+}
 
 describe('Process Builder LiteLoader Logic (liteloader.js)', () => {
 
-    describe('setupLiteLoader(processBuilderInstance)', () => {
-        let mockProcessBuilderInstance;
-        let originalFsExistsSync;
-        let originalConfigGetModConfiguration;
+    describe('setupLiteLoader(config)', () => {
+        let mockConfigInstance
+        let originalFsExistsSync
+        let originalCMGetModConfiguration
+        let originalCMGetInstanceDirectory
+        let originalCMGetCommonDirectory
+
+        const dummyDistro = {
+            rawServer: { id: 'testServer', minecraftVersion: '1.12.2' },
+            modules: []
+        }
+        const dummyVanillaManifest = { id: '1.12.2', libraries: [], arguments: {}, assets: '1.12.2', type: 'release' }
+        const dummyModManifest = { id: '1.12.2-forge-x.y.z', arguments: {}, minecraftArguments: '' }
+        const dummyAuthUser = { displayName: 'TestUser', uuid: 'test-uuid', accessToken: 'test-token', type: 'mojang' }
+        const dummyLauncherVersion = '1.0.0'
 
         beforeEach(() => {
-            mockProcessBuilderInstance = {
-                server: {
-                    modules: [],
-                    rawServer: { id: 'testServer' }
-                },
-                usingLiteLoader: false,
-                llPath: null,
-                // Mock any other properties accessed on the instance
-            };
-            originalFsExistsSync = fs.existsSync;
-            originalConfigGetModConfiguration = ConfigManager.getModConfiguration;
+            originalFsExistsSync = fs.existsSync
+            originalCMGetModConfiguration = ConfigManager.getModConfiguration
+            originalCMGetInstanceDirectory = ConfigManager.getInstanceDirectory
+            originalCMGetCommonDirectory = ConfigManager.getCommonDirectory
 
-            // Setup default mocks
-            fs.existsSync = (p) => true; // Assume path exists by default
-            ConfigManager.getModConfiguration = (id) => ({ mods: {} }); // Default empty mod config
-        });
+            fs.existsSync = jest.fn().mockReturnValue(true)
+            ConfigManager.getModConfiguration = jest.fn().mockReturnValue({ mods: {} })
+            ConfigManager.getInstanceDirectory = jest.fn().mockReturnValue('/test/instances')
+            ConfigManager.getCommonDirectory = jest.fn().mockReturnValue('/test/common')
+
+            dummyDistro.modules = []
+            mockConfigInstance = new ProcessConfiguration(
+                dummyDistro,
+                dummyVanillaManifest,
+                dummyModManifest,
+                dummyAuthUser,
+                dummyLauncherVersion
+            )
+        })
 
         afterEach(() => {
-            fs.existsSync = originalFsExistsSync;
-            ConfigManager.getModConfiguration = originalConfigGetModConfiguration;
-        });
+            fs.existsSync = originalFsExistsSync
+            ConfigManager.getModConfiguration = originalCMGetModConfiguration
+            ConfigManager.getInstanceDirectory = originalCMGetInstanceDirectory
+            ConfigManager.getCommonDirectory = originalCMGetCommonDirectory
+            jest.clearAllMocks()
+        })
 
         it('should enable LiteLoader if a LiteLoader module is present, enabled, and its file exists', () => {
-            // Arrange
-            mockProcessBuilderInstance.server.modules = [
+            dummyDistro.modules = [
                 {
                     rawModule: { type: Type.LiteLoader },
-                    getRequired: () => ({ value: false, def: true }), // Optional, defaults to true
+                    getRequired: () => ({ value: false, def: true }),
                     getVersionlessMavenIdentifier: () => 'com.example:liteloader',
                     getPath: () => '/path/to/liteloader.jar'
                 }
-            ];
-            // ConfigManager.getModConfiguration should return config where this liteloader is enabled
-            ConfigManager.getModConfiguration = (id) => ({
+            ]
+            mockConfigInstance = new ProcessConfiguration(dummyDistro, dummyVanillaManifest, dummyModManifest, dummyAuthUser, dummyLauncherVersion)
+
+            ConfigManager.getModConfiguration.mockReturnValue({
                 mods: { 'com.example:liteloader': true }
-            });
+            })
+            fs.existsSync.mockReturnValue(true)
 
-            // Act
-            // Need to inject the mocked isModEnabled from mockUtils for this test
-            const actualSetupLiteLoader = require('proxyquire')('../../../../app/assets/js/processbuilder/liteloader', {
-                './utils': mockUtils,
-                'fs-extra': fs // ensure fs-extra is also proxied if you mock it more deeply
-            }).setupLiteLoader;
-            actualSetupLiteLoader(mockProcessBuilderInstance);
+            // eslint-disable-next-line no-unused-vars
+            const proxiedSetupLiteLoader = require('proxyquire')('../../../../app/assets/js/processbuilder/liteloader', {
+                './utils.js': mockUtils,
+                'fs-extra': fs
+            }).setupLiteLoader
+            proxiedSetupLiteLoader(mockConfigInstance)
 
-            // Assert
-            expect(mockProcessBuilderInstance.usingLiteLoader).to.be.true;
-            expect(mockProcessBuilderInstance.llPath).to.equal('/path/to/liteloader.jar');
-        });
+            expect(mockConfigInstance.isUsingLiteLoader()).toBe(true) // Chai: .to.be.true;
+            expect(mockConfigInstance.getLiteLoaderPath()).toBe('/path/to/liteloader.jar') // Chai: .to.equal(...)
+        })
 
         it('should not enable LiteLoader if module is not enabled in config', () => {
-            mockProcessBuilderInstance.server.modules = [
+            dummyDistro.modules = [
                 {
                     rawModule: { type: Type.LiteLoader },
                     getRequired: () => ({ value: false, def: true }),
                     getVersionlessMavenIdentifier: () => 'com.example:liteloader',
                     getPath: () => '/path/to/liteloader.jar'
                 }
-            ];
-            ConfigManager.getModConfiguration = (id) => ({
-                mods: { 'com.example:liteloader': false } // Mod is disabled
-            });
+            ]
+            mockConfigInstance = new ProcessConfiguration(dummyDistro, dummyVanillaManifest, dummyModManifest, dummyAuthUser, dummyLauncherVersion)
+            ConfigManager.getModConfiguration.mockReturnValue({
+                mods: { 'com.example:liteloader': false }
+            })
+            fs.existsSync.mockReturnValue(true)
 
-            const actualSetupLiteLoader = require('proxyquire')('../../../../app/assets/js/processbuilder/liteloader', {
-                './utils': mockUtils,
+            // eslint-disable-next-line no-unused-vars
+            const proxiedSetupLiteLoader = require('proxyquire')('../../../../app/assets/js/processbuilder/liteloader', {
+                './utils.js': mockUtils,
                 'fs-extra': fs
-            }).setupLiteLoader;
-            actualSetupLiteLoader(mockProcessBuilderInstance);
+            }).setupLiteLoader
+            proxiedSetupLiteLoader(mockConfigInstance)
 
-            expect(mockProcessBuilderInstance.usingLiteLoader).to.be.false;
-        });
+            expect(mockConfigInstance.isUsingLiteLoader()).toBe(false) // Chai: .to.be.false;
+        })
 
         it('should not enable LiteLoader if file does not exist', () => {
-            mockProcessBuilderInstance.server.modules = [
+            dummyDistro.modules = [
                 {
                     rawModule: { type: Type.LiteLoader },
                     getRequired: () => ({ value: false, def: true }),
                     getVersionlessMavenIdentifier: () => 'com.example:liteloader',
                     getPath: () => '/path/to/liteloader.jar'
                 }
-            ];
-            fs.existsSync = (p) => false; // LiteLoader jar does not exist
+            ]
+            mockConfigInstance = new ProcessConfiguration(dummyDistro, dummyVanillaManifest, dummyModManifest, dummyAuthUser, dummyLauncherVersion)
+            ConfigManager.getModConfiguration.mockReturnValue({
+                mods: { 'com.example:liteloader': true }
+            })
+            fs.existsSync.mockReturnValue(false)
 
-            const actualSetupLiteLoader = require('proxyquire')('../../../../app/assets/js/processbuilder/liteloader', {
-                './utils': mockUtils,
+            // eslint-disable-next-line no-unused-vars
+            const proxiedSetupLiteLoader = require('proxyquire')('../../../../app/assets/js/processbuilder/liteloader', {
+                './utils.js': mockUtils,
                 'fs-extra': fs
-            }).setupLiteLoader;
-            actualSetupLiteLoader(mockProcessBuilderInstance);
+            }).setupLiteLoader
+            proxiedSetupLiteLoader(mockConfigInstance)
 
-            expect(mockProcessBuilderInstance.usingLiteLoader).to.be.false;
-        });
+            expect(mockConfigInstance.isUsingLiteLoader()).toBe(false) // Chai: .to.be.false;
+        })
 
-        it('should handle required LiteLoader modules correctly', () => {
-            mockProcessBuilderInstance.server.modules = [
+        it('should handle required LiteLoader modules correctly (file exists)', () => {
+            dummyDistro.modules = [
                 {
                     rawModule: { type: Type.LiteLoader },
-                    getRequired: () => ({ value: true }), // Required mod
+                    getRequired: () => ({ value: true }),
                     getVersionlessMavenIdentifier: () => 'com.example:liteloader',
                     getPath: () => '/path/to/liteloader.jar'
                 }
-            ];
-            // No need to check ConfigManager for required mods if they are marked as required:true
+            ]
+            mockConfigInstance = new ProcessConfiguration(dummyDistro, dummyVanillaManifest, dummyModManifest, dummyAuthUser, dummyLauncherVersion)
+            fs.existsSync.mockReturnValue(true)
 
-            const actualSetupLiteLoader = require('proxyquire')('../../../../app/assets/js/processbuilder/liteloader', {
-                './utils': mockUtils, // isModEnabled won't be called for required:true
+            // eslint-disable-next-line no-unused-vars
+            const proxiedSetupLiteLoader = require('proxyquire')('../../../../app/assets/js/processbuilder/liteloader', {
+                './utils.js': mockUtils,
                 'fs-extra': fs
-            }).setupLiteLoader;
-            actualSetupLiteLoader(mockProcessBuilderInstance);
+            }).setupLiteLoader
+            proxiedSetupLiteLoader(mockConfigInstance)
 
-            expect(mockProcessBuilderInstance.usingLiteLoader).to.be.true;
-            expect(mockProcessBuilderInstance.llPath).to.equal('/path/to/liteloader.jar');
-        });
+            expect(mockConfigInstance.isUsingLiteLoader()).toBe(true) // Chai: .to.be.true;
+            expect(mockConfigInstance.getLiteLoaderPath()).toBe('/path/to/liteloader.jar') // Chai: .to.equal(...)
+        })
 
-    });
-});
+        it('should NOT enable required LiteLoader module if file does NOT exist', () => {
+            dummyDistro.modules = [
+                {
+                    rawModule: { type: Type.LiteLoader },
+                    getRequired: () => ({ value: true }),
+                    getVersionlessMavenIdentifier: () => 'com.example:liteloader',
+                    getPath: () => '/path/to/liteloader.jar'
+                }
+            ]
+            mockConfigInstance = new ProcessConfiguration(dummyDistro, dummyVanillaManifest, dummyModManifest, dummyAuthUser, dummyLauncherVersion)
+            fs.existsSync.mockReturnValue(false) // File does not exist
+
+            // eslint-disable-next-line no-unused-vars
+            const proxiedSetupLiteLoader = require('proxyquire')('../../../../app/assets/js/processbuilder/liteloader', {
+                './utils.js': mockUtils,
+                'fs-extra': fs
+            }).setupLiteLoader
+            proxiedSetupLiteLoader(mockConfigInstance)
+
+            expect(mockConfigInstance.isUsingLiteLoader()).toBe(false) // Chai: .to.be.false;
+        })
+    })
+})

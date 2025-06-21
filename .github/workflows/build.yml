@@ -34,6 +34,14 @@ jobs:
         run: npm ci
         shell: bash
 
+      - name: Lint
+        run: npm run lint
+        shell: bash
+
+      - name: Test
+        run: npm test
+        shell: bash
+
       - name: Install Flatpak and Flatpak Builder (for Linux)
         if: runner.os == 'Linux'
         run: |
@@ -49,6 +57,18 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run dist
+        shell: bash
+
+      - name: Sentry Release
+        if: success() # Only run if build was successful
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: foxford-dc # Already in sentry.properties but can be explicit
+          SENTRY_PROJECT: node # Already in sentry.properties but can be explicit
+        run: |
+          npm run sentry:release
+          npm run sentry:upload-sourcemaps
+          npm run sentry:set-commits
         shell: bash
       
       - name: List files in dist (Linux/macOS)

@@ -1,21 +1,20 @@
-const child_process         = require('child_process')
 const crypto                = require('crypto')
 const fs                    = require('fs-extra')
-const { LoggerUtil }        = require('helios-core')
 const { mcVersionAtLeast }  = require('helios-core/common') // Trimmed imports
 const { Type }              = require('helios-distribution-types')
 const os                    = require('os')
-const path                  = require('path')
-const { sendToSentry }      = require('./preloader');
-// Removed: const { getClasspathSeparator, isModEnabled } = require('./processbuilder/utils');
-const { setupLiteLoader }   = require('./processbuilder/liteloader');
-const { resolveModConfiguration, constructJSONModList, constructModList } = require('./processbuilder/modConfig');
-const { constructJVMArguments } = require('./processbuilder/jvmArgs');
-// Removed: const AdmZip = require('adm-zip');
+const path                  = require('path') // Keep path for tempNativePath generation for now
 
-const ConfigManager            = require('./configmanager')
+// Load modules
+const ProcessConfiguration  = require('./processbuilder/modules/config')
+const logger                = require('./processbuilder/modules/logging')
+const { executeMinecraftProcess } = require('./processbuilder/modules/execution')
+const ConfigManager         = require('./configmanager')
 
-const logger = LoggerUtil.getLogger('ProcessBuilder')
+// Helper function loaders
+const { setupLiteLoader }   = require('./processbuilder/liteloader')
+const { resolveModConfiguration, constructJSONModList, constructModList } = require('./processbuilder/modConfig')
+const { constructJVMArguments } = require('./processbuilder/jvmArgs')
 
 
 /**
@@ -29,102 +28,56 @@ const logger = LoggerUtil.getLogger('ProcessBuilder')
 class ProcessBuilder {
 
     constructor(distroServer, vanillaManifest, modManifest, authUser, launcherVersion){
-        this.gameDir = path.join(ConfigManager.getInstanceDirectory(), distroServer.rawServer.id)
-        this.commonDir = ConfigManager.getCommonDirectory()
-        this.server = distroServer
-        this.vanillaManifest = vanillaManifest
-        this.modManifest = modManifest
-        this.authUser = authUser
-        this.launcherVersion = launcherVersion
-        this.forgeModListFile = path.join(this.gameDir, 'forgeMods.list') // 1.13+
-        this.fmlDir = path.join(this.gameDir, 'forgeModList.json')
-        this.llDir = path.join(this.gameDir, 'liteloaderModList.json')
-        this.libPath = path.join(this.commonDir, 'libraries')
-
-        this.usingLiteLoader = false
-        this.usingFabricLoader = false
-        this.llPath = null
+        this.config = new ProcessConfiguration(distroServer, vanillaManifest, modManifest, authUser, launcherVersion)
+        // Properties like gameDir, commonDir, server, vanillaManifest, authUser, launcherVersion,
+        // forgeModListFile, fmlDir, llDir, libPath are now accessed via this.config.get...()
+        // State properties like usingLiteLoader, usingFabricLoader, llPath are also in this.config
     }
 
     /**
      * Convienence method to run the functions typically used to build a process.
      */
     build(){
-        fs.ensureDirSync(this.gameDir)
+        // Use config properties
+        fs.ensureDirSync(this.config.getGameDirectory())
+        // TODO: tempNativePath generation could also be part of ProcessConfiguration or a dedicated utility
         const tempNativePath = path.join(os.tmpdir(), ConfigManager.getTempNativeFolder(), crypto.pseudoRandomBytes(16).toString('hex'))
-        process.throwDeprecation = true
-        setupLiteLoader(this)
-        logger.info('Using liteloader:', this.usingLiteLoader)
-        this.usingFabricLoader = this.server.modules.some(mdl => mdl.rawModule.type === Type.Fabric)
-        logger.info('Using fabric loader:', this.usingFabricLoader)
-        const modObj = resolveModConfiguration(this, ConfigManager.getModConfiguration(this.server.rawServer.id).mods, this.server.modules)
+        process.throwDeprecation = true // This is a global process flag, consider if it's still needed here.
 
-        if(!mcVersionAtLeast('1.13', this.server.rawServer.minecraftVersion)){
-            constructJSONModList(this, 'forge', modObj.fMods, true)
-            if(this.usingLiteLoader){
-                constructJSONModList(this, 'liteloader', modObj.lMods, true)
+        // Pass config to helper functions
+        setupLiteLoader(this.config) // setupLiteLoader will need to use config.setUsingLiteLoader, etc.
+        logger.info('Using liteloader:', this.config.isUsingLiteLoader())
+
+        // Determine and set Fabric loader status on the config object
+        const isFabric = this.config.getServer().modules.some(mdl => mdl.rawModule.type === Type.Fabric)
+        this.config.setUsingFabricLoader(isFabric)
+        logger.info('Using fabric loader:', this.config.isUsingFabricLoader())
+
+        // resolveModConfiguration will need to be adapted to take config object
+        const modObj = resolveModConfiguration(this.config, ConfigManager.getModConfiguration(this.config.getServer().rawServer.id).mods, this.config.getServer().modules)
+
+        // mcVersionAtLeast and constructJSONModList will need to take config or specific values from it
+        if(!mcVersionAtLeast(this.config.getVanillaManifest().id, '1.13')){ // Example: or pass server.rawServer.minecraftVersion
+            constructJSONModList(this.config, 'forge', modObj.fMods, true)
+            if(this.config.isUsingLiteLoader()){
+                constructJSONModList(this.config, 'liteloader', modObj.lMods, true)
             }
         }
 
         const uberModArr = modObj.fMods.concat(modObj.lMods)
-        let args = constructJVMArguments(this, uberModArr, tempNativePath)
+        // constructJVMArguments will need to be adapted
+        let args = constructJVMArguments(this.config, uberModArr, tempNativePath)
 
-        if(mcVersionAtLeast('1.13', this.server.rawServer.minecraftVersion)){
-            args = args.concat(constructModList(this, modObj.fMods))
+        if(mcVersionAtLeast(this.config.getVanillaManifest().id, '1.13')){
+            // constructModList will need to be adapted
+            args = args.concat(constructModList(this.config, modObj.fMods))
         }
 
         logger.info('Launch Arguments:', args)
 
-        const child = child_process.spawn(ConfigManager.getJavaExecutable(this.server.rawServer.id), args, {
-            cwd: this.gameDir,
-            detached: ConfigManager.getLaunchDetached()
-        })
-
-        if(ConfigManager.getLaunchDetached()){
-            child.unref()
-        }
-
-        child.stdout.setEncoding('utf8')
-        child.stderr.setEncoding('utf8')
-
-        child.stdout.on('data', (data) => {
-            data.trim().split('\n').forEach(x => console.log(`\x1b[32m[Minecraft]\x1b[0m ${x}`))
-
-        })
-        child.stderr.on('data', (data) => {
-            data.trim().split('\n').forEach(x => console.log(`\x1b[31m[Minecraft]\x1b[0m ${x}`))
-        })
-        child.on('close', (code, signal) => {
-            logger.info('Exited with code', code)
-            if(code != 0){
-
-
-                const exitMessage = `Process exited with code: ${code}`;
-                sendToSentry(exitMessage, 'error');
-
-                setOverlayContent(
-                    Lang.queryJS('processbuilder.exit.exitErrorHeader'),
-                    Lang.queryJS('processbuilder.exit.message') + code,
-                    Lang.queryJS('uibinder.startup.closeButton')
-                )
-                setOverlayHandler(() => {
-                    toggleOverlay(false)
-                })
-                setDismissHandler(() => {
-                    toggleOverlay(false)
-                })
-                toggleOverlay(true, true)
-            }
-            fs.remove(tempNativePath, (err) => {
-                if(err){
-                    logger.warn('Error while deleting temp dir', err)
-                } else {
-                    logger.info('Temp dir deleted successfully.')
-                }
-            })
-        })
-
-        return child
+        // Delegate to execution module
+        const javaExecutable = ConfigManager.getJavaExecutable(this.config.getServer().rawServer.id)
+        return executeMinecraftProcess(javaExecutable, args, this.config.getGameDirectory(), tempNativePath)
     }
 
 }
