@@ -2,7 +2,7 @@
 const AdmZip = require('adm-zip');
 const fs = require('fs-extra');
 const path = require('path');
-const { isLibraryCompatible, getMojangOS, mcVersionAtLeast } = require('helios-core/common');
+const { isLibraryCompatible, getMojangOS, mcVersionAtLeast } = require('@envel/helios-core/common');
 const { Type } = require('helios-distribution-types');
 
 // Internal helper function

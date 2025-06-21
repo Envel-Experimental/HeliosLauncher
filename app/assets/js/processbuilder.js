@@ -1,8 +1,8 @@
 const child_process         = require('child_process')
 const crypto                = require('crypto')
 const fs                    = require('fs-extra')
-const { LoggerUtil }        = require('helios-core')
-const { mcVersionAtLeast }  = require('helios-core/common') // Trimmed imports
+const { LoggerUtil }        = require('@envel/helios-core')
+const { mcVersionAtLeast }  = require('@envel/helios-core/common') // Trimmed imports
 const { Type }              = require('helios-distribution-types')
 const os                    = require('os')
 const path                  = require('path')

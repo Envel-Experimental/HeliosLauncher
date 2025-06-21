@@ -1,7 +1,7 @@
 const { expect } = require('chai');
 const { constructJVMArguments } = require('../../../../app/assets/js/processbuilder/jvmArgs');
 const ConfigManager = require('../../../../app/assets/js/configmanager');
-const { mcVersionAtLeast } = require('helios-core/common'); // Real one, or mock if complex interactions
+const { mcVersionAtLeast } = require('@envel/helios-core/common'); // Real one, or mock if complex interactions
 const path = require('path');
 
 // Mocks for dependencies of jvmArgs.js and its helpers

@@ -2,7 +2,7 @@
 const os = require('os');
 const path = require('path');
 const ConfigManager = require('../configmanager'); // Adjust path as necessary
-const { getMojangOS, mcVersionAtLeast } = require('helios-core/common');
+const { getMojangOS, mcVersionAtLeast } = require('@envel/helios-core/common');
 const { getClasspathSeparator } = require('./utils');
 const { classpathArg } = require('./classpath'); // Added import
 
