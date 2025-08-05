@@ -8,16 +8,11 @@ serverStatusPlaceholder = "ОФФЛАЙН"
 mojangStatus = "СТАТУС MOJANG"
 mojangStatusTooltipTitle = "Сервисы"
 mojangStatusNETitle = "Не&nbsp;обязательно"
-newsButton = "НОВОСТИ"
+openFolderButton = "Открыть папку"
 launchButton = "ИГРАТЬ"
 launchButtonPlaceholder = "&#8226; Сервер не выбран"
 launchDetails = "Пожалуйста, подождите.."
 settingsButton = "НАСТРОЙКИ"
-newsNavigationStatus = "{currentPage} из {totalPages}"
-newsErrorLoadSpan = "Проверка новостей.."
-newsErrorFailedSpan = "Не удалось загрузить новости"
-newsErrorRetryButton = "Повторить попытку"
-newsErrorNoneSpan = "Новостей нет"
 
 [ejs.login]
 loginCancelText = "Отмена"
@@ -158,6 +153,10 @@ failureTitle = "Ошибка при запуске"
 failureText = "Смотрите консоль (CTRL + Shift + i) для получения деталей."
 okay = "Ок"
 
+[js.landing.folderNotFound]
+title = "Папка не найдена"
+content = "Папка с выбранной версией не найдена."
+
 [js.landing.selectedAccount]
 noAccountSelected = "Аккаунт не выбран"
 
@@ -206,9 +205,6 @@ launchingGame = "Запуск игры.."
 launchWrapperNotDownloaded = "Основной файл, LaunchWrapper, не удалось скачать корректно. В результате игра не может запуститься.<br><br>Чтобы устранить эту проблему, временно отключите антивирусное программное обеспечение и повторите запуск игры.<br><br>Если у вас есть время, пожалуйста, <a href=\"https://github.com/Envel-Experimental/HeliosLauncher/issues\">сообщите об этом</a> и укажите, каким антивирусом вы пользуетесь. Мы свяжемся с ними и попытаемся устранить проблему."
 doneEnjoyServer = "Готово. Запускаю..."
 checkConsoleForDetails = "Пожалуйста, смотрите консоль (CTRL + Shift + i) для получения деталей."
-
-[js.landing.news]
-checking = "Проверка новостей"
 
 [js.landing.discord]
 loading = "Загрузка игры.."

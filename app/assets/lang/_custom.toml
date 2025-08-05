@@ -4,6 +4,7 @@
 title = "ФЛАУНЧЕР"
 
 [ejs.landing]
+openFolderButton = ""
 mediaGitHubURL = "https://github.com/Envel-Experimental/HeliosLauncher"
 mediaTwitterURL = "#"
 mediaInstagramURL = "#"
@@ -18,3 +19,7 @@ supportLink = "https://github.com/Envel-Experimental/HeliosLauncher/issues"
 welcomeHeader = "Добро пожаловать в ФЛАУНЧЕР!"
 welcomeDescription = "Далее мы создадим тебе аккаунт в Minecraft. Придумай игровое имя из больших и/или маленьких английских букв, можно использовать цифры и символ нижнего подчеркивания. От 4 до 16 символов."
 welcomeDescCTA = 'На следующей странице нажми "Создать аккаунт" и введи игровое имя.'
+
+[js.landing.folderNotFound]
+title = ""
+content = ""
