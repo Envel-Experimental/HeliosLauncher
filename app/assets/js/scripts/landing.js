@@ -670,23 +670,20 @@ function slide_(up){
 }
 
 // Bind news button.
-document.getElementById('newsButton').onclick = () => {
-    // Toggle tabbing.
-    if(newsActive){
-        $('#landingContainer *').removeAttr('tabindex')
-        $('#newsContainer *').attr('tabindex', '-1')
-    } else {
-        $('#landingContainer *').attr('tabindex', '-1')
-        $('#newsContainer, #newsContainer *, #lower, #lower #center *').removeAttr('tabindex')
-        if(newsAlertShown){
-            $('#newsButtonAlert').fadeOut(2000)
-            newsAlertShown = false
-            ConfigManager.setNewsCacheDismissed(true)
-            ConfigManager.save()
+document.getElementById('newsButton').onclick = async () => {
+    const path = require('path')
+    const { shell } = require('electron')
+    try {
+        const distro = await DistroAPI.getDistribution()
+        const serv = distro.getServerById(ConfigManager.getSelectedServer())
+        if(serv) {
+            const serverId = serv.rawServer.id
+            const instancePath = path.join(ConfigManager.getInstanceDirectory(), serverId)
+            await shell.openPath(instancePath)
         }
+    } catch (err) {
+        loggerLanding.error('Error opening instance directory.', err)
     }
-    slide_(!newsActive)
-    newsActive = !newsActive
 }
 
 // Array to store article meta.
