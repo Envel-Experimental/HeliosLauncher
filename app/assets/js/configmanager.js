@@ -94,7 +94,8 @@ const DEFAULT_CONFIG = {
         },
         launcher: {
             allowPrerelease: false,
-            dataDirectory: dataPath
+            dataDirectory: dataPath,
+            totalRAMWarningShown: false
         }
     },
     newsCache: {
@@ -798,4 +799,23 @@ exports.getAllowPrerelease = function(def = false){
  */
 exports.setAllowPrerelease = function(allowPrerelease){
     config.settings.launcher.allowPrerelease = allowPrerelease
+}
+
+/**
+ * Check if the total RAM warning has been shown.
+ *
+ * @param {boolean} def Optional. If true, the default value will be returned.
+ * @returns {boolean} Whether or not the total RAM warning has been shown.
+ */
+exports.getTotalRAMWarningShown = function(def = false){
+    return !def ? config.settings.launcher.totalRAMWarningShown : DEFAULT_CONFIG.settings.launcher.totalRAMWarningShown
+}
+
+/**
+ * Set the status of whether the total RAM warning has been shown.
+ *
+ * @param {boolean} shown Whether or not the total RAM warning has been shown.
+ */
+exports.setTotalRAMWarningShown = function(shown){
+    config.settings.launcher.totalRAMWarningShown = shown
 }

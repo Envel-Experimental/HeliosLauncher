@@ -12,6 +12,7 @@ const semver                            = require('semver')
 const { pathToFileURL }                 = require('url')
 const { AZURE_CLIENT_ID, MSFT_OPCODE, MSFT_REPLY_TYPE, MSFT_ERROR, SHELL_OPCODE } = require('./app/assets/js/ipcconstants')
 const LangLoader                        = require('./app/assets/js/langloader')
+const SysUtil                           = require('./app/assets/js/sysutil')
 
 // Setup Lang
 LangLoader.setupLanguage()
@@ -258,9 +259,13 @@ function createWindow() {
 
     win.loadURL(pathToFileURL(path.join(__dirname, 'app', 'app.ejs')).toString())
 
-    /*win.once('ready-to-show', () => {
+    win.once('ready-to-show', async () => {
+        const warnings = await SysUtil.performChecks()
+        if (warnings.length > 0) {
+            win.webContents.send('system-warnings', warnings)
+        }
         win.show()
-    })*/
+    })
 
     win.removeMenu()
 

@@ -321,3 +321,28 @@ function prepareAccountSelectionList(){
     populateAccountListings()
     setAccountListingHandlers()
 }
+
+// System Warnings
+let warningQueue = []
+
+function showNextWarning() {
+    if (warningQueue.length > 0) {
+        const warningKey = warningQueue.shift()
+        const message = Lang.queryJS(`systemChecks.${warningKey}`)
+        const title = Lang.queryJS('systemChecks.warningTitle')
+
+        setOverlayContent(title, message, Lang.queryJS('landing.launch.okay'))
+        setOverlayHandler(showNextWarning)
+        setDismissHandler(showNextWarning)
+        toggleOverlay(true, true)
+    } else {
+        toggleOverlay(false)
+    }
+}
+
+ipcRenderer.on('system-warnings', (event, warnings) => {
+    if (warnings && warnings.length > 0) {
+        warningQueue = warnings
+        showNextWarning()
+    }
+})
