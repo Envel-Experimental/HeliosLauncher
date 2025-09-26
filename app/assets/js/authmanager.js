@@ -1,9 +1,9 @@
 /**
  * AuthManager
- * 
+ *
  * This module aims to abstract login procedures. Offline login is used instead of Mojang's REST API,
  * while Microsoft login procedures remain intact.
- * 
+ *
  * @module authmanager
  */
 
@@ -49,29 +49,29 @@ function microsoftErrorDisplayable(errorCode) {
     }
 }
 
-const crypto = require('crypto');
+const crypto = require('crypto')
 
 function generateOfflineUUID(username) {
-    const hash = crypto.createHash('md5').update(`OfflinePlayer:${username}`).digest('hex');
-    return `${hash.substr(0, 8)}-${hash.substr(8, 4)}-${hash.substr(12, 4)}-${hash.substr(16, 4)}-${hash.substr(20)}`;
+    const hash = crypto.createHash('md5').update(`OfflinePlayer:${username}`).digest('hex')
+    return `${hash.substr(0, 8)}-${hash.substr(8, 4)}-${hash.substr(12, 4)}-${hash.substr(16, 4)}-${hash.substr(20)}`
 }
 
 exports.addMojangAccount = async function(username, password) {
-    const profileId = generateOfflineUUID(username);
+    const profileId = generateOfflineUUID(username)
     const session = {
         id: 'offline-id',
         accessToken: 'offline-access-token',
         selectedProfile: { id: profileId, name: username }
-    };
-    
+    }
+
     const ret = ConfigManager.addMojangAuthAccount(
         session.selectedProfile.id,
         session.accessToken,
         username,
         session.selectedProfile.name
-    );
-    ConfigManager.save();
-    return ret;
+    )
+    ConfigManager.save()
+    return ret
 }
 
 // Microsoft authentication functions remain as-is
@@ -80,11 +80,11 @@ const AUTH_MODE = { FULL: 0, MS_REFRESH: 1, MC_REFRESH: 2 }
 
 /**
  * Perform the full MS Auth flow in a given mode.
- * 
+ *
  * AUTH_MODE.FULL = Full authorization for a new account.
  * AUTH_MODE.MS_REFRESH = Full refresh authorization.
  * AUTH_MODE.MC_REFRESH = Refresh of the MC token, reusing the MS token.
- * 
+ *
  * @param {string} entryCode FULL-AuthCode. MS_REFRESH=refreshToken, MC_REFRESH=accessToken
  * @param {*} authMode The auth mode.
  * @returns An object with all auth data. AccessToken object will be null when mode is MC_REFRESH.
@@ -103,7 +103,7 @@ async function fullMicrosoftAuthFlow(entryCode, authMode) {
         } else {
             accessTokenRaw = entryCode
         }
-        
+
         const xblResponse = await MicrosoftAuth.getXBLToken(accessTokenRaw)
         if(xblResponse.responseStatus === RestResponseStatus.ERROR) {
             return Promise.reject(microsoftErrorDisplayable(xblResponse.microsoftErrorCode))
@@ -137,10 +137,10 @@ async function fullMicrosoftAuthFlow(entryCode, authMode) {
 /**
  * Calculate the expiry date. Advance the expiry time by 10 seconds
  * to reduce the liklihood of working with an expired token.
- * 
+ *
  * @param {number} nowMs Current time milliseconds.
  * @param {number} expiresInS Expires in (seconds)
- * @returns 
+ * @returns
  */
 function calculateExpiryDate(nowMs, expiresInS) {
     return nowMs + ((expiresInS-10)*1000)
@@ -149,7 +149,7 @@ function calculateExpiryDate(nowMs, expiresInS) {
 /**
  * Add a Microsoft account. This will pass the provided auth code to Microsoft's OAuth2.0 flow.
  * The resultant data will be stored as an auth account in the configuration database.
- * 
+ *
  * @param {string} authCode The authCode obtained from Microsoft.
  * @returns {Promise.<Object>} Promise which resolves the resolved authenticated account object.
  */
@@ -187,7 +187,7 @@ exports.removeMojangAccount = async function(uuid) {
 /**
  * Remove a Microsoft account. It is expected that the caller will invoke the OAuth logout
  * through the ipc renderer.
- * 
+ *
  * @param {string} uuid The UUID of the account to be removed.
  * @returns {Promise.<void>} Promise which resolves to void when the action is complete.
  */
@@ -211,7 +211,7 @@ async function validateSelectedMojangAccount() {
  * Validate the selected account with Microsoft's authserver. If the account is not valid,
  * we will attempt to refresh the access token and update that value. If that fails, a
  * new login will be required.
- * 
+ *
  * @returns {Promise.<boolean>} Promise which resolves to true if the access token is valid,
  * otherwise false.
  */
@@ -267,7 +267,7 @@ async function validateSelectedMicrosoftAccount() {
 
 /**
  * Validate the selected auth account.
- * 
+ *
  * @returns {Promise.<boolean>} Promise which resolves to true if the access token is valid,
  * otherwise false.
  */

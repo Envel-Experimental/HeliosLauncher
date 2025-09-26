@@ -1,3 +1,4 @@
+/* global setOverlayContent, setOverlayHandler, setDismissHandler, toggleOverlay */
 const AdmZip                = require('adm-zip')
 const child_process         = require('child_process')
 const crypto                = require('crypto')
@@ -7,9 +8,10 @@ const { getMojangOS, isLibraryCompatible, mcVersionAtLeast }  = require('@envel/
 const { Type }              = require('helios-distribution-types')
 const os                    = require('os')
 const path                  = require('path')
-const { sendToSentry }      = require('./preloader'); 
+const { sendToSentry }      = require('./preloader')
 
 const ConfigManager            = require('./configmanager')
+const Lang                     = require('./langloader')
 
 const logger = LoggerUtil.getLogger('ProcessBuilder')
 
@@ -98,8 +100,8 @@ class ProcessBuilder {
             if(code != 0){
 
 
-                const exitMessage = `Process exited with code: ${code}`;
-                sendToSentry(exitMessage, 'error');
+                const exitMessage = `Process exited with code: ${code}`
+                sendToSentry(exitMessage, 'error')
 
                 setOverlayContent(
                     Lang.queryJS('processbuilder.exit.exitErrorHeader'),

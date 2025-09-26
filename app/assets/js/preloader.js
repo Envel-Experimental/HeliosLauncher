@@ -1,86 +1,85 @@
-const { ipcRenderer } = require('electron');
-const fs = require('fs-extra');
-const os = require('os');
-const path = require('path');
+const { ipcRenderer } = require('electron')
+const fs = require('fs-extra')
+const os = require('os')
+const path = require('path')
 
-const ConfigManager = require('./configmanager');
-const { DistroAPI } = require('./distromanager');
-const LangLoader = require('./langloader');
-const { LoggerUtil } = require('@envel/helios-core');
-const { HeliosDistribution } = require('@envel/helios-core/common');
-let Sentry;
+const ConfigManager = require('./configmanager')
+const { DistroAPI } = require('./distromanager')
+const LangLoader = require('./langloader')
+const { LoggerUtil } = require('@envel/helios-core')
+let Sentry
 
-const logger = LoggerUtil.getLogger('Preloader');
+const logger = LoggerUtil.getLogger('Preloader')
 
-logger.info('Loading..');
+logger.info('Loading..')
 
 try {
-  Sentry = require('@sentry/electron/renderer');
-  Sentry.init({
-    dsn: "https://f02442d2a0733ac2c810b8d8d7f4a21e@o4508545424359424.ingest.de.sentry.io/4508545432027216",
-  });
+    Sentry = require('@sentry/electron/renderer')
+    Sentry.init({
+        dsn: 'https://f02442d2a0733ac2c810b8d8d7f4a21e@o4508545424359424.ingest.de.sentry.io/4508545432027216',
+    })
 
-  const systemInfo = {
-    platform: os.platform(),
-    arch: os.arch(),
-    cpu: os.cpus(),
-    totalMemory: os.totalmem(),
-    freeMemory: os.freemem(),
-    hostname: os.hostname(),
-  };
+    const systemInfo = {
+        platform: os.platform(),
+        arch: os.arch(),
+        cpu: os.cpus(),
+        totalMemory: os.totalmem(),
+        freeMemory: os.freemem(),
+        hostname: os.hostname(),
+    }
 
-  Sentry.setContext("system", systemInfo);
+    Sentry.setContext('system', systemInfo)
 } catch (error) {
-  logger.warn('Sentry initialization failed:', error);
+    logger.warn('Sentry initialization failed:', error)
 }
 
-ConfigManager.load();
+ConfigManager.load()
 
-DistroAPI['commonDir'] = ConfigManager.getCommonDirectory();
-DistroAPI['instanceDir'] = ConfigManager.getInstanceDirectory();
+DistroAPI['commonDir'] = ConfigManager.getCommonDirectory()
+DistroAPI['instanceDir'] = ConfigManager.getInstanceDirectory()
 
-LangLoader.setupLanguage();
+LangLoader.setupLanguage()
 
 function onDistroLoad(data) {
-  if (data) {
-    if (ConfigManager.getSelectedServer() == null || data.getServerById(ConfigManager.getSelectedServer()) == null) {
-      logger.info('Determining default selected server..');
-      ConfigManager.setSelectedServer(data.getMainServer().rawServer.id);
-      ConfigManager.save();
+    if (data) {
+        if (ConfigManager.getSelectedServer() == null || data.getServerById(ConfigManager.getSelectedServer()) == null) {
+            logger.info('Determining default selected server..')
+            ConfigManager.setSelectedServer(data.getMainServer().rawServer.id)
+            ConfigManager.save()
+        }
     }
-  }
-  ipcRenderer.send('distributionIndexDone', data !== null);
+    ipcRenderer.send('distributionIndexDone', data !== null)
 }
 
 // Capture log or error and send to Sentry
 function sendToSentry(message, type = 'info') {
-  if (Sentry) {
-    if (type === 'error') {
-      Sentry.captureException(new Error(message));
-    } else {
-      Sentry.captureMessage(message);
+    if (Sentry) {
+        if (type === 'error') {
+            Sentry.captureException(new Error(message))
+        } else {
+            Sentry.captureMessage(message)
+        }
     }
-  }
 }
 
-module.exports = { sendToSentry };
+module.exports = { sendToSentry }
 
 DistroAPI.getDistribution()
-  .then(heliosDistro => {
-    logger.info('Loaded distribution index.');
-    onDistroLoad(heliosDistro);
-  })
-  .catch(err => {
-    logger.error('Failed to load distribution index:', err);
-    sendToSentry(`Failed to load distribution index: ${err.message}`, 'error');
-    onDistroLoad(null);
-  });
+    .then(heliosDistro => {
+        logger.info('Loaded distribution index.')
+        onDistroLoad(heliosDistro)
+    })
+    .catch(err => {
+        logger.error('Failed to load distribution index:', err)
+        sendToSentry(`Failed to load distribution index: ${err.message}`, 'error')
+        onDistroLoad(null)
+    })
 
 fs.remove(path.join(os.tmpdir(), ConfigManager.getTempNativeFolder()), (err) => {
-  if (err) {
-    logger.warn('Error while cleaning natives directory:', err);
-    sendToSentry(`Error cleaning natives directory: ${err.message}`, 'error');
-  } else {
-    logger.info('Cleaned natives directory.');
-  }
-});
+    if (err) {
+        logger.warn('Error while cleaning natives directory:', err)
+        sendToSentry(`Error cleaning natives directory: ${err.message}`, 'error')
+    } else {
+        logger.info('Cleaned natives directory.')
+    }
+})
