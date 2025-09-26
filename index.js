@@ -12,17 +12,20 @@ const semver                            = require('semver')
 const { pathToFileURL }                 = require('url')
 const { AZURE_CLIENT_ID, MSFT_OPCODE, MSFT_REPLY_TYPE, MSFT_ERROR, SHELL_OPCODE } = require('./app/assets/js/ipcconstants')
 const LangLoader                        = require('./app/assets/js/langloader')
+const SysUtil                           = require('./app/assets/js/sysutil')
+const ConfigManager                     = require('./app/assets/js/configmanager')
 
 // Setup Lang
 LangLoader.setupLanguage()
+ConfigManager.load()
 
 try {
-    const Sentry = require('@sentry/electron/main');
+    const Sentry = require('@sentry/electron/main')
     Sentry.init({
         dsn: 'https://f02442d2a0733ac2c810b8d8d7f4a21e@o4508545424359424.ingest.de.sentry.io/4508545432027216',
-    });
+    })
 } catch (error) {
-    console.error("Sentry failed to initialize:", error);
+    console.error('Sentry failed to initialize:', error)
 }
 
 
@@ -258,9 +261,13 @@ function createWindow() {
 
     win.loadURL(pathToFileURL(path.join(__dirname, 'app', 'app.ejs')).toString())
 
-    /*win.once('ready-to-show', () => {
+    win.once('ready-to-show', async () => {
+        const warnings = await SysUtil.performChecks()
+        if (warnings.length > 0) {
+            win.webContents.send('system-warnings', warnings)
+        }
         win.show()
-    })*/
+    })
 
     win.removeMenu()
 

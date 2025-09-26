@@ -45,7 +45,7 @@ const loggerLanding = LoggerUtil.getLogger('Landing')
 
 /**
  * Show/hide the loading area.
- * 
+ *
  * @param {boolean} loading True if the loading area should be shown, otherwise false.
  */
 function toggleLaunchArea(loading){
@@ -60,7 +60,7 @@ function toggleLaunchArea(loading){
 
 /**
  * Set the details text of the loading area.
- * 
+ *
  * @param {string} details The new text for the loading details.
  */
 function setLaunchDetails(details){
@@ -69,7 +69,7 @@ function setLaunchDetails(details){
 
 /**
  * Set the value of the loading progress bar and display that value.
- * 
+ *
  * @param {number} percent Percentage (0-100)
  */
 function setLaunchPercentage(percent){
@@ -80,7 +80,7 @@ function setLaunchPercentage(percent){
 
 /**
  * Set the value of the OS progress bar and display that on the UI.
- * 
+ *
  * @param {number} percent Percentage (0-100)
  */
 function setDownloadPercentage(percent){
@@ -90,7 +90,7 @@ function setDownloadPercentage(percent){
 
 /**
  * Enable or disable the launch button.
- * 
+ *
  * @param {boolean} val True to enable, false to disable.
  */
 function setLaunchEnabled(val){
@@ -191,7 +191,7 @@ const refreshMojangStatuses = async function(){
         loggerLanding.warn('Unable to refresh Mojang service status.')
         statuses = MojangRestAPI.getDefaultStatuses()
     }
-    
+
     greenCount = 0
     greyCount = 0
 
@@ -228,7 +228,7 @@ const refreshMojangStatuses = async function(){
             status = 'green'
         }
     }
-    
+
     document.getElementById('mojangStatusEssentialContainer').innerHTML = tooltipEssentialHTML
     document.getElementById('mojangStatusNonEssentialContainer').innerHTML = tooltipNonEssentialHTML
     document.getElementById('mojang_status_icon').style.color = MojangRestAPI.statusToHex(status)
@@ -262,12 +262,12 @@ const refreshServerStatus = async (fade = false) => {
         document.getElementById('landingPlayerLabel').innerHTML = pLabel
         document.getElementById('player_count').innerHTML = pVal
     }
-    
+
 }
 
 /**
  * Shows an error overlay, toggles off the launch area.
- * 
+ *
  * @param {string} title The overlay title.
  * @param {string} desc The overlay description.
  */
@@ -286,8 +286,8 @@ function showLaunchFailure(title, desc){
 
 /**
  * Asynchronously scan the system for valid Java installations.
- * 
- * @param {boolean} launchAfter Whether we should begin to launch after scanning. 
+ *
+ * @param {boolean} launchAfter Whether we should begin to launch after scanning.
  */
 async function asyncSystemScan(effectiveJavaOptions, launchAfter = true){
 
@@ -312,7 +312,7 @@ async function asyncSystemScan(effectiveJavaOptions, launchAfter = true){
         setOverlayHandler(() => {
             setLaunchDetails(Lang.queryJS('landing.systemScan.javaDownloadPrepare'))
             toggleOverlay(false)
-            
+
             try {
                 downloadJava(effectiveJavaOptions, launchAfter)
             } catch(err) {
@@ -503,7 +503,7 @@ async function dlAsync(login = true) {
         showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringFileVerificationTitle'), err.displayable || Lang.queryJS('landing.dlAsync.seeConsoleForDetails'))
         return
     }
-    
+
 
     if(invalidFileCount > 0) {
         loggerLaunchSuite.info('Downloading files.')
@@ -622,8 +622,8 @@ let newsGlideCount = 0
 
 /**
  * Show the news UI via a slide animation.
- * 
- * @param {boolean} up True to slide up, otherwise false. 
+ *
+ * @param {boolean} up True to slide up, otherwise false.
  */
 function slide_(up){
     const lCUpper = document.querySelector('#landingContainer > #upper')
@@ -694,7 +694,7 @@ let newsLoadingListener = null
 
 /**
  * Set the news loading animation.
- * 
+ *
  * @param {boolean} val True to set loading animation, otherwise false.
  */
 function setNewsLoading(val){
@@ -736,7 +736,7 @@ newsArticleContentScrollable.onscroll = (e) => {
 
 /**
  * Reload the news without restarting.
- * 
+ *
  * @returns {Promise.<void>} A promise which resolves when the news
  * content has finished loading and transitioning.
  */
@@ -774,7 +774,7 @@ async function digestMessage(str) {
 /**
  * Initialize News UI. This will load the news and prepare
  * the UI accordingly.
- * 
+ *
  * @returns {Promise.<void>} A promise which resolves when the news
  * content has finished loading and transitioning.
  */
@@ -853,7 +853,7 @@ async function initNews(){
         const switchHandler = (forward) => {
             let cArt = parseInt(newsContent.getAttribute('article'))
             let nxtArt = forward ? (cArt >= newsArr.length-1 ? 0 : cArt + 1) : (cArt <= 0 ? newsArr.length-1 : cArt - 1)
-    
+
             displayArticle(newsArr[nxtArt], nxtArt+1)
         }
 
@@ -893,7 +893,7 @@ document.addEventListener('keydown', (e) => {
 
 /**
  * Display a news article on the UI.
- * 
+ *
  * @param {Object} articleObject The article meta object.
  * @param {number} index The article index.
  */
@@ -928,14 +928,14 @@ async function loadNews(){
     }
 
     const promise = new Promise((resolve, reject) => {
-        
+
         const newsFeed = distroData.rawDistribution.rss
-        let newsHost;
+        let newsHost
         try {
-            newsHost = new URL(newsFeed).origin + '/';
+            newsHost = new URL(newsFeed).origin + '/'
         } catch {
-            console.log('Invalid RSS feed URL:', newsFeed);
-            return resolve(null);
+            console.log('Invalid RSS feed URL:', newsFeed)
+            return resolve(null)
         }
         $.ajax({
             url: newsFeed,
