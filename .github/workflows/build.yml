@@ -95,16 +95,16 @@ jobs:
           BRANCH="${GITHUB_REF_NAME}"
           COMMIT="${GITHUB_SHA}"
 
-          # главный релиз: ветка main + коммит со словом release
-          if [[ "$BRANCH" == "main" && "${{ github.event.head_commit.message }}" == "release" ]]; then
+          # главный релиз: ветка master + коммит со словом release
+          if [[ "$BRANCH" == "master" && "${{ github.event.head_commit.message }}" == "release" ]]; then
             echo "tag_name=release-${{ github.run_id }}" >> $GITHUB_OUTPUT
             echo "prerelease=false"                    >> $GITHUB_OUTPUT
             echo "release_name=Release build"          >> $GITHUB_OUTPUT
-          # pre-release: ветка main, но без commit 'release'
-          elif [[ "$BRANCH" == "main" ]]; then
+          # pre-release: ветка master, но без commit 'release'
+          elif [[ "$BRANCH" == "master" ]]; then
             echo "tag_name=prerelease-${{ github.run_id }}" >> $GITHUB_OUTPUT
             echo "prerelease=true"                         >> $GITHUB_OUTPUT
-            echo "release_name=Prerelease build from main" >> $GITHUB_OUTPUT
+            echo "release_name=Prerelease build from master" >> $GITHUB_OUTPUT
           # beta-релиз со сторонней ветки
           else
             echo "tag_name=beta-${BRANCH}-${{ github.run_id }}" >> $GITHUB_OUTPUT
