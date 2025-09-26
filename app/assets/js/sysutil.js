@@ -4,7 +4,7 @@ const ConfigManager = require('./configmanager')
 
 // Configurable thresholds
 const TOTAL_RAM_THRESHOLD_GB = 6
-const FREE_RAM_THRESHOLD_GB = 1.5
+const FREE_RAM_THRESHOLD_GB = 1.0
 const FREE_DISK_THRESHOLD_GB = 10
 
 // Convert GB to Bytes for comparison

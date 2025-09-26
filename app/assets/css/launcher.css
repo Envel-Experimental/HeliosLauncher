@@ -3580,9 +3580,9 @@ input:checked + .toggleSwitchSlider:before {
     display: flex;
     flex-direction: column;
     align-items: center;
-    /*justify-content: space-between;*/
-    width: 300px;
-    /*height: 35%;*/
+    justify-content: center;
+    width: 45%;
+    height: 35%;
     box-sizing: border-box;
     padding: 15px 0px;
     /* background-color: #424242; */
@@ -3621,7 +3621,7 @@ input:checked + .toggleSwitchSlider:before {
     font-family: "Roboto", serif;
     font-weight: 500;
     font-style: normal;
-    font-size: 20px;
+    font-size: 32px;
     font-weight: bold;
     letter-spacing: 1px;
     -webkit-user-select: initial;
@@ -3629,7 +3629,7 @@ input:checked + .toggleSwitchSlider:before {
 
 /* Overlay description styles. */
 #overlayDesc {
-    font-size: 12px;
+    font-size: 16px;
     font-weight: bold;
     -webkit-user-select: initial;
 }
@@ -3651,6 +3651,8 @@ input:checked + .toggleSwitchSlider:before {
     font-style: normal;
     font-weight: bold;
     border-radius: 2px;
+    padding: 10px 20px;
+    font-size: 24px;
     padding: 0px 8.1px;
     cursor: pointer;
     transition: 0.25s ease;
@@ -3668,7 +3670,7 @@ input:checked + .toggleSwitchSlider:before {
 /* Overlay dismiss option styles. */
 #overlayDismiss {
     font-weight: bold;
-    font-size: 10px;
+    font-size: 12px;
     text-decoration: none;
     padding-top: 2.5px;
     background: none;
