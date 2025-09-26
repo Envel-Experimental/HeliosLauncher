@@ -1,6 +1,6 @@
 {
   "name": "flauncher",
-  "version": "2.3.3",
+  "version": "2.3.4",
   "productName": "FLauncher",
   "description": "Modded Minecraft Launcher",
   "author": "Nikita Gutsenkov (https://github.com/Envel-Experimental/)",
@@ -20,7 +20,7 @@
     "lint": "eslint --config .eslintrc.json ."
   },
   "engines": {
-    "node": "20.x.x"
+    "node": ">=20.x.x"
   },
   "dependencies": {
     "@electron/remote": "^2.1.2",
