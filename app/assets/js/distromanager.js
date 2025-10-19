@@ -1,4 +1,5 @@
 const { DistributionAPI } = require('@envel/helios-core/common')
+const { retry } = require('./util')
 
 const ConfigManager = require('./configmanager')
 
@@ -13,5 +14,21 @@ const api = new DistributionAPI(
     exports.REMOTE_DISTRO_URL,
     false
 )
+
+const FAILED_DOWNLOAD_ERROR_CODE = 1
+const MAX_DOWNLOAD_RETRIES = 3
+const DOWNLOAD_RETRY_DELAY = 2000
+
+const realGetDistribution = api.getDistribution.bind(api)
+api.getDistribution = async () => {
+    return await retry(
+        realGetDistribution,
+        MAX_DOWNLOAD_RETRIES,
+        DOWNLOAD_RETRY_DELAY,
+        (err) => {
+            return err.error === FAILED_DOWNLOAD_ERROR_CODE
+        }
+    )
+}
 
 exports.DistroAPI = api

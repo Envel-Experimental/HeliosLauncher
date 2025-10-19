@@ -2,6 +2,7 @@ const fs   = require('fs-extra')
 const { LoggerUtil } = require('@envel/helios-core')
 const os   = require('os')
 const path = require('path')
+const { retry } = require('./util')
 
 const logger = LoggerUtil.getLogger('ConfigManager')
 
@@ -44,7 +45,11 @@ exports.setDataDirectory = function(dataDirectory){
 
 const configPath = path.join(exports.getLauncherDirectory(), 'config.json')
 const configPathLEGACY = path.join(dataPath, 'config.json')
-const firstLaunch = !fs.existsSync(configPath) && !fs.existsSync(configPathLEGACY)
+let firstLaunch = false;
+(async () => {
+    firstLaunch = !await fs.pathExists(configPath) && !await fs.pathExists(configPathLEGACY)
+})()
+
 
 exports.getAbsoluteMinRAM = function(ram){
     if(ram?.minimum != null) {
@@ -121,8 +126,13 @@ let config = null
 /**
  * Save the current configuration to a file.
  */
-exports.save = function(){
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 4), 'UTF-8')
+exports.save = async function(){
+    return await retry(
+        () => fs.writeFile(configPath, JSON.stringify(config, null, 4), 'UTF-8'),
+        3,
+        1000,
+        err => err.code === 'EPERM' || err.code === 'EBUSY'
+    )
 }
 
 /**
@@ -131,38 +141,36 @@ exports.save = function(){
  * be generated. Note that "resolved" values default to null and will
  * need to be externally assigned.
  */
-exports.load = function(){
-    let doLoad = true
+exports.load = async function(){
+    const configExists = await fs.pathExists(configPath)
+    const legacyConfigExists = await fs.pathExists(configPathLEGACY)
 
-    if(!fs.existsSync(configPath)){
-        // Create all parent directories.
-        fs.ensureDirSync(path.join(configPath, '..'))
-        if(fs.existsSync(configPathLEGACY)){
-            fs.moveSync(configPathLEGACY, configPath)
+    if (!configExists) {
+        await fs.ensureDir(path.join(configPath, '..'))
+        if (legacyConfigExists) {
+            await fs.move(configPathLEGACY, configPath)
         } else {
-            doLoad = false
             config = DEFAULT_CONFIG
-            exports.save()
+            await exports.save()
+            logger.info('Successfully Loaded')
+            return
         }
     }
-    if(doLoad){
-        let doValidate = false
-        try {
-            config = JSON.parse(fs.readFileSync(configPath, 'UTF-8'))
-            doValidate = true
-        } catch (err){
-            logger.error(err)
-            logger.info('Configuration file contains malformed JSON or is corrupt.')
-            logger.info('Generating a new configuration file.')
-            fs.ensureDirSync(path.join(configPath, '..'))
-            config = DEFAULT_CONFIG
-            exports.save()
-        }
-        if(doValidate){
-            config = validateKeySet(DEFAULT_CONFIG, config)
-            exports.save()
-        }
+
+    try {
+        const fileContent = await fs.readFile(configPath, 'UTF-8')
+        config = JSON.parse(fileContent)
+        config = validateKeySet(DEFAULT_CONFIG, config)
+        await exports.save()
+    } catch (err) {
+        logger.error(err)
+        logger.info('Configuration file contains malformed JSON or is corrupt.')
+        logger.info('Generating a new configuration file.')
+        await fs.ensureDir(path.join(configPath, '..'))
+        config = DEFAULT_CONFIG
+        await exports.save()
     }
+
     logger.info('Successfully Loaded')
 }
 
