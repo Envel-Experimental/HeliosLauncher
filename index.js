@@ -34,10 +34,6 @@ if (!gotTheLock) {
 
 // Setup Lang
 LangLoader.setupLanguage()
-ConfigManager.load().catch(err => {
-    console.error('Error loading config:', err)
-    // Handle error appropriately, maybe show a dialog to the user
-})
 
 try {
     const Sentry = require('@sentry/electron/main')
@@ -440,7 +436,13 @@ function getPlatformIcon(filename){
     return path.join(__dirname, 'app', 'assets', 'images', `${filename}.${ext}`)
 }
 
-app.on('ready', () => {
+app.on('ready', async () => {
+    try {
+        await ConfigManager.load()
+    } catch (err) {
+        console.error('Error loading config:', err)
+        // Handle error appropriately, maybe show a dialog to the user
+    }
     createWindow()
     createMenu()
     powerMonitor.on('resume', () => {
