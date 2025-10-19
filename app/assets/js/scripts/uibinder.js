@@ -454,6 +454,13 @@ ipcRenderer.on('distributionIndexDone', async (event, res) => {
     }
 })
 
+ipcRenderer.on('power-resume', async () => {
+    if (!fatalStartupError) {
+        const data = await DistroAPI.getDistribution()
+        onDistroRefresh(data)
+    }
+})
+
 // Util for development
 async function devModeToggle() {
     DistroAPI.toggleDevMode(true)

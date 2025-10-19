@@ -1,7 +1,6 @@
 const os = require('os')
 const { exec } = require('child_process') // Built-in Node.js module
 const checkDiskSpace = require('check-disk-space').default
-const ConfigManager = require('./configmanager')
 
 // Configurable thresholds
 const TOTAL_RAM_THRESHOLD_GB = 6
@@ -55,16 +54,6 @@ function getAvailableRamGb() {
  */
 exports.performChecks = async function() {
     const warnings = []
-
-    // 1. Total RAM Check (one-time)
-    if (!ConfigManager.getTotalRAMWarningShown()) {
-        const totalRam = os.totalmem() / BYTES_PER_GB
-        if (totalRam < TOTAL_RAM_THRESHOLD_GB) {
-            warnings.push('lowTotalRAM')
-            ConfigManager.setTotalRAMWarningShown(true)
-            ConfigManager.save()
-        }
-    }
 
     try {
         // 2. Available RAM Check (every launch)

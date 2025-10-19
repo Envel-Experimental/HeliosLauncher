@@ -7,6 +7,7 @@ const ConfigManager = require('./configmanager')
 const { DistroAPI } = require('./distromanager')
 const LangLoader = require('./langloader')
 const { LoggerUtil } = require('@envel/helios-core')
+const { retry } = require('./util')
 let Sentry
 
 const logger = LoggerUtil.getLogger('Preloader')
@@ -33,19 +34,21 @@ try {
     logger.warn('Sentry initialization failed:', error)
 }
 
-ConfigManager.load()
+ConfigManager.load().catch(err => {
+    logger.error('Error loading config:', err)
+})
 
 DistroAPI['commonDir'] = ConfigManager.getCommonDirectory()
 DistroAPI['instanceDir'] = ConfigManager.getInstanceDirectory()
 
 LangLoader.setupLanguage()
 
-function onDistroLoad(data) {
+async function onDistroLoad(data) {
     if (data) {
         if (ConfigManager.getSelectedServer() == null || data.getServerById(ConfigManager.getSelectedServer()) == null) {
             logger.info('Determining default selected server..')
             ConfigManager.setSelectedServer(data.getMainServer().rawServer.id)
-            ConfigManager.save()
+            await ConfigManager.save()
         }
     }
     ipcRenderer.send('distributionIndexDone', data !== null)
@@ -75,11 +78,15 @@ DistroAPI.getDistribution()
         onDistroLoad(null)
     })
 
-fs.remove(path.join(os.tmpdir(), ConfigManager.getTempNativeFolder()), (err) => {
-    if (err) {
-        logger.warn('Error while cleaning natives directory:', err)
-        sendToSentry(`Error cleaning natives directory: ${err.message}`, 'error')
-    } else {
+retry(() => fs.remove(path.join(os.tmpdir(), ConfigManager.getTempNativeFolder())))
+    .then(() => {
         logger.info('Cleaned natives directory.')
-    }
-})
+    })
+    .catch(err => {
+        if (err.code === 'EACCES') {
+            logger.warn('Could not clean natives directory, permission denied.')
+        } else {
+            logger.warn('Error while cleaning natives directory:', err)
+            sendToSentry(`Error cleaning natives directory: ${err.message}`, 'error')
+        }
+    })

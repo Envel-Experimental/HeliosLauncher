@@ -2,12 +2,13 @@ const remoteMain = require('@electron/remote/main')
 remoteMain.initialize()
 
 // Requirements
-const { app, BrowserWindow, ipcMain, Menu, shell } = require('electron')
+const { app, BrowserWindow, ipcMain, Menu, shell, powerMonitor } = require('electron')
 const autoUpdater                       = require('electron-updater').autoUpdater
 const ejse                              = require('ejs-electron')
 const fs                                = require('fs')
+const os                                = require('os')
 const isDev                             = require('./app/assets/js/isdev')
-const path                              = require('path')
+const path                              =require('path')
 const semver                            = require('semver')
 const { pathToFileURL }                 = require('url')
 const { AZURE_CLIENT_ID, MSFT_OPCODE, MSFT_REPLY_TYPE, MSFT_ERROR, SHELL_OPCODE } = require('./app/assets/js/ipcconstants')
@@ -15,9 +16,28 @@ const LangLoader                        = require('./app/assets/js/langloader')
 const SysUtil                           = require('./app/assets/js/sysutil')
 const ConfigManager                     = require('./app/assets/js/configmanager')
 
+// Set up single instance lock.
+const gotTheLock = app.requestSingleInstanceLock()
+
+if (!gotTheLock) {
+    app.quit()
+} else {
+    app.on('second-instance', (event, commandLine, workingDirectory) => {
+        // Someone tried to run a second instance, we should focus our window.
+        if (win) {
+            if (win.isMinimized()) win.restore()
+            win.focus()
+        }
+    })
+}
+
+
 // Setup Lang
 LangLoader.setupLanguage()
-ConfigManager.load()
+ConfigManager.load().catch(err => {
+    console.error('Error loading config:', err)
+    // Handle error appropriately, maybe show a dialog to the user
+})
 
 try {
     const Sentry = require('@sentry/electron/main')
@@ -30,6 +50,8 @@ try {
 
 
 // Setup auto updater.
+let autoUpdateListeners = {}
+
 function initAutoUpdater(event, data) {
 
     if(data){
@@ -46,60 +68,105 @@ function initAutoUpdater(event, data) {
     if(process.platform === 'darwin'){
         autoUpdater.autoDownload = false
     }
-    autoUpdater.on('update-available', (info) => {
-        event.sender.send('autoUpdateNotification', 'update-available', info)
-    })
-    autoUpdater.on('update-downloaded', (info) => {
-        event.sender.send('autoUpdateNotification', 'update-downloaded', info)
-    })
-    autoUpdater.on('update-not-available', (info) => {
-        event.sender.send('autoUpdateNotification', 'update-not-available', info)
-    })
-    autoUpdater.on('checking-for-update', () => {
-        event.sender.send('autoUpdateNotification', 'checking-for-update')
-    })
-    autoUpdater.on('error', (err) => {
-        event.sender.send('autoUpdateNotification', 'realerror', err)
-    }) 
+
+    // Event listeners for auto updater.
+    const updateAvailableListener = info => {
+        if (!event.sender.isDestroyed()) {
+            event.sender.send('autoUpdateNotification', 'update-available', info)
+        }
+    }
+    const updateDownloadedListener = info => {
+        if (!event.sender.isDestroyed()) {
+            event.sender.send('autoUpdateNotification', 'update-downloaded', info)
+        }
+    }
+    const updateNotAvailableListener = info => {
+        if (!event.sender.isDestroyed()) {
+            event.sender.send('autoUpdateNotification', 'update-not-available', info)
+        }
+    }
+    const checkingForUpdateListener = () => {
+        if (!event.sender.isDestroyed()) {
+            event.sender.send('autoUpdateNotification', 'checking-for-update')
+        }
+    }
+    const errorListener = err => {
+        if (!event.sender.isDestroyed()) {
+            if (err.code === 'EPERM' || err.code === 'ENOENT') {
+                event.sender.send('autoUpdateNotification', 'antivirus-issue')
+            } else {
+                event.sender.send('autoUpdateNotification', 'realerror', err)
+            }
+        }
+    }
+
+    // Remove old listeners if they exist.
+    for (const [eventName, listener] of Object.entries(autoUpdateListeners)) {
+        autoUpdater.removeListener(eventName, listener)
+    }
+
+    // Assign new listeners.
+    autoUpdateListeners = {
+        'update-available': updateAvailableListener,
+        'update-downloaded': updateDownloadedListener,
+        'update-not-available': updateNotAvailableListener,
+        'checking-for-update': checkingForUpdateListener,
+        error: errorListener,
+    }
+
+    // Add new listeners.
+    for (const [eventName, listener] of Object.entries(autoUpdateListeners)) {
+        autoUpdater.on(eventName, listener)
+    }
 }
 
 // Open channel to listen for update actions.
 ipcMain.on('autoUpdateAction', (event, arg, data) => {
-    switch(arg){
-        case 'initAutoUpdater':
-            console.log('Initializing auto updater.')
-            initAutoUpdater(event, data)
-            event.sender.send('autoUpdateNotification', 'ready')
-            break
-        case 'checkForUpdate':
-            autoUpdater.checkForUpdates()
-                .catch(err => {
-                    event.sender.send('autoUpdateNotification', 'realerror', err)
-                })
-            break
-        case 'allowPrereleaseChange':
-            if(!data){
-                const preRelComp = semver.prerelease(app.getVersion())
-                if(preRelComp != null && preRelComp.length > 0){
-                    autoUpdater.allowPrerelease = true
+    if (!event.sender.isDestroyed()) {
+        switch(arg){
+            case 'initAutoUpdater':
+                console.log('Initializing auto updater.')
+                initAutoUpdater(event, data)
+                event.sender.send('autoUpdateNotification', 'ready')
+                break
+            case 'checkForUpdate':
+                autoUpdater.checkForUpdates()
+                    .catch(err => {
+                        if (!event.sender.isDestroyed()) {
+                            if (err.code === 'EPERM' || err.code === 'ENOENT') {
+                                event.sender.send('autoUpdateNotification', 'antivirus-issue')
+                            } else {
+                                event.sender.send('autoUpdateNotification', 'realerror', err)
+                            }
+                        }
+                    })
+                break
+            case 'allowPrereleaseChange':
+                if(!data){
+                    const preRelComp = semver.prerelease(app.getVersion())
+                    if(preRelComp != null && preRelComp.length > 0){
+                        autoUpdater.allowPrerelease = true
+                    } else {
+                        autoUpdater.allowPrerelease = data
+                    }
                 } else {
                     autoUpdater.allowPrerelease = data
                 }
-            } else {
-                autoUpdater.allowPrerelease = data
-            }
-            break
-        case 'installUpdateNow':
-            autoUpdater.quitAndInstall()
-            break
-        default:
-            console.log('Unknown argument', arg)
-            break
+                break
+            case 'installUpdateNow':
+                autoUpdater.quitAndInstall()
+                break
+            default:
+                console.log('Unknown argument', arg)
+                break
+        }
     }
 })
 // Redirect distribution index event from preloader to renderer.
 ipcMain.on('distributionIndexDone', (event, res) => {
-    event.sender.send('distributionIndexDone', res)
+    if (!event.sender.isDestroyed()) {
+        event.sender.send('distributionIndexDone', res)
+    }
 })
 
 // Handle trash item.
@@ -182,6 +249,7 @@ ipcMain.on(MSFT_OPCODE.OPEN_LOGIN, (ipcEvent, ...arguments_) => {
 let msftLogoutWindow
 let msftLogoutSuccess
 let msftLogoutSuccessSent
+let msftLogoutTimeout
 ipcMain.on(MSFT_OPCODE.OPEN_LOGOUT, (ipcEvent, uuid, isLastAccount) => {
     if (msftLogoutWindow) {
         ipcEvent.reply(MSFT_OPCODE.REPLY_LOGOUT, MSFT_REPLY_TYPE.ERROR, MSFT_ERROR.ALREADY_OPEN)
@@ -204,6 +272,10 @@ ipcMain.on(MSFT_OPCODE.OPEN_LOGOUT, (ipcEvent, uuid, isLastAccount) => {
     })
 
     msftLogoutWindow.on('close', () => {
+        if (msftLogoutTimeout) {
+            clearTimeout(msftLogoutTimeout)
+            msftLogoutTimeout = null
+        }
         if(!msftLogoutSuccess) {
             ipcEvent.reply(MSFT_OPCODE.REPLY_LOGOUT, MSFT_REPLY_TYPE.ERROR, MSFT_ERROR.NOT_FINISHED)
         } else if(!msftLogoutSuccessSent) {
@@ -215,7 +287,7 @@ ipcMain.on(MSFT_OPCODE.OPEN_LOGOUT, (ipcEvent, uuid, isLastAccount) => {
     msftLogoutWindow.webContents.on('did-navigate', (_, uri) => {
         if(uri.startsWith('https://login.microsoftonline.com/common/oauth2/v2.0/logoutsession')) {
             msftLogoutSuccess = true
-            setTimeout(() => {
+            msftLogoutTimeout = setTimeout(() => {
                 if(!msftLogoutSuccessSent) {
                     msftLogoutSuccessSent = true
                     ipcEvent.reply(MSFT_OPCODE.REPLY_LOGOUT, MSFT_REPLY_TYPE.SUCCESS, uuid, isLastAccount)
@@ -263,10 +335,20 @@ function createWindow() {
 
     win.once('ready-to-show', async () => {
         const warnings = await SysUtil.performChecks()
-        if (warnings.length > 0) {
-            win.webContents.send('system-warnings', warnings)
+        if (win && !win.isDestroyed()) {
+            if (warnings.length > 0) {
+                win.webContents.send('system-warnings', warnings)
+            }
+            if (!ConfigManager.getTotalRAMWarningShown()) {
+                const totalRam = os.totalmem() / (1024 * 1024 * 1024)
+                if (totalRam < 6) {
+                    win.webContents.send('system-warnings', ['lowTotalRAM'])
+                    ConfigManager.setTotalRAMWarningShown(true)
+                    await ConfigManager.save()
+                }
+            }
+            win.show()
         }
-        win.show()
     })
 
     win.removeMenu()
@@ -358,8 +440,16 @@ function getPlatformIcon(filename){
     return path.join(__dirname, 'app', 'assets', 'images', `${filename}.${ext}`)
 }
 
-app.on('ready', createWindow)
-app.on('ready', createMenu)
+app.on('ready', () => {
+    createWindow()
+    createMenu()
+    powerMonitor.on('resume', () => {
+        if (win && !win.isDestroyed()) {
+            win.webContents.send('power-resume')
+        }
+    })
+})
+
 
 app.on('window-all-closed', () => {
     // On macOS it is common for applications and their menu bar

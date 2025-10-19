@@ -830,16 +830,22 @@ function saveModConfiguration(){
 function _saveModConfiguration(modConf){
     for(let m of Object.entries(modConf)){
         const tSwitch = settingsModsContainer.querySelectorAll(`[formod='${m[0]}']`)
-        if(!tSwitch[0].hasAttribute('dropin')){
-            if(typeof m[1] === 'boolean'){
+
+        if (tSwitch.length > 0) {
+            if (tSwitch[0].hasAttribute('dropin')) {
+                continue
+            }
+            if (typeof m[1] === 'boolean') {
                 modConf[m[0]] = tSwitch[0].checked
-            } else {
-                if(m[1] != null){
-                    if(tSwitch.length > 0){
-                        modConf[m[0]].value = tSwitch[0].checked
-                    }
+            } else if (m[1] != null) {
+                modConf[m[0]].value = tSwitch[0].checked
+                if (m[1].mods) {
                     modConf[m[0]].mods = _saveModConfiguration(modConf[m[0]].mods)
                 }
+            }
+        } else {
+            if (typeof m[1] === 'object' && m[1] != null && m[1].mods) {
+                modConf[m[0]].mods = _saveModConfiguration(modConf[m[0]].mods)
             }
         }
     }
