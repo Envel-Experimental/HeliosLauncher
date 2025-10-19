@@ -1,5 +1,6 @@
 const DropinModUtil = require('@app/assets/js/dropinmodutil');
 const fs = require('fs-extra');
+const path = require('path');
 const { ipcRenderer } = require('electron');
 
 jest.mock('fs-extra', () => ({
@@ -42,13 +43,13 @@ describe('DropinModUtil', () => {
                 disabled: true,
             },
             {
-                fullName: '1.12.2/test.jar',
+                fullName: path.join('1.12.2', 'test.jar'),
                 name: 'test.jar',
                 ext: 'jar',
                 disabled: false,
             },
             {
-                fullName: '1.12.2/test.zip.disabled',
+                fullName: path.join('1.12.2', 'test.zip.disabled'),
                 name: 'test.zip',
                 ext: 'zip',
                 disabled: true,
