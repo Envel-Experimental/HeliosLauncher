@@ -20,6 +20,10 @@ jest.mock('electron', () => ({
 }));
 
 describe('DropinModUtil', () => {
+    afterEach(() => {
+        jest.clearAllMocks();
+    });
+
     it('should validate that the directory exists', () => {
         DropinModUtil.validateDir('test-dir');
         expect(fs.ensureDirSync).toHaveBeenCalledWith('test-dir');
@@ -59,18 +63,18 @@ describe('DropinModUtil', () => {
 
     it('should add drop-in mods', () => {
         DropinModUtil.addDropinMods([{ name: 'test.jar', path: 'test-path' }], 'test-dir');
-        expect(fs.moveSync).toHaveBeenCalledWith('test-path', expect.any(String));
+        expect(fs.moveSync).toHaveBeenCalledWith('test-path', path.join('test-dir', 'test.jar'));
     });
 
     it('should delete a drop-in mod', async () => {
         ipcRenderer.invoke.mockResolvedValue({ result: true });
         await DropinModUtil.deleteDropinMod('test-dir', 'test.jar');
-        expect(ipcRenderer.invoke).toHaveBeenCalledWith('TRASH_ITEM', expect.any(String));
+        expect(ipcRenderer.invoke).toHaveBeenCalledWith('TRASH_ITEM', path.join('test-dir', 'test.jar'));
     });
 
     it('should toggle a drop-in mod', () => {
         DropinModUtil.toggleDropinMod('test-dir', 'test.jar', false);
-        expect(fs.rename).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('.disabled'), expect.any(Function));
+        expect(fs.rename).toHaveBeenCalledWith(path.join('test-dir', 'test.jar'), path.join('test-dir', 'test.jar.disabled'), expect.any(Function));
     });
 
     it('should check if a drop-in mod is enabled', () => {
@@ -103,11 +107,11 @@ describe('DropinModUtil', () => {
 
     it('should set the enabled shaderpack', () => {
         DropinModUtil.setEnabledShaderpack('test-dir', 'test.zip');
-        expect(fs.writeFileSync).toHaveBeenCalledWith(expect.any(String), 'shaderPack=test.zip', { encoding: 'utf-8' });
+        expect(fs.writeFileSync).toHaveBeenCalledWith(path.join('test-dir', 'optionsshaders.txt'), 'shaderPack=test.zip', { encoding: 'utf-8' });
     });
 
     it('should add shaderpacks', () => {
         DropinModUtil.addShaderpacks([{ name: 'test.zip', path: 'test-path' }], 'test-dir');
-        expect(fs.moveSync).toHaveBeenCalledWith('test-path', expect.any(String));
+        expect(fs.moveSync).toHaveBeenCalledWith('test-path', path.join('test-dir', 'shaderpacks', 'test.zip'));
     });
 });
