@@ -2,7 +2,9 @@ const { DistributionAPI } = require('@envel/helios-core/common');
 const ConfigManager = require('@app/assets/js/configmanager');
 
 jest.mock('@envel/helios-core/common', () => ({
-    DistributionAPI: jest.fn(),
+    DistributionAPI: jest.fn().mockImplementation(() => ({
+        getDistribution: jest.fn(),
+    })),
 }));
 
 jest.mock('@app/assets/js/configmanager', () => ({
