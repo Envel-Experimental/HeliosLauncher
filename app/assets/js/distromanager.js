@@ -28,7 +28,12 @@ api.getDistribution = async () => {
         (err) => {
             return err.error === FAILED_DOWNLOAD_ERROR_CODE
         }
-    )
+    ).catch((err) => {
+        // Log the error, but do not throw it.
+        // This allows the launcher to continue in offline mode.
+        console.error('Failed to download distribution index after multiple retries.', err)
+        return null
+    })
 }
 
 exports.DistroAPI = api

@@ -52,15 +52,17 @@ async function preloader() {
         const heliosDistro = await DistroAPI.getDistribution()
         logger.info('Loaded distribution index.')
 
-        if (ConfigManager.getSelectedServer() == null || heliosDistro.getServerById(ConfigManager.getSelectedServer()) == null) {
-            logger.info('Determining default selected server..')
-            ConfigManager.setSelectedServer(heliosDistro.getMainServer().rawServer.id)
-            await ConfigManager.save()
+        if (heliosDistro) {
+            if (ConfigManager.getSelectedServer() == null || heliosDistro.getServerById(ConfigManager.getSelectedServer()) == null) {
+                logger.info('Determining default selected server..')
+                ConfigManager.setSelectedServer(heliosDistro.getMainServer().rawServer.id)
+                await ConfigManager.save()
+            }
         }
 
         ipcRenderer.send('distributionIndexDone', true)
     } catch (err) {
-        logger.error('Failed to load distribution index:', err)
+        logger.error('Failed to load distribution index, continuing in offline mode.', err)
         sendToSentry(`Failed to load distribution index: ${err.message}`, 'error')
         ipcRenderer.send('distributionIndexDone', false)
     }

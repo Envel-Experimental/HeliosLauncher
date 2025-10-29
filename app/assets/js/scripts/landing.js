@@ -101,7 +101,12 @@ function setLaunchEnabled(val){
 document.getElementById('launch_button').addEventListener('click', async e => {
     loggerLanding.info('Launching game..')
     try {
-        const server = (await DistroAPI.getDistribution()).getServerById(ConfigManager.getSelectedServer())
+        const distro = await DistroAPI.getDistribution()
+        if(distro == null){
+            showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), Lang.queryJS('landing.launch.noDistributionIndex'))
+            return
+        }
+        const server = distro.getServerById(ConfigManager.getSelectedServer())
         const jExe = ConfigManager.getJavaExecutable(ConfigManager.getSelectedServer())
         if(jExe == null){
             await asyncSystemScan(server.effectiveJavaOptions)
@@ -443,6 +448,8 @@ async function dlAsync(login = true) {
 
     const loggerLaunchSuite = LoggerUtil.getLogger('LaunchSuite')
 
+    let isOfflineLaunch = false
+
     setLaunchDetails(Lang.queryJS('landing.dlAsync.loadingServerInfo'))
 
     let distro
@@ -499,9 +506,9 @@ async function dlAsync(login = true) {
         })
         setLaunchPercentage(100)
     } catch (err) {
-        loggerLaunchSuite.error('Error during file validation.')
-        showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringFileVerificationTitle'), err.displayable || Lang.queryJS('landing.dlAsync.seeConsoleForDetails'))
-        return
+        loggerLaunchSuite.warn('Error during file validation. Continuing with local files.', err)
+        isOfflineLaunch = true
+        invalidFileCount = 0
     }
 
 
@@ -515,9 +522,8 @@ async function dlAsync(login = true) {
             })
             setDownloadPercentage(100)
         } catch(err) {
-            loggerLaunchSuite.error('Error during file download.')
-            showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringFileDownloadTitle'), err.displayable || Lang.queryJS('landing.dlAsync.seeConsoleForDetails'))
-            return
+            loggerLaunchSuite.warn('Error during file download. Continuing with local files.', err)
+            isOfflineLaunch = true
         }
     } else {
         loggerLaunchSuite.info('No invalid files, skipping download.')
@@ -526,9 +532,19 @@ async function dlAsync(login = true) {
     // Remove download bar.
     remote.getCurrentWindow().setProgressBar(-1)
 
-    fullRepairModule.destroyReceiver()
+    if (!isOfflineLaunch) {
+        try {
+            fullRepairModule.destroyReceiver()
+        } catch (err) {
+            loggerLaunchSuite.warn('Error destroying receiver', err)
+        }
+    }
 
-    setLaunchDetails(Lang.queryJS('landing.dlAsync.preparingToLaunch'))
+    if (isOfflineLaunch) {
+        setLaunchDetails(Lang.queryJS('landing.dlAsync.launchingOffline'))
+    } else {
+        setLaunchDetails(Lang.queryJS('landing.dlAsync.preparingToLaunch'))
+    }
 
     const mojangIndexProcessor = new MojangIndexProcessor(
         ConfigManager.getCommonDirectory(),
@@ -540,7 +556,18 @@ async function dlAsync(login = true) {
     )
 
     const modLoaderData = await distributionIndexProcessor.loadModLoaderVersionJson(serv)
-    const versionData = await mojangIndexProcessor.getVersionJson()
+    let versionData
+    try {
+        versionData = await mojangIndexProcessor.getVersionJson()
+    } catch (err) {
+        loggerLaunchSuite.warn('Unable to load Mojang version data, attempting to load from local cache.', err)
+        versionData = await mojangIndexProcessor.getLocalVersionJson()
+        if(!versionData) {
+            loggerLaunchSuite.error('Unable to load Mojang version data from local cache.')
+            showLaunchFailure(Lang.queryJS('landing.dlAsync.fatalError'), Lang.queryJS('landing.dlAsync.unableToLoadMojangVersionData'))
+            return
+        }
+    }
 
     if(login) {
         const authUser = ConfigManager.getSelectedAccount()
