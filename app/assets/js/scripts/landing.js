@@ -529,6 +529,7 @@ async function dlAsync(login = true) {
     // Remove download bar.
     remote.getCurrentWindow().setProgressBar(-1)
 
+    setLaunchDetails(Lang.queryJS('landing.dlAsync.launchingOffline'))
     try {
         fullRepairModule.destroyReceiver()
     } catch (err) {
