@@ -448,6 +448,8 @@ async function dlAsync(login = true) {
 
     const loggerLaunchSuite = LoggerUtil.getLogger('LaunchSuite')
 
+    let isOfflineLaunch = false
+
     setLaunchDetails(Lang.queryJS('landing.dlAsync.loadingServerInfo'))
 
     let distro
@@ -505,7 +507,7 @@ async function dlAsync(login = true) {
         setLaunchPercentage(100)
     } catch (err) {
         loggerLaunchSuite.warn('Error during file validation. Continuing with local files.', err)
-        setLaunchDetails(Lang.queryJS('landing.dlAsync.launchingOffline'))
+        isOfflineLaunch = true
         invalidFileCount = 0
     }
 
@@ -521,6 +523,7 @@ async function dlAsync(login = true) {
             setDownloadPercentage(100)
         } catch(err) {
             loggerLaunchSuite.warn('Error during file download. Continuing with local files.', err)
+            isOfflineLaunch = true
         }
     } else {
         loggerLaunchSuite.info('No invalid files, skipping download.')
@@ -529,14 +532,19 @@ async function dlAsync(login = true) {
     // Remove download bar.
     remote.getCurrentWindow().setProgressBar(-1)
 
-    setLaunchDetails(Lang.queryJS('landing.dlAsync.launchingOffline'))
-    try {
-        fullRepairModule.destroyReceiver()
-    } catch (err) {
-        loggerLaunchSuite.warn('Error destroying receiver', err)
+    if (!isOfflineLaunch) {
+        try {
+            fullRepairModule.destroyReceiver()
+        } catch (err) {
+            loggerLaunchSuite.warn('Error destroying receiver', err)
+        }
     }
 
-    setLaunchDetails(Lang.queryJS('landing.dlAsync.preparingToLaunch'))
+    if (isOfflineLaunch) {
+        setLaunchDetails(Lang.queryJS('landing.dlAsync.launchingOffline'))
+    } else {
+        setLaunchDetails(Lang.queryJS('landing.dlAsync.preparingToLaunch'))
+    }
 
     const mojangIndexProcessor = new MojangIndexProcessor(
         ConfigManager.getCommonDirectory(),
