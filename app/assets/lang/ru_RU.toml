@@ -1,0 +1,3 @@
+[landing]
+    [landing.dlAsync]
+        launchingOffline = "Запускается локальная копия."

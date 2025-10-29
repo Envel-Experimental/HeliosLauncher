@@ -505,6 +505,7 @@ async function dlAsync(login = true) {
         setLaunchPercentage(100)
     } catch (err) {
         loggerLaunchSuite.warn('Error during file validation. Continuing with local files.', err)
+        setLaunchDetails(Lang.queryJS('landing.dlAsync.launchingOffline'))
         invalidFileCount = 0
     }
 
@@ -528,7 +529,11 @@ async function dlAsync(login = true) {
     // Remove download bar.
     remote.getCurrentWindow().setProgressBar(-1)
 
-    fullRepairModule.destroyReceiver()
+    try {
+        fullRepairModule.destroyReceiver()
+    } catch (err) {
+        loggerLaunchSuite.warn('Error destroying receiver', err)
+    }
 
     setLaunchDetails(Lang.queryJS('landing.dlAsync.preparingToLaunch'))
 
