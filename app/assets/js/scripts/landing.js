@@ -101,7 +101,12 @@ function setLaunchEnabled(val){
 document.getElementById('launch_button').addEventListener('click', async e => {
     loggerLanding.info('Launching game..')
     try {
-        const server = (await DistroAPI.getDistribution()).getServerById(ConfigManager.getSelectedServer())
+        const distro = await DistroAPI.getDistribution()
+        if(distro == null){
+            showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), Lang.queryJS('landing.launch.noDistributionIndex'))
+            return
+        }
+        const server = distro.getServerById(ConfigManager.getSelectedServer())
         const jExe = ConfigManager.getJavaExecutable(ConfigManager.getSelectedServer())
         if(jExe == null){
             await asyncSystemScan(server.effectiveJavaOptions)
@@ -499,9 +504,8 @@ async function dlAsync(login = true) {
         })
         setLaunchPercentage(100)
     } catch (err) {
-        loggerLaunchSuite.error('Error during file validation.')
-        showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringFileVerificationTitle'), err.displayable || Lang.queryJS('landing.dlAsync.seeConsoleForDetails'))
-        return
+        loggerLaunchSuite.warn('Error during file validation. Continuing with local files.', err)
+        invalidFileCount = 0
     }
 
 
@@ -515,9 +519,7 @@ async function dlAsync(login = true) {
             })
             setDownloadPercentage(100)
         } catch(err) {
-            loggerLaunchSuite.error('Error during file download.')
-            showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringFileDownloadTitle'), err.displayable || Lang.queryJS('landing.dlAsync.seeConsoleForDetails'))
-            return
+            loggerLaunchSuite.warn('Error during file download. Continuing with local files.', err)
         }
     } else {
         loggerLaunchSuite.info('No invalid files, skipping download.')

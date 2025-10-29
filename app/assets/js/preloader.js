@@ -60,7 +60,7 @@ async function preloader() {
 
         ipcRenderer.send('distributionIndexDone', true)
     } catch (err) {
-        logger.error('Failed to load distribution index:', err)
+        logger.error('Failed to load distribution index, continuing in offline mode.', err)
         sendToSentry(`Failed to load distribution index: ${err.message}`, 'error')
         ipcRenderer.send('distributionIndexDone', false)
     }
