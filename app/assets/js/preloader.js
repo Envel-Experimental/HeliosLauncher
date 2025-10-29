@@ -52,10 +52,12 @@ async function preloader() {
         const heliosDistro = await DistroAPI.getDistribution()
         logger.info('Loaded distribution index.')
 
-        if (ConfigManager.getSelectedServer() == null || heliosDistro.getServerById(ConfigManager.getSelectedServer()) == null) {
-            logger.info('Determining default selected server..')
-            ConfigManager.setSelectedServer(heliosDistro.getMainServer().rawServer.id)
-            await ConfigManager.save()
+        if (heliosDistro) {
+            if (ConfigManager.getSelectedServer() == null || heliosDistro.getServerById(ConfigManager.getSelectedServer()) == null) {
+                logger.info('Determining default selected server..')
+                ConfigManager.setSelectedServer(heliosDistro.getMainServer().rawServer.id)
+                await ConfigManager.save()
+            }
         }
 
         ipcRenderer.send('distributionIndexDone', true)

@@ -542,7 +542,18 @@ async function dlAsync(login = true) {
     )
 
     const modLoaderData = await distributionIndexProcessor.loadModLoaderVersionJson(serv)
-    const versionData = await mojangIndexProcessor.getVersionJson()
+    let versionData
+    try {
+        versionData = await mojangIndexProcessor.getVersionJson()
+    } catch (err) {
+        loggerLaunchSuite.warn('Unable to load Mojang version data, attempting to load from local cache.', err)
+        versionData = await mojangIndexProcessor.getLocalVersionJson()
+        if(!versionData) {
+            loggerLaunchSuite.error('Unable to load Mojang version data from local cache.')
+            showLaunchFailure(Lang.queryJS('landing.dlAsync.fatalError'), Lang.queryJS('landing.dlAsync.unableToLoadMojangVersionData'))
+            return
+        }
+    }
 
     if(login) {
         const authUser = ConfigManager.getSelectedAccount()
