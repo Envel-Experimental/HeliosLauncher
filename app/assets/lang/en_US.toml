@@ -206,7 +206,7 @@ launchingGame = "Запуск игры.."
 launchWrapperNotDownloaded = "Основной файл, LaunchWrapper, не удалось скачать корректно. В результате игра не может запуститься.<br><br>Чтобы устранить эту проблему, временно отключите антивирусное программное обеспечение и повторите запуск игры.<br><br>Если у вас есть время, пожалуйста, <a href=\"https://github.com/Envel-Experimental/HeliosLauncher/issues\">сообщите об этом</a> и укажите, каким антивирусом вы пользуетесь. Мы свяжемся с ними и попытаемся устранить проблему."
 doneEnjoyServer = "Готово. Запускаю..."
 checkConsoleForDetails = "Пожалуйста, смотрите консоль (CTRL + Shift + i) для получения деталей."
-        launchingOffline = "Launching local copy."
+launchingOffline = "Запускаю офлайн копию. Ошибка серверов."
 
 [js.landing.news]
 checking = "Проверка новостей"
