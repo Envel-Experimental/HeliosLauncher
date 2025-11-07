@@ -3637,12 +3637,13 @@ input:checked + .toggleSwitchSlider:before {
 /* Div which contains action buttons. */
 #overlayActionContainer {
     display: flex;
-    flex-direction: column;
     justify-content: center;
+    gap: 10px;
 }
 
 /* Overlay acknowledge button styles. */
-#overlayAcknowledge {
+#overlayAcknowledge,
+#overlayAcknowledgeMid {
     background: none;
     border: 1px solid #ffffff;
     color: white;
@@ -3651,18 +3652,26 @@ input:checked + .toggleSwitchSlider:before {
     font-style: normal;
     font-weight: bold;
     border-radius: 2px;
-    padding: 10px 20px;
-    font-size: 24px;
-    padding: 0px 8.1px;
+    padding: 5px 10px;
+    font-size: 16px;
     cursor: pointer;
     transition: 0.25s ease;
 }
+
+#overlayAcknowledge {
+    background: #4CAF50; /* Green background for primary action */
+    border-color: #4CAF50;
+}
+
 #overlayAcknowledge:hover,
-#overlayAcknowledge:focus {
+#overlayAcknowledge:focus,
+#overlayAcknowledgeMid:hover,
+#overlayAcknowledgeMid:focus {
     box-shadow: 0px 0px 10px 0px #fff;
     outline: none;
 }
-#overlayAcknowledge:active {
+#overlayAcknowledge:active,
+#overlayAcknowledgeMid:active {
     border-color: rgba(255, 255, 255, 0.75);
     color: rgba(255, 255, 255, 0.75);
 }
@@ -3670,13 +3679,16 @@ input:checked + .toggleSwitchSlider:before {
 /* Overlay dismiss option styles. */
 #overlayDismiss {
     font-weight: bold;
-    font-size: 12px;
+    font-size: 16px;
     text-decoration: none;
-    padding-top: 2.5px;
+    padding: 5px 10px;
     background: none;
-    border: none;
+    border: 1px solid #ffffff;
+    border-radius: 2px;
     outline: none;
     cursor: pointer;
+    color: white;
+    transition: 0.25s ease;
 }
 #overlayDismiss:hover {
     color: rgba(255, 255, 255, 0.75);
