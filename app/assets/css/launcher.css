@@ -3641,11 +3641,13 @@ input:checked + .toggleSwitchSlider:before {
     gap: 10px;
 }
 
-/* Overlay acknowledge button styles. */
+/* Common styles for overlay buttons */
 #overlayAcknowledge,
-#overlayAcknowledgeMid {
-    background: none;
-    border: 1px solid #ffffff;
+#overlayAcknowledgeMid,
+#overlayDismiss {
+    background: rgba(0, 0, 0, 0.25);
+    border-style: solid;
+    border-width: 2px;
     color: white;
     font-family: "Roboto", serif;
     font-weight: 500;
@@ -3656,45 +3658,36 @@ input:checked + .toggleSwitchSlider:before {
     font-size: 16px;
     cursor: pointer;
     transition: 0.25s ease;
+    text-decoration: none;
+    outline: none;
 }
 
+/* Primary action button ("Update") */
 #overlayAcknowledge {
-    background: #4CAF50; /* Green background for primary action */
-    border-color: #4CAF50;
+    border-color: #4CAF50; /* Green border */
 }
 
+/* Secondary action buttons */
+#overlayAcknowledgeMid,
+#overlayDismiss {
+    border-color: #ffffff; /* White border */
+}
+
+/* Hover, focus, and active states */
 #overlayAcknowledge:hover,
 #overlayAcknowledge:focus,
 #overlayAcknowledgeMid:hover,
-#overlayAcknowledgeMid:focus {
+#overlayAcknowledgeMid:focus,
+#overlayDismiss:hover,
+#overlayDismiss:focus {
     box-shadow: 0px 0px 10px 0px #fff;
-    outline: none;
-}
-#overlayAcknowledge:active,
-#overlayAcknowledgeMid:active {
-    border-color: rgba(255, 255, 255, 0.75);
-    color: rgba(255, 255, 255, 0.75);
 }
 
-/* Overlay dismiss option styles. */
-#overlayDismiss {
-    font-weight: bold;
-    font-size: 16px;
-    text-decoration: none;
-    padding: 5px 10px;
-    background: none;
-    border: 1px solid #ffffff;
-    border-radius: 2px;
-    outline: none;
-    cursor: pointer;
-    color: white;
-    transition: 0.25s ease;
-}
-#overlayDismiss:hover {
-    color: rgba(255, 255, 255, 0.75);
-}
+#overlayAcknowledge:active,
+#overlayAcknowledgeMid:active,
 #overlayDismiss:active {
-    color: rgba(165, 165, 165, 0.75);
+    border-color: rgba(255, 255, 255, 0.75);
+    color: rgba(255, 255, 255, 0.75);
 }
 
 /* * *
