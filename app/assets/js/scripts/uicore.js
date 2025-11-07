@@ -104,26 +104,29 @@ function changeAllowPrerelease(val){
 }
 
 function showUpdateUI(info){
-    //TODO Make this message a bit more informative `${info.version}`
-    document.getElementById('image_seal_container').setAttribute('update', true)
-    document.getElementById('image_seal_container').onclick = () => {
-        /*setOverlayContent('Update Available', 'A new update for the launcher is available. Would you like to install now?', 'Install', 'Later')
-        setOverlayHandler(() => {
-            if(!isDev){
-                ipcRenderer.send('autoUpdateAction', 'installUpdateNow')
-            } else {
-                console.error('Cannot install updates in development environment.')
-                toggleOverlay(false)
-            }
-        })
-        setDismissHandler(() => {
+    setOverlayContent(
+        Lang.queryJS('uicore.update.updateAvailableTitle'),
+        Lang.queryJS('uicore.update.updateAvailableDesc'),
+        Lang.queryJS('uicore.update.updateButton'),
+        Lang.queryJS('uicore.update.updateFromSiteButton'),
+        Lang.queryJS('uicore.update.laterButton')
+    )
+    setOverlayHandler(() => {
+        if(!isDev){
+            ipcRenderer.send('autoUpdateAction', 'installUpdateNow')
+        } else {
+            console.error('Cannot install updates in development environment.')
             toggleOverlay(false)
-        })
-        toggleOverlay(true, true)*/
-        switchView(getCurrentView(), VIEWS.settings, 500, 500, () => {
-            settingsNavItemListener(document.getElementById('settingsNavUpdate'), false)
-        })
-    }
+        }
+    })
+    setMiddleButtonHandler(() => {
+        shell.openExternal(`https://github.com/Envel-Experimental/HeliosLauncher/releases/v${info.version}`)
+        toggleOverlay(false)
+    })
+    setDismissHandler(() => {
+        toggleOverlay(false)
+    })
+    toggleOverlay(true, true)
 }
 
 /* jQuery Example
