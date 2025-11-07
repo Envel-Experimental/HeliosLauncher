@@ -118,7 +118,7 @@ function showUpdateUI(info){
         }
     })
     setMiddleButtonHandler(() => {
-        shell.openExternal(`https://github.com/Envel-Experimental/HeliosLauncher/releases/v${info.version}`)
+        shell.openExternal(`https://f-launcher.ru/`)
         toggleOverlay(false)
     })
     setDismissHandler(() => {
