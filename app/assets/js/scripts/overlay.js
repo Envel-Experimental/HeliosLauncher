@@ -135,7 +135,14 @@ function setOverlayContent(title, description, acknowledge, acknowledge_mid, dis
     document.getElementById('overlayTitle').innerHTML = title
     document.getElementById('overlayDesc').innerHTML = description
     document.getElementById('overlayAcknowledge').innerHTML = acknowledge
-    document.getElementById('overlayAcknowledgeMid').innerHTML = acknowledge_mid
+
+    if(acknowledge_mid != null){
+        document.getElementById('overlayAcknowledgeMid').innerHTML = acknowledge_mid
+        document.getElementById('overlayAcknowledgeMid').style.display = ''
+    } else {
+        document.getElementById('overlayAcknowledgeMid').style.display = 'none'
+    }
+
     document.getElementById('overlayDismiss').innerHTML = dismiss
 }
 
