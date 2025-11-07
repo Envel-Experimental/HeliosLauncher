@@ -3637,52 +3637,57 @@ input:checked + .toggleSwitchSlider:before {
 /* Div which contains action buttons. */
 #overlayActionContainer {
     display: flex;
-    flex-direction: column;
     justify-content: center;
+    gap: 10px;
 }
 
-/* Overlay acknowledge button styles. */
-#overlayAcknowledge {
-    background: none;
-    border: 1px solid #ffffff;
+/* Common styles for overlay buttons */
+#overlayAcknowledge,
+#overlayAcknowledgeMid,
+#overlayDismiss {
+    background: rgba(0, 0, 0, 0.25);
+    border-style: solid;
+    border-width: 2px;
     color: white;
     font-family: "Roboto", serif;
     font-weight: 500;
     font-style: normal;
     font-weight: bold;
     border-radius: 2px;
-    padding: 10px 20px;
-    font-size: 24px;
-    padding: 0px 8.1px;
+    padding: 5px 10px;
+    font-size: 16px;
     cursor: pointer;
     transition: 0.25s ease;
-}
-#overlayAcknowledge:hover,
-#overlayAcknowledge:focus {
-    box-shadow: 0px 0px 10px 0px #fff;
+    text-decoration: none;
     outline: none;
-}
-#overlayAcknowledge:active {
-    border-color: rgba(255, 255, 255, 0.75);
-    color: rgba(255, 255, 255, 0.75);
 }
 
-/* Overlay dismiss option styles. */
+/* Primary action button ("Update") */
+#overlayAcknowledge {
+    border-color: #4CAF50; /* Green border */
+}
+
+/* Secondary action buttons */
+#overlayAcknowledgeMid,
 #overlayDismiss {
-    font-weight: bold;
-    font-size: 12px;
-    text-decoration: none;
-    padding-top: 2.5px;
-    background: none;
-    border: none;
-    outline: none;
-    cursor: pointer;
+    border-color: #ffffff; /* White border */
 }
-#overlayDismiss:hover {
-    color: rgba(255, 255, 255, 0.75);
+
+/* Hover, focus, and active states */
+#overlayAcknowledge:hover,
+#overlayAcknowledge:focus,
+#overlayAcknowledgeMid:hover,
+#overlayAcknowledgeMid:focus,
+#overlayDismiss:hover,
+#overlayDismiss:focus {
+    box-shadow: 0px 0px 10px 0px #fff;
 }
+
+#overlayAcknowledge:active,
+#overlayAcknowledgeMid:active,
 #overlayDismiss:active {
-    color: rgba(165, 165, 165, 0.75);
+    border-color: rgba(255, 255, 255, 0.75);
+    color: rgba(255, 255, 255, 0.75);
 }
 
 /* * *

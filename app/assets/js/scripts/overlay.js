@@ -128,12 +128,21 @@ async function toggleServerSelection(toggleState){
  * @param {string} title Overlay title text.
  * @param {string} description Overlay description text.
  * @param {string} acknowledge Acknowledge button text.
+ * @param {string} acknowledge_mid Middle acknowledge button text.
  * @param {string} dismiss Dismiss button text.
  */
-function setOverlayContent(title, description, acknowledge, dismiss = Lang.queryJS('overlay.dismiss')){
+function setOverlayContent(title, description, acknowledge, acknowledge_mid, dismiss = Lang.queryJS('overlay.dismiss')){
     document.getElementById('overlayTitle').innerHTML = title
     document.getElementById('overlayDesc').innerHTML = description
     document.getElementById('overlayAcknowledge').innerHTML = acknowledge
+
+    if(acknowledge_mid != null){
+        document.getElementById('overlayAcknowledgeMid').innerHTML = acknowledge_mid
+        document.getElementById('overlayAcknowledgeMid').style.display = ''
+    } else {
+        document.getElementById('overlayAcknowledgeMid').style.display = 'none'
+    }
+
     document.getElementById('overlayDismiss').innerHTML = dismiss
 }
 
@@ -150,6 +159,22 @@ function setOverlayHandler(handler){
         }
     } else {
         document.getElementById('overlayAcknowledge').onclick = handler
+    }
+}
+
+/**
+ * Set the onclick handler of the overlay middle acknowledge button.
+ * If the handler is null, a default handler will be added.
+ *
+ * @param {function} handler
+ */
+function setMiddleButtonHandler(handler){
+    if(handler == null){
+        document.getElementById('overlayAcknowledgeMid').onclick = () => {
+            toggleOverlay(false)
+        }
+    } else {
+        document.getElementById('overlayAcknowledgeMid').onclick = handler
     }
 }
 
