@@ -8,24 +8,6 @@
 
 You can download from [GitHub Releases](https://github.com/Envel-Experimental/HeliosLauncher/releases)
 
-#### Latest Release
-
-[![](https://img.shields.io/github/release/dscalzi/HeliosLauncher.svg?style=flat-square)](https://github.com/Envel-Experimental/HeliosLauncher/releases/latest)
-
-#### Latest Pre-Release
-[![](https://img.shields.io/github/release/Envel-Experimental/HeliosLauncher/all.svg?style=flat-square)](https://github.com/Envel-Experimental/HeliosLauncher/releases)
-
-**Supported Platforms**
-
-If you download from the [Releases](https://github.com/Envel-Experimental/HeliosLauncher/releases) tab, select the installer for your system.
-
-| Platform | File |
-| -------- | ---- |
-| Windows x64 | `Helios-Launcher-setup-VERSION.exe` |
-| macOS x64 | `Helios-Launcher-setup-VERSION-x64.dmg` |
-| macOS arm64 | `Helios-Launcher-setup-VERSION-arm64.dmg` |
-| Linux x64 | `Helios-Launcher-setup-VERSION.AppImage` |
-
 ## Console
 
 To open the console, use the following keybind.
