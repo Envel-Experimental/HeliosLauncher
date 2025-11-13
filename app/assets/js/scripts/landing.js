@@ -107,6 +107,10 @@ document.getElementById('launch_button').addEventListener('click', async e => {
             return
         }
         const server = distro.getServerById(ConfigManager.getSelectedServer())
+        if(server == null) {
+            showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), Lang.queryJS('landing.launch.noServerSelected'))
+            return
+        }
         const jExe = ConfigManager.getJavaExecutable(ConfigManager.getSelectedServer())
         if(jExe == null){
             await asyncSystemScan(server.effectiveJavaOptions)

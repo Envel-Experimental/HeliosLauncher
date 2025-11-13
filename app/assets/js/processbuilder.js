@@ -128,7 +128,7 @@ class ProcessBuilder {
                 )
                 logger.info('Temp dir deleted successfully.')
             } catch (err) {
-                if (err.code === 'EACCES') {
+                if (err.code === 'EACCES' || err.code === 'EPERM') {
                     logger.warn('Could not delete temp dir due to permissions.', err)
                 } else if (err.code === 'ENOENT') {
                     logger.info('Temp dir already deleted.')
