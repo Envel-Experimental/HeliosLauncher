@@ -6,14 +6,16 @@ const { retry } = require('./util')
 
 const logger = LoggerUtil.getLogger('ConfigManager')
 
-const sysRoot = process.env.APPDATA || (process.platform == 'darwin' ? process.env.HOME + '/Library/Application Support' : process.env.HOME)
+const app = (process.type === 'renderer'
+    ? require('@electron/remote').app
+    : require('electron').app
+)
+
+const sysRoot = process.platform === 'linux' ? app.getPath('home') : app.getPath('appData')
 
 const dataPath = path.join(sysRoot, '.foxford')
 
-const launcherDir = (process.type === 'renderer'
-    ? require('@electron/remote').app
-    : require('electron').app
-).getPath('userData')
+const launcherDir = app.getPath('userData')
 
 /**
  * Retrieve the absolute path of the launcher directory.
