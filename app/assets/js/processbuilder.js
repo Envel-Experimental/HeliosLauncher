@@ -115,7 +115,7 @@ class ProcessBuilder {
                 setDismissHandler(() => {
                     toggleOverlay(false)
                 })
-                toggleOverlay(true, true)
+                toggleOverlay(true)
             }
             try {
                 await retry(
