@@ -96,24 +96,19 @@ function initAutoUpdater(event, data) {
         }
     }
 
-    // Remove old listeners if they exist.
-    for (const [eventName, listener] of Object.entries(autoUpdateListeners)) {
-        autoUpdater.removeListener(eventName, listener)
-    }
-
-    // Assign new listeners.
-    autoUpdateListeners = {
-        'update-available': updateAvailableListener,
-        'update-downloaded': updateDownloadedListener,
-        'update-not-available': updateNotAvailableListener,
-        'checking-for-update': checkingForUpdateListener,
-        error: errorListener,
-    }
+    // Remove old listeners to prevent memory leaks.
+    autoUpdater.removeAllListeners('update-available')
+    autoUpdater.removeAllListeners('update-downloaded')
+    autoUpdater.removeAllListeners('update-not-available')
+    autoUpdater.removeAllListeners('checking-for-update')
+    autoUpdater.removeAllListeners('error')
 
     // Add new listeners.
-    for (const [eventName, listener] of Object.entries(autoUpdateListeners)) {
-        autoUpdater.on(eventName, listener)
-    }
+    autoUpdater.on('update-available', updateAvailableListener)
+    autoUpdater.on('update-downloaded', updateDownloadedListener)
+    autoUpdater.on('update-not-available', updateNotAvailableListener)
+    autoUpdater.on('checking-for-update', checkingForUpdateListener)
+    autoUpdater.on('error', errorListener)
 }
 
 // Open channel to listen for update actions.
@@ -264,6 +259,10 @@ ipcMain.on(MSFT_OPCODE.OPEN_LOGOUT, (ipcEvent, uuid, isLastAccount) => {
     })
 
     msftLogoutWindow.on('closed', () => {
+        if (msftLogoutTimeout) {
+            clearTimeout(msftLogoutTimeout)
+            msftLogoutTimeout = null
+        }
         msftLogoutWindow = undefined
     })
 
@@ -450,6 +449,10 @@ app.on('ready', async () => {
             win.webContents.send('power-resume')
         }
     })
+})
+
+app.on('before-quit', () => {
+    powerMonitor.removeAllListeners('resume')
 })
 
 

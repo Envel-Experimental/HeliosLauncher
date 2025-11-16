@@ -1,6 +1,6 @@
 {
   "name": "flauncher",
-  "version": "2.3.5",
+  "version": "2.3.6",
   "productName": "FLauncher",
   "description": "Modded Minecraft Launcher",
   "author": "Nikita Gutsenkov (https://github.com/Envel-Experimental/)",
@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "@electron/remote": "^2.1.2",
-    "@envel/helios-core": "2.3.9",
+    "@envel/helios-core": "2.3.10",
     "@sentry/electron": "^7.1.1",
     "@sentry/profiling-node": "^10.15.0",
     "adm-zip": "^0.5.16",
