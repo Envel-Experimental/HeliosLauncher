@@ -80,8 +80,12 @@ exports.addDropinMods = function(files, modsdir) {
     exports.validateDir(modsdir)
 
     for(let f of files) {
-        if(MOD_REGEX.exec(f.name) != null) {
-            fs.moveSync(f.path, path.join(modsdir, f.name))
+        if(f && typeof f.path === 'string' && typeof f.name === 'string') {
+            if(MOD_REGEX.exec(f.name) != null) {
+                fs.moveSync(f.path, path.join(modsdir, f.name))
+            }
+        } else {
+            console.warn('Warning: Invalid file object encountered in addDropinMods:', f)
         }
     }
 

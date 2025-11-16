@@ -72,8 +72,22 @@ function initAutoUpdater(event, data) {
         }
     }
     const updateDownloadedListener = info => {
-        if (!event.sender.isDestroyed()) {
-            event.sender.send('autoUpdateNotification', 'update-downloaded', info)
+        if (info && info.downloadedFile) {
+            if (fs.existsSync(info.downloadedFile)) {
+                if (!event.sender.isDestroyed()) {
+                    event.sender.send('autoUpdateNotification', 'update-downloaded', info)
+                }
+            } else {
+                console.error('Update failed: Temporary file not found.', info.downloadedFile)
+                if (!event.sender.isDestroyed()) {
+                    event.sender.send('autoUpdateNotification', 'realerror', new Error('Update failed: Temporary file not found.'))
+                }
+            }
+        } else {
+            // Fallback for older electron-updater versions or unexpected info format
+            if (!event.sender.isDestroyed()) {
+                event.sender.send('autoUpdateNotification', 'update-downloaded', info)
+            }
         }
     }
     const updateNotAvailableListener = info => {
