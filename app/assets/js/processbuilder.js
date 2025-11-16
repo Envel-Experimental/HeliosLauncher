@@ -9,6 +9,7 @@ const { Type }              = require('helios-distribution-types')
 const os                    = require('os')
 const path                  = require('path')
 const { sendToSentry }      = require('./preloader')
+const { isAppleM }          = require('./sysutil')
 const { retry }             = require('./util')
 
 const ConfigManager            = require('./configmanager')
@@ -49,6 +50,22 @@ class ProcessBuilder {
      * Convienence method to run the functions typically used to build a process.
      */
     build(){
+        if(isAppleM() && !mcVersionAtLeast('1.20', this.server.rawServer.minecraftVersion)) {
+            const e = 'Старые версии игры несовместимы с новыми процессорами Apple M-серии.'
+            setOverlayContent(
+                'Ошибка при запуске',
+                e,
+                Lang.queryJS('uibinder.startup.closeButton')
+            )
+            setOverlayHandler(() => {
+                toggleOverlay(false)
+            })
+            setDismissHandler(() => {
+                toggleOverlay(false)
+            })
+            toggleOverlay(true, true)
+            throw new Error(e)
+        }
         fs.ensureDirSync(this.gameDir)
         const tempNativePath = path.join(os.tmpdir(), ConfigManager.getTempNativeFolder(), crypto.pseudoRandomBytes(16).toString('hex'))
         process.throwDeprecation = true

@@ -83,3 +83,12 @@ exports.performChecks = async function() {
 
     return warnings
 }
+
+/**
+ * Check if the CPU is an Apple M-series chip.
+ *
+ * @returns {boolean} True if the CPU is an Apple M-series chip, false otherwise.
+ */
+exports.isAppleM = function() {
+    return os.platform() === 'darwin' && os.arch() === 'arm64'
+}
