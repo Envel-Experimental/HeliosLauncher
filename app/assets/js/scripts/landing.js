@@ -385,7 +385,7 @@ async function downloadJava(effectiveJavaOptions, launchAfter = true) {
     }
 
     let received = 0
-    await downloadFile(asset.url, asset.path, ({ transferred }) => {
+    await downloadFile(asset, ({ transferred }) => {
         received = transferred
         setDownloadPercentage(Math.trunc((transferred/asset.size)*100))
     })
