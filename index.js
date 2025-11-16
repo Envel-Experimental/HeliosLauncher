@@ -331,16 +331,16 @@ function createWindow() {
     win.once('ready-to-show', async () => {
         const warnings = await SysUtil.performChecks()
         if (win && !win.isDestroyed()) {
-            if (warnings.length > 0) {
-                win.webContents.send('system-warnings', warnings)
-            }
             if (!ConfigManager.getTotalRAMWarningShown()) {
                 const totalRam = os.totalmem() / (1024 * 1024 * 1024)
                 if (totalRam < 6) {
-                    win.webContents.send('system-warnings', ['lowTotalRAM'])
+                    warnings.push('lowTotalRAM')
                     ConfigManager.setTotalRAMWarningShown(true)
                     await ConfigManager.save()
                 }
+            }
+            if (warnings.length > 0) {
+                win.webContents.send('system-warnings', warnings)
             }
             win.show()
         }
