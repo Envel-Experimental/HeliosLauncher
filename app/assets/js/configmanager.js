@@ -1,8 +1,9 @@
-const fs   = require('fs-extra')
+const fs = require('fs-extra')
 const { LoggerUtil } = require('@envel/helios-core')
-const os   = require('os')
+const os = require('os')
 const path = require('path')
 const { retry } = require('./util')
+const pathutil = require('./pathutil')
 
 const logger = LoggerUtil.getLogger('ConfigManager')
 
@@ -11,21 +12,16 @@ const app = (process.type === 'renderer'
     : require('electron').app
 )
 
-const sysRoot = process.platform === 'linux' ? app.getPath('home') : app.getPath('appData')
-
-const dataPath = path.join(sysRoot, '.foxford')
-
-const launcherDir = app.getPath('userData')
+const dataPath = pathutil.resolveDataPathSync(app)
 
 /**
  * Retrieve the absolute path of the launcher directory.
  *
- * @returns {string} The absolute path of the launcher directory.
+ * @returns {string} The absolute path of the launcher directory (which is now dataPath).
  */
 exports.getLauncherDirectory = function(){
-    return launcherDir
+    return dataPath 
 }
-
 /**
  * Get the launcher's data directory. This is where all files related
  * to game launch are installed (common, instances, java, etc).
@@ -46,7 +42,7 @@ exports.setDataDirectory = function(dataDirectory){
 }
 
 const configPath = path.join(exports.getLauncherDirectory(), 'config.json')
-const configPathLEGACY = path.join(dataPath, 'config.json')
+const configPathLEGACY = path.join(app.getPath('userData'), 'config.json')
 let firstLaunch = false;
 (async () => {
     firstLaunch = !await fs.pathExists(configPath) && !await fs.pathExists(configPathLEGACY)
@@ -163,6 +159,10 @@ exports.load = async function(){
         const fileContent = await fs.readFile(configPath, 'UTF-8')
         config = JSON.parse(fileContent)
         config = validateKeySet(DEFAULT_CONFIG, config)
+        if (!pathutil.isPathValid(config.settings.launcher.dataDirectory)) {
+            logger.warn(`Bad dataDirectory (${config.settings.launcher.dataDirectory}) in config.json, migrating to ${dataPath}.`)
+            config.settings.launcher.dataDirectory = dataPath
+        }
         await exports.save()
     } catch (err) {
         logger.error(err)

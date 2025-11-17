@@ -3,8 +3,8 @@ name: Build and Release
 on:
   push:
     branches:
-      - '**'          # любая ветка
-  workflow_dispatch:   # ручной запуск
+      - '**'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -22,48 +22,64 @@ jobs:
 
     steps:
       - name: Check out Git repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.ref }}   # ← ключевая строчка
+          ref: ${{ github.ref }}
 
       - name: Set up Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
+
+      - name: Cache electron-builder binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\electron-builder\cache
+            ~/.cache/electron-builder
+            ~/Library/Caches/electron-builder
+          key: electron-builder-cache-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            electron-builder-cache-${{ runner.os }}-
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
+      # Условие: (ОС = Windows) ИЛИ (сообщение коммита НЕ '1')
       - name: Install dependencies
+        if: runner.os == 'Windows' || github.event.head_commit.message != '1'
         run: npm ci
 
       - name: Install Flatpak toolchain (Linux only)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && (runner.os == 'Windows' || github.event.head_commit.message != '1')
         run: |
           sudo apt-get update
           sudo apt-get install -y flatpak flatpak-builder gnome-software-plugin-flatpak
           flatpak --version
 
       - name: Build
+        if: runner.os == 'Windows' || github.event.head_commit.message != '1'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GIT_BRANCH: ${{ env.BRANCH_NAME }}
           GIT_SHA:    ${{ env.COMMIT_SHA }}
         run: npm run dist
-      
+        
       - name: List dist (Linux/macOS)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && (runner.os == 'Windows' || github.event.head_commit.message != '1')
         run: ls -la dist
 
       - name: List dist (Windows)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && (runner.os == 'Windows' || github.event.head_commit.message != '1')
         run: Get-ChildItem dist
         shell: pwsh
 
       - name: Upload build artifacts
+        if: runner.os == 'Windows' || github.event.head_commit.message != '1'
         uses: actions/upload-artifact@v4
         with:
           name: build-artifacts-${{ matrix.os }}
@@ -88,6 +104,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          if-no-files-found: ignore 
 
       - name: Decide tag / prerelease / names
         id: vars
@@ -95,17 +112,21 @@ jobs:
           BRANCH="${GITHUB_REF_NAME}"
           COMMIT="${GITHUB_SHA}"
 
-          # главный релиз: ветка master + коммит со словом release
-          if [[ "$BRANCH" == "master" && "${{ github.event.head_commit.message }}" == "release" ]]; then
+          # Логика для коммита '1'
+          if [[ "${{ github.event.head_commit.message }}" == "1" ]]; then
+            echo "tag_name=test-compressed-${{ github.run_id }}" >> $GITHUB_OUTPUT
+            echo "prerelease=true"                         >> $GITHUB_OUTPUT
+            echo "release_name=Test Build (Compressed)"    >> $GITHUB_OUTPUT
+          
+          # Обычная логика
+          elif [[ "$BRANCH" == "master" && "${{ github.event.head_commit.message }}" == "release" ]]; then
             echo "tag_name=release-${{ github.run_id }}" >> $GITHUB_OUTPUT
-            echo "prerelease=false"                    >> $GITHUB_OUTPUT
-            echo "release_name=Release build"          >> $GITHUB_OUTPUT
-          # pre-release: ветка master, но без commit 'release'
+            echo "prerelease=false"                 >> $GITHUB_OUTPUT
+            echo "release_name=Release build"         >> $GITHUB_OUTPUT
           elif [[ "$BRANCH" == "master" ]]; then
             echo "tag_name=prerelease-${{ github.run_id }}" >> $GITHUB_OUTPUT
             echo "prerelease=true"                         >> $GITHUB_OUTPUT
             echo "release_name=Prerelease build from master" >> $GITHUB_OUTPUT
-          # beta-релиз со сторонней ветки
           else
             echo "tag_name=beta-${BRANCH}-${{ github.run_id }}" >> $GITHUB_OUTPUT
             echo "prerelease=true"                              >> $GITHUB_OUTPUT
@@ -137,5 +158,6 @@ jobs:
             artifacts/**/*.exe
             artifacts/**/*.blockmap
             artifacts/**/*.yml
+          allowUpdates: true 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

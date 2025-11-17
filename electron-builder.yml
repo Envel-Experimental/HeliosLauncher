@@ -24,10 +24,10 @@ win:
 
 # Windows Installer Configuration
 nsis:
-  oneClick: false
-  perMachine: false
+  oneClick: true
+  perMachine: true
   allowElevation: true
-  allowToChangeInstallationDirectory: true
+  allowToChangeInstallationDirectory: false
 
 # macOS Configuration
 mac:
