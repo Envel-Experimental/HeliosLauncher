@@ -1,4 +1,6 @@
 const os = require('os')
+const fs = require('fs-extra')
+const path = require('path')
 const { exec } = require('child_process') // Built-in Node.js module
 const checkDiskSpace = require('check-disk-space').default
 
@@ -82,4 +84,33 @@ exports.performChecks = async function() {
     }
 
     return warnings
+}
+
+/**
+ * Returns the path to the launcher's runtime directory.
+ * This function will add special logic for Windows if the path contains non-ASCII characters.
+ *
+ * @param {string} dataDir The launcher's data directory.
+ * @returns {string} The path to the launcher's runtime directory.
+ */
+exports.getLauncherRuntimeDir = function(dataDir) {
+    const defaultRuntimePath = path.join(dataDir, 'runtime', process.arch)
+
+    if (process.platform === 'win32') {
+        // Check if the path contains non-ASCII characters.
+        // eslint-disable-next-line no-control-regex
+        if (/[^\x00-\x7F]/.test(defaultRuntimePath)) {
+            const publicRuntimePath = path.join(process.env.PUBLIC, '.foxford', 'runtime', process.arch)
+
+            try {
+                fs.ensureDirSync(publicRuntimePath)
+                return publicRuntimePath
+            } catch (err) {
+                console.error('Failed to create public runtime directory:', err)
+                return defaultRuntimePath
+            }
+        }
+    }
+
+    return defaultRuntimePath
 }

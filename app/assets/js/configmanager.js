@@ -3,6 +3,7 @@ const { LoggerUtil } = require('@envel/helios-core')
 const os   = require('os')
 const path = require('path')
 const { retry } = require('./util')
+const SysUtil = require('./sysutil')
 
 const logger = LoggerUtil.getLogger('ConfigManager')
 
@@ -636,7 +637,10 @@ exports.setMaxRAM = function(serverid, maxRAM){
  * @returns {string} The path of the Java Executable.
  */
 exports.getJavaExecutable = function(serverid){
-    return config.javaConfig[serverid].executable
+    if(config.javaConfig[serverid].executable) {
+        return config.javaConfig[serverid].executable
+    }
+    return path.join(SysUtil.getLauncherRuntimeDir(exports.getDataDirectory()), 'bin', 'javaw.exe')
 }
 
 /**
