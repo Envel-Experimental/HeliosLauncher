@@ -42,7 +42,7 @@ mac:
         - 'universal'
   artifactName: '${productName}-setup-${version}-${arch}.${ext}'
   category: 'public.app-category.games'
-  singleArchFiles: "**/@sentry-internal/node-cpu-profiler/lib/*-darwin-*-*.node"
+  x64ArchFiles: "**/@sentry-internal/node-cpu-profiler/lib/*-darwin-*-*.node"
 
 # Linux Configuration
 linux: 
