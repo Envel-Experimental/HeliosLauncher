@@ -9,6 +9,11 @@ jest.mock('fs-extra', () => ({
   writeFile: jest.fn(),
   readFile: jest.fn(),
   move: jest.fn(),
+
+  pathExistsSync: jest.fn(() => false),
+  ensureDirSync: jest.fn(),
+  writeFileSync: jest.fn(),
+  readFileSync: jest.fn(),
 }));
 
 const ConfigManager = require('@app/assets/js/configmanager');
