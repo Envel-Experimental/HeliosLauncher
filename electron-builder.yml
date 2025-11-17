@@ -2,13 +2,10 @@ appId: 'flauncher'
 productName: 'Flauncher'
 artifactName: '${productName}-setup-${version}-${arch}.${ext}'
 
-copyright: 'Copyright © 2018-2026 Nikita Gutsenkov'
+copyright: 'Copyright © 2018-2024 Nikita Gutsenkov'
 
 asar: true
 compression: 'maximum'
-
-asarUnpack:
-  - "**/@sentry-internal/node-cpu-profiler/lib/*.node"
 
 files:
   - '!{dist,.gitignore,.vscode,docs,dev-app-update.yml,.nvmrc,.eslintrc.json}'
@@ -23,7 +20,7 @@ win:
       arch: 
         - 'x64'
         - 'arm64'
-        
+      
 
 # Windows Installer Configuration
 nsis:
@@ -42,7 +39,6 @@ mac:
         - 'universal'
   artifactName: '${productName}-setup-${version}-${arch}.${ext}'
   category: 'public.app-category.games'
-  x64ArchFiles: "**/@sentry-internal/node-cpu-profiler/lib/*-darwin-*-*.node"
 
 # Linux Configuration
 linux: 
