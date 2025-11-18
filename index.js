@@ -24,7 +24,6 @@ if (!gotTheLock) {
     app.quit()
 } else {
     app.on('second-instance', (event, commandLine, workingDirectory) => {
-        // Someone tried to run a second instance, we should focus our window.
         if (win) {
             if (win.isMinimized()) win.restore()
             win.focus()
@@ -36,10 +35,9 @@ if (!gotTheLock) {
 // Setup Lang
 LangLoader.setupLanguage()
 
-// Глобальный обработчик синхронных ошибок
 process.on('uncaughtException', (err) => {
     if (err.code === 'EPERM') {
-        handleEPERM()
+        if (handleEPERM()) return 
     } else {
         console.error('An uncaught exception occurred:', err)
         dialog.showMessageBoxSync({
@@ -55,7 +53,7 @@ process.on('uncaughtException', (err) => {
 
 process.on('unhandledRejection', (reason, promise) => {
     if (reason && reason.code === 'EPERM') {
-        handleEPERM()
+        if (handleEPERM()) return
     } else {
         console.error('An unhandled rejection occurred:', reason)
         dialog.showMessageBoxSync({
@@ -357,8 +355,7 @@ function createWindow() {
                 }
             } catch (err) {
                 if (err.code === 'EPERM') {
-                    handleEPERM()
-                    return 
+                    if (handleEPERM()) return 
                 } else {
                     console.error('Failed to save config during ready-to-show:', err)
                 }
@@ -458,8 +455,7 @@ function relaunchAsAdmin() {
         
         const exe = process.execPath
         const cwd = path.dirname(exe)
-
-        const command = `Start-Process -FilePath '${exe}' -WorkingDirectory '${cwd}' -Verb RunAs`
+        const command = `Start-Process -FilePath '${exe}' -WorkingDirectory '${cwd}' -ArgumentList '--relaunch-admin' -Verb RunAs`
         
         const ps = spawn('powershell.exe', ['-Command', command], {
             windowsHide: true, 
@@ -495,6 +491,11 @@ function relaunchAsAdmin() {
 }
 
 function handleEPERM() {
+    if (process.argv.includes('--relaunch-admin')) {
+        console.error('[EPERM Loop Protection] Already admin, but EPERM persists. Ignoring error to keep app alive.')
+        return false;
+    }
+
     const choice = dialog.showMessageBoxSync({
         type: 'error',
         title: 'Ошибка прав доступа',
@@ -504,11 +505,13 @@ function handleEPERM() {
         defaultId: 0,
         cancelId: 1
     })
+    
     if (choice === 0) {
         relaunchAsAdmin()
     } else {
         app.quit()
     }
+    return true;
 }
 
 app.on('ready', async () => {
@@ -516,10 +519,14 @@ app.on('ready', async () => {
         await ConfigManager.load()
     } catch (err) {
         if (err.code === 'EPERM') {
-            handleEPERM()
-            return
+            if (!handleEPERM()) {
+                console.log('Proceeding despite config load failure...')
+            } else {
+                return
+            }
+        } else {
+            console.error('Error loading config:', err)
         }
-        console.error('Error loading config:', err)
     }
     createWindow()
     createMenu()
