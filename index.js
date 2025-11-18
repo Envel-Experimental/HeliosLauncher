@@ -461,6 +461,24 @@ function createWindow() {
                 win.webContents.send('system-warnings', warnings)
             }
             win.show()
+
+            // Auto update
+            setTimeout(() => {
+                // 1. Safety check: Ensure the window still exists (user hasn't closed the app)
+                if (win && !win.isDestroyed()) {
+                    console.log('[AutoUpdate] Starting delayed update check...')
+                    
+                    // 2. Initialize logic (simulate an IPC event by passing the current window)
+                    // Note: 'false' means we are not forcing pre-release settings
+                    initAutoUpdater({ sender: win.webContents }, false)
+
+                    // 3. trigger the check silently (non-blocking)
+                    autoUpdater.checkForUpdates().catch(err => {
+                        console.warn('[AutoUpdate] Background check error:', err)
+                        // Log to console only, do not disturb the user with error popups
+                    })
+                }
+            }, 15 * 60 * 1000) // 15 minutes * 60 seconds * 1000 ms
         }
     })
 

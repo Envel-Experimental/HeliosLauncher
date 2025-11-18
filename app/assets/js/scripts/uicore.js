@@ -82,6 +82,7 @@ ipcRenderer.on('autoUpdateNotification', (event, arg, info) => {
                         loggerAutoUpdater.debug('Error Code:', info.code)
                     }
                 }
+                settingsUpdateButtonStatus(Lang.queryJS('uicore.autoUpdate.checkForUpdatesButton'))
                 break
             default:
                 loggerAutoUpdater.info('Unknown argument', arg)
