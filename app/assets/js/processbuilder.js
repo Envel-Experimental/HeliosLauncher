@@ -10,9 +10,10 @@ const os                    = require('os')
 const path                  = require('path')
 const { sendToSentry }      = require('./preloader')
 const { retry }             = require('./util')
+const pathutil              = require('./pathutil')
 
-const ConfigManager            = require('./configmanager')
-const Lang                     = require('./langloader')
+const ConfigManager         = require('./configmanager')
+const Lang                  = require('./langloader')
 
 const logger = LoggerUtil.getLogger('ProcessBuilder')
 
@@ -50,7 +51,24 @@ class ProcessBuilder {
      */
     build(){
         fs.ensureDirSync(this.gameDir)
-        const tempNativePath = path.join(os.tmpdir(), ConfigManager.getTempNativeFolder(), crypto.pseudoRandomBytes(16).toString('hex'))
+        
+        const currentSystemTemp = os.tmpdir()
+        let nativeBasePath = currentSystemTemp
+
+        if (!pathutil.isPathValid(currentSystemTemp)) {
+            nativeBasePath = 'C:\\.foxford\\temp_safe'
+
+            try {
+                fs.ensureDirSync(nativeBasePath)
+                console.log(`[ProcessBuilder] Natives redirected to safe path: ${nativeBasePath}`)
+            } catch (err) {
+                console.error(`[ProcessBuilder] Failed to create safe native folder:`, err)
+                nativeBasePath = currentSystemTemp
+            }
+        }
+        
+        const tempNativePath = path.join(nativeBasePath, ConfigManager.getTempNativeFolder(), crypto.pseudoRandomBytes(16).toString('hex'))
+
         process.throwDeprecation = true
         this.setupLiteLoader()
         logger.info('Using liteloader:', this.usingLiteLoader)
@@ -100,13 +118,26 @@ class ProcessBuilder {
             logger.info('Exited with code', code)
             if(code != 0){
 
-
                 const exitMessage = `Process exited with code: ${code}`
                 sendToSentry(exitMessage, 'error')
 
+                const modCfg = ConfigManager.getModConfiguration(this.server.rawServer.id)
+                for(const mdl of this.server.modules){
+                    const type = mdl.rawModule.type
+                    if(type === Type.ForgeMod || type === Type.LiteMod || type === Type.LiteLoader || type === Type.FabricMod){
+                        if(!mdl.getRequired().value){
+                            modCfg.mods[mdl.getVersionlessMavenIdentifier()] = {
+                                value: false
+                            }
+                        }
+                    }
+                }
+                ConfigManager.setModConfiguration(this.server.rawServer.id, modCfg)
+                ConfigManager.save()
+
                 setOverlayContent(
                     Lang.queryJS('processbuilder.exit.exitErrorHeader'),
-                    Lang.queryJS('processbuilder.exit.message') + code,
+                    `${Lang.queryJS('processbuilder.exit.message') + code}<br><br>Пробуем исправить проблему и отключаем все модификации. Их снова можно включить их в настройках.`,
                     Lang.queryJS('uibinder.startup.closeButton')
                 )
                 setOverlayHandler(() => {

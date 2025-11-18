@@ -1,3 +1,49 @@
+// ====================================================================
+// PATCH: NON-ASCII (CYRILLIC) USERNAME FIX
+// This block detects if the system TEMP path contains non-ASCII characters (like Cyrillic).
+// If detected, it attempts to redirect temporary files to a safe, ASCII-only path
+// to prevent Java/Native library loading errors (UnsatisfiedLinkError).
+// ====================================================================
+const fs = require('fs')
+const os = require('os')
+const path = require('path')
+
+function tryFixCyrillicTemp() {
+    try {
+        const currentTemp = os.tmpdir()
+        // Check for non-ASCII characters (e.g. Russian letters)
+        const hasNonAscii = /[^\x00-\x7F]/.test(currentTemp)
+
+        if (hasNonAscii) {
+            console.log('[Setup] Non-ASCII characters detected in TEMP path. Attempting redirect...')
+            
+            // Define a safe path in the root data directory (C:\.foxford\temp_safe)
+            const safePath = 'C:\\.foxford\\temp_safe'
+
+            if (!fs.existsSync(safePath)) {
+                fs.mkdirSync(safePath, { recursive: true })
+            }
+
+            // Override system environment variables for this process only
+            process.env.TEMP = safePath
+            process.env.TMP = safePath
+            
+            // Override Node's internal function
+            const oldTmpDir = os.tmpdir
+            os.tmpdir = () => safePath
+
+            console.log(`[Setup] TEMP directory successfully redirected to: ${safePath}`)
+        }
+    } catch (err) {
+        // If the fix fails, log it but DO NOT crash the app. Continue with defaults.
+        console.warn('[Setup] Failed to apply Cyrillic temp fix. Continuing with default settings.', err)
+    }
+}
+
+// Run the patch immediately before any other module loads
+tryFixCyrillicTemp()
+// ====================================================================
+
 const remoteMain = require('@electron/remote/main')
 remoteMain.initialize()
 
@@ -6,10 +52,8 @@ const { app, BrowserWindow, ipcMain, Menu, shell, powerMonitor, dialog } = requi
 const autoUpdater                       = require('electron-updater').autoUpdater
 const { spawn }                         = require('child_process')
 const ejse                              = require('ejs-electron')
-const fs                                = require('fs')
-const os                                = require('os')
+// fs, os, path are already imported at the top
 const isDev                             = require('./app/assets/js/isdev')
-const path                              = require('path')
 const semver                            = require('semver')
 const { pathToFileURL }                 = require('url')
 const { AZURE_CLIENT_ID, MSFT_OPCODE, MSFT_REPLY_TYPE, MSFT_ERROR, SHELL_OPCODE } = require('./app/assets/js/ipcconstants')
@@ -24,7 +68,7 @@ if (!gotTheLock) {
     app.quit()
 } else {
     app.on('second-instance', (event, commandLine, workingDirectory) => {
-        // Someone tried to run a second instance, we should focus our window.
+        // Focus the existing window if a user tries to open a second instance
         if (win) {
             if (win.isMinimized()) win.restore()
             win.focus()
@@ -43,8 +87,8 @@ LangLoader.setupLanguage()
 function isIgnorableError(err) {
     if (err.code !== 'EPERM') return false
 
-    // Check if the path involves temporary files or native libraries
-    const isTemp = err.path && (err.path.includes('Temp') || err.path.includes('WCNatives'))
+    // Check if the path involves temporary files, native libraries, or our safe temp dir
+    const isTemp = err.path && (err.path.includes('Temp') || err.path.includes('WCNatives') || err.path.includes('temp_safe'))
     
     // Also ignore unlink (deletion) errors, as cleaning up temp files is not critical
     const isUnlink = err.syscall === 'unlink'
@@ -57,12 +101,11 @@ process.on('uncaughtException', (err) => {
     // 1. Check if this is a non-critical error we can ignore
     if (isIgnorableError(err)) {
         console.warn('[Warning] Suppressed non-critical EPERM error:', err.path)
-        return // Just return, keep the app running
+        return // Keep running
     }
 
     if (err.code === 'EPERM') {
         // If returns true: we are handling/relaunching, stop execution.
-        // If returns false: we ignore it and keep running.
         if (handleEPERM()) return 
     } else {
         console.error('An uncaught exception occurred:', err)
@@ -83,7 +126,7 @@ process.on('unhandledRejection', (reason, promise) => {
     const err = reason instanceof Error ? reason : new Error(reason)
     err.code = reason.code || err.code
     err.path = reason.path || err.path
-    err.syscall = reason.syscall || err.syscall
+    err.syscall = reason.syscall || reason.syscall
 
     if (isIgnorableError(err)) {
         console.warn('[Warning] Suppressed non-critical Async EPERM error:', err.path)
@@ -489,6 +532,9 @@ function getPlatformIcon(filename){
     return path.join(__dirname, 'app', 'assets', 'images', `${filename}.${ext}`)
 }
 
+/**
+ * Relaunches the application with Administrator privileges.
+ */
 function relaunchAsAdmin() {
     if (process.platform === 'win32') {
         
@@ -511,7 +557,7 @@ function relaunchAsAdmin() {
         })
 
         ps.on('error', (err) => {
-            // If PowerShell failed to start, reclaim lock and show error
+            // If PowerShell failed to start, reclaim the lock and notify the user.
             app.requestSingleInstanceLock() 
             dialog.showMessageBoxSync({
                 type: 'error',
@@ -523,8 +569,8 @@ function relaunchAsAdmin() {
             app.quit()
         })
 
-        // 4. Wait for the 'exit' event. This triggers when the user clicks "Yes" or "No" in UAC.
-        // This prevents the parent app from closing before the command is fully sent.
+        // 4. Wait for the 'exit' event. This triggers when the user interacts with the UAC prompt.
+        // This ensures the command has been fully processed before closing the app.
         ps.on('exit', () => {
             app.quit()
         })
@@ -542,12 +588,12 @@ function relaunchAsAdmin() {
 }
 
 /**
- * Handles EPERM errors.
- * Returns true if the app needs to stop/relaunch.
+ * Handles critical EPERM (permission denied) errors.
+ * Returns true if the application should stop execution (due to restart or quit).
  * Returns false if the error should be ignored (loop protection).
  */
 function handleEPERM() {
-    // Check for loop protection flag
+    // Check for loop protection
     if (process.argv.includes('--relaunch-admin')) {
         console.error('[EPERM Loop Protection] Already admin, but EPERM persists. Ignoring error to keep app alive.')
         return false // Ignore error, continue execution
@@ -576,8 +622,7 @@ app.on('ready', async () => {
         await ConfigManager.load()
     } catch (err) {
         if (err.code === 'EPERM') {
-            // If handleEPERM returns false (ignore), we log and proceed.
-            // If true, we return (stop execution).
+            // Check if we should ignore the error and proceed, or stop for a restart.
             if (!handleEPERM()) {
                 console.log('Proceeding despite config load failure...')
             } else {
