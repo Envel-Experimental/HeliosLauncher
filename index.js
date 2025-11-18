@@ -17,8 +17,8 @@ function tryFixCyrillicTemp() {
         if (hasNonAscii) {
             console.log('[Setup] Non-ASCII characters detected in TEMP path. Attempting redirect...')
             
-            // Define a safe path in the root data directory (C:\.foxford\temp_safe)
-            const safePath = 'C:\\.foxford\\temp_safe'
+            // Define a safe path in the root data directory (C:\.foxford\temp_natives)
+            const safePath = 'C:\\.foxford\\temp_natives'
 
             if (!fs.existsSync(safePath)) {
                 fs.mkdirSync(safePath, { recursive: true })
@@ -81,19 +81,31 @@ if (!gotTheLock) {
 LangLoader.setupLanguage()
 
 /**
- * Helper function to check if the error is safe to ignore.
- * Returns true if the error is an EPERM related to temp files or deletion.
+ * Determines if a file system error is non-critical and can be ignored without
+ * triggering the administrative relaunch process.
+ *
+ * @param {Error} err The encountered error object (must have code, syscall, and path properties).
+ * @returns {boolean} True if the error should be ignored, false if it is critical (i.e., requires admin intervention).
  */
 function isIgnorableError(err) {
-    if (err.code !== 'EPERM') return false
+    // Check if the error code is related to basic permission denial (EPERM) or resource locking (EBUSY).
+    if (err.code !== 'EPERM' && err.code !== 'EBUSY') return false
 
-    // Check if the path involves temporary files, native libraries, or our safe temp dir
-    const isTemp = err.path && (err.path.includes('Temp') || err.path.includes('WCNatives') || err.path.includes('temp_safe'))
+    // Ignore non-critical cleanup system calls (deletion of old files, directory removal, file status check).
+    const isCleanup = err.syscall === 'unlink' || err.syscall === 'rmdir' || err.syscall === 'lstat'
+
+    // CRITICAL CHECK: If the operation is NOT cleanup (i.e., open, write, or mkdir) 
+    // AND it affects our designated safe directory (temp_natives). This indicates a serious failure
+    // to establish the working environment, which requires admin intervention.
+    if (!isCleanup && err.path && err.path.includes('temp_natives')) {
+        return false // Do not ignore: This is a critical write/creation failure.
+    }
+
+    // Ignore errors occurring within standard system temporary folders or native library cache (non-critical collateral damage).
+    const isTemp = err.path && (err.path.includes('Temp') || err.path.includes('WCNatives'))
     
-    // Also ignore unlink (deletion) errors, as cleaning up temp files is not critical
-    const isUnlink = err.syscall === 'unlink'
-
-    return isTemp || isUnlink
+    // Ignore the error if it involves standard temporary file paths OR is a general cleanup operation.
+    return isTemp || isCleanup
 }
 
 // Global synchronous error handler
