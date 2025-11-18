@@ -439,10 +439,21 @@ function getPlatformIcon(filename){
 function relaunchAsAdmin() {
     if (process.platform === 'win32') {
         const command = `Start-Process -FilePath "${process.execPath}" -Verb RunAs`
-        spawn('powershell.exe', ['-Command', command], {
+        const ps = spawn('powershell.exe', ['-Command', command], {
             stdio: 'inherit',
             detached: true
-        }).unref()
+        })
+        ps.on('error', (err) => {
+            dialog.showMessageBoxSync({
+                type: 'error',
+                title: 'Ошибка',
+                message: 'Не удалось перезапустить приложение.',
+                detail: 'Пожалуйста, перезапустите приложение от имени администратора.',
+                buttons: ['Выйти']
+            })
+            app.quit()
+        })
+        ps.unref()
         app.quit()
     } else {
         dialog.showMessageBoxSync({
