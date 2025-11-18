@@ -2,13 +2,14 @@ const remoteMain = require('@electron/remote/main')
 remoteMain.initialize()
 
 // Requirements
-const { app, BrowserWindow, ipcMain, Menu, shell, powerMonitor } = require('electron')
+const { app, BrowserWindow, ipcMain, Menu, shell, powerMonitor, dialog } = require('electron')
 const autoUpdater                       = require('electron-updater').autoUpdater
+const { spawn }                         = require('child_process')
 const ejse                              = require('ejs-electron')
 const fs                                = require('fs')
 const os                                = require('os')
 const isDev                             = require('./app/assets/js/isdev')
-const path                              =require('path')
+const path                              = require('path')
 const semver                            = require('semver')
 const { pathToFileURL }                 = require('url')
 const { AZURE_CLIENT_ID, MSFT_OPCODE, MSFT_REPLY_TYPE, MSFT_ERROR, SHELL_OPCODE } = require('./app/assets/js/ipcconstants')
@@ -35,6 +36,75 @@ if (!gotTheLock) {
 // Setup Lang
 LangLoader.setupLanguage()
 
+/**
+ * Helper function to check if the error is safe to ignore.
+ * Returns true if the error is an EPERM related to temp files or deletion.
+ */
+function isIgnorableError(err) {
+    if (err.code !== 'EPERM') return false
+
+    // Check if the path involves temporary files or native libraries
+    const isTemp = err.path && (err.path.includes('Temp') || err.path.includes('WCNatives'))
+    
+    // Also ignore unlink (deletion) errors, as cleaning up temp files is not critical
+    const isUnlink = err.syscall === 'unlink'
+
+    return isTemp || isUnlink
+}
+
+// Global synchronous error handler
+process.on('uncaughtException', (err) => {
+    // 1. Check if this is a non-critical error we can ignore
+    if (isIgnorableError(err)) {
+        console.warn('[Warning] Suppressed non-critical EPERM error:', err.path)
+        return // Just return, keep the app running
+    }
+
+    if (err.code === 'EPERM') {
+        // If returns true: we are handling/relaunching, stop execution.
+        // If returns false: we ignore it and keep running.
+        if (handleEPERM()) return 
+    } else {
+        console.error('An uncaught exception occurred:', err)
+        dialog.showMessageBoxSync({
+            type: 'error',
+            title: 'Критическая ошибка',
+            message: 'Произошла непредвиденная ошибка.',
+            detail: err.message,
+            buttons: ['Выйти']
+        })
+        app.quit()
+    }
+})
+
+// Global asynchronous error handler (Promise rejections)
+process.on('unhandledRejection', (reason, promise) => {
+    // Convert reason to an Error object if possible for checking
+    const err = reason instanceof Error ? reason : new Error(reason)
+    err.code = reason.code || err.code
+    err.path = reason.path || err.path
+    err.syscall = reason.syscall || err.syscall
+
+    if (isIgnorableError(err)) {
+        console.warn('[Warning] Suppressed non-critical Async EPERM error:', err.path)
+        return
+    }
+
+    if (reason && reason.code === 'EPERM') {
+        if (handleEPERM()) return
+    } else {
+        console.error('An unhandled rejection occurred:', reason)
+        dialog.showMessageBoxSync({
+            type: 'error',
+            title: 'Критическая ошибка (async)',
+            message: 'Произошла непредвиденная асинхронная ошибка.',
+            detail: (reason && reason.message) ? reason.message : 'Неизвестная ошибка',
+            buttons: ['Выйти']
+        })
+        app.quit()
+    }
+})
+
 try {
     const Sentry = require('@sentry/electron/main')
     Sentry.init({
@@ -49,12 +119,8 @@ try {
 let autoUpdateListeners = {}
 
 function initAutoUpdater(event, data) {
-
     if(data){
         autoUpdater.allowPrerelease = true
-    } else {
-        // Defaults to true if application version contains prerelease components (e.g. 0.12.1-alpha.1)
-        // autoUpdater.allowPrerelease = true
     }
     
     if(isDev){
@@ -96,14 +162,12 @@ function initAutoUpdater(event, data) {
         }
     }
 
-    // Remove old listeners to prevent memory leaks.
     autoUpdater.removeAllListeners('update-available')
     autoUpdater.removeAllListeners('update-downloaded')
     autoUpdater.removeAllListeners('update-not-available')
     autoUpdater.removeAllListeners('checking-for-update')
     autoUpdater.removeAllListeners('error')
 
-    // Add new listeners.
     autoUpdater.on('update-available', updateAvailableListener)
     autoUpdater.on('update-downloaded', updateDownloadedListener)
     autoUpdater.on('update-not-available', updateNotAvailableListener)
@@ -111,7 +175,6 @@ function initAutoUpdater(event, data) {
     autoUpdater.on('error', errorListener)
 }
 
-// Open channel to listen for update actions.
 ipcMain.on('autoUpdateAction', (event, arg, data) => {
     if (!event.sender.isDestroyed()) {
         switch(arg){
@@ -153,36 +216,26 @@ ipcMain.on('autoUpdateAction', (event, arg, data) => {
         }
     }
 })
-// Redirect distribution index event from preloader to renderer.
+
 ipcMain.on('distributionIndexDone', (event, res) => {
     if (!event.sender.isDestroyed()) {
         event.sender.send('distributionIndexDone', res)
     }
 })
 
-// Handle trash item.
 ipcMain.handle(SHELL_OPCODE.TRASH_ITEM, async (event, ...args) => {
     try {
         await shell.trashItem(args[0])
-        return {
-            result: true
-        }
+        return { result: true }
     } catch(error) {
-        return {
-            result: false,
-            error: error
-        }
+        return { result: false, error: error }
     }
 })
 
-// Disable hardware acceleration.
-// https://electronjs.org/docs/tutorial/offscreen-rendering
 app.disableHardwareAcceleration()
-
 
 const REDIRECT_URI_PREFIX = 'https://login.microsoftonline.com/common/oauth2/nativeclient?'
 
-// Microsoft Auth Login
 let msftAuthWindow
 let msftAuthSuccess
 let msftAuthViewSuccess
@@ -236,7 +289,6 @@ ipcMain.on(MSFT_OPCODE.OPEN_LOGIN, (ipcEvent, ...arguments_) => {
     msftAuthWindow.loadURL(`https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?prompt=select_account&client_id=${AZURE_CLIENT_ID}&response_type=code&scope=XboxLive.signin%20offline_access&redirect_uri=https://login.microsoftonline.com/common/oauth2/nativeclient`)
 })
 
-// Microsoft Auth Logout
 let msftLogoutWindow
 let msftLogoutSuccess
 let msftLogoutSuccessSent
@@ -300,8 +352,6 @@ ipcMain.on(MSFT_OPCODE.OPEN_LOGOUT, (ipcEvent, uuid, isLastAccount) => {
     msftLogoutWindow.loadURL('https://login.microsoftonline.com/common/oauth2/v2.0/logout')
 })
 
-// Keep a global reference of the window object, if you don't, the window will
-// be closed automatically when the JavaScript object is garbage collected.
 let win
 
 function createWindow() {
@@ -331,14 +381,27 @@ function createWindow() {
     win.once('ready-to-show', async () => {
         const warnings = await SysUtil.performChecks()
         if (win && !win.isDestroyed()) {
-            if (!ConfigManager.getTotalRAMWarningShown()) {
-                const totalRam = os.totalmem() / (1024 * 1024 * 1024)
-                if (totalRam < 6) {
-                    warnings.push('lowTotalRAM')
-                    ConfigManager.setTotalRAMWarningShown(true)
-                    await ConfigManager.save()
+            
+            // Protect against crashes when saving config
+            try {
+                if (!ConfigManager.getTotalRAMWarningShown()) {
+                    const totalRam = os.totalmem() / (1024 * 1024 * 1024)
+                    if (totalRam < 6) {
+                        warnings.push('lowTotalRAM')
+                        ConfigManager.setTotalRAMWarningShown(true)
+                        await ConfigManager.save()
+                    }
+                }
+            } catch (err) {
+                if (err.code === 'EPERM') {
+                    // If true (relaunch needed), stop execution.
+                    // If false (ignore), continue showing window.
+                    if (handleEPERM()) return 
+                } else {
+                    console.error('Failed to save config during ready-to-show:', err)
                 }
             }
+
             if (warnings.length > 0) {
                 win.webContents.send('system-warnings', warnings)
             }
@@ -356,10 +419,7 @@ function createWindow() {
 }
 
 function createMenu() {
-    
     if(process.platform === 'darwin') {
-
-        // Extend default included application menu to continue support for quit keyboard shortcut
         let applicationSubMenu = {
             label: 'Application',
             submenu: [{
@@ -376,7 +436,6 @@ function createMenu() {
             }]
         }
 
-        // New edit menu adds support for text-editing keyboard shortcuts
         let editSubMenu = {
             label: 'Edit',
             submenu: [{
@@ -408,15 +467,10 @@ function createMenu() {
             }]
         }
 
-        // Bundle submenus into a single template and build a menu object with it
         let menuTemplate = [applicationSubMenu, editSubMenu]
         let menuObject = Menu.buildFromTemplate(menuTemplate)
-
-        // Assign it to the application
         Menu.setApplicationMenu(menuObject)
-
     }
-
 }
 
 function getPlatformIcon(filename){
@@ -435,12 +489,103 @@ function getPlatformIcon(filename){
     return path.join(__dirname, 'app', 'assets', 'images', `${filename}.${ext}`)
 }
 
+function relaunchAsAdmin() {
+    if (process.platform === 'win32') {
+        
+        // 1. Release the single instance lock immediately so the new admin instance
+        // can start without being blocked by this current instance.
+        app.releaseSingleInstanceLock()
+        
+        const exe = process.execPath
+        // 2. Explicitly set working directory to the app's folder (avoids System32 default).
+        const cwd = path.dirname(exe)
+
+        // 3. Pass --relaunch-admin to signal that we've already tried elevating permissions.
+        const command = `Start-Process -FilePath '${exe}' -WorkingDirectory '${cwd}' -ArgumentList '--relaunch-admin' -Verb RunAs`
+        
+        const ps = spawn('powershell.exe', ['-Command', command], {
+            // windowsHide: true -> Hides the black console window but keeps it attached
+            // to the session, allowing the UAC prompt to appear.
+            windowsHide: true, 
+            stdio: 'ignore'
+        })
+
+        ps.on('error', (err) => {
+            // If PowerShell failed to start, reclaim lock and show error
+            app.requestSingleInstanceLock() 
+            dialog.showMessageBoxSync({
+                type: 'error',
+                title: 'Ошибка',
+                message: 'Не удалось выполнить перезапуск.',
+                detail: err.message,
+                buttons: ['Выйти']
+            })
+            app.quit()
+        })
+
+        // 4. Wait for the 'exit' event. This triggers when the user clicks "Yes" or "No" in UAC.
+        // This prevents the parent app from closing before the command is fully sent.
+        ps.on('exit', () => {
+            app.quit()
+        })
+
+    } else {
+        dialog.showMessageBoxSync({
+            type: 'error',
+            title: 'Ошибка прав доступа',
+            message: 'Для продолжения работы требуются права администратора.',
+            detail: 'Перезапустите приложение от имени администратора.',
+            buttons: ['Выйти']
+        })
+        app.quit()
+    }
+}
+
+/**
+ * Handles EPERM errors.
+ * Returns true if the app needs to stop/relaunch.
+ * Returns false if the error should be ignored (loop protection).
+ */
+function handleEPERM() {
+    // Check for loop protection flag
+    if (process.argv.includes('--relaunch-admin')) {
+        console.error('[EPERM Loop Protection] Already admin, but EPERM persists. Ignoring error to keep app alive.')
+        return false // Ignore error, continue execution
+    }
+
+    const choice = dialog.showMessageBoxSync({
+        type: 'error',
+        title: 'Ошибка прав доступа',
+        message: 'Нужны права администратора, чтобы продолжить.',
+        detail: 'Приложению не удается записать данные. Перезапустить с правами администратора?',
+        buttons: ['Перезапустить', 'Выйти'],
+        defaultId: 0,
+        cancelId: 1
+    })
+    
+    if (choice === 0) {
+        relaunchAsAdmin()
+    } else {
+        app.quit()
+    }
+    return true // Stop execution
+}
+
 app.on('ready', async () => {
     try {
         await ConfigManager.load()
     } catch (err) {
-        console.error('Error loading config:', err)
-        // Handle error appropriately, maybe show a dialog to the user
+        if (err.code === 'EPERM') {
+            // If handleEPERM returns false (ignore), we log and proceed.
+            // If true, we return (stop execution).
+            if (!handleEPERM()) {
+                console.log('Proceeding despite config load failure...')
+            } else {
+                return 
+            }
+        } else {
+            console.error('Error loading config:', err)
+        }
     }
     createWindow()
     createMenu()
@@ -457,16 +602,12 @@ app.on('before-quit', () => {
 
 
 app.on('window-all-closed', () => {
-    // On macOS it is common for applications and their menu bar
-    // to stay active until the user quits explicitly with Cmd + Q
     if (process.platform !== 'darwin') {
         app.quit()
     }
 })
 
 app.on('activate', () => {
-    // On macOS it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
     if (win === null) {
         createWindow()
     }
