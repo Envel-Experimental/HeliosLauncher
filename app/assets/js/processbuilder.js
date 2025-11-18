@@ -1,4 +1,4 @@
-/* global setOverlayContent, setOverlayHandler, setDismissHandler, toggleOverlay */
+/* global setOverlayContent, setOverlayHandler, setDismissHandler, toggleOverlay, setMiddleButtonHandler */
 const AdmZip                = require('adm-zip')
 const child_process         = require('child_process')
 const crypto                = require('crypto')
@@ -125,38 +125,56 @@ class ProcessBuilder {
         })
         child.on('close', async (code, signal) => {
             logger.info('Exited with code', code)
-            if(code != 0){
 
+            const isCrash = code !== 0 && code !== 130 && code !== 137 && code !== 143 && code !== 255
+
+            if (isCrash) {
                 const exitMessage = `Process exited with code: ${code}`
                 sendToSentry(exitMessage, 'error')
 
-                const modCfg = ConfigManager.getModConfiguration(this.server.rawServer.id)
-                for(const mdl of this.server.modules){
-                    const type = mdl.rawModule.type
-                    if(type === Type.ForgeMod || type === Type.LiteMod || type === Type.LiteLoader || type === Type.FabricMod){
-                        if(!mdl.getRequired().value){
-                            modCfg.mods[mdl.getVersionlessMavenIdentifier()] = {
-                                value: false
-                            }
-                        }
-                    }
-                }
-                ConfigManager.setModConfiguration(this.server.rawServer.id, modCfg)
-                ConfigManager.save()
-
                 setOverlayContent(
-                    Lang.queryJS('processbuilder.exit.exitErrorHeader'),
-                    `${Lang.queryJS('processbuilder.exit.message') + code}<br><br>Пробуем исправить проблему и отключаем все модификации. Их снова можно включить их в настройках.`,
-                    Lang.queryJS('uibinder.startup.closeButton')
+                    Lang.queryJS('processbuilder.exit.crash.title'),
+                    Lang.queryJS('processbuilder.exit.crash.body', { exitCode: code }),
+                    Lang.queryJS('processbuilder.exit.crash.close'),
+                    Lang.queryJS('processbuilder.exit.crash.disable')
                 )
+
                 setOverlayHandler(() => {
                     toggleOverlay(false)
                 })
+
+                setMiddleButtonHandler(() => {
+                    const modCfg = ConfigManager.getModConfiguration(this.server.rawServer.id)
+                    for (const mdl of this.server.modules) {
+                        const type = mdl.rawModule.type
+                        if (type === Type.ForgeMod || type === Type.LiteMod || type === Type.LiteLoader || type === Type.FabricMod) {
+                            if (!mdl.getRequired().value) {
+                                modCfg.mods[mdl.getVersionlessMavenIdentifier()] = {
+                                    value: false
+                                }
+                            }
+                        }
+                    }
+                    ConfigManager.setModConfiguration(this.server.rawServer.id, modCfg)
+                    ConfigManager.save()
+
+                    setOverlayContent(
+                        Lang.queryJS('processbuilder.exit.disabled.title'),
+                        Lang.queryJS('processbuilder.exit.disabled.body'),
+                        Lang.queryJS('processbuilder.exit.disabled.close')
+                    )
+                    setOverlayHandler(() => {
+                        toggleOverlay(false)
+                    })
+                    setMiddleButtonHandler(null)
+                })
+
                 setDismissHandler(() => {
                     toggleOverlay(false)
                 })
                 toggleOverlay(true)
             }
+
             try {
                 await retry(
                     () => fs.remove(tempNativePath),
