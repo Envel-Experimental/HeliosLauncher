@@ -50,8 +50,24 @@ class ProcessBuilder {
      */
     build(){
         fs.ensureDirSync(this.gameDir)
-        const tempNativeBaseDir = process.env.TEMP || os.tmpdir()
-        const tempNativePath = path.join(tempNativeBaseDir, ConfigManager.getTempNativeFolder(), crypto.pseudoRandomBytes(16).toString('hex'))
+        
+        const currentSystemTemp = os.tmpdir()
+        let nativeBasePath = currentSystemTemp
+
+        if (!pathutil.isPathValid(currentSystemTemp)) {
+            nativeBasePath = 'C:\\.foxford\\temp_safe'
+
+            try {
+                fs.ensureDirSync(nativeBasePath)
+                console.log(`[ProcessBuilder] Natives redirected to safe path: ${nativeBasePath}`)
+            } catch (err) {
+                console.error(`[ProcessBuilder] Failed to create safe native folder:`, err)
+                nativeBasePath = currentSystemTemp
+            }
+        }
+        
+        const tempNativePath = path.join(nativeBasePath, ConfigManager.getTempNativeFolder(), crypto.pseudoRandomBytes(16).toString('hex'))
+
         process.throwDeprecation = true
         this.setupLiteLoader()
         logger.info('Using liteloader:', this.usingLiteLoader)
