@@ -100,13 +100,26 @@ class ProcessBuilder {
             logger.info('Exited with code', code)
             if(code != 0){
 
-
                 const exitMessage = `Process exited with code: ${code}`
                 sendToSentry(exitMessage, 'error')
 
+                const modCfg = ConfigManager.getModConfiguration(this.server.rawServer.id)
+                for(const mdl of this.server.modules){
+                    const type = mdl.rawModule.type
+                    if(type === Type.ForgeMod || type === Type.LiteMod || type === Type.LiteLoader || type === Type.FabricMod){
+                        if(!mdl.getRequired().value){
+                            modCfg.mods[mdl.getVersionlessMavenIdentifier()] = {
+                                value: false
+                            }
+                        }
+                    }
+                }
+                ConfigManager.setModConfiguration(this.server.rawServer.id, modCfg)
+                ConfigManager.save()
+
                 setOverlayContent(
                     Lang.queryJS('processbuilder.exit.exitErrorHeader'),
-                    Lang.queryJS('processbuilder.exit.message') + code,
+                    `${Lang.queryJS('processbuilder.exit.message') + code}<br><br>Пробуем исправить проблему и отключаем все модификации. Их снова можно включить их в настройках.`,
                     Lang.queryJS('uibinder.startup.closeButton')
                 )
                 setOverlayHandler(() => {
