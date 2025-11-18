@@ -2,13 +2,14 @@ const remoteMain = require('@electron/remote/main')
 remoteMain.initialize()
 
 // Requirements
-const { app, BrowserWindow, ipcMain, Menu, shell, powerMonitor } = require('electron')
+const { app, BrowserWindow, ipcMain, Menu, shell, powerMonitor, dialog } = require('electron')
 const autoUpdater                       = require('electron-updater').autoUpdater
+const { spawn }                         = require('child_process')
 const ejse                              = require('ejs-electron')
 const fs                                = require('fs')
 const os                                = require('os')
 const isDev                             = require('./app/assets/js/isdev')
-const path                              =require('path')
+const path                              = require('path')
 const semver                            = require('semver')
 const { pathToFileURL }                 = require('url')
 const { AZURE_CLIENT_ID, MSFT_OPCODE, MSFT_REPLY_TYPE, MSFT_ERROR, SHELL_OPCODE } = require('./app/assets/js/ipcconstants')
@@ -34,6 +35,38 @@ if (!gotTheLock) {
 
 // Setup Lang
 LangLoader.setupLanguage()
+
+process.on('uncaughtException', (err) => {
+    if (err.code === 'EPERM') {
+        handleEPERM()
+    } else {
+        console.error('An uncaught exception occurred:', err)
+        dialog.showMessageBoxSync({
+            type: 'error',
+            title: 'Критическая ошибка',
+            message: 'Произошла непредвиденная ошибка.',
+            detail: err.message,
+            buttons: ['Выйти']
+        })
+        app.quit()
+    }
+})
+
+process.on('unhandledRejection', (reason, promise) => {
+    if (reason && reason.code === 'EPERM') {
+        handleEPERM()
+    } else {
+        console.error('An unhandled rejection occurred:', reason)
+        dialog.showMessageBoxSync({
+            type: 'error',
+            title: 'Критическая ошибка (async)',
+            message: 'Произошла непредвиденная асинхронная ошибка.',
+            detail: (reason && reason.message) ? reason.message : 'Неизвестная ошибка',
+            buttons: ['Выйти']
+        })
+        app.quit()
+    }
+})
 
 try {
     const Sentry = require('@sentry/electron/main')
@@ -331,14 +364,25 @@ function createWindow() {
     win.once('ready-to-show', async () => {
         const warnings = await SysUtil.performChecks()
         if (win && !win.isDestroyed()) {
-            if (!ConfigManager.getTotalRAMWarningShown()) {
-                const totalRam = os.totalmem() / (1024 * 1024 * 1024)
-                if (totalRam < 6) {
-                    warnings.push('lowTotalRAM')
-                    ConfigManager.setTotalRAMWarningShown(true)
-                    await ConfigManager.save()
+            
+            try {
+                if (!ConfigManager.getTotalRAMWarningShown()) {
+                    const totalRam = os.totalmem() / (1024 * 1024 * 1024)
+                    if (totalRam < 6) {
+                        warnings.push('lowTotalRAM')
+                        ConfigManager.setTotalRAMWarningShown(true)
+                        await ConfigManager.save()
+                    }
+                }
+            } catch (err) {
+                if (err.code === 'EPERM') {
+                    handleEPERM()
+                    return
+                } else {
+                    console.error('Failed to save config during ready-to-show:', err)
                 }
             }
+
             if (warnings.length > 0) {
                 win.webContents.send('system-warnings', warnings)
             }
@@ -435,12 +479,62 @@ function getPlatformIcon(filename){
     return path.join(__dirname, 'app', 'assets', 'images', `${filename}.${ext}`)
 }
 
+function relaunchAsAdmin() {
+    if (process.platform === 'win32') {
+
+        app.releaseSingleInstanceLock()
+        
+        const command = `Start-Process -FilePath "${process.execPath}" -Verb RunAs`
+        
+        const ps = spawn('powershell.exe', ['-Command', command], {
+            windowsHide: true, 
+            stdio: 'ignore'
+        })
+
+        ps.unref()
+
+        setTimeout(() => {
+            app.quit()
+        }, 2000)
+
+    } else {
+        dialog.showMessageBoxSync({
+            type: 'error',
+            title: 'Ошибка прав доступа',
+            message: 'Для продолжения работы требуются права администратора.',
+            detail: 'Перезапустите приложение от имени администратора.',
+            buttons: ['Выйти']
+        })
+        app.quit()
+    }
+}
+
+function handleEPERM() {
+    const choice = dialog.showMessageBoxSync({
+        type: 'error',
+        title: 'Ошибка прав доступа',
+        message: 'Нужны права администратора, чтобы продолжить.',
+        detail: 'Никак не получается создать файл.\n\nПерезапустить приложение с правами администратора?',
+        buttons: ['Перезапустить', 'Выйти'],
+        defaultId: 0,
+        cancelId: 1
+    })
+    if (choice === 0) {
+        relaunchAsAdmin()
+    } else {
+        app.quit()
+    }
+}
+
 app.on('ready', async () => {
     try {
         await ConfigManager.load()
     } catch (err) {
+        if (err.code === 'EPERM') {
+            handleEPERM()
+            return
+        }
         console.error('Error loading config:', err)
-        // Handle error appropriately, maybe show a dialog to the user
     }
     createWindow()
     createMenu()
