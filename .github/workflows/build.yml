@@ -33,23 +33,26 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - name: Cache electron-builder binaries
+      - name: Cache electron-builder and node-gyp
         uses: actions/cache@v4
         with:
           path: |
-            ~\AppData\Local\electron-builder\cache
+            ~/.npm
+            ~/.electron
+            ~/.electron-gyp
+            ~/.cache/electron
             ~/.cache/electron-builder
             ~/Library/Caches/electron-builder
-          key: electron-builder-cache-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+            ~\AppData\Local\electron-builder\cache
+          key: electron-build-cache-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
           restore-keys: |
-            electron-builder-cache-${{ runner.os }}-
+            electron-build-cache-${{ runner.os }}-
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
-      # Условие: (ОС = Windows) ИЛИ (сообщение коммита НЕ '1')
       - name: Install dependencies
         if: runner.os == 'Windows' || github.event.head_commit.message != '1'
         run: npm ci
@@ -112,13 +115,11 @@ jobs:
           BRANCH="${GITHUB_REF_NAME}"
           COMMIT="${GITHUB_SHA}"
 
-          # Логика для коммита '1'
           if [[ "${{ github.event.head_commit.message }}" == "1" ]]; then
             echo "tag_name=test-compressed-${{ github.run_id }}" >> $GITHUB_OUTPUT
             echo "prerelease=true"                         >> $GITHUB_OUTPUT
             echo "release_name=Test Build (Compressed)"    >> $GITHUB_OUTPUT
           
-          # Обычная логика
           elif [[ "$BRANCH" == "master" && "${{ github.event.head_commit.message }}" == "release" ]]; then
             echo "tag_name=release-${{ github.run_id }}" >> $GITHUB_OUTPUT
             echo "prerelease=false"                 >> $GITHUB_OUTPUT
