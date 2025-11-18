@@ -491,7 +491,9 @@ function relaunchAsAdmin() {
 
         ps.unref()
 
-        app.quit()
+        setTimeout(() => {
+            app.quit()
+        }, 3000)
 
     } else {
         dialog.showMessageBoxSync({
