@@ -452,27 +452,40 @@ function getPlatformIcon(filename){
     return path.join(__dirname, 'app', 'assets', 'images', `${filename}.${ext}`)
 }
 
+function showManualRelaunchError() {
+    dialog.showMessageBoxSync({
+        type: 'error',
+        title: 'Ошибка',
+        message: 'Не удалось выполнить автоматический перезапуск.',
+        detail: 'Пожалуйста, перезапустите приложение от имени администратора.',
+        buttons: ['Выйти']
+    })
+}
+
 function relaunchAsAdmin() {
     if (process.platform === 'win32') {
+        
+        const relaunchTimeout = setTimeout(() => {
+            showManualRelaunchError()
+            app.quit()
+        }, 10000)
+
         const command = `Start-Process -FilePath "${process.execPath}" -Verb RunAs`
         const ps = spawn('powershell.exe', ['-Command', command], {
-            stdio: 'inherit',
-            detached: true
+            stdio: 'inherit'
         })
+
         ps.on('error', (err) => {
-            dialog.showMessageBoxSync({
-                type: 'error',
-                title: 'Ошибка',
-                message: 'Не удалось перезапустить приложение.',
-                detail: 'Пожалуйста, перезапустите приложение от имени администратора.',
-                buttons: ['Выйти']
-            })
+            clearTimeout(relaunchTimeout)
+            showManualRelaunchError()
             app.quit()
         })
+
         ps.on('exit', () => {
+            clearTimeout(relaunchTimeout)
             app.quit()
         })
-        ps.unref()
+
     } else {
         dialog.showMessageBoxSync({
             type: 'error',
