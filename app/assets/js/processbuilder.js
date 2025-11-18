@@ -50,7 +50,8 @@ class ProcessBuilder {
      */
     build(){
         fs.ensureDirSync(this.gameDir)
-        const tempNativePath = path.join(os.tmpdir(), ConfigManager.getTempNativeFolder(), crypto.pseudoRandomBytes(16).toString('hex'))
+        const tempNativeBaseDir = process.env.TEMP || os.tmpdir()
+        const tempNativePath = path.join(tempNativeBaseDir, ConfigManager.getTempNativeFolder(), crypto.pseudoRandomBytes(16).toString('hex'))
         process.throwDeprecation = true
         this.setupLiteLoader()
         logger.info('Using liteloader:', this.usingLiteLoader)

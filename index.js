@@ -17,10 +17,9 @@ function tryFixCyrillicTemp() {
         if (hasNonAscii) {
             console.log('[Setup] Non-ASCII characters detected in TEMP path. Attempting redirect...')
             
-            // Define a safe path in the root drive to avoid User directory entirely
+            // Define a safe path in the root data directory (C:\.foxford\temp_safe)
             const safePath = 'C:\\.foxford\\temp_safe'
 
-            // Try to create the directory. If this fails (e.g. no permission), the catch block handles it.
             if (!fs.existsSync(safePath)) {
                 fs.mkdirSync(safePath, { recursive: true })
             }
@@ -41,7 +40,7 @@ function tryFixCyrillicTemp() {
     }
 }
 
-// Run the patch immediately
+// Run the patch immediately before any other module loads
 tryFixCyrillicTemp()
 // ====================================================================
 
@@ -99,14 +98,14 @@ function isIgnorableError(err) {
 
 // Global synchronous error handler
 process.on('uncaughtException', (err) => {
-    // 1. Filter out non-critical errors (like temp file cleanup)
+    // 1. Check if this is a non-critical error we can ignore
     if (isIgnorableError(err)) {
         console.warn('[Warning] Suppressed non-critical EPERM error:', err.path)
         return // Keep running
     }
 
     if (err.code === 'EPERM') {
-        // If handleEPERM returns true, it means we are restarting/quitting.
+        // If returns true: we are handling/relaunching, stop execution.
         if (handleEPERM()) return 
     } else {
         console.error('An uncaught exception occurred:', err)
@@ -123,11 +122,11 @@ process.on('uncaughtException', (err) => {
 
 // Global asynchronous error handler (Promise rejections)
 process.on('unhandledRejection', (reason, promise) => {
-    // Ensure reason is an Error object
+    // Convert reason to an Error object if possible for checking
     const err = reason instanceof Error ? reason : new Error(reason)
     err.code = reason.code || err.code
     err.path = reason.path || err.path
-    err.syscall = reason.syscall || err.syscall
+    err.syscall = reason.syscall || reason.syscall
 
     if (isIgnorableError(err)) {
         console.warn('[Warning] Suppressed non-critical Async EPERM error:', err.path)
@@ -426,8 +425,7 @@ function createWindow() {
         const warnings = await SysUtil.performChecks()
         if (win && !win.isDestroyed()) {
             
-            // Wrap the config saving logic in a try-catch block to prevent crashes
-            // during startup if the config file is locked or unwritable.
+            // Protect against crashes when saving config
             try {
                 if (!ConfigManager.getTotalRAMWarningShown()) {
                     const totalRam = os.totalmem() / (1024 * 1024 * 1024)
@@ -439,8 +437,8 @@ function createWindow() {
                 }
             } catch (err) {
                 if (err.code === 'EPERM') {
-                    // If handleEPERM returns true (action taken), stop loading.
-                    // If false (ignored), proceed.
+                    // If true (relaunch needed), stop execution.
+                    // If false (ignore), continue showing window.
                     if (handleEPERM()) return 
                 } else {
                     console.error('Failed to save config during ready-to-show:', err)
@@ -535,29 +533,31 @@ function getPlatformIcon(filename){
 }
 
 /**
- * Relaunches the application with Administrator privileges using PowerShell.
+ * Relaunches the application with Administrator privileges.
  */
 function relaunchAsAdmin() {
     if (process.platform === 'win32') {
         
-        // 1. Release the lock immediately so the new instance isn't blocked
+        // 1. Release the single instance lock immediately so the new admin instance
+        // can start without being blocked by this current instance.
         app.releaseSingleInstanceLock()
         
         const exe = process.execPath
-        // 2. Set working directory to app folder to avoid System32 issues
+        // 2. Explicitly set working directory to the app's folder (avoids System32 default).
         const cwd = path.dirname(exe)
 
-        // 3. Pass --relaunch-admin to signal loop protection logic
+        // 3. Pass --relaunch-admin to signal that we've already tried elevating permissions.
         const command = `Start-Process -FilePath '${exe}' -WorkingDirectory '${cwd}' -ArgumentList '--relaunch-admin' -Verb RunAs`
         
         const ps = spawn('powershell.exe', ['-Command', command], {
-            // Hides console but keeps UAC ability
+            // windowsHide: true -> Hides the black console window but keeps it attached
+            // to the session, allowing the UAC prompt to appear.
             windowsHide: true, 
             stdio: 'ignore'
         })
 
         ps.on('error', (err) => {
-            // Failed to spawn powershell
+            // If PowerShell failed to start, reclaim the lock and notify the user.
             app.requestSingleInstanceLock() 
             dialog.showMessageBoxSync({
                 type: 'error',
@@ -569,7 +569,8 @@ function relaunchAsAdmin() {
             app.quit()
         })
 
-        // 4. Wait for user action in UAC, then quit
+        // 4. Wait for the 'exit' event. This triggers when the user interacts with the UAC prompt.
+        // This ensures the command has been fully processed before closing the app.
         ps.on('exit', () => {
             app.quit()
         })
@@ -587,15 +588,15 @@ function relaunchAsAdmin() {
 }
 
 /**
- * Handles critical EPERM errors.
- * Returns true to stop execution (restarting).
- * Returns false to ignore and continue (loop protection).
+ * Handles critical EPERM (permission denied) errors.
+ * Returns true if the application should stop execution (due to restart or quit).
+ * Returns false if the error should be ignored (loop protection).
  */
 function handleEPERM() {
     // Check for loop protection
     if (process.argv.includes('--relaunch-admin')) {
         console.error('[EPERM Loop Protection] Already admin, but EPERM persists. Ignoring error to keep app alive.')
-        return false 
+        return false // Ignore error, continue execution
     }
 
     const choice = dialog.showMessageBoxSync({
@@ -613,7 +614,7 @@ function handleEPERM() {
     } else {
         app.quit()
     }
-    return true
+    return true // Stop execution
 }
 
 app.on('ready', async () => {
@@ -621,7 +622,7 @@ app.on('ready', async () => {
         await ConfigManager.load()
     } catch (err) {
         if (err.code === 'EPERM') {
-            // If handleEPERM returns false (ignore), allow load to proceed.
+            // Check if we should ignore the error and proceed, or stop for a restart.
             if (!handleEPERM()) {
                 console.log('Proceeding despite config load failure...')
             } else {
