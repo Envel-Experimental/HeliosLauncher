@@ -47,7 +47,7 @@ class ProcessBuilder {
     }
 
     /**
-     * Convienence method to run the functions typically used to build a process.
+     * Convenience method to run the functions typically used to build a process.
      */
     build(){
         fs.ensureDirSync(this.gameDir)
@@ -55,21 +55,30 @@ class ProcessBuilder {
         const currentSystemTemp = os.tmpdir()
         let nativeBasePath = currentSystemTemp
 
-        if (!pathutil.isPathValid(currentSystemTemp)) {
-            nativeBasePath = 'C:\\.foxford\\temp_safe'
+        const fallbackPath = pathutil.getFallbackDataPath()
+        const isUsingFallback = this.commonDir.startsWith(fallbackPath)
+        const isWindows = process.platform === 'win32'
+
+        // Detect if we are on Windows and the temp path uses a short name format (contains '~').
+        // This usually happens when the username has non-ASCII characters (Cyrillic).
+        // If detected, or if pathutil flags the path as invalid, force a safe fallback location.
+        if ((isWindows && currentSystemTemp.includes('~')) || !pathutil.isPathValid(currentSystemTemp) || isUsingFallback) {
+            
+            // Force redirect to C:\.foxford\temp_natives to avoid UnsatisfiedLinkError
+            nativeBasePath = path.join(fallbackPath, 'temp_natives')
 
             try {
                 fs.ensureDirSync(nativeBasePath)
-                console.log(`[ProcessBuilder] Natives redirected to safe path: ${nativeBasePath}`)
+                console.log(`[ProcessBuilder] Natives redirected to safe path due to potential path issues: ${nativeBasePath}`)
             } catch (err) {
-                console.error(`[ProcessBuilder] Failed to create safe native folder:`, err)
+                console.error(`[ProcessBuilder] Failed to create safe native folder at ${nativeBasePath}:`, err)
+                // If creation fails (e.g. permissions), revert to system default and hope for the best
                 nativeBasePath = currentSystemTemp
             }
         }
         
         const tempNativePath = path.join(nativeBasePath, ConfigManager.getTempNativeFolder(), crypto.pseudoRandomBytes(16).toString('hex'))
-
-        process.throwDeprecation = true
+        
         this.setupLiteLoader()
         logger.info('Using liteloader:', this.usingLiteLoader)
         this.usingFabricLoader = this.server.modules.some(mdl => mdl.rawModule.type === Type.Fabric)
@@ -189,12 +198,12 @@ class ProcessBuilder {
      * determine if it is enabled.
      *
      * A mod is enabled if:
-     *   * The configuration is not null and one of the following:
-     *     * The configuration is a boolean and true.
-     *     * The configuration is an object and its 'value' property is true.
-     *   * The configuration is null and one of the following:
-     *     * The required object is null.
-     *     * The required object's 'def' property is null or true.
+     * * The configuration is not null and one of the following:
+     * * The configuration is a boolean and true.
+     * * The configuration is an object and its 'value' property is true.
+     * * The configuration is null and one of the following:
+     * * The required object is null.
+     * * The required object's 'def' property is null or true.
      *
      * @param {Object | boolean} modCfg The mod configuration object.
      * @param {Object} required Optional. The required object from the mod's distro declaration.
@@ -248,10 +257,16 @@ class ProcessBuilder {
             const type = mdl.rawModule.type
             if(type === Type.ForgeMod || type === Type.LiteMod || type === Type.LiteLoader || type === Type.FabricMod){
                 const o = !mdl.getRequired().value
-                const e = ProcessBuilder.isModEnabled(modCfg[mdl.getVersionlessMavenIdentifier()], mdl.getRequired())
+                
+                // Safety check for configuration existence to prevent crash if config is missing.
+                const modConfigEntry = modCfg[mdl.getVersionlessMavenIdentifier()];
+                const e = ProcessBuilder.isModEnabled(modConfigEntry, mdl.getRequired())
+                
                 if(!o || (o && e)){
                     if(mdl.subModules.length > 0){
-                        const v = this.resolveModConfiguration(modCfg[mdl.getVersionlessMavenIdentifier()].mods, mdl.subModules)
+                        // Safe recursion
+                        const nextModCfg = (modConfigEntry && modConfigEntry.mods) ? modConfigEntry.mods : {};
+                        const v = this.resolveModConfiguration(nextModCfg, mdl.subModules)
                         fMods = fMods.concat(v.fMods)
                         lMods = lMods.concat(v.lMods)
                         if(type === Type.LiteLoader){
@@ -718,7 +733,8 @@ class ProcessBuilder {
         const ext = '.jar'
         const extLen = ext.length
         for(let i=0; i<list.length; i++) {
-            const extIndex = list[i].indexOf(ext)
+            // Using lastIndexOf to safely find extension at the end of the path
+            const extIndex = list[i].lastIndexOf(ext)
             if(extIndex > -1 && extIndex  !== list[i].length - extLen) {
                 list[i] = list[i].substring(0, extIndex + extLen)
             }
@@ -813,11 +829,12 @@ class ProcessBuilder {
 
                         // Extract the file.
                         if(!shouldExclude){
-                            fs.writeFile(path.join(tempNativePath, fileName), zipEntries[i].getData(), (err) => {
-                                if(err){
-                                    logger.error('Error while extracting native library:', err)
-                                }
-                            })
+                            // Using synchronous write to ensure natives are completely written before game launch.
+                            try {
+                                fs.writeFileSync(path.join(tempNativePath, fileName), zipEntries[i].getData())
+                            } catch (e) {
+                                logger.error('Error while extracting native library:', e)
+                            }
                         }
 
                     }
@@ -864,11 +881,12 @@ class ProcessBuilder {
 
                         // Extract the file.
                         if(!shouldExclude){
-                            fs.writeFile(path.join(tempNativePath, extractName), zipEntries[i].getData(), (err) => {
-                                if(err){
-                                    logger.error('Error while extracting native library:', err)
-                                }
-                            })
+                            // Using synchronous write to ensure natives are completely written before game launch.
+                            try {
+                                fs.writeFileSync(path.join(tempNativePath, extractName), zipEntries[i].getData())
+                            } catch (e) {
+                                logger.error('Error while extracting native library:', e)
+                            }
                         }
 
                     }
