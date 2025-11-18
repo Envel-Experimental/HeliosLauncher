@@ -36,6 +36,7 @@ if (!gotTheLock) {
 // Setup Lang
 LangLoader.setupLanguage()
 
+// Глобальный обработчик синхронных ошибок
 process.on('uncaughtException', (err) => {
     if (err.code === 'EPERM') {
         handleEPERM()
@@ -82,12 +83,8 @@ try {
 let autoUpdateListeners = {}
 
 function initAutoUpdater(event, data) {
-
     if(data){
         autoUpdater.allowPrerelease = true
-    } else {
-        // Defaults to true if application version contains prerelease components (e.g. 0.12.1-alpha.1)
-        // autoUpdater.allowPrerelease = true
     }
     
     if(isDev){
@@ -129,14 +126,12 @@ function initAutoUpdater(event, data) {
         }
     }
 
-    // Remove old listeners to prevent memory leaks.
     autoUpdater.removeAllListeners('update-available')
     autoUpdater.removeAllListeners('update-downloaded')
     autoUpdater.removeAllListeners('update-not-available')
     autoUpdater.removeAllListeners('checking-for-update')
     autoUpdater.removeAllListeners('error')
 
-    // Add new listeners.
     autoUpdater.on('update-available', updateAvailableListener)
     autoUpdater.on('update-downloaded', updateDownloadedListener)
     autoUpdater.on('update-not-available', updateNotAvailableListener)
@@ -144,7 +139,6 @@ function initAutoUpdater(event, data) {
     autoUpdater.on('error', errorListener)
 }
 
-// Open channel to listen for update actions.
 ipcMain.on('autoUpdateAction', (event, arg, data) => {
     if (!event.sender.isDestroyed()) {
         switch(arg){
@@ -186,36 +180,26 @@ ipcMain.on('autoUpdateAction', (event, arg, data) => {
         }
     }
 })
-// Redirect distribution index event from preloader to renderer.
+
 ipcMain.on('distributionIndexDone', (event, res) => {
     if (!event.sender.isDestroyed()) {
         event.sender.send('distributionIndexDone', res)
     }
 })
 
-// Handle trash item.
 ipcMain.handle(SHELL_OPCODE.TRASH_ITEM, async (event, ...args) => {
     try {
         await shell.trashItem(args[0])
-        return {
-            result: true
-        }
+        return { result: true }
     } catch(error) {
-        return {
-            result: false,
-            error: error
-        }
+        return { result: false, error: error }
     }
 })
 
-// Disable hardware acceleration.
-// https://electronjs.org/docs/tutorial/offscreen-rendering
 app.disableHardwareAcceleration()
-
 
 const REDIRECT_URI_PREFIX = 'https://login.microsoftonline.com/common/oauth2/nativeclient?'
 
-// Microsoft Auth Login
 let msftAuthWindow
 let msftAuthSuccess
 let msftAuthViewSuccess
@@ -269,7 +253,6 @@ ipcMain.on(MSFT_OPCODE.OPEN_LOGIN, (ipcEvent, ...arguments_) => {
     msftAuthWindow.loadURL(`https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?prompt=select_account&client_id=${AZURE_CLIENT_ID}&response_type=code&scope=XboxLive.signin%20offline_access&redirect_uri=https://login.microsoftonline.com/common/oauth2/nativeclient`)
 })
 
-// Microsoft Auth Logout
 let msftLogoutWindow
 let msftLogoutSuccess
 let msftLogoutSuccessSent
@@ -333,8 +316,6 @@ ipcMain.on(MSFT_OPCODE.OPEN_LOGOUT, (ipcEvent, uuid, isLastAccount) => {
     msftLogoutWindow.loadURL('https://login.microsoftonline.com/common/oauth2/v2.0/logout')
 })
 
-// Keep a global reference of the window object, if you don't, the window will
-// be closed automatically when the JavaScript object is garbage collected.
 let win
 
 function createWindow() {
@@ -377,7 +358,7 @@ function createWindow() {
             } catch (err) {
                 if (err.code === 'EPERM') {
                     handleEPERM()
-                    return
+                    return 
                 } else {
                     console.error('Failed to save config during ready-to-show:', err)
                 }
@@ -400,10 +381,7 @@ function createWindow() {
 }
 
 function createMenu() {
-    
     if(process.platform === 'darwin') {
-
-        // Extend default included application menu to continue support for quit keyboard shortcut
         let applicationSubMenu = {
             label: 'Application',
             submenu: [{
@@ -420,7 +398,6 @@ function createMenu() {
             }]
         }
 
-        // New edit menu adds support for text-editing keyboard shortcuts
         let editSubMenu = {
             label: 'Edit',
             submenu: [{
@@ -452,15 +429,10 @@ function createMenu() {
             }]
         }
 
-        // Bundle submenus into a single template and build a menu object with it
         let menuTemplate = [applicationSubMenu, editSubMenu]
         let menuObject = Menu.buildFromTemplate(menuTemplate)
-
-        // Assign it to the application
         Menu.setApplicationMenu(menuObject)
-
     }
-
 }
 
 function getPlatformIcon(filename){
@@ -481,21 +453,34 @@ function getPlatformIcon(filename){
 
 function relaunchAsAdmin() {
     if (process.platform === 'win32') {
-
+        
         app.releaseSingleInstanceLock()
         
-        const command = `Start-Process -FilePath "${process.execPath}" -Verb RunAs`
+        const exe = process.execPath
+        const cwd = path.dirname(exe)
+
+        const command = `Start-Process -FilePath '${exe}' -WorkingDirectory '${cwd}' -Verb RunAs`
         
         const ps = spawn('powershell.exe', ['-Command', command], {
             windowsHide: true, 
             stdio: 'ignore'
         })
 
-        ps.unref()
-
-        setTimeout(() => {
+        ps.on('error', (err) => {
+            app.requestSingleInstanceLock()
+            dialog.showMessageBoxSync({
+                type: 'error',
+                title: 'Ошибка',
+                message: 'Не удалось выполнить перезапуск.',
+                detail: err.message,
+                buttons: ['Выйти']
+            })
             app.quit()
-        }, 2000)
+        })
+
+        ps.on('exit', () => {
+            app.quit()
+        })
 
     } else {
         dialog.showMessageBoxSync({
@@ -514,7 +499,7 @@ function handleEPERM() {
         type: 'error',
         title: 'Ошибка прав доступа',
         message: 'Нужны права администратора, чтобы продолжить.',
-        detail: 'Никак не получается создать файл.\n\nПерезапустить приложение с правами администратора?',
+        detail: 'Приложению не удается записать данные. Перезапустить с правами администратора?',
         buttons: ['Перезапустить', 'Выйти'],
         defaultId: 0,
         cancelId: 1
@@ -551,16 +536,12 @@ app.on('before-quit', () => {
 
 
 app.on('window-all-closed', () => {
-    // On macOS it is common for applications and their menu bar
-    // to stay active until the user quits explicitly with Cmd + Q
     if (process.platform !== 'darwin') {
         app.quit()
     }
 })
 
 app.on('activate', () => {
-    // On macOS it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
     if (win === null) {
         createWindow()
     }
