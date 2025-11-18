@@ -2,8 +2,9 @@ const remoteMain = require('@electron/remote/main')
 remoteMain.initialize()
 
 // Requirements
-const { app, BrowserWindow, ipcMain, Menu, shell, powerMonitor } = require('electron')
+const { app, BrowserWindow, ipcMain, Menu, shell, powerMonitor, dialog } = require('electron')
 const autoUpdater                       = require('electron-updater').autoUpdater
+const { spawn }                         = require('child_process')
 const ejse                              = require('ejs-electron')
 const fs                                = require('fs')
 const os                                = require('os')
@@ -435,12 +436,48 @@ function getPlatformIcon(filename){
     return path.join(__dirname, 'app', 'assets', 'images', `${filename}.${ext}`)
 }
 
+function relaunchAsAdmin() {
+    if (process.platform === 'win32') {
+        const command = `Start-Process -FilePath "${process.execPath}" -Verb RunAs`
+        spawn('powershell.exe', ['-Command', command], {
+            stdio: 'inherit',
+            detached: true
+        }).unref()
+        app.quit()
+    } else {
+        dialog.showMessageBoxSync({
+            type: 'error',
+            title: 'Ошибка прав доступа',
+            message: 'Для продолжения работы требуются права администратора.',
+            detail: 'Перезапусти приложение от имени администратора.',
+            buttons: ['Выйти']
+        })
+        app.quit()
+    }
+}
+
 app.on('ready', async () => {
     try {
         await ConfigManager.load()
     } catch (err) {
+        if (err.code === 'EPERM') {
+            const choice = dialog.showMessageBoxSync({
+                type: 'error',
+                title: 'Ошибка прав доступа',
+                message: 'Никак не получается создать файл.',
+                detail: 'Перезапустить приложение с правами администратора?',
+                buttons: ['Перезапустить', 'Выйти'],
+                defaultId: 0,
+                cancelId: 1
+            })
+            if (choice === 0) {
+                relaunchAsAdmin()
+            } else {
+                app.quit()
+            }
+            return
+        }
         console.error('Error loading config:', err)
-        // Handle error appropriately, maybe show a dialog to the user
     }
     createWindow()
     createMenu()
