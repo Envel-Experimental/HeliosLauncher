@@ -485,7 +485,7 @@ function relaunchAsAdmin() {
         const command = `Start-Process -FilePath "${process.execPath}" -Verb RunAs`
         
         const ps = spawn('powershell.exe', ['-Command', command], {
-            detached: true,
+            windowsHide: true, 
             stdio: 'ignore'
         })
 
@@ -493,7 +493,7 @@ function relaunchAsAdmin() {
 
         setTimeout(() => {
             app.quit()
-        }, 3000)
+        }, 2000)
 
     } else {
         dialog.showMessageBoxSync({
