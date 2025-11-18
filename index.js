@@ -24,6 +24,7 @@ if (!gotTheLock) {
     app.quit()
 } else {
     app.on('second-instance', (event, commandLine, workingDirectory) => {
+        // Someone tried to run a second instance, we should focus our window.
         if (win) {
             if (win.isMinimized()) win.restore()
             win.focus()
@@ -35,8 +36,33 @@ if (!gotTheLock) {
 // Setup Lang
 LangLoader.setupLanguage()
 
+/**
+ * Helper function to check if the error is safe to ignore.
+ * Returns true if the error is an EPERM related to temp files or deletion.
+ */
+function isIgnorableError(err) {
+    if (err.code !== 'EPERM') return false
+
+    // Check if the path involves temporary files or native libraries
+    const isTemp = err.path && (err.path.includes('Temp') || err.path.includes('WCNatives'))
+    
+    // Also ignore unlink (deletion) errors, as cleaning up temp files is not critical
+    const isUnlink = err.syscall === 'unlink'
+
+    return isTemp || isUnlink
+}
+
+// Global synchronous error handler
 process.on('uncaughtException', (err) => {
+    // 1. Check if this is a non-critical error we can ignore
+    if (isIgnorableError(err)) {
+        console.warn('[Warning] Suppressed non-critical EPERM error:', err.path)
+        return // Just return, keep the app running
+    }
+
     if (err.code === 'EPERM') {
+        // If returns true: we are handling/relaunching, stop execution.
+        // If returns false: we ignore it and keep running.
         if (handleEPERM()) return 
     } else {
         console.error('An uncaught exception occurred:', err)
@@ -51,7 +77,19 @@ process.on('uncaughtException', (err) => {
     }
 })
 
+// Global asynchronous error handler (Promise rejections)
 process.on('unhandledRejection', (reason, promise) => {
+    // Convert reason to an Error object if possible for checking
+    const err = reason instanceof Error ? reason : new Error(reason)
+    err.code = reason.code || err.code
+    err.path = reason.path || err.path
+    err.syscall = reason.syscall || err.syscall
+
+    if (isIgnorableError(err)) {
+        console.warn('[Warning] Suppressed non-critical Async EPERM error:', err.path)
+        return
+    }
+
     if (reason && reason.code === 'EPERM') {
         if (handleEPERM()) return
     } else {
@@ -344,6 +382,7 @@ function createWindow() {
         const warnings = await SysUtil.performChecks()
         if (win && !win.isDestroyed()) {
             
+            // Protect against crashes when saving config
             try {
                 if (!ConfigManager.getTotalRAMWarningShown()) {
                     const totalRam = os.totalmem() / (1024 * 1024 * 1024)
@@ -355,6 +394,8 @@ function createWindow() {
                 }
             } catch (err) {
                 if (err.code === 'EPERM') {
+                    // If true (relaunch needed), stop execution.
+                    // If false (ignore), continue showing window.
                     if (handleEPERM()) return 
                 } else {
                     console.error('Failed to save config during ready-to-show:', err)
@@ -451,19 +492,27 @@ function getPlatformIcon(filename){
 function relaunchAsAdmin() {
     if (process.platform === 'win32') {
         
+        // 1. Release the single instance lock immediately so the new admin instance
+        // can start without being blocked by this current instance.
         app.releaseSingleInstanceLock()
         
         const exe = process.execPath
+        // 2. Explicitly set working directory to the app's folder (avoids System32 default).
         const cwd = path.dirname(exe)
+
+        // 3. Pass --relaunch-admin to signal that we've already tried elevating permissions.
         const command = `Start-Process -FilePath '${exe}' -WorkingDirectory '${cwd}' -ArgumentList '--relaunch-admin' -Verb RunAs`
         
         const ps = spawn('powershell.exe', ['-Command', command], {
+            // windowsHide: true -> Hides the black console window but keeps it attached
+            // to the session, allowing the UAC prompt to appear.
             windowsHide: true, 
             stdio: 'ignore'
         })
 
         ps.on('error', (err) => {
-            app.requestSingleInstanceLock()
+            // If PowerShell failed to start, reclaim lock and show error
+            app.requestSingleInstanceLock() 
             dialog.showMessageBoxSync({
                 type: 'error',
                 title: 'Ошибка',
@@ -474,6 +523,8 @@ function relaunchAsAdmin() {
             app.quit()
         })
 
+        // 4. Wait for the 'exit' event. This triggers when the user clicks "Yes" or "No" in UAC.
+        // This prevents the parent app from closing before the command is fully sent.
         ps.on('exit', () => {
             app.quit()
         })
@@ -490,10 +541,16 @@ function relaunchAsAdmin() {
     }
 }
 
+/**
+ * Handles EPERM errors.
+ * Returns true if the app needs to stop/relaunch.
+ * Returns false if the error should be ignored (loop protection).
+ */
 function handleEPERM() {
+    // Check for loop protection flag
     if (process.argv.includes('--relaunch-admin')) {
         console.error('[EPERM Loop Protection] Already admin, but EPERM persists. Ignoring error to keep app alive.')
-        return false;
+        return false // Ignore error, continue execution
     }
 
     const choice = dialog.showMessageBoxSync({
@@ -511,7 +568,7 @@ function handleEPERM() {
     } else {
         app.quit()
     }
-    return true;
+    return true // Stop execution
 }
 
 app.on('ready', async () => {
@@ -519,10 +576,12 @@ app.on('ready', async () => {
         await ConfigManager.load()
     } catch (err) {
         if (err.code === 'EPERM') {
+            // If handleEPERM returns false (ignore), we log and proceed.
+            // If true, we return (stop execution).
             if (!handleEPERM()) {
                 console.log('Proceeding despite config load failure...')
             } else {
-                return
+                return 
             }
         } else {
             console.error('Error loading config:', err)
