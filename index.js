@@ -9,7 +9,7 @@ const ejse                              = require('ejs-electron')
 const fs                                = require('fs')
 const os                                = require('os')
 const isDev                             = require('./app/assets/js/isdev')
-const path                              =require('path')
+const path                              = require('path')
 const semver                            = require('semver')
 const { pathToFileURL }                 = require('url')
 const { AZURE_CLIENT_ID, MSFT_OPCODE, MSFT_REPLY_TYPE, MSFT_ERROR, SHELL_OPCODE } = require('./app/assets/js/ipcconstants')
@@ -46,6 +46,22 @@ process.on('uncaughtException', (err) => {
             title: 'Критическая ошибка',
             message: 'Произошла непредвиденная ошибка.',
             detail: err.message,
+            buttons: ['Выйти']
+        })
+        app.quit()
+    }
+})
+
+process.on('unhandledRejection', (reason, promise) => {
+    if (reason && reason.code === 'EPERM') {
+        handleEPERM()
+    } else {
+        console.error('An unhandled rejection occurred:', reason)
+        dialog.showMessageBoxSync({
+            type: 'error',
+            title: 'Критическая ошибка (async)',
+            message: 'Произошла непредвиденная асинхронная ошибка.',
+            detail: (reason && reason.message) ? reason.message : 'Неизвестная ошибка',
             buttons: ['Выйти']
         })
         app.quit()
@@ -348,14 +364,25 @@ function createWindow() {
     win.once('ready-to-show', async () => {
         const warnings = await SysUtil.performChecks()
         if (win && !win.isDestroyed()) {
-            if (!ConfigManager.getTotalRAMWarningShown()) {
-                const totalRam = os.totalmem() / (1024 * 1024 * 1024)
-                if (totalRam < 6) {
-                    warnings.push('lowTotalRAM')
-                    ConfigManager.setTotalRAMWarningShown(true)
-                    await ConfigManager.save()
+            
+            try {
+                if (!ConfigManager.getTotalRAMWarningShown()) {
+                    const totalRam = os.totalmem() / (1024 * 1024 * 1024)
+                    if (totalRam < 6) {
+                        warnings.push('lowTotalRAM')
+                        ConfigManager.setTotalRAMWarningShown(true)
+                        await ConfigManager.save()
+                    }
+                }
+            } catch (err) {
+                if (err.code === 'EPERM') {
+                    handleEPERM()
+                    return
+                } else {
+                    console.error('Failed to save config during ready-to-show:', err)
                 }
             }
+
             if (warnings.length > 0) {
                 win.webContents.send('system-warnings', warnings)
             }
@@ -452,40 +479,19 @@ function getPlatformIcon(filename){
     return path.join(__dirname, 'app', 'assets', 'images', `${filename}.${ext}`)
 }
 
-function showManualRelaunchError() {
-    dialog.showMessageBoxSync({
-        type: 'error',
-        title: 'Ошибка',
-        message: 'Не удалось выполнить автоматический перезапуск.',
-        detail: 'Пожалуйста, перезапустите приложение от имени администратора.',
-        buttons: ['Выйти']
-    })
-}
-
 function relaunchAsAdmin() {
     if (process.platform === 'win32') {
         
-        const relaunchTimeout = setTimeout(() => {
-            showManualRelaunchError()
-            app.quit()
-        }, 10000)
-
         const command = `Start-Process -FilePath "${process.execPath}" -Verb RunAs`
+        
         const ps = spawn('powershell.exe', ['-Command', command], {
             detached: true,
             stdio: 'ignore'
         })
 
-        ps.on('error', (err) => {
-            clearTimeout(relaunchTimeout)
-            showManualRelaunchError()
-            app.quit()
-        })
+        ps.unref()
 
-        ps.on('exit', () => {
-            clearTimeout(relaunchTimeout)
-            app.quit()
-        })
+        app.quit()
 
     } else {
         dialog.showMessageBoxSync({
