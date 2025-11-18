@@ -472,7 +472,8 @@ function relaunchAsAdmin() {
 
         const command = `Start-Process -FilePath "${process.execPath}" -Verb RunAs`
         const ps = spawn('powershell.exe', ['-Command', command], {
-            stdio: 'inherit'
+            detached: true,
+            stdio: 'ignore'
         })
 
         ps.on('error', (err) => {
