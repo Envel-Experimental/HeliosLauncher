@@ -36,6 +36,22 @@ if (!gotTheLock) {
 // Setup Lang
 LangLoader.setupLanguage()
 
+process.on('uncaughtException', (err) => {
+    if (err.code === 'EPERM') {
+        handleEPERM()
+    } else {
+        console.error('An uncaught exception occurred:', err)
+        dialog.showMessageBoxSync({
+            type: 'error',
+            title: 'Критическая ошибка',
+            message: 'Произошла непредвиденная ошибка.',
+            detail: err.message,
+            buttons: ['Выйти']
+        })
+        app.quit()
+    }
+})
+
 try {
     const Sentry = require('@sentry/electron/main')
     Sentry.init({
@@ -448,7 +464,7 @@ function relaunchAsAdmin() {
                 type: 'error',
                 title: 'Ошибка',
                 message: 'Не удалось перезапустить приложение.',
-                detail: 'Пожалуйста, перезапустите приложение от имени администратора.',
+                detail: 'Пожалуйста, перезапусти приложение от имени администратора.',
                 buttons: ['Выйти']
             })
             app.quit()
@@ -467,25 +483,29 @@ function relaunchAsAdmin() {
     }
 }
 
+function handleEPERM() {
+    const choice = dialog.showMessageBoxSync({
+        type: 'error',
+        title: 'Ошибка прав доступа',
+        message: 'Никак не получается создать файл.',
+        detail: 'Перезапустить приложение с правами администратора?',
+        buttons: ['Перезапустить', 'Выйти'],
+        defaultId: 0,
+        cancelId: 1
+    })
+    if (choice === 0) {
+        relaunchAsAdmin()
+    } else {
+        app.quit()
+    }
+}
+
 app.on('ready', async () => {
     try {
         await ConfigManager.load()
     } catch (err) {
         if (err.code === 'EPERM') {
-            const choice = dialog.showMessageBoxSync({
-                type: 'error',
-                title: 'Ошибка прав доступа',
-                message: 'Никак не получается создать файл.',
-                detail: 'Перезапустить приложение с правами администратора?',
-                buttons: ['Перезапустить', 'Выйти'],
-                defaultId: 0,
-                cancelId: 1
-            })
-            if (choice === 0) {
-                relaunchAsAdmin()
-            } else {
-                app.quit()
-            }
+            handleEPERM()
             return
         }
         console.error('Error loading config:', err)
