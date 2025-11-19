@@ -33,7 +33,7 @@ jobs:
           
           # Construct the release name to match standard Electron Sentry format: "AppName@Version".
           # If this doesn't match what the app sends at runtime, source maps won't work.
-          version: "flauncher@${{ inputs.version }}"
+          version: "FLauncher@${{ inputs.version }}"
           
           # Since you are not using Webpack/Vite (no minification), we upload
           # the raw source files from the root directory ('./').
