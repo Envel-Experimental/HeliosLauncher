@@ -6,6 +6,8 @@
 const path          = require('path')
 const { Type }      = require('helios-distribution-types')
 
+const remoteElectron = require('@electron/remote')
+
 const AuthManager   = require('./assets/js/authmanager')
 const ConfigManager = require('./assets/js/configmanager')
 const { DistroAPI } = require('./assets/js/distromanager')
@@ -114,7 +116,7 @@ function showFatalStartupError(){
                 Lang.queryJS('uibinder.startup.closeButton')
             )
             setOverlayHandler(() => {
-                const window = remote.getCurrentWindow()
+                const window = remoteElectron.getCurrentWindow()
                 window.close()
             })
             toggleOverlay(true)
@@ -128,6 +130,9 @@ function showFatalStartupError(){
  * @param {Object} data The distro index object.
  */
 function onDistroRefresh(data){
+
+    if (!data) return
+
     updateSelectedServer(data.getServerById(ConfigManager.getSelectedServer()))
     syncModConfigurations(data)
     ensureJavaSettings(data)
@@ -432,6 +437,17 @@ document.addEventListener('readystatechange', async () => {
 ipcRenderer.on('distributionIndexDone', async (event, res) => {
     if(res) {
         const data = await DistroAPI.getDistribution()
+
+        if (!data) {
+            fatalStartupError = true
+            if(document.readyState === 'interactive' || document.readyState === 'complete'){
+                showFatalStartupError()
+            } else {
+                rscShouldLoad = true
+            }
+            return
+        }
+
         syncModConfigurations(data)
         ensureJavaSettings(data)
         if(document.readyState === 'interactive' || document.readyState === 'complete'){
@@ -452,7 +468,9 @@ ipcRenderer.on('distributionIndexDone', async (event, res) => {
 ipcRenderer.on('power-resume', async () => {
     if (!fatalStartupError) {
         const data = await DistroAPI.getDistribution()
-        onDistroRefresh(data)
+        if (data) { 
+            onDistroRefresh(data)
+        }
     }
 })
 

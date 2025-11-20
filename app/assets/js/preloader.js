@@ -16,6 +16,8 @@ const logger = LoggerUtil.getLogger('Preloader')
 async function preloader() {
     logger.info('Loading..')
 
+    LangLoader.setupLanguage()
+
     try {
         Sentry = require('@sentry/electron/renderer')
         Sentry.init({
@@ -66,7 +68,6 @@ async function preloader() {
             ipcRenderer.send('distributionIndexDone', false) 
         }
 
-        ipcRenderer.send('distributionIndexDone', true)
     } catch (err) {
         logger.error('Failed to load distribution index, continuing in offline mode.', err)
         sendToSentry(`Failed to load distribution index: ${err.message}`, 'error')

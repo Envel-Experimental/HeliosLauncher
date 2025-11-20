@@ -455,6 +455,8 @@ exports.removeAuthAccount = function(uuid){
  * @returns {Object} The selected authenticated account.
  */
 exports.getSelectedAccount = function(){
+    if (!config) return null
+
     return config.authenticationDatabase[config.selectedAccount]
 }
 
