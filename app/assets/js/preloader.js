@@ -1,5 +1,6 @@
 const { ipcRenderer } = require('electron')
 const fs = require('fs-extra')
+const { app } = require('@electron/remote')
 const os = require('os')
 const path = require('path')
 
@@ -19,6 +20,7 @@ async function preloader() {
         Sentry = require('@sentry/electron/renderer')
         Sentry.init({
             dsn: 'https://f02442d2a0733ac2c810b8d8d7f4a21e@o4508545424359424.ingest.de.sentry.io/4508545432027216',
+            release: 'FLauncher@' + app.getVersion(),
         })
 
         const systemInfo = {
@@ -58,6 +60,10 @@ async function preloader() {
                 ConfigManager.setSelectedServer(heliosDistro.getMainServer().rawServer.id)
                 await ConfigManager.save()
             }
+            ipcRenderer.send('distributionIndexDone', true)
+        } else {
+            logger.error('Loaded distribution index is null.')
+            ipcRenderer.send('distributionIndexDone', false) 
         }
 
         ipcRenderer.send('distributionIndexDone', true)
