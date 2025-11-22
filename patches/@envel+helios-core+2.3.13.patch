@@ -1,0 +1,112 @@
+diff --git a/node_modules/@envel/helios-core/dist/common/util/FileUtils.js b/node_modules/@envel/helios-core/dist/common/util/FileUtils.js
+index ab70624..9e77ce8 100644
+--- a/node_modules/@envel/helios-core/dist/common/util/FileUtils.js
++++ b/node_modules/@envel/helios-core/dist/common/util/FileUtils.js
+@@ -39,6 +39,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.calculateHashByBuffer = calculateHashByBuffer;
+ exports.calculateHash = calculateHash;
+ exports.validateLocalFile = validateLocalFile;
++exports.setValidationCache = setValidationCache;
++exports.getValidationCache = getValidationCache;
+ exports.validateFiles = validateFiles;
+ exports.getVersionJsonPath = getVersionJsonPath;
+ exports.getVersionJarPath = getVersionJarPath;
+@@ -67,13 +69,42 @@ function calculateHash(path, algo) {
+         input.on('close', () => resolve(hash.digest('hex')));
+     });
+ }
++let validationCache = null;
++function setValidationCache(cache) {
++    validationCache = cache;
++}
++function getValidationCache() {
++    return validationCache;
++}
+ async function validateLocalFile(path, algo, hash) {
+     if (await (0, fs_extra_1.pathExists)((0, NodeUtil_1.ensureDecodedPath)(path))) {
+         if (hash == null) {
+             return true;
+         }
++        const filePath = (0, NodeUtil_1.ensureDecodedPath)(path);
++        let stats;
+         try {
+-            return (await calculateHash(path, algo)) === hash;
++            stats = await (0, fs_extra_1.stat)(filePath);
++        } catch (err) {
++            // Ignore
++        }
++        if (validationCache && validationCache[path] && stats) {
++            const entry = validationCache[path];
++            if (entry.size === stats.size && entry.mtime === stats.mtimeMs && entry.hash === hash) {
++                return true;
++            }
++        }
++        try {
++            const calcHash = await calculateHash(path, algo);
++            const res = calcHash === hash;
++            if (res && validationCache && stats) {
++                validationCache[path] = {
++                    size: stats.size,
++                    mtime: stats.mtimeMs,
++                    hash: hash
++                };
++            }
++            return res;
+         }
+         catch (err) {
+             log.error('Failed to calculate hash.', err);
+diff --git a/node_modules/@envel/helios-core/dist/dl/AssetGaurdTransmitter.js b/node_modules/@envel/helios-core/dist/dl/AssetGaurdTransmitter.js
+index 554077d..0f58331 100644
+--- a/node_modules/@envel/helios-core/dist/dl/AssetGaurdTransmitter.js
++++ b/node_modules/@envel/helios-core/dist/dl/AssetGaurdTransmitter.js
+@@ -61,7 +61,7 @@ class FullRepair extends BaseTransmitter {
+     receiverName() {
+         return 'FullRepairReceiver';
+     }
+-    verifyFiles(onProgress) {
++    verifyFiles(onProgress, validationCache) {
+         return new Promise((resolve, reject) => {
+             const onMessageHandle = (message) => {
+                 switch (message.response) {
+@@ -72,7 +72,7 @@ class FullRepair extends BaseTransmitter {
+                     case 'validateComplete':
+                         log.info('Received validation complete.');
+                         this.receiver.removeListener('message', onMessageHandle);
+-                        resolve(message.invalidCount);
++                        resolve({ invalidCount: message.invalidCount, validationCache: message.validationCache });
+                         break;
+                     case 'error':
+                         log.error('Received error.');
+@@ -88,7 +88,8 @@ class FullRepair extends BaseTransmitter {
+                 instanceDirectory: this.instanceDirectory,
+                 launcherDirectory: this.launcherDirectory,
+                 serverId: this.serverId,
+-                devMode: this.devMode
++                devMode: this.devMode,
++                validationCache: validationCache
+             });
+         });
+     }
+diff --git a/node_modules/@envel/helios-core/dist/dl/receivers/FullRepairReceiver.js b/node_modules/@envel/helios-core/dist/dl/receivers/FullRepairReceiver.js
+index 89fe157..b431287 100644
+--- a/node_modules/@envel/helios-core/dist/dl/receivers/FullRepairReceiver.js
++++ b/node_modules/@envel/helios-core/dist/dl/receivers/FullRepairReceiver.js
+@@ -57,6 +57,9 @@ class FullRepairReceiver {
+         }
+     }
+     async validate(message) {
++        if (message.validationCache) {
++            (0, FileUtils_1.setValidationCache)(message.validationCache);
++        }
+         const api = new DistributionAPI_1.DistributionAPI(message.launcherDirectory, message.commonDirectory, message.instanceDirectory, null, // The main process must refresh, this is a local pull only.
+         message.devMode);
+         const distribution = await api.getDistributionLocalLoadOnly();
+@@ -85,7 +88,7 @@ class FullRepairReceiver {
+                 .forEach(asset => assets.push(asset));
+         }
+         this.assets = assets;
+-        process.send({ response: 'validateComplete', invalidCount: this.assets.length });
++        process.send({ response: 'validateComplete', invalidCount: this.assets.length, validationCache: (0, FileUtils_1.getValidationCache)() });
+     }
+     // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     async download(_message) {

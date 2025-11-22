@@ -29,6 +29,7 @@ const {
 
 // Internal Requirements
 const ProcessBuilder          = require('./assets/js/processbuilder')
+const ValidationCacheManager  = require('./assets/js/validationcachemanager')
 
 // Launch Elements
 const launch_content          = document.getElementById('launch_content')
@@ -480,6 +481,8 @@ async function dlAsync(login = true) {
     toggleLaunchArea(true)
     setLaunchPercentage(0, 100)
 
+    await ValidationCacheManager.load()
+
     const fullRepairModule = new FullRepair(
         ConfigManager.getCommonDirectory(),
         ConfigManager.getInstanceDirectory(),
@@ -505,9 +508,17 @@ async function dlAsync(login = true) {
     setLaunchDetails(Lang.queryJS('landing.dlAsync.validatingFileIntegrity'))
     let invalidFileCount = 0
     try {
-        invalidFileCount = await fullRepairModule.verifyFiles(percent => {
+        const result = await fullRepairModule.verifyFiles(percent => {
             setLaunchPercentage(percent)
-        })
+        }, ValidationCacheManager.getCache())
+
+        if (typeof result === 'object' && result.validationCache) {
+            invalidFileCount = result.invalidCount
+            await ValidationCacheManager.updateCache(result.validationCache)
+        } else {
+            invalidFileCount = result
+        }
+
         setLaunchPercentage(100)
     } catch (err) {
         loggerLaunchSuite.warn('Error during file validation. Continuing with local files.', err)
