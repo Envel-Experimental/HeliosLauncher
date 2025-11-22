@@ -116,6 +116,15 @@ process.on('uncaughtException', (err) => {
         return // Keep running
     }
 
+    // ENOSPC: no space left on device!
+    if (err.code === 'ENOSPC') {
+        console.warn('Disk full detected (ENOSPC). Sending warning to UI.')
+        if (win && !win.isDestroyed()) {
+            win.webContents.send('system-warnings', ['lowDiskSpace'])
+        }
+        return
+    }
+
     if (err.code === 'EPERM') {
         // If returns true: we are handling/relaunching, stop execution.
         if (handleEPERM()) return 
@@ -142,6 +151,15 @@ process.on('unhandledRejection', (reason, promise) => {
 
     if (isIgnorableError(err)) {
         console.warn('[Warning] Suppressed non-critical Async EPERM error:', err.path)
+        return
+    }
+
+    // ENOSPC: no space left on device!
+    if (err.code === 'ENOSPC') {
+        console.warn('Disk full detected (Async ENOSPC). Sending warning to UI.')
+        if (win && !win.isDestroyed()) {
+            win.webContents.send('system-warnings', ['lowDiskSpace'])
+        }
         return
     }
 
