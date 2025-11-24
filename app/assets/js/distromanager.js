@@ -15,6 +15,17 @@ const api = new DistributionAPI(
     false
 )
 
+const originalPullRemote = api.pullRemote.bind(api)
+api.pullRemote = async () => {
+    const result = await originalPullRemote()
+    if (result.data == null) {
+        api._remoteFailed = true
+    } else {
+        api._remoteFailed = false
+    }
+    return result
+}
+
 const FAILED_DOWNLOAD_ERROR_CODE = 1
 const MAX_DOWNLOAD_RETRIES = 3
 const DOWNLOAD_RETRY_DELAY = 2000

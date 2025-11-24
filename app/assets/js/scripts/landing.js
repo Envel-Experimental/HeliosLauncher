@@ -291,6 +291,24 @@ function showLaunchFailure(title, desc){
     toggleLaunchArea(false)
 }
 
+/**
+ * Shows the offline warning overlay.
+ */
+async function showOfflineWarning() {
+    return new Promise((resolve) => {
+        setOverlayContent(
+            Lang.queryJS('landing.launch.serverUnavailableTitle'),
+            Lang.queryJS('landing.launch.serverUnavailableDesc'),
+            Lang.queryJS('landing.launch.serverUnavailableOkay')
+        )
+        setOverlayHandler(() => {
+            toggleOverlay(false)
+            resolve()
+        })
+        toggleOverlay(true)
+    })
+}
+
 /* System (Java) Scan */
 
 /**
@@ -561,6 +579,7 @@ async function dlAsync(login = true) {
 
     const modLoaderData = await distributionIndexProcessor.loadModLoaderVersionJson(serv)
     let versionData
+    let mojangOffline = false
     try {
         versionData = await mojangIndexProcessor.getVersionJson()
     } catch (err) {
@@ -571,6 +590,11 @@ async function dlAsync(login = true) {
             showLaunchFailure(Lang.queryJS('landing.dlAsync.fatalError'), Lang.queryJS('landing.dlAsync.unableToLoadMojangVersionData'))
             return
         }
+        mojangOffline = true
+    }
+
+    if (DistroAPI._remoteFailed || isOfflineLaunch || mojangOffline) {
+        showOfflineWarning()
     }
 
     if(login) {

@@ -157,6 +157,9 @@ pleaseWait = "Пожалуйста, подождите.."
 failureTitle = "Ошибка при запуске"
 failureText = "Смотрите консоль (CTRL + Shift + i) для получения деталей."
 okay = "Продолжить"
+serverUnavailableTitle = "Серверы недоступны"
+serverUnavailableDesc = "Серверы недоступны, будем пробовать запускать скачанную версию. Если не запустится - проверь подключение к Интернету и перезапусти приложение."
+serverUnavailableOkay = "ОК"
 
 [js.landing.selectedAccount]
 noAccountSelected = "Аккаунт не выбран"
