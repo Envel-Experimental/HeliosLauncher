@@ -1,0 +1,29 @@
+diff --git a/node_modules/@envel/helios-core/dist/java/JavaGuard.js b/node_modules/@envel/helios-core/dist/java/JavaGuard.js
+index a13778a..4d4c78a 100644
+--- a/node_modules/@envel/helios-core/dist/java/JavaGuard.js
++++ b/node_modules/@envel/helios-core/dist/java/JavaGuard.js
+@@ -33,7 +33,7 @@ exports.getLauncherRuntimeDir = getLauncherRuntimeDir;
+ const child_process_1 = require("child_process");
+ const fs_extra_1 = require("fs-extra");
+ const got_1 = __importDefault(require("got"));
+const helios_distribution_types_1 = require("helios-distribution-types");
+ const path_1 = require("path");
+ const util_1 = require("util");
+ const LoggerUtil_1 = require("../util/LoggerUtil");
+@@ -602,10 +602,12 @@ class Win32RegistryJavaDiscoverer {
+                                         }
+                                         if (major > -1) {
+                                             javaVer.get('JavaHome', (err, res) => {
+-                                                const jHome = res.value;
+-                                                // Exclude 32bit.
+-                                                if (!jHome.includes('(x86)')) {
+-                                                    candidates.add(jHome);
++                                                if(res) {
++                                                    const jHome = res.value;
++                                                    // Exclude 32bit.
++                                                    if (jHome && !jHome.includes('(x86)')) {
++                                                        candidates.add(jHome);
++                                                    }
+                                                 }
+                                                 // SUBKEY DONE
+                                                 numDone++;

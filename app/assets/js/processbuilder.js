@@ -11,6 +11,7 @@ const path                  = require('path')
 const { sendToSentry }      = require('./preloader')
 const { retry }             = require('./util')
 const pathutil              = require('./pathutil')
+const CrashHandler          = require('./crash-handler')
 
 const ConfigManager         = require('./configmanager')
 const Lang                  = require('./langloader')
@@ -129,45 +130,73 @@ class ProcessBuilder {
             const isCrash = code !== 0 && code !== 130 && code !== 137 && code !== 143 && code !== 255
 
             if (isCrash) {
-                const exitMessage = `Process exited with code: ${code}`
-                sendToSentry(exitMessage, 'error')
+                const logPath = path.join(this.gameDir, 'logs', 'latest.log');
+                let crashAnalysis = null;
+                if (fs.existsSync(logPath)) {
+                    const logContent = fs.readFileSync(logPath, 'utf-8');
+                    crashAnalysis = CrashHandler.analyzeLog(logContent);
+                }
 
-                setOverlayContent(
-                    Lang.queryJS('processbuilder.exit.crash.title'),
-                    Lang.queryJS('processbuilder.exit.crash.body', { exitCode: code }),
-                    Lang.queryJS('processbuilder.exit.crash.close'),
-                    Lang.queryJS('processbuilder.exit.crash.disable')
-                )
+                if (crashAnalysis) {
+                    setOverlayContent(
+                        Lang.queryJS('js.processbuilder.crash.title'),
+                        Lang.queryJS('js.processbuilder.crash.body', { description: crashAnalysis.description }),
+                        Lang.queryJS('js.processbuilder.crash.close'),
+                        Lang.queryJS('js.processbuilder.crash.fix', { fileName: path.basename(crashAnalysis.file) })
+                    );
 
-                setOverlayHandler(() => {
-                    toggleOverlay(false)
-                })
+                    setOverlayHandler(() => {
+                        toggleOverlay(false);
+                    });
 
-                setMiddleButtonHandler(() => {
-                    const modCfg = ConfigManager.getModConfiguration(this.server.rawServer.id)
-                    for (const mdl of this.server.modules) {
-                        const type = mdl.rawModule.type
-                        if (type === Type.ForgeMod || type === Type.LiteMod || type === Type.LiteLoader || type === Type.FabricMod) {
-                            if (!mdl.getRequired().value) {
-                                modCfg.mods[mdl.getVersionlessMavenIdentifier()] = {
-                                    value: false
-                                }
-                            }
+                    setMiddleButtonHandler(() => {
+                        const configPath = path.join(this.gameDir, 'config', crashAnalysis.file);
+                        if (fs.existsSync(configPath)) {
+                            fs.renameSync(configPath, configPath + '.disabled');
                         }
-                    }
-                    ConfigManager.setModConfiguration(this.server.rawServer.id, modCfg)
-                    ConfigManager.save()
+                        toggleOverlay(false);
+                    });
+                } else {
+                    const exitMessage = `Process exited with code: ${code}`
+                    sendToSentry(exitMessage, 'error')
 
                     setOverlayContent(
-                        Lang.queryJS('processbuilder.exit.disabled.title'),
-                        Lang.queryJS('processbuilder.exit.disabled.body'),
-                        Lang.queryJS('processbuilder.exit.disabled.close')
+                        Lang.queryJS('processbuilder.exit.crash.title'),
+                        Lang.queryJS('processbuilder.exit.crash.body', { exitCode: code }),
+                        Lang.queryJS('processbuilder.exit.crash.close'),
+                        Lang.queryJS('processbuilder.exit.crash.disable')
                     )
+
                     setOverlayHandler(() => {
                         toggleOverlay(false)
                     })
-                    setMiddleButtonHandler(null)
-                })
+
+                    setMiddleButtonHandler(() => {
+                        const modCfg = ConfigManager.getModConfiguration(this.server.rawServer.id)
+                        for (const mdl of this.server.modules) {
+                            const type = mdl.rawModule.type
+                            if (type === Type.ForgeMod || type === Type.LiteMod || type === Type.LiteLoader || type === Type.FabricMod) {
+                                if (!mdl.getRequired().value) {
+                                    modCfg.mods[mdl.getVersionlessMavenIdentifier()] = {
+                                        value: false
+                                    }
+                                }
+                            }
+                        }
+                        ConfigManager.setModConfiguration(this.server.rawServer.id, modCfg)
+                        ConfigManager.save()
+
+                        setOverlayContent(
+                            Lang.queryJS('processbuilder.exit.disabled.title'),
+                            Lang.queryJS('processbuilder.exit.disabled.body'),
+                            Lang.queryJS('processbuilder.exit.disabled.close')
+                        )
+                        setOverlayHandler(() => {
+                            toggleOverlay(false)
+                        })
+                        setMiddleButtonHandler(null)
+                    })
+                }
 
                 setDismissHandler(() => {
                     toggleOverlay(false)
