@@ -23,7 +23,7 @@
     "test:integration": "jest tests/integration",
     "test:coverage": "jest --coverage",
     "test:performance": "xvfb-run --auto-servernum --server-args=\"-screen 0 1280x960x24\" -- playwright test tests/performance",
-    "test:smoke": "xvfb-run --auto-servernum --server-args=\"-screen 0 1280x960x24\" -- playwright test tests/smoke"
+    "test:smoke": "xvfb-run --auto-servernum --server-args=\"-screen 0 1280x960x24\" -- playwright test tests/smoke.spec.js"
   },
   "engines": {
     "node": ">=20.x.x"
@@ -49,14 +49,14 @@
   "devDependencies": {
     "@babel/core": "^7.28.5",
     "@babel/preset-env": "^7.28.5",
-    "@playwright/test": "^1.56.1",
+    "@playwright/test": "^1.57.0",
     "babel-jest": "^30.2.0",
     "electron": "^39.2.1",
     "electron-builder": "^26.0.12",
     "eslint": "^9.39.1",
     "jest": "^29.7.0",
     "msw": "^2.12.2",
-    "playwright": "^1.56.1"
+    "playwright": "^1.57.0"
   },
   "overrides": {
     "js-yaml": "^4.1.1"
