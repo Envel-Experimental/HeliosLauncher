@@ -11,6 +11,7 @@ const path                  = require('path')
 const { sendToSentry }      = require('./preloader')
 const { retry }             = require('./util')
 const pathutil              = require('./pathutil')
+const CrashHandler          = require('./crash-handler')
 
 const ConfigManager         = require('./configmanager')
 const Lang                  = require('./langloader')
@@ -49,9 +50,9 @@ class ProcessBuilder {
     /**
      * Convenience method to run the functions typically used to build a process.
      */
-    build(){
+    build() {
         fs.ensureDirSync(this.gameDir)
-        
+
         const currentSystemTemp = os.tmpdir()
         let nativeBasePath = currentSystemTemp
 
@@ -60,25 +61,19 @@ class ProcessBuilder {
         const isWindows = process.platform === 'win32'
 
         // Detect if we are on Windows and the temp path uses a short name format (contains '~').
-        // This usually happens when the username has non-ASCII characters (Cyrillic).
-        // If detected, or if pathutil flags the path as invalid, force a safe fallback location.
         if ((isWindows && currentSystemTemp.includes('~')) || !pathutil.isPathValid(currentSystemTemp) || isUsingFallback) {
-            
-            // Force redirect to C:\.foxford\temp_natives to avoid UnsatisfiedLinkError
             nativeBasePath = path.join(fallbackPath, 'temp_natives')
-
             try {
                 fs.ensureDirSync(nativeBasePath)
-                console.log(`[ProcessBuilder] Natives redirected to safe path due to potential path issues: ${nativeBasePath}`)
+                console.log(`[ProcessBuilder] Natives redirected to safe path: ${nativeBasePath}`)
             } catch (err) {
-                console.error(`[ProcessBuilder] Failed to create safe native folder at ${nativeBasePath}:`, err)
-                // If creation fails (e.g. permissions), revert to system default and hope for the best
+                console.error(`[ProcessBuilder] Failed to create safe native folder:`, err)
                 nativeBasePath = currentSystemTemp
             }
         }
-        
+
         const tempNativePath = path.join(nativeBasePath, ConfigManager.getTempNativeFolder(), crypto.pseudoRandomBytes(16).toString('hex'))
-        
+
         this.setupLiteLoader()
         logger.info('Using liteloader:', this.usingLiteLoader)
         this.usingFabricLoader = this.server.modules.some(mdl => mdl.rawModule.type === Type.Fabric)
@@ -86,10 +81,9 @@ class ProcessBuilder {
         const modObj = this.resolveModConfiguration(ConfigManager.getModConfiguration(this.server.rawServer.id).mods, this.server.modules)
 
         // Mod list below 1.13
-        // Fabric only supports 1.14+
-        if(!mcVersionAtLeast('1.13', this.server.rawServer.minecraftVersion)){
+        if (!mcVersionAtLeast('1.13', this.server.rawServer.minecraftVersion)) {
             this.constructJSONModList('forge', modObj.fMods, true)
-            if(this.usingLiteLoader){
+            if (this.usingLiteLoader) {
                 this.constructJSONModList('liteloader', modObj.lMods, true)
             }
         }
@@ -97,8 +91,7 @@ class ProcessBuilder {
         const uberModArr = modObj.fMods.concat(modObj.lMods)
         let args = this.constructJVMArguments(uberModArr, tempNativePath)
 
-        if(mcVersionAtLeast('1.13', this.server.rawServer.minecraftVersion)){
-            //args = args.concat(this.constructModArguments(modObj.fMods))
+        if (mcVersionAtLeast('1.13', this.server.rawServer.minecraftVersion)) {
             args = args.concat(this.constructModList(modObj.fMods))
         }
 
@@ -109,71 +102,185 @@ class ProcessBuilder {
             detached: ConfigManager.getLaunchDetached()
         })
 
-        if(ConfigManager.getLaunchDetached()){
+        if (ConfigManager.getLaunchDetached()) {
             child.unref()
         }
 
         child.stdout.setEncoding('utf8')
         child.stderr.setEncoding('utf8')
 
-        child.stdout.on('data', (data) => {
-            data.trim().split('\n').forEach(x => console.log(`\x1b[32m[Minecraft]\x1b[0m ${x}`))
+        // --- Performance: Ring Buffer (O(1) writes) ---
+        // Stores last BUFFER_SIZE lines. Prevents memory leaks.
+        const BUFFER_SIZE = 2000;
+        const ringBuffer = new Array(BUFFER_SIZE);
+        let head = 0;
+        let isBufferFull = false;
+        
+        // Accumulators for split stream chunks
+        let stdoutRemainder = '';
+        let stderrRemainder = '';
 
+        const writeToRing = (line) => {
+            ringBuffer[head] = line;
+            head = (head + 1) % BUFFER_SIZE;
+            if (head === 0) isBufferFull = true;
+        }
+
+        const processChunk = (data, isError) => {
+            const str = (isError ? stderrRemainder : stdoutRemainder) + data.toString();
+            const lines = str.split(/\r?\n/);
+            const newRemainder = lines.pop();
+            
+            if (isError) stderrRemainder = newRemainder;
+            else stdoutRemainder = newRemainder;
+
+            for (let i = 0; i < lines.length; i++) {
+                if(lines[i].trim()) writeToRing(lines[i]);
+            }
+        };
+
+        child.stdout.on('data', (data) => {
+            processChunk(data, false);
+            data.trim().split('\n').forEach(x => console.log(`\x1b[32m[Minecraft]\x1b[0m ${x}`))
         })
+
         child.stderr.on('data', (data) => {
+            processChunk(data, true);
             data.trim().split('\n').forEach(x => console.log(`\x1b[31m[Minecraft]\x1b[0m ${x}`))
         })
+
+        // Safe translation wrapper to prevent crashes if keys are missing
+        const safeQueryJS = (key, params = {}, fallback = '') => {
+            try {
+                return Lang.queryJS(key, params);
+            } catch (e) {
+                return fallback;
+            }
+        };
+
         child.on('close', async (code, signal) => {
             logger.info('Exited with code', code)
+
+            // Flush remaining buffers
+            if (stdoutRemainder) writeToRing(stdoutRemainder);
+            if (stderrRemainder) writeToRing(stderrRemainder);
 
             const isCrash = code !== 0 && code !== 130 && code !== 137 && code !== 143 && code !== 255
 
             if (isCrash) {
-                const exitMessage = `Process exited with code: ${code}`
-                sendToSentry(exitMessage, 'error')
+                // Reconstruct linear log from Ring Buffer
+                let recentLogContent = '';
+                if (!isBufferFull) {
+                    recentLogContent = ringBuffer.slice(0, head).join('\n');
+                } else {
+                    const part1 = ringBuffer.slice(head, BUFFER_SIZE);
+                    const part2 = ringBuffer.slice(0, head);
+                    recentLogContent = part1.concat(part2).join('\n');
+                }
 
-                setOverlayContent(
-                    Lang.queryJS('processbuilder.exit.crash.title'),
-                    Lang.queryJS('processbuilder.exit.crash.body', { exitCode: code }),
-                    Lang.queryJS('processbuilder.exit.crash.close'),
-                    Lang.queryJS('processbuilder.exit.crash.disable')
-                )
+                let crashAnalysis = CrashHandler.analyzeLog(recentLogContent);
 
-                setOverlayHandler(() => {
-                    toggleOverlay(false)
-                })
-
-                setMiddleButtonHandler(() => {
-                    const modCfg = ConfigManager.getModConfiguration(this.server.rawServer.id)
-                    for (const mdl of this.server.modules) {
-                        const type = mdl.rawModule.type
-                        if (type === Type.ForgeMod || type === Type.LiteMod || type === Type.LiteLoader || type === Type.FabricMod) {
-                            if (!mdl.getRequired().value) {
-                                modCfg.mods[mdl.getVersionlessMavenIdentifier()] = {
-                                    value: false
-                                }
-                            }
+                // Fallback to disk if memory log missed it (rare)
+                if (!crashAnalysis) {
+                    const logPath = path.join(this.gameDir, 'logs', 'latest.log');
+                    if (fs.existsSync(logPath)) {
+                        try {
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+                            const fileLogContent = fs.readFileSync(logPath, 'utf-8');
+                            crashAnalysis = CrashHandler.analyzeLog(fileLogContent);
+                        } catch (e) {
+                            logger.warn('Failed to read latest.log', e);
                         }
                     }
-                    ConfigManager.setModConfiguration(this.server.rawServer.id, modCfg)
-                    ConfigManager.save()
+                }
+
+                if (crashAnalysis) {
+                    setOverlayContent(
+                        Lang.queryJS('processbuilder.crash.title'),
+                        Lang.queryJS('processbuilder.crash.body', { description: crashAnalysis.description }),
+                        Lang.queryJS('processbuilder.crash.fix'),
+                        Lang.queryJS('processbuilder.crash.close')
+                    );
+
+                    // Button 1 Handler
+                    setOverlayHandler(() => {
+                        const configPath = path.join(this.gameDir, 'config', crashAnalysis.file);
+                        if (fs.existsSync(configPath)) {
+                            try {
+                                const disabledPath = configPath + '.disabled';
+                                if (fs.existsSync(disabledPath)) fs.unlinkSync(disabledPath);
+                                fs.renameSync(configPath, disabledPath);
+                                logger.info(`Disabled corrupted config: ${configPath}`);
+                            } catch (err) {
+                                logger.error('Failed to disable config file', err);
+                            }
+                        }
+                        toggleOverlay(false);
+
+                        setTimeout(() => {
+                            const launchBtn = document.getElementById('launch_button');
+                            if (launchBtn) {
+                                logger.info('Autostarting game after fix...');
+                                launchBtn.click();
+                            }
+                        }, 1000);
+                    });
+
+                    // Button 2 Handler
+                    setMiddleButtonHandler(() => {
+                        toggleOverlay(false);
+                    });
+                } else {
+                    // Standard crash overlay
+                    const exitMessage = `Process exited with code: ${code}`
+                    sendToSentry(exitMessage, 'error')
 
                     setOverlayContent(
-                        Lang.queryJS('processbuilder.exit.disabled.title'),
-                        Lang.queryJS('processbuilder.exit.disabled.body'),
-                        Lang.queryJS('processbuilder.exit.disabled.close')
+                        Lang.queryJS('processbuilder.exit.crash.title'),
+                        Lang.queryJS('processbuilder.exit.crash.body', { exitCode: code }),
+                        Lang.queryJS('processbuilder.exit.crash.close'),
+                        Lang.queryJS('processbuilder.exit.crash.disable')
                     )
+
                     setOverlayHandler(() => {
                         toggleOverlay(false)
                     })
-                    setMiddleButtonHandler(null)
-                })
+
+                    setMiddleButtonHandler(() => {
+                        const modCfg = ConfigManager.getModConfiguration(this.server.rawServer.id)
+                        for (const mdl of this.server.modules) {
+                            const type = mdl.rawModule.type
+                            if (type === Type.ForgeMod || type === Type.LiteMod || type === Type.LiteLoader || type === Type.FabricMod) {
+                                if (!mdl.getRequired().value) {
+                                    modCfg.mods[mdl.getVersionlessMavenIdentifier()] = {
+                                        value: false
+                                    }
+                                }
+                            }
+                        }
+                        ConfigManager.setModConfiguration(this.server.rawServer.id, modCfg)
+                        ConfigManager.save()
+
+                        setOverlayContent(
+                            Lang.queryJS('processbuilder.exit.disabled.title'),
+                            Lang.queryJS('processbuilder.exit.disabled.body'),
+                            Lang.queryJS('processbuilder.exit.disabled.close')
+                        )
+                        setOverlayHandler(() => {
+                            toggleOverlay(false)
+                        })
+                        setMiddleButtonHandler(null)
+                    })
+                }
 
                 setDismissHandler(() => {
                     toggleOverlay(false)
                 })
                 toggleOverlay(true)
             }
+
+            // Explicit cleanup
+            ringBuffer.length = 0; 
 
             try {
                 await retry(

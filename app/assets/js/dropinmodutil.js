@@ -80,7 +80,7 @@ exports.addDropinMods = function(files, modsdir) {
     exports.validateDir(modsdir)
 
     for(let f of files) {
-        if(MOD_REGEX.exec(f.name) != null) {
+        if(f.path && MOD_REGEX.exec(f.name) != null) {
             fs.moveSync(f.path, path.join(modsdir, f.name))
         }
     }
@@ -230,7 +230,7 @@ exports.addShaderpacks = function(files, instanceDir) {
     exports.validateDir(p)
 
     for(let f of files) {
-        if(SHADER_REGEX.exec(f.name) != null) {
+        if(f.path && SHADER_REGEX.exec(f.name) != null) {
             fs.moveSync(f.path, path.join(p, f.name))
         }
     }
