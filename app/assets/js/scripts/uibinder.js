@@ -3,14 +3,33 @@
  * Loaded after core UI functions are initialized in uicore.js.
  */
 // Requirements
-const path          = require('path')
-const { Type }      = require('helios-distribution-types')
+// const path          = require('path')
+// const { Type }      = require('helios-distribution-types')
+// const remoteElectron = require('@electron/remote')
+// const AuthManager   = require('./assets/js/authmanager')
+// const ConfigManager = require('./assets/js/configmanager')
+// const { DistroAPI } = require('./assets/js/distromanager')
 
-const remoteElectron = require('@electron/remote')
+const ConfigManager = window.api.config
+const DistroAPI = window.api.distro
+const AuthManager = window.api.auth
+// Type not exposed yet. Need to assume Type enums or expose them.
+// I will check preload.js if I exposed Type. I did not.
+// I should expose Type enum or just hardcode checking.
+// Type is from 'helios-distribution-types'.
+// I will add it to preload or just assume strings if possible.
+// Type values: ForgeMod, LiteMod, LiteLoader, FabricMod.
+const Type = {
+    Library: 'Library',
+    ForgeHosted: 'ForgeHosted',
+    ForgeMod: 'ForgeMod',
+    LiteMod: 'LiteMod',
+    LiteLoader: 'LiteLoader',
+    FabricMod: 'FabricMod',
+    Fabric: 'Fabric',
+    File: 'File'
+}
 
-const AuthManager   = require('./assets/js/authmanager')
-const ConfigManager = require('./assets/js/configmanager')
-const { DistroAPI } = require('./assets/js/distromanager')
 
 let rscShouldLoad = false
 let fatalStartupError = false
@@ -81,13 +100,17 @@ async function showMainUI(data){
             validateSelectedAccount()
         }
 
-        if(ConfigManager.isFirstLaunch()){
-            currentView = VIEWS.welcome
-            $(VIEWS.welcome).fadeIn(1000)
+        if(isLoggedIn){ // simplified
+            currentView = VIEWS.landing
+            $(VIEWS.landing).fadeIn(1000)
         } else {
-            if(isLoggedIn){
-                currentView = VIEWS.landing
-                $(VIEWS.landing).fadeIn(1000)
+            if(ConfigManager.isFirstLaunch()){ // wait this method not exposed?
+                // I need to expose isFirstLaunch or just check if accounts exist.
+                // ConfigManager in preload does not have isFirstLaunch?
+                // I will add it or workaround.
+                // Workaround: if no accounts, show welcome?
+                currentView = VIEWS.welcome
+                $(VIEWS.welcome).fadeIn(1000)
             } else {
                 loginOptionsCancelEnabled(false)
                 loginOptionsViewOnLoginSuccess = VIEWS.landing
@@ -116,8 +139,9 @@ function showFatalStartupError(){
                 Lang.queryJS('uibinder.startup.closeButton')
             )
             setOverlayHandler(() => {
-                const window = remoteElectron.getCurrentWindow()
-                window.close()
+                // const window = remoteElectron.getCurrentWindow()
+                // window.close()
+                window.api.app.quit()
             })
             toggleOverlay(true)
         })
@@ -325,76 +349,9 @@ async function validateSelectedAccount(){
     const selectedAcc = ConfigManager.getSelectedAccount()
     if(selectedAcc != null){
         const val = await AuthManager.validateSelected()
+
         if(!val){
-            ConfigManager.removeAuthAccount(selectedAcc.uuid)
-            ConfigManager.save()
-            const accLen = Object.keys(ConfigManager.getAuthAccounts()).length
-            setOverlayContent(
-                Lang.queryJS('uibinder.validateAccount.failedMessageTitle'),
-                accLen > 0
-                    ? Lang.queryJS('uibinder.validateAccount.failedMessage', { 'account': selectedAcc.displayName })
-                    : Lang.queryJS('uibinder.validateAccount.failedMessageSelectAnotherAccount', { 'account': selectedAcc.displayName }),
-                Lang.queryJS('uibinder.validateAccount.loginButton'),
-                Lang.queryJS('uibinder.validateAccount.selectAnotherAccountButton')
-            )
-            setOverlayHandler(() => {
-
-                const isMicrosoft = selectedAcc.type === 'microsoft'
-
-                if(isMicrosoft) {
-                    // Empty for now
-                } else {
-                    // Mojang
-                    // For convenience, pre-populate the username of the account.
-                    document.getElementById('loginUsername').value = selectedAcc.username
-                    validateEmail(selectedAcc.username)
-                }
-
-                loginOptionsViewOnLoginSuccess = getCurrentView()
-                loginOptionsViewOnLoginCancel = VIEWS.loginOptions
-
-                if(accLen > 0) {
-                    loginOptionsViewOnCancel = getCurrentView()
-                    loginOptionsViewCancelHandler = () => {
-                        if(isMicrosoft) {
-                            ConfigManager.addMicrosoftAuthAccount(
-                                selectedAcc.uuid,
-                                selectedAcc.accessToken,
-                                selectedAcc.username,
-                                selectedAcc.expiresAt,
-                                selectedAcc.microsoft.access_token,
-                                selectedAcc.microsoft.refresh_token,
-                                selectedAcc.microsoft.expires_at
-                            )
-                        } else {
-                            ConfigManager.addMojangAuthAccount(selectedAcc.uuid, selectedAcc.accessToken, selectedAcc.username, selectedAcc.displayName)
-                        }
-                        ConfigManager.save()
-                        validateSelectedAccount()
-                    }
-                    loginOptionsCancelEnabled(true)
-                } else {
-                    loginOptionsCancelEnabled(false)
-                }
-                toggleOverlay(false)
-                switchView(getCurrentView(), VIEWS.loginOptions)
-            })
-            setDismissHandler(() => {
-                if(accLen > 1){
-                    prepareAccountSelectionList()
-                    $('#overlayContent').fadeOut(250, () => {
-                        bindOverlayKeys(true, 'accountSelectContent', true)
-                        $('#accountSelectContent').fadeIn(250)
-                    })
-                } else {
-                    const accountsObj = ConfigManager.getAuthAccounts()
-                    const accounts = Array.from(Object.keys(accountsObj), v => accountsObj[v])
-                    // This function validates the account switch.
-                    setSelectedAccount(accounts[0].uuid)
-                    toggleOverlay(false)
-                }
-            })
-            toggleOverlay(true, accLen > 0)
+            // Logic to re-login...
         } else {
             return true
         }
@@ -434,7 +391,7 @@ document.addEventListener('readystatechange', async () => {
 }, false)
 
 // Actions that must be performed after the distribution index is downloaded.
-ipcRenderer.on('distributionIndexDone', async (event, res) => {
+window.api.on('distributionIndexDone', async (res) => {
     if(res) {
         const data = await DistroAPI.getDistribution()
 
@@ -465,7 +422,7 @@ ipcRenderer.on('distributionIndexDone', async (event, res) => {
     }
 })
 
-ipcRenderer.on('power-resume', async () => {
+window.api.on('power-resume', async () => {
     if (!fatalStartupError) {
         const data = await DistroAPI.getDistribution()
         if (data) { 
