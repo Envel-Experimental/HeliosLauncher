@@ -100,7 +100,7 @@ async function resolveDataPath(app) {
         // 3. FATAL FALLBACK FAILURE: Could not create C:\.foxford (Permission Denied likely).
         // Log: Warning about reverting to the known unstable path, which will likely lead to a Java crash.
         console.warn('Could not use C:\\.foxford fallback (Permission Denied likely). Reverting to problematic default path.', error)
-        return defaultPath 
+        return defaultPath
     }
 }
 

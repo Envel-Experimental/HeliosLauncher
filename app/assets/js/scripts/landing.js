@@ -3,6 +3,7 @@
  */
 // Requirements
 const { URL }                 = require('url')
+const DOM                     = require('./assets/js/utils/domUtils')
 const {
     MojangRestAPI,
     getServerStatus
@@ -262,10 +263,10 @@ const refreshServerStatus = async (fade = false) => {
         loggerLanding.debug(err)
     }
     if(fade){
-        $('#server_status_wrapper').fadeOut(250, () => {
+        DOM.fadeOut(document.getElementById('server_status_wrapper'), 250, () => {
             document.getElementById('landingPlayerLabel').innerHTML = pLabel
             document.getElementById('player_count').innerHTML = pVal
-            $('#server_status_wrapper').fadeIn(500)
+            DOM.fadeIn(document.getElementById('server_status_wrapper'), 500)
         })
     } else {
         document.getElementById('landingPlayerLabel').innerHTML = pLabel
@@ -348,7 +349,7 @@ async function asyncSystemScan(effectiveJavaOptions, launchAfter = true){
             }
         })
         setDismissHandler(() => {
-            $('#overlayContent').fadeOut(250, () => {
+            DOM.fadeOut(document.getElementById('overlayContent'), 250, () => {
                 //$('#overlayDismiss').toggle(false)
                 setOverlayContent(
                     Lang.queryJS('landing.systemScan.javaRequired', { 'major': effectiveJavaOptions.suggestedMajor }),
@@ -365,7 +366,7 @@ async function asyncSystemScan(effectiveJavaOptions, launchAfter = true){
 
                     asyncSystemScan(effectiveJavaOptions, launchAfter)
                 })
-                $('#overlayContent').fadeIn(250)
+                DOM.fadeIn(document.getElementById('overlayContent'), 250)
             })
         })
         toggleOverlay(true, true)

@@ -5,6 +5,9 @@
 const validUsername = /^[a-zA-Z0-9_]{4,16}$/
 const basicEmail = /^\S+@\S+\.\S+$/
 
+// Requirements
+const DOM = require('./assets/js/utils/domUtils')
+
 // Login Elements
 const loginCancelContainer  = document.getElementById('loginCancelContainer')
 const loginCancelButton     = document.getElementById('loginCancelButton')
@@ -125,9 +128,9 @@ let loginViewCancelHandler
 
 function loginCancelEnabled(val){
     if(val){
-        $(loginCancelContainer).show()
+        DOM.show(loginCancelContainer)
     } else {
-        $(loginCancelContainer).hide()
+        DOM.hide(loginCancelContainer)
     }
 }
 
@@ -157,8 +160,8 @@ loginButton.addEventListener('click', () => {
     AuthManager.addMojangAccount(loginUsername.value, '').then((value) => {
         updateSelectedAccount(value)
         loginButton.innerHTML = loginButton.innerHTML.replace(Lang.queryJS('login.loggingIn'), Lang.queryJS('login.success'))
-        $('.circle-loader').toggleClass('load-complete')
-        $('.checkmark').toggle()
+        document.querySelector('.circle-loader').classList.toggle('load-complete')
+        DOM.toggle(document.querySelector('.checkmark'))
         setTimeout(() => {
             switchView(VIEWS.login, loginViewOnSuccess, 500, 500, async () => {
                 if(loginViewOnSuccess === VIEWS.settings){
@@ -168,8 +171,8 @@ loginButton.addEventListener('click', () => {
                 loginCancelEnabled(false)
                 loginViewCancelHandler = null
                 loginUsername.value = ''
-                $('.circle-loader').toggleClass('load-complete')
-                $('.checkmark').toggle()
+                document.querySelector('.circle-loader').classList.toggle('load-complete')
+                DOM.toggle(document.querySelector('.checkmark'))
                 loginLoading(false)
                 loginButton.innerHTML = loginButton.innerHTML.replace(Lang.queryJS('login.success'), Lang.queryJS('login.login'))
                 formDisabled(false)

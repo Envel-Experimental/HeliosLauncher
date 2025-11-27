@@ -51,7 +51,7 @@ class ProcessBuilder {
      */
     build(){
         fs.ensureDirSync(this.gameDir)
-        
+
         const currentSystemTemp = os.tmpdir()
         let nativeBasePath = currentSystemTemp
 
@@ -63,7 +63,7 @@ class ProcessBuilder {
         // This usually happens when the username has non-ASCII characters (Cyrillic).
         // If detected, or if pathutil flags the path as invalid, force a safe fallback location.
         if ((isWindows && currentSystemTemp.includes('~')) || !pathutil.isPathValid(currentSystemTemp) || isUsingFallback) {
-            
+
             // Force redirect to C:\.foxford\temp_natives to avoid UnsatisfiedLinkError
             nativeBasePath = path.join(fallbackPath, 'temp_natives')
 
@@ -76,9 +76,9 @@ class ProcessBuilder {
                 nativeBasePath = currentSystemTemp
             }
         }
-        
+
         const tempNativePath = path.join(nativeBasePath, ConfigManager.getTempNativeFolder(), crypto.pseudoRandomBytes(16).toString('hex'))
-        
+
         this.setupLiteLoader()
         logger.info('Using liteloader:', this.usingLiteLoader)
         this.usingFabricLoader = this.server.modules.some(mdl => mdl.rawModule.type === Type.Fabric)
@@ -275,15 +275,15 @@ class ProcessBuilder {
             const type = mdl.rawModule.type
             if(type === Type.ForgeMod || type === Type.LiteMod || type === Type.LiteLoader || type === Type.FabricMod){
                 const o = !mdl.getRequired().value
-                
+
                 // Safety check for configuration existence to prevent crash if config is missing.
-                const modConfigEntry = modCfg[mdl.getVersionlessMavenIdentifier()];
+                const modConfigEntry = modCfg[mdl.getVersionlessMavenIdentifier()]
                 const e = ProcessBuilder.isModEnabled(modConfigEntry, mdl.getRequired())
-                
+
                 if(!o || (o && e)){
                     if(mdl.subModules.length > 0){
                         // Safe recursion
-                        const nextModCfg = (modConfigEntry && modConfigEntry.mods) ? modConfigEntry.mods : {};
+                        const nextModCfg = (modConfigEntry && modConfigEntry.mods) ? modConfigEntry.mods : {}
                         const v = this.resolveModConfiguration(nextModCfg, mdl.subModules)
                         fMods = fMods.concat(v.fMods)
                         lMods = lMods.concat(v.lMods)

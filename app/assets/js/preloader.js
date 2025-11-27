@@ -65,7 +65,7 @@ async function preloader() {
             ipcRenderer.send('distributionIndexDone', true)
         } else {
             logger.error('Loaded distribution index is null.')
-            ipcRenderer.send('distributionIndexDone', false) 
+            ipcRenderer.send('distributionIndexDone', false)
         }
 
     } catch (err) {

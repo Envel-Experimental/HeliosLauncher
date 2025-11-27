@@ -1,7 +1,7 @@
-const DiscordWrapper = require('@app/assets/js/discordwrapper');
-const { Client } = require('discord-rpc-patch');
+const DiscordWrapper = require('@app/assets/js/discordwrapper')
+const { Client } = require('discord-rpc-patch')
 
-const mockLogin = jest.fn().mockResolvedValue();
+const mockLogin = jest.fn().mockResolvedValue()
 
 jest.mock('discord-rpc-patch', () => ({
     Client: jest.fn(() => ({
@@ -11,11 +11,11 @@ jest.mock('discord-rpc-patch', () => ({
         clearActivity: jest.fn(),
         destroy: jest.fn(),
     })),
-}), { virtual: true });
+}), { virtual: true })
 
 jest.mock('@app/assets/js/langloader', () => ({
     queryJS: jest.fn(),
-}));
+}))
 
 describe('DiscordWrapper', () => {
     it('should initialize the RPC client', () => {
@@ -23,15 +23,15 @@ describe('DiscordWrapper', () => {
             clientId: '12345',
             smallImageKey: 'test-small-key',
             smallImageText: 'test-small-text',
-        };
+        }
         const servSettings = {
             shortId: 'test-short-id',
             largeImageKey: 'test-large-key',
             largeImageText: 'test-large-text',
-        };
+        }
 
-        DiscordWrapper.initRPC(genSettings, servSettings);
+        DiscordWrapper.initRPC(genSettings, servSettings)
 
-        expect(mockLogin).toHaveBeenCalledWith({ clientId: '12345' });
-    });
-});
+        expect(mockLogin).toHaveBeenCalledWith({ clientId: '12345' })
+    })
+})

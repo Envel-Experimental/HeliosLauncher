@@ -20,7 +20,7 @@ const dataPath = pathutil.resolveDataPathSync(app)
  * @returns {string} The absolute path of the launcher directory (which is now dataPath).
  */
 exports.getLauncherDirectory = function(){
-    return dataPath 
+    return dataPath
 }
 /**
  * Get the launcher's data directory. This is where all files related

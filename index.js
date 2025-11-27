@@ -16,7 +16,7 @@ function tryFixCyrillicTemp() {
 
         if (hasNonAscii) {
             console.log('[Setup] Non-ASCII characters detected in TEMP path. Attempting redirect...')
-            
+
             // Define a safe path in the root data directory (C:\.foxford\temp_natives)
             const safePath = 'C:\\.foxford\\temp_natives'
 
@@ -27,7 +27,7 @@ function tryFixCyrillicTemp() {
             // Override system environment variables for this process only
             process.env.TEMP = safePath
             process.env.TMP = safePath
-            
+
             // Override Node's internal function
             const oldTmpDir = os.tmpdir
             os.tmpdir = () => safePath
@@ -94,7 +94,7 @@ function isIgnorableError(err) {
     // Ignore non-critical cleanup system calls (deletion of old files, directory removal, file status check).
     const isCleanup = err.syscall === 'unlink' || err.syscall === 'rmdir' || err.syscall === 'lstat'
 
-    // CRITICAL CHECK: If the operation is NOT cleanup (i.e., open, write, or mkdir) 
+    // CRITICAL CHECK: If the operation is NOT cleanup (i.e., open, write, or mkdir)
     // AND it affects our designated safe directory (temp_natives). This indicates a serious failure
     // to establish the working environment, which requires admin intervention.
     if (!isCleanup && err.path && err.path.includes('temp_natives')) {
@@ -103,7 +103,7 @@ function isIgnorableError(err) {
 
     // Ignore errors occurring within standard system temporary folders or native library cache (non-critical collateral damage).
     const isTemp = err.path && (err.path.includes('Temp') || err.path.includes('WCNatives'))
-    
+
     // Ignore the error if it involves standard temporary file paths OR is a general cleanup operation.
     return isTemp || isCleanup
 }
@@ -127,7 +127,7 @@ process.on('uncaughtException', (err) => {
 
     if (err.code === 'EPERM') {
         // If returns true: we are handling/relaunching, stop execution.
-        if (handleEPERM()) return 
+        if (handleEPERM()) return
     } else {
         console.error('An uncaught exception occurred:', err)
         dialog.showMessageBoxSync({
@@ -196,7 +196,7 @@ function initAutoUpdater(event, data) {
     if(data){
         autoUpdater.allowPrerelease = true
     }
-    
+
     if(isDev){
         autoUpdater.autoInstallOnAppQuit = false
         autoUpdater.updateConfigPath = path.join(__dirname, 'dev-app-update.yml')
@@ -404,7 +404,7 @@ ipcMain.on(MSFT_OPCODE.OPEN_LOGOUT, (ipcEvent, uuid, isLastAccount) => {
             ipcEvent.reply(MSFT_OPCODE.REPLY_LOGOUT, MSFT_REPLY_TYPE.SUCCESS, uuid, isLastAccount)
         }
     })
-    
+
     msftLogoutWindow.webContents.on('did-navigate', (_, uri) => {
         if(uri.startsWith('https://login.microsoftonline.com/common/oauth2/v2.0/logoutsession')) {
             msftLogoutSuccess = true
@@ -421,7 +421,7 @@ ipcMain.on(MSFT_OPCODE.OPEN_LOGOUT, (ipcEvent, uuid, isLastAccount) => {
             }, 5000)
         }
     })
-    
+
     msftLogoutWindow.removeMenu()
     msftLogoutWindow.loadURL('https://login.microsoftonline.com/common/oauth2/v2.0/logout')
 })
@@ -455,7 +455,7 @@ function createWindow() {
     win.once('ready-to-show', async () => {
         const warnings = await SysUtil.performChecks()
         if (win && !win.isDestroyed()) {
-            
+
             // Protect against crashes when saving config
             try {
                 if (!ConfigManager.getTotalRAMWarningShown()) {
@@ -470,7 +470,7 @@ function createWindow() {
                 if (err.code === 'EPERM') {
                     // If true (relaunch needed), stop execution.
                     // If false (ignore), continue showing window.
-                    if (handleEPERM()) return 
+                    if (handleEPERM()) return
                 } else {
                     console.error('Failed to save config during ready-to-show:', err)
                 }
@@ -486,7 +486,7 @@ function createWindow() {
                 // 1. Safety check: Ensure the window still exists (user hasn't closed the app)
                 if (win && !win.isDestroyed()) {
                     console.log('[AutoUpdate] Starting delayed update check...')
-                    
+
                     // 2. Initialize logic (simulate an IPC event by passing the current window)
                     // Note: 'false' means we are not forcing pre-release settings
                     initAutoUpdater({ sender: win.webContents }, false)
@@ -586,28 +586,28 @@ function getPlatformIcon(filename){
  */
 function relaunchAsAdmin() {
     if (process.platform === 'win32') {
-        
+
         // 1. Release the single instance lock immediately so the new admin instance
         // can start without being blocked by this current instance.
         app.releaseSingleInstanceLock()
-        
+
         const exe = process.execPath
         // 2. Explicitly set working directory to the app's folder (avoids System32 default).
         const cwd = path.dirname(exe)
 
         // 3. Pass --relaunch-admin to signal that we've already tried elevating permissions.
         const command = `Start-Process -FilePath '${exe}' -WorkingDirectory '${cwd}' -ArgumentList '--relaunch-admin' -Verb RunAs`
-        
+
         const ps = spawn('powershell.exe', ['-Command', command], {
             // windowsHide: true -> Hides the black console window but keeps it attached
             // to the session, allowing the UAC prompt to appear.
-            windowsHide: true, 
+            windowsHide: true,
             stdio: 'ignore'
         })
 
         ps.on('error', (err) => {
             // If PowerShell failed to start, reclaim the lock and notify the user.
-            app.requestSingleInstanceLock() 
+            app.requestSingleInstanceLock()
             dialog.showMessageBoxSync({
                 type: 'error',
                 title: 'Ошибка',
@@ -657,7 +657,7 @@ function handleEPERM() {
         defaultId: 0,
         cancelId: 1
     })
-    
+
     if (choice === 0) {
         relaunchAsAdmin()
     } else {
@@ -675,7 +675,7 @@ app.on('ready', async () => {
             if (!handleEPERM()) {
                 console.log('Proceeding despite config load failure...')
             } else {
-                return 
+                return
             }
         } else {
             console.error('Error loading config:', err)

@@ -5,7 +5,6 @@
  * modules, excluding dependencies.
  */
 // Requirements
-const $                              = require('jquery')
 const {ipcRenderer, shell, webFrame} = require('electron')
 const remote                         = require('@electron/remote')
 const isDev                          = require('./assets/js/isdev')
@@ -39,56 +38,56 @@ let updateCheckListener
 ipcRenderer.on('autoUpdateNotification', (event, arg, info) => {
     switch(arg){
         case 'checking-for-update':
-                loggerAutoUpdater.info('Checking for update..')
-                settingsUpdateButtonStatus(Lang.queryJS('uicore.autoUpdate.checkingForUpdateButton'), true)
-                break
-            case 'update-available':
-                loggerAutoUpdater.info('New update available', info.version)
+            loggerAutoUpdater.info('Checking for update..')
+            settingsUpdateButtonStatus(Lang.queryJS('uicore.autoUpdate.checkingForUpdateButton'), true)
+            break
+        case 'update-available':
+            loggerAutoUpdater.info('New update available', info.version)
 
-                if(process.platform === 'darwin'){
-                    info.darwindownload = `https://github.com/Envel-Experimental/HeliosLauncher/releases/download/v${info.version}/Foxford-Launcher-setup-${info.version}${process.arch === 'arm64' ? '-arm64' : '-x64'}.dmg`
-                    showUpdateUI(info)
-                }
-
-                populateSettingsUpdateInformation(info)
-                break
-            case 'update-downloaded':
-                loggerAutoUpdater.info('Update ' + info.version + ' ready to be installed.')
-                settingsUpdateButtonStatus(Lang.queryJS('uicore.autoUpdate.installNowButton'), false, () => {
-                    if(!isDev){
-                        ipcRenderer.send('autoUpdateAction', 'installUpdateNow')
-                    }
-                })
+            if(process.platform === 'darwin'){
+                info.darwindownload = `https://github.com/Envel-Experimental/HeliosLauncher/releases/download/v${info.version}/Foxford-Launcher-setup-${info.version}${process.arch === 'arm64' ? '-arm64' : '-x64'}.dmg`
                 showUpdateUI(info)
-                break
-            case 'update-not-available':
-                loggerAutoUpdater.info('No new update found.')
-                settingsUpdateButtonStatus(Lang.queryJS('uicore.autoUpdate.checkForUpdatesButton'))
-                break
-            case 'ready':
-                updateCheckListener = setInterval(() => {
-                    ipcRenderer.send('autoUpdateAction', 'checkForUpdate')
-                }, 1800000)
-                ipcRenderer.send('autoUpdateAction', 'checkForUpdate')
-                break
-            case 'realerror':
-                if(info != null && info.code != null){
-                    if(info.code === 'ERR_UPDATER_INVALID_RELEASE_FEED'){
-                        loggerAutoUpdater.info('No suitable releases found.')
-                    } else if(info.code === 'ERR_XML_MISSED_ELEMENT'){
-                        loggerAutoUpdater.info('No releases found.')
-                    } else {
-                        loggerAutoUpdater.error('Error during update check..', info)
-                        loggerAutoUpdater.debug('Error Code:', info.code)
-                    }
+            }
+
+            populateSettingsUpdateInformation(info)
+            break
+        case 'update-downloaded':
+            loggerAutoUpdater.info('Update ' + info.version + ' ready to be installed.')
+            settingsUpdateButtonStatus(Lang.queryJS('uicore.autoUpdate.installNowButton'), false, () => {
+                if(!isDev){
+                    ipcRenderer.send('autoUpdateAction', 'installUpdateNow')
                 }
-                settingsUpdateButtonStatus(Lang.queryJS('uicore.autoUpdate.checkForUpdatesButton'))
-                break
-            default:
-                loggerAutoUpdater.info('Unknown argument', arg)
-                break
-        }
-    })
+            })
+            showUpdateUI(info)
+            break
+        case 'update-not-available':
+            loggerAutoUpdater.info('No new update found.')
+            settingsUpdateButtonStatus(Lang.queryJS('uicore.autoUpdate.checkForUpdatesButton'))
+            break
+        case 'ready':
+            updateCheckListener = setInterval(() => {
+                ipcRenderer.send('autoUpdateAction', 'checkForUpdate')
+            }, 1800000)
+            ipcRenderer.send('autoUpdateAction', 'checkForUpdate')
+            break
+        case 'realerror':
+            if(info != null && info.code != null){
+                if(info.code === 'ERR_UPDATER_INVALID_RELEASE_FEED'){
+                    loggerAutoUpdater.info('No suitable releases found.')
+                } else if(info.code === 'ERR_XML_MISSED_ELEMENT'){
+                    loggerAutoUpdater.info('No releases found.')
+                } else {
+                    loggerAutoUpdater.error('Error during update check..', info)
+                    loggerAutoUpdater.debug('Error Code:', info.code)
+                }
+            }
+            settingsUpdateButtonStatus(Lang.queryJS('uicore.autoUpdate.checkForUpdatesButton'))
+            break
+        default:
+            loggerAutoUpdater.info('Unknown argument', arg)
+            break
+    }
+})
 
 /**
  * Send a notification to the main process changing the value of
@@ -119,7 +118,7 @@ function showUpdateUI(info){
         }
     })
     setMiddleButtonHandler(() => {
-        shell.openExternal(`https://f-launcher.ru/`)
+        shell.openExternal('https://f-launcher.ru/')
         toggleOverlay(false)
     })
     setDismissHandler(() => {
@@ -127,11 +126,6 @@ function showUpdateUI(info){
     })
     toggleOverlay(true, true)
 }
-
-/* jQuery Example
-$(function(){
-    loggerUICore.info('UICore Initialized');
-})*/
 
 document.addEventListener('readystatechange', function () {
     if (document.readyState === 'interactive'){
@@ -196,9 +190,17 @@ document.addEventListener('readystatechange', function () {
 /**
  * Open web links in the user's default browser.
  */
-$(document).on('click', 'a[href^="http"]', function(event) {
-    event.preventDefault()
-    shell.openExternal(this.href)
+document.addEventListener('click', event => {
+    if (event.target.tagName === 'A' && event.target.href.startsWith('http')) {
+        event.preventDefault()
+        shell.openExternal(event.target.href)
+    } else if (event.target.closest('a')) {
+        const anchor = event.target.closest('a')
+        if (anchor.href.startsWith('http')) {
+            event.preventDefault()
+            shell.openExternal(anchor.href)
+        }
+    }
 })
 
 /**
