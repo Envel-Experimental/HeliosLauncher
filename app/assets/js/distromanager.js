@@ -15,15 +15,21 @@ const api = new DistributionAPI(
     false
 )
 
-const originalPullRemote = api.pullRemote.bind(api)
+// const originalPullRemote = api.pullRemote.bind(api)
 api.pullRemote = async () => {
-    const result = await originalPullRemote()
-    if (result.data == null) {
-        api._remoteFailed = true
-    } else {
+    try {
+        const response = await fetch(exports.REMOTE_DISTRO_URL)
+        if (!response.ok) {
+            throw new Error(`Failed to download distribution index: ${response.status} ${response.statusText}`)
+        }
+        const data = await response.json()
         api._remoteFailed = false
+        return { data }
+    } catch (err) {
+        console.error('Failed to retrieve distribution index', err)
+        api._remoteFailed = true
+        return { data: null }
     }
-    return result
 }
 
 const FAILED_DOWNLOAD_ERROR_CODE = 1

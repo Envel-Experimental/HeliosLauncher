@@ -15,8 +15,7 @@ const {
 const {
     FullRepair,
     DistributionIndexProcessor,
-    MojangIndexProcessor,
-    downloadFile
+    MojangIndexProcessor
 }                             = require('@envel/helios-core/dl')
 const {
     validateSelectedJvm,
@@ -29,6 +28,7 @@ const {
 
 // Internal Requirements
 const ProcessBuilder          = require('./assets/js/processbuilder')
+const { downloadFile }        = require('./assets/js/requestutils')
 
 // Launch Elements
 const launch_content          = document.getElementById('launch_content')
