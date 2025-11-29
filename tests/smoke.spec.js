@@ -2,7 +2,8 @@
  * Smoke Test: Application Startup
  *
  * Verifies that the application launches correctly, renders the initial UI,
- * and does not log any errors in the Renderer process.
+ * loads the distribution index, and displays the "Play" button.
+ * Fails if any renderer process errors are logged or if a fatal error overlay is shown.
  */
 
 const { _electron: electron } = require('playwright');
@@ -11,7 +12,10 @@ const { test, expect } = require('@playwright/test');
 test.describe('Application Startup Smoke Test', () => {
   let electronApp;
 
-  test('should launch successfully and render UI without errors', async () => {
+  // Set a higher timeout for the entire test suite to accommodate slow startups/network
+  test.setTimeout(60000);
+
+  test('should launch, load index, and display Play button without errors', async () => {
     // 1. Launch the application
     console.log('Launching application...');
     electronApp = await electron.launch({
@@ -22,11 +26,10 @@ test.describe('Application Startup Smoke Test', () => {
     // 2. Hook into the Electron console to detect errors
     let errorLogged = false;
     electronApp.on('console', msg => {
+      // Log everything for debugging the stuck state
+      console.log(`[Renderer] [${msg.type()}] ${msg.text()}`);
       if (msg.type() === 'error') {
-        console.error(`[Renderer Error] ${msg.text()}`);
         errorLogged = true;
-      } else {
-        console.log(`[Renderer Log] ${msg.text()}`);
       }
     });
 
@@ -39,8 +42,6 @@ test.describe('Application Startup Smoke Test', () => {
     const title = await window.title();
     console.log(`App Title: "${title}"`);
 
-    // Use electronApp.evaluate to get window size from the main process
-    // because window.evaluate is blocked in the renderer by uicore.js
     const size = await electronApp.evaluate(async ({ BrowserWindow }) => {
         const win = BrowserWindow.getAllWindows()[0];
         if (win) {
@@ -50,20 +51,58 @@ test.describe('Application Startup Smoke Test', () => {
     });
     console.log(`Window Size: ${size.width}x${size.height}`);
 
-    // 5. Verify UI
-    // Verify specific elements exist using Playwright locators (avoids eval)
+    // 5. Verify UI Elements
     console.log('Verifying UI elements...');
 
     // Check that body exists
     await window.locator('body').waitFor();
 
-    // Check for the main container or loading container to ensure content is loaded
-    // app.ejs includes 'loadingContainer' and 'main'
-    const loadingContainer = window.locator('#loadingContainer');
-    const mainContainer = window.locator('#main');
+    // Wait for EITHER the "Play" button (success) OR the Fatal Error Overlay (failure)
 
-    // Expect at least one of the main structural elements to be present
-    await expect(loadingContainer.or(mainContainer).first()).toBeAttached();
+    console.log('Waiting for Landing UI or Error Overlay...');
+
+    const landingContainer = window.locator('#landingContainer');
+    const errorOverlay = window.locator('#overlayContainer');
+    const overlayTitle = window.locator('#overlayTitle');
+    const overlayDesc = window.locator('#overlayDesc');
+
+    const loadingContainer = window.locator('#loadingContainer');
+
+    // Polling loop to check for states
+    await expect.poll(async () => {
+        // Log current visibility states
+        const isLanding = await landingContainer.isVisible();
+        const isError = await errorOverlay.isVisible();
+
+        if (isError) {
+            const title = await overlayTitle.innerText().catch(() => 'Unknown');
+            const desc = await overlayDesc.innerText().catch(() => 'Unknown');
+            console.log(`[Diagnostic] Overlay Visible. Title: "${title}", Desc: "${desc}"`);
+
+            if (title.includes('Fatal Error') || title.includes('Startup Error') || title.includes('Ошибка')) {
+                return 'error';
+            }
+        }
+
+        if (isLanding) {
+            return 'success';
+        }
+
+        return 'waiting';
+    }, {
+        timeout: 45000,
+        message: 'Timed out waiting for Landing UI or Error Overlay'
+    }).toBe('success');
+
+    // Check buttons
+    const launchButton = window.locator('#launch_button');
+    const serverSelection = window.locator('#server_selection_button');
+
+    await expect(launchButton).toBeVisible();
+    await expect(serverSelection).toBeVisible();
+
+    const buttonText = await launchButton.innerText();
+    console.log(`Launch Button Text: "${buttonText}"`);
 
     // 6. Fail if any console errors were logged
     expect(errorLogged, 'Renderer process logged errors during startup').toBe(false);
