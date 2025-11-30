@@ -16,6 +16,7 @@ env:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
@@ -53,16 +54,32 @@ jobs:
         with:
           python-version: '3.9'
 
+      - name: Disable Windows Defender
+        if: runner.os == 'Windows'
+        run: |
+          Set-MpPreference -DisableRealtimeMonitoring $true
+          Set-MpPreference -DisableIOAVProtection $true
+        shell: pwsh
+
       - name: Install dependencies
         if: runner.os == 'Windows' || github.event.head_commit.message != '1'
-        run: npm ci
+        run: npm ci --no-audit --no-fund
 
-      - name: Install Flatpak toolchain (Linux only)
-        if: runner.os == 'Linux' && (runner.os == 'Windows' || github.event.head_commit.message != '1')
+      - name: Configure Network (Force IP & DNS)
+        if: runner.os == 'macOS'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y flatpak flatpak-builder gnome-software-plugin-flatpak
-          flatpak --version
+          echo "89.23.113.35 f-launcher.ru" | sudo tee -a /etc/hosts
+
+          echo "nameserver 8.8.8.8" | sudo tee /etc/resolv.conf
+          
+          echo "=== /etc/hosts content ==="
+          cat /etc/hosts
+          echo "=== Trying ping ==="
+          ping -c 3 89.23.113.35 || true
+
+      - name: Run tests
+        if: runner.os == 'macOS'
+        run: npm test
 
       - name: Build
         if: runner.os == 'Windows' || github.event.head_commit.message != '1'
@@ -70,7 +87,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GIT_BRANCH: ${{ env.BRANCH_NAME }}
           GIT_SHA:    ${{ env.COMMIT_SHA }}
-        run: npm run dist
+        shell: bash
+        run: |
+          
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            npm run dist -- --linux appimage snap deb rpm tar.gz
+          elif [ "$RUNNER_OS" == "Windows" ]; then
+            npm run dist -- --win
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            npm run dist -- --mac
+          fi
         
       - name: List dist (Linux/macOS)
         if: runner.os != 'Windows' && (runner.os == 'Windows' || github.event.head_commit.message != '1')
@@ -86,6 +112,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-artifacts-${{ matrix.os }}
+          compression-level: 0
           path: |
             dist/**/*.dmg
             dist/**/*.AppImage
