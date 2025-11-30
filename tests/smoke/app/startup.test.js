@@ -20,7 +20,7 @@ test.describe('Application Startup Smoke Test', () => {
                 '--disable-backgrounding-occluded-windows',
                 '--disable-hang-monitor' // Prevents the "Application is not responding" dialog
             ],
-            timeout: 60000 // Increase launch timeout to 60s for CI environments
+            timeout: 60000 // Increased launch timeout for slow CI runners
         });
     });
 
@@ -47,7 +47,7 @@ test.describe('Application Startup Smoke Test', () => {
         // Define locators
         const landing = window.locator('#landingContainer');
         const overlay = window.locator('#overlayContainer');
-        // Generic locator for a button inside the overlay (usually "Continue" or "OK")
+        // Generic locator for a button inside the overlay (usually "Continue", "Retry" or "OK")
         const overlayButton = overlay.locator('button'); 
 
         console.log('Starting UI interaction loop (60s timeout)...');
@@ -67,18 +67,26 @@ test.describe('Application Startup Smoke Test', () => {
             // 2. OBSTACLE: Is an Overlay blocking the view?
             if (await overlay.isVisible()) {
                 const text = await overlay.innerText();
-                console.log('Overlay detected:', text.substring(0, 50).replace(/\n/g, ' '));
+                // Clean up text for clearer logging
+                const cleanText = text.replace(/\n/g, ' ').substring(0, 80);
+                console.log(`Overlay detected: "${cleanText}..."`);
                 
-                // Attempt to dismiss it by clicking the first available button inside
+                // If it is a network error or memory warning, try to dismiss it
                 if (await overlayButton.count() > 0 && await overlayButton.first().isVisible()) {
-                    console.log('Attempting to click overlay button to dismiss...');
-                    await overlayButton.first().click();
-                    // Wait a moment for animation/fade-out
-                    await new Promise(r => setTimeout(r, 1000));
-                    continue; // Loop again to check if Landing appeared
+                    console.log('Attempting to click overlay button to dismiss/retry...');
+                    try {
+                        await overlayButton.first().click({ timeout: 2000 });
+                    } catch (err) {
+                        console.log('Click failed (button might be obscured or animating):', err.message);
+                    }
+                    // Wait a moment for app to react/animate
+                    await new Promise(r => setTimeout(r, 2000));
+                    continue; // Loop again to check result
                 } else {
-                    console.log('Warning: Overlay visible but no clickable button found.');
+                    console.log('Warning: Overlay visible but no clickable button found. Waiting...');
                 }
+            } else {
+                console.log('Waiting for UI... (No overlay, no landing)');
             }
 
             // Wait 1 second before re-checking
@@ -86,6 +94,6 @@ test.describe('Application Startup Smoke Test', () => {
         }
 
         // If we exit the loop, it means we never saw the Landing UI
-        throw new Error('Timeout: Failed to reach Landing UI. App might be stuck on black screen or overlay could not be dismissed.');
+        throw new Error('Timeout: Failed to reach Landing UI. App might be stuck on black screen, or infinite overlay loop (e.g., Network Error -> Retry -> Network Error).');
     });
 });
