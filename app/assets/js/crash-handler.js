@@ -54,5 +54,16 @@ exports.analyzeLog = function(logContent) {
         };
     }
 
+    // Check for missing version json file (ENOENT)
+    const missingVersionJsonRegex = /ENOENT: no such file or directory, open '.*[\\/]versions[\\/](.+)[\\/]\1\.json'/;
+    match = missingVersionJsonRegex.exec(logContent);
+    if (match && match[1]) {
+        return {
+            type: 'missing-version-file',
+            file: match[1] + '.json',
+            description: "Файл версии поврежден. Нажми 'Исправить' для восстановления."
+        };
+    }
+
     return null;
 }
