@@ -16,7 +16,7 @@ env:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 15
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
@@ -61,13 +61,25 @@ jobs:
           Set-MpPreference -DisableIOAVProtection $true
         shell: pwsh
 
+      - name: Install Linux Test Deps
+        if: runner.os == 'Linux' && (runner.os == 'Windows' || github.event.head_commit.message != '1')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libasound2
+
       - name: Install dependencies
         if: runner.os == 'Windows' || github.event.head_commit.message != '1'
         run: npm ci --no-audit --no-fund
 
       - name: Run tests
         if: runner.os == 'Windows' || github.event.head_commit.message != '1'
-        run: npm test
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" npm test
+          else
+            npm test
+          fi
 
       - name: Install Flatpak toolchain (Linux only)
         if: runner.os == 'Linux' && (runner.os == 'Windows' || github.event.head_commit.message != '1')
