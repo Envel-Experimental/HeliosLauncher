@@ -204,26 +204,40 @@ class ProcessBuilder {
 
                     // Button 1 Handler
                     setOverlayHandler(() => {
-                        const configPath = path.join(this.gameDir, 'config', crashAnalysis.file);
-                        if (fs.existsSync(configPath)) {
-                            try {
-                                const disabledPath = configPath + '.disabled';
-                                if (fs.existsSync(disabledPath)) fs.unlinkSync(disabledPath);
-                                fs.renameSync(configPath, disabledPath);
-                                logger.info(`Disabled corrupted config: ${configPath}`);
-                            } catch (err) {
-                                logger.error('Failed to disable config file', err);
+                        if (crashAnalysis.type === 'missing-version-file') {
+                            const versionPath = path.join(this.commonDir, 'versions', path.basename(crashAnalysis.file, '.json'));
+                            if (fs.existsSync(versionPath)) {
+                                try {
+                                    fs.removeSync(versionPath);
+                                    logger.info(`Deleted corrupted version directory: ${versionPath}`);
+                                } catch (err) {
+                                    logger.error('Failed to delete version directory', err);
+                                }
                             }
-                        }
-                        toggleOverlay(false);
+                            toggleOverlay(false);
+                            // No auto-restart for this type as it requires re-download/validation which is triggered by "Play"
+                        } else {
+                            const configPath = path.join(this.gameDir, 'config', crashAnalysis.file);
+                            if (fs.existsSync(configPath)) {
+                                try {
+                                    const disabledPath = configPath + '.disabled';
+                                    if (fs.existsSync(disabledPath)) fs.unlinkSync(disabledPath);
+                                    fs.renameSync(configPath, disabledPath);
+                                    logger.info(`Disabled corrupted config: ${configPath}`);
+                                } catch (err) {
+                                    logger.error('Failed to disable config file', err);
+                                }
+                            }
+                            toggleOverlay(false);
 
-                        setTimeout(() => {
-                            const launchBtn = document.getElementById('launch_button');
-                            if (launchBtn) {
-                                logger.info('Autostarting game after fix...');
-                                launchBtn.click();
-                            }
-                        }, 1000);
+                            setTimeout(() => {
+                                const launchBtn = document.getElementById('launch_button');
+                                if (launchBtn) {
+                                    logger.info('Autostarting game after fix...');
+                                    launchBtn.click();
+                                }
+                            }, 1000);
+                        }
                     });
 
                     // Button 2 Handler
