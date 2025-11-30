@@ -82,7 +82,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GIT_BRANCH: ${{ env.BRANCH_NAME }}
           GIT_SHA:    ${{ env.COMMIT_SHA }}
-        run: npm run dist
+        run: npm run dist -- --linux flatpak appimage snap deb rpm tar.gz --win --mac
         
       - name: List dist (Linux/macOS)
         if: runner.os != 'Windows' && (runner.os == 'Windows' || github.event.head_commit.message != '1')
