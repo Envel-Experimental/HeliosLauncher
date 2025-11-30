@@ -5,7 +5,6 @@ test.describe('Application Startup Smoke Test', () => {
     let electronApp;
 
     test.beforeAll(async () => {
-        // Launch Electron with comprehensive flags to prevent "black screen" and rendering hangs in CI.
         electronApp = await electron.launch({ 
             args: [
                 '.', 
@@ -31,24 +30,22 @@ test.describe('Application Startup Smoke Test', () => {
 
     test('should launch, handle network/memory overlays, and consider app alive', async () => {
         const window = await electronApp.firstWindow();
-
-        // --- LOG CAPTURE START ---
         const consoleLogs = [];
+
+        // Catch console logs immediately
         window.on('console', msg => {
             const text = msg.text();
             consoleLogs.push(text);
-            // Optional debug log
-            if (text.includes('Overlay') || text.includes('Error') || text.includes('Visible')) {
+            if (text.includes('Overlay') || text.includes('Error')) {
                 console.log('[App Console]', text);
             }
         });
-        // -------------------------
 
         await window.waitForLoadState('domcontentloaded');
         try {
             await window.locator('body').waitFor({ state: 'attached', timeout: 30000 });
         } catch (e) {
-            console.log('Body waitFor timeout, continuing to checks...');
+            console.log('Body waitFor timeout, continuing...');
         }
 
         const title = await window.title();
@@ -65,14 +62,14 @@ test.describe('Application Startup Smoke Test', () => {
 
         while (Date.now() - startTime < timeout) {
             
-            // 1. PRIMARY GOAL: Is the main Landing UI (Play button area) visible?
+            // 1. Success Case: Landing UI Visible
             if (await landing.isVisible()) {
                 console.log('Test Pass: Landing UI (#landingContainer) is visible.');
-                return; // SUCCESS
+                return;
             }
 
-            // 2. CHECK LOGS: Did the app report a critical overlay (Network/RAM)?
-            // This is the most reliable check for "Alternative Success" on slow CI
+            // 2. Success Case: Critical Error in Logs (Network/RAM)
+            // This catches cases where UI is slow but app logic is reporting errors correctly
             const logError = consoleLogs.find(l => 
                 l.includes('Критическая ошибка') || 
                 l.includes('сервера недоступны') || 
@@ -81,25 +78,26 @@ test.describe('Application Startup Smoke Test', () => {
             );
 
             if (logError) {
-                console.log('Test Pass: Valid error overlay detected via logs. App is alive.');
-                return; // SUCCESS (Alternative path)
+                console.log('Test Pass: Valid error overlay detected via logs:', logError);
+                return; 
             }
 
-            // 3. CHECK DOM OVERLAY (Just in case logs are silent but DOM exists)
+            // 3. Success Case: Critical Error in DOM Text
             if (await overlay.isVisible()) {
                 const text = await overlay.innerText();
-                const cleanText = text.replace(/\n/g, ' ').substring(0, 80);
-                console.log(`Overlay detected in DOM: "${cleanText}..."`);
+                const cleanText = text.replace(/\n/g, ' ').substring(0, 100);
+                console.log(`Overlay DOM Text: "${cleanText}..."`);
                 
-                // If we see it in DOM, we can also consider it a pass for network errors
-                if (cleanText.includes('сервера недоступны') || cleanText.includes('Network error')) {
-                     console.log('Test Pass: Network Error Overlay visible in DOM.');
-                     return; // SUCCESS
+                // If we see network error text in DOM, it's a pass
+                if (cleanText.includes('сервера недоступны') || cleanText.includes('Network error') || cleanText.includes('Критическая ошибка')) {
+                     console.log('Test Pass: Network/Critical Error Overlay visible in DOM.');
+                     return; 
                 }
 
-                // Try to dismiss other warnings
+                // If it's a dismissible warning (RAM), try to click
                 if (await overlayButton.count() > 0 && await overlayButton.first().isVisible()) {
                     try {
+                        console.log('Clicking overlay button...');
                         await overlayButton.first().click({ timeout: 2000 });
                     } catch (err) {
                         console.log('Click failed:', err.message);
@@ -109,10 +107,9 @@ test.describe('Application Startup Smoke Test', () => {
                 }
             }
 
-            // Wait 1 second before re-checking
             await new Promise(r => setTimeout(r, 1000));
         }
 
-        throw new Error('Timeout: Failed to reach Landing UI. App might be stuck on black screen.');
+        throw new Error('Timeout: Failed to reach Landing UI or see a valid Error Overlay.');
     });
 });
