@@ -65,7 +65,7 @@ jobs:
         if: runner.os == 'Linux' && (runner.os == 'Windows' || github.event.head_commit.message != '1')
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb libasound2t64
+          sudo apt-get install -y xvfb libasound2t64 libnss3 libatk-bridge2.0-0 libgtk-3-0 libgbm1 libxss1
 
       - name: Install dependencies
         if: runner.os == 'Windows' || github.event.head_commit.message != '1'
