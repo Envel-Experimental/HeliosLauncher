@@ -82,7 +82,18 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GIT_BRANCH: ${{ env.BRANCH_NAME }}
           GIT_SHA:    ${{ env.COMMIT_SHA }}
-        run: npm run dist -- --linux flatpak appimage snap deb rpm tar.gz --win --mac
+        shell: bash
+        run: |
+          # Разделяем сборку: каждая ОС собирает только свои форматы.
+          # Это лечит ошибку dmg-license на Linux и ускоряет процесс.
+          
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            npm run dist -- --linux flatpak appimage snap deb rpm tar.gz
+          elif [ "$RUNNER_OS" == "Windows" ]; then
+            npm run dist -- --win
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            npm run dist -- --mac
+          fi
         
       - name: List dist (Linux/macOS)
         if: runner.os != 'Windows' && (runner.os == 'Windows' || github.event.head_commit.message != '1')
