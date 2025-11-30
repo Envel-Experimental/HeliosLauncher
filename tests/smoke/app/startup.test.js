@@ -5,18 +5,22 @@ test.describe('Application Startup Smoke Test', () => {
     let electronApp;
 
     test.beforeAll(async () => {
-        // Launch Electron with specific flags to avoid "black screen" or hanging on logo in CI environments.
-        // --disable-gpu: Critical for Windows CI runners without a real GPU.
-        // --no-sandbox: Improves stability on Linux/Docker.
+        // Launch Electron with comprehensive flags to prevent "black screen" and rendering hangs in CI.
+        // These flags force software rendering and disable background throttling.
         electronApp = await electron.launch({ 
             args: [
                 '.', 
                 '--no-sandbox', 
                 '--disable-gpu', 
                 '--disable-dev-shm-usage', 
-                '--disable-software-rasterizer'
+                '--disable-software-rasterizer', // Forces CPU rendering
+                '--disable-gpu-compositing',     // Disables GPU compositing completely
+                '--disable-renderer-backgrounding', // Prevents throttling when window is not focused
+                '--disable-background-timer-throttling',
+                '--disable-backgrounding-occluded-windows',
+                '--disable-hang-monitor' // Prevents the "Application is not responding" dialog
             ],
-            timeout: 45000 
+            timeout: 60000 // Increase launch timeout to 60s for CI environments
         });
     });
 
@@ -26,49 +30,62 @@ test.describe('Application Startup Smoke Test', () => {
         }
     });
 
-    test('should launch, load index, and display Play button (or Memory Warning)', async () => {
-        // Wait for the first window to appear
+    test('should launch, dismiss overlay if present, and ensure Landing UI is visible', async () => {
         const window = await electronApp.firstWindow();
-        
-        // Wait for the DOM to be ready.
-        // This helps avoid checking elements while the screen is still black/loading.
-        await window.waitForLoadState('domcontentloaded');
-        await window.locator('body').waitFor({ state: 'attached' });
 
-        // Verify window title to ensure the app context is correct
+        // Wait for the DOM to be ready to avoid checking on a blank window
+        await window.waitForLoadState('domcontentloaded');
+        try {
+            await window.locator('body').waitFor({ state: 'attached', timeout: 30000 });
+        } catch (e) {
+            console.log('Body waitFor timeout, continuing to checks...');
+        }
+
         const title = await window.title();
         expect(title).toMatch(/FLauncher|ФЛАУНЧЕР/i);
 
-        // --- MAIN LOGIC ---
-        // We wait for EITHER the success screen (#landingContainer) 
-        // OR the memory warning overlay (#overlayContainer).
-        // This prevents the test from failing if the CI runner has low RAM.
-        
+        // Define locators
         const landing = window.locator('#landingContainer');
         const overlay = window.locator('#overlayContainer');
+        // Generic locator for a button inside the overlay (usually "Continue" or "OK")
+        const overlayButton = overlay.locator('button'); 
 
-        // Poll the UI state until one of the expected containers is visible.
-        // Timeout set to 45s to allow heavy assets to load on slow CI machines.
-        await expect(async () => {
-            const isLandingVisible = await landing.isVisible();
-            const isOverlayVisible = await overlay.isVisible();
+        console.log('Starting UI interaction loop (60s timeout)...');
+        
+        const startTime = Date.now();
+        const timeout = 60000;
+
+        // Loop to handle potential overlays dynamically
+        while (Date.now() - startTime < timeout) {
             
-            // Scenario A: Memory warning or other overlay appeared.
-            // We consider this a "pass" because the app successfully rendered the UI layer.
-            if (isOverlayVisible) {
-                const overlayText = await overlay.innerText();
-                console.log('Overlay detected (Test Passed):', overlayText);
-                return true; 
+            // 1. PRIMARY GOAL: Is the main Landing UI (Play button area) visible?
+            if (await landing.isVisible()) {
+                console.log('Test Pass: Landing UI (#landingContainer) is visible.');
+                return; // SUCCESS
             }
 
-            // Scenario B: Main landing screen appeared. Success.
-            if (isLandingVisible) {
-                return true;
+            // 2. OBSTACLE: Is an Overlay blocking the view?
+            if (await overlay.isVisible()) {
+                const text = await overlay.innerText();
+                console.log('Overlay detected:', text.substring(0, 50).replace(/\n/g, ' '));
+                
+                // Attempt to dismiss it by clicking the first available button inside
+                if (await overlayButton.count() > 0 && await overlayButton.first().isVisible()) {
+                    console.log('Attempting to click overlay button to dismiss...');
+                    await overlayButton.first().click();
+                    // Wait a moment for animation/fade-out
+                    await new Promise(r => setTimeout(r, 1000));
+                    continue; // Loop again to check if Landing appeared
+                } else {
+                    console.log('Warning: Overlay visible but no clickable button found.');
+                }
             }
 
-            // If neither is visible yet (e.g., stuck on preloader/logo), fail the assertion to trigger a retry.
-            // This error message will only show up if the timeout (45s) is exceeded.
-            expect(isLandingVisible || isOverlayVisible, 'Waiting for Landing or Overlay...').toBeTruthy();
-        }).toPass({ timeout: 45000, interval: 1000 });
+            // Wait 1 second before re-checking
+            await new Promise(r => setTimeout(r, 1000));
+        }
+
+        // If we exit the loop, it means we never saw the Landing UI
+        throw new Error('Timeout: Failed to reach Landing UI. App might be stuck on black screen or overlay could not be dismissed.');
     });
 });
