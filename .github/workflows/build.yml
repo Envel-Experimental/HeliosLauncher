@@ -16,6 +16,7 @@ env:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
@@ -53,15 +54,26 @@ jobs:
         with:
           python-version: '3.9'
 
+      - name: Disable Windows Defender
+        if: runner.os == 'Windows'
+        run: |
+          Set-MpPreference -DisableRealtimeMonitoring $true
+          Set-MpPreference -DisableIOAVProtection $true
+        shell: pwsh
+
       - name: Install dependencies
         if: runner.os == 'Windows' || github.event.head_commit.message != '1'
-        run: npm ci
+        run: npm ci --no-audit --no-fund
+
+      - name: Run tests
+        if: runner.os == 'Windows' || github.event.head_commit.message != '1'
+        run: npm test
 
       - name: Install Flatpak toolchain (Linux only)
         if: runner.os == 'Linux' && (runner.os == 'Windows' || github.event.head_commit.message != '1')
         run: |
           sudo apt-get update
-          sudo apt-get install -y flatpak flatpak-builder gnome-software-plugin-flatpak
+          sudo apt-get install -y --no-install-recommends flatpak flatpak-builder
           flatpak --version
 
       - name: Build
@@ -86,6 +98,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-artifacts-${{ matrix.os }}
+          compression-level: 0
           path: |
             dist/**/*.dmg
             dist/**/*.AppImage
