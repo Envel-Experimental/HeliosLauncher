@@ -84,8 +84,6 @@ jobs:
           GIT_SHA:    ${{ env.COMMIT_SHA }}
         shell: bash
         run: |
-          # Разделяем сборку: каждая ОС собирает только свои форматы.
-          # Это лечит ошибку dmg-license на Linux и ускоряет процесс.
           
           if [ "$RUNNER_OS" == "Linux" ]; then
             npm run dist -- --linux flatpak appimage snap deb rpm tar.gz
