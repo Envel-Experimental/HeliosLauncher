@@ -65,7 +65,7 @@ jobs:
         if: runner.os == 'Linux' && (runner.os == 'Windows' || github.event.head_commit.message != '1')
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb libasound2
+          sudo apt-get install -y xvfb libasound2t64
 
       - name: Install dependencies
         if: runner.os == 'Windows' || github.event.head_commit.message != '1'
