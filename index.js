@@ -44,8 +44,8 @@ function tryFixCyrillicTemp() {
 tryFixCyrillicTemp()
 // ====================================================================
 
-const remoteMain = require('@electron/remote/main')
-remoteMain.initialize()
+// const remoteMain = require('@electron/remote/main')
+// remoteMain.initialize()
 
 // Requirements
 const { app, BrowserWindow, ipcMain, Menu, shell, powerMonitor, dialog } = require('electron')
@@ -56,10 +56,15 @@ const ejse                              = require('ejs-electron')
 const isDev                             = require('./app/assets/js/isdev')
 const semver                            = require('semver')
 const { pathToFileURL }                 = require('url')
-const { AZURE_CLIENT_ID, MSFT_OPCODE, MSFT_REPLY_TYPE, MSFT_ERROR, SHELL_OPCODE } = require('./app/assets/js/ipcconstants')
+const { AZURE_CLIENT_ID, MSFT_OPCODE, MSFT_REPLY_TYPE, MSFT_ERROR, SHELL_OPCODE, IPC } = require('./app/assets/js/ipcconstants')
 const LangLoader                        = require('./app/assets/js/langloader')
 const SysUtil                           = require('./app/assets/js/sysutil')
 const ConfigManager                     = require('./app/assets/js/configmanager')
+const { DistroAPI }                     = require('./app/assets/js/distromanager')
+const pathutil                          = require('./app/assets/js/pathutil')
+
+// Load Handlers
+require('./app/assets/js/main/launcherhandler')
 
 // Set up single instance lock.
 const gotTheLock = app.requestSingleInstanceLock()
@@ -291,6 +296,54 @@ ipcMain.on('autoUpdateAction', (event, arg, data) => {
     }
 })
 
+// === IPC Handlers for Secure Mode ===
+
+ipcMain.on(IPC.GET_DATA_PATH, (event) => {
+    event.returnValue = ConfigManager.getLauncherDirectory()
+})
+
+ipcMain.on(IPC.SAVE_CONFIG, async () => {
+    // Reload config if renderer saved it?
+    // Wait, renderer calls api.config.save(), which calls ConfigManager.save() in preload.
+    // ConfigManager.save() writes to disk.
+    // Main process should reload to stay in sync.
+    await ConfigManager.load()
+})
+
+ipcMain.on(IPC.QUIT, () => {
+    app.quit()
+})
+
+ipcMain.on(IPC.RELAUNCH, () => {
+    app.relaunch()
+    app.quit()
+})
+
+ipcMain.on(IPC.GET_VERSION, (event) => {
+    event.returnValue = app.getVersion()
+})
+
+ipcMain.handle(IPC.SHOW_MESSAGE_BOX, async (event, options) => {
+    return await dialog.showMessageBox(win, options)
+})
+
+ipcMain.on(IPC.OPEN_EXTERNAL, (event, url) => {
+    shell.openExternal(url)
+})
+
+ipcMain.on(IPC.SHOW_ITEM_IN_FOLDER, (event, path) => {
+    shell.showItemInFolder(path)
+})
+
+// Distro Handler
+ipcMain.on(IPC.GET_DISTRO, async (event) => {
+    // If renderer requests distro, we return it.
+    // Usually renderer uses preload to fetch it directly if using node,
+    // but in strict isolation, main should fetch.
+})
+
+// ===================================
+
 ipcMain.on('distributionIndexDone', (event, res) => {
     if (!event.sender.isDestroyed()) {
         event.sender.send('distributionIndexDone', res)
@@ -436,13 +489,14 @@ function createWindow() {
         icon: getPlatformIcon('icon'),
         frame: false,
         webPreferences: {
-            preload: path.join(__dirname, 'app', 'assets', 'js', 'preloader.js'),
-            nodeIntegration: true,
-            contextIsolation: false
+            preload: path.join(__dirname, 'app', 'preload.js'), // New Preload
+            nodeIntegration: false, // Secure
+            contextIsolation: true, // Secure
+            enableRemoteModule: false // Secure
         },
         backgroundColor: '#171614'
     })
-    remoteMain.enable(win.webContents)
+    // remoteMain.enable(win.webContents) // Disabled
 
     const data = {
         bkid: Math.floor((Math.random() * fs.readdirSync(path.join(__dirname, 'app', 'assets', 'images', 'backgrounds')).length)),

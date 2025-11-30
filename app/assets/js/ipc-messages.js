@@ -1,24 +1,25 @@
-// NOTE FOR THIRD-PARTY
-// REPLACE THIS CLIENT ID WITH YOUR APPLICATION ID.
-// SEE https://github.com/Envel-Experimental/HeliosLauncher/blob/master/docs/MicrosoftAuth.md
-exports.AZURE_CLIENT_ID = '1ce6e35a-126f-48fd-97fb-54d143ac6d45'
-// SEE NOTE ABOVE.
+// Inter-Process Communication (IPC) constants
+// Used to prevent string typos and mismatching channels.
 
 exports.IPC = {
+    // Config
     GET_CONFIG: 'get-config',
     SAVE_CONFIG: 'save-config',
-    GET_DATA_PATH: 'get-data-path', // New
-    AUTH_LOGIN: 'auth-login',
-    AUTH_LOGOUT: 'auth-logout',
-    AUTH_VALIDATE: 'auth-validate',
+    // Auth
+    LOGIN: 'auth-login',
+    LOGOUT: 'auth-logout',
+    VALIDATE_ACCOUNT: 'auth-validate',
+    // Distro
     GET_DISTRO: 'get-distro',
     DISTRO_DONE: 'distributionIndexDone',
+    // Game
     LAUNCH_GAME: 'game-launch',
     GAME_PROGRESS: 'game-progress',
     GAME_STARTUP_ERROR: 'game-startup-error',
     GAME_ERROR: 'game-error',
     GAME_CLOSE: 'game-close',
     GAME_CONSOLE_LOG: 'game-console-log',
+    // Mods
     SCAN_MODS: 'scan-dropin-mods',
     DELETE_MOD: 'delete-dropin-mod',
     TOGGLE_MOD: 'toggle-dropin-mod',
@@ -27,6 +28,7 @@ exports.IPC = {
     ADD_MODS: 'add-dropin-mods',
     ADD_SHADERS: 'add-shaderpacks',
     OPEN_FOLDER: 'open-folder',
+    // App
     QUIT: 'app-quit',
     RELAUNCH: 'app-relaunch',
     GET_VERSION: 'app-get-version',
@@ -36,27 +38,10 @@ exports.IPC = {
     SYSTEM_WARNINGS: 'system-warnings',
     AUTO_UPDATE: 'autoUpdateNotification',
     AUTO_UPDATE_ACTION: 'autoUpdateAction',
-    // Microsoft Auth Opcodes
     MSFT_OPCODE: {
         OPEN_LOGIN: 'MSFT_AUTH_OPEN_LOGIN',
         OPEN_LOGOUT: 'MSFT_AUTH_OPEN_LOGOUT',
         REPLY_LOGIN: 'MSFT_AUTH_REPLY_LOGIN',
         REPLY_LOGOUT: 'MSFT_AUTH_REPLY_LOGOUT'
-    },
-    SHELL_OPCODE: {
-        TRASH_ITEM: 'TRASH_ITEM'
     }
 }
-
-// Opcodes (Backwards compatibility if needed, but we should use IPC object)
-exports.MSFT_OPCODE = exports.IPC.MSFT_OPCODE
-exports.MSFT_REPLY_TYPE = {
-    SUCCESS: 'MSFT_AUTH_REPLY_SUCCESS',
-    ERROR: 'MSFT_AUTH_REPLY_ERROR'
-}
-exports.MSFT_ERROR = {
-    ALREADY_OPEN: 'MSFT_AUTH_ERR_ALREADY_OPEN',
-    NOT_FINISHED: 'MSFT_AUTH_ERR_NOT_FINISHED'
-}
-
-exports.SHELL_OPCODE = exports.IPC.SHELL_OPCODE

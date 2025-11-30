@@ -7,12 +7,30 @@ const pathutil = require('./pathutil')
 
 const logger = LoggerUtil.getLogger('ConfigManager')
 
-const app = (process.type === 'renderer'
-    ? require('@electron/remote').app
-    : require('electron').app
-)
+let dataPath
 
-const dataPath = pathutil.resolveDataPathSync(app)
+// Initialize dataPath
+try {
+    // If in Main process, use electron.app
+    if (process.type === 'browser') {
+        const { app } = require('electron')
+        dataPath = pathutil.resolveDataPathSync(app)
+    } else {
+        // In Renderer/Preload, we might not have app.
+        // We expect dataPath to be set via ipc or manually if remote is unavailable.
+        // Try remote first for backward compatibility during migration, then failover
+        try {
+            const { app } = require('@electron/remote')
+            dataPath = pathutil.resolveDataPathSync(app)
+        } catch (e) {
+            // Remote not available. We must wait for initialization or use a shim.
+            // For now, let's assume it will be set via setLauncherDirectory or we use IPC if possible.
+            // Note: IPC sync in top-level require is dangerous.
+        }
+    }
+} catch (e) {
+    // Ignore
+}
 
 /**
  * Retrieve the absolute path of the launcher directory.
@@ -22,6 +40,15 @@ const dataPath = pathutil.resolveDataPathSync(app)
 exports.getLauncherDirectory = function(){
     return dataPath 
 }
+
+/**
+ * Manually set the launcher directory. Useful for renderer process without remote.
+ * @param {string} path
+ */
+exports.setLauncherDirectory = function(path) {
+    dataPath = path
+}
+
 /**
  * Get the launcher's data directory. This is where all files related
  * to game launch are installed (common, instances, java, etc).
@@ -41,13 +68,38 @@ exports.setDataDirectory = function(dataDirectory){
     config.settings.launcher.dataDirectory = dataDirectory
 }
 
-const configPath = path.join(exports.getLauncherDirectory(), 'config.json')
-const configPathLEGACY = path.join(app.getPath('userData'), 'config.json')
-let firstLaunch = false;
-(async () => {
-    firstLaunch = !await fs.pathExists(configPath) && !await fs.pathExists(configPathLEGACY)
-})()
+const DEFAULT_CONFIG = {
+    settings: {
+        game: {
+            resWidth: 1280,
+            resHeight: 720,
+            fullscreen: false,
+            autoConnect: true,
+            launchDetached: true
+        },
+        launcher: {
+            allowPrerelease: false,
+            dataDirectory: null, // Set in load()
+            totalRAMWarningShown: false
+        }
+    },
+    newsCache: {
+        date: null,
+        content: null,
+        dismissed: false
+    },
+    clientToken: null,
+    selectedServer: null, // Resolved
+    selectedAccount: null,
+    authenticationDatabase: {},
+    modConfigurations: [],
+    javaConfig: {}
+}
 
+let configPath
+let configPathLEGACY
+let config = null
+let firstLaunch = false
 
 exports.getAbsoluteMinRAM = function(ram){
     if(ram?.minimum != null) {
@@ -84,47 +136,10 @@ function resolveSelectedRAM(ram) {
 }
 
 /**
- * Three types of values:
- * Static = Explicitly declared.
- * Dynamic = Calculated by a private function.
- * Resolved = Resolved externally, defaults to null.
- */
-const DEFAULT_CONFIG = {
-    settings: {
-        game: {
-            resWidth: 1280,
-            resHeight: 720,
-            fullscreen: false,
-            autoConnect: true,
-            launchDetached: true
-        },
-        launcher: {
-            allowPrerelease: false,
-            dataDirectory: dataPath,
-            totalRAMWarningShown: false
-        }
-    },
-    newsCache: {
-        date: null,
-        content: null,
-        dismissed: false
-    },
-    clientToken: null,
-    selectedServer: null, // Resolved
-    selectedAccount: null,
-    authenticationDatabase: {},
-    modConfigurations: [],
-    javaConfig: {}
-}
-
-let config = null
-
-// Persistance Utility Functions
-
-/**
  * Save the current configuration to a file.
  */
 exports.save = async function(){
+    if (!configPath) return // Not loaded yet
     return await retry(
         () => fs.writeFile(configPath, JSON.stringify(config, null, 4), 'UTF-8'),
         3,
@@ -140,8 +155,33 @@ exports.save = async function(){
  * need to be externally assigned.
  */
 exports.load = async function(){
+    if (!dataPath) {
+        throw new Error('Data path not set for ConfigManager')
+    }
+
+    // Set default data directory if not set in DEFAULT_CONFIG (since dataPath was not ready at module load)
+    DEFAULT_CONFIG.settings.launcher.dataDirectory = dataPath
+
+    configPath = path.join(dataPath, 'config.json')
+
+    // Legacy path check requires 'electron'.app.getPath('userData').
+    // If we are in renderer without remote, we assume legacy migration is done or not our responsibility.
+    // But we can check if dataPath is different from legacy path if we could resolve it.
+    // For now, we skip legacy migration check in Renderer if remote is missing.
+    // Main process should handle migration.
+
+    let legacyConfigExists = false
+    try {
+        if (process.type === 'browser') {
+             const { app } = require('electron')
+             configPathLEGACY = path.join(app.getPath('userData'), 'config.json')
+             legacyConfigExists = await fs.pathExists(configPathLEGACY)
+        }
+    } catch(e) {
+        // Ignore
+    }
+
     const configExists = await fs.pathExists(configPath)
-    const legacyConfigExists = await fs.pathExists(configPathLEGACY)
 
     if (!configExists) {
         await fs.ensureDir(path.join(configPath, '..'))
@@ -149,6 +189,7 @@ exports.load = async function(){
             await fs.move(configPathLEGACY, configPath)
         } else {
             config = DEFAULT_CONFIG
+            firstLaunch = true
             await exports.save()
             logger.info('Successfully Loaded')
             return

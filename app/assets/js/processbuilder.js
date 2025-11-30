@@ -8,7 +8,7 @@ const { getMojangOS, isLibraryCompatible, mcVersionAtLeast }  = require('@envel/
 const { Type }              = require('helios-distribution-types')
 const os                    = require('os')
 const path                  = require('path')
-const { sendToSentry }      = require('./preloader')
+// const { sendToSentry }      = require('./preloader') // Deprecated
 const { retry }             = require('./util')
 const pathutil              = require('./pathutil')
 const CrashHandler          = require('./crash-handler')
@@ -233,7 +233,7 @@ class ProcessBuilder {
                 } else {
                     // Standard crash overlay
                     const exitMessage = `Process exited with code: ${code}`
-                    sendToSentry(exitMessage, 'error')
+                    // sendToSentry(exitMessage, 'error') // Sentry handled elsewhere or ignored
 
                     setOverlayContent(
                         Lang.queryJS('processbuilder.exit.crash.title'),
@@ -299,7 +299,7 @@ class ProcessBuilder {
                     logger.info('Temp dir already deleted.')
                 } else {
                     logger.warn('Error while deleting temp dir', err)
-                    sendToSentry(err)
+                    // sendToSentry(err)
                 }
             }
         })
