@@ -1,0 +1,34 @@
+name: Manual Full Launch Test (macOS)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  full_test:
+    name: Full E2E Test on macOS
+    runs-on: macos-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Configure Network (DNS Hack)
+        run: |
+          echo "89.23.113.35 f-launcher.ru" | sudo tee -a /etc/hosts
+          echo "nameserver 8.8.8.8" | sudo tee /etc/resolv.conf
+          
+          echo "=== Ping Check ==="
+          ping -c 3 f-launcher.ru || true
+
+      - name: Run Full Launch Test
+        run: npx playwright test tests/full-launch.spec.js
