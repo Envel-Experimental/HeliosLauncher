@@ -12,6 +12,7 @@ const { sendToSentry }      = require('./preloader')
 const { retry }             = require('./util')
 const pathutil              = require('./pathutil')
 const CrashHandler          = require('./crash-handler')
+const DropinModUtil         = require('./dropinmodutil')
 
 const ConfigManager         = require('./configmanager')
 const Lang                  = require('./langloader')
@@ -109,43 +110,11 @@ class ProcessBuilder {
         child.stdout.setEncoding('utf8')
         child.stderr.setEncoding('utf8')
 
-        // --- Performance: Ring Buffer (O(1) writes) ---
-        // Stores last BUFFER_SIZE lines. Prevents memory leaks.
-        const BUFFER_SIZE = 2000;
-        const ringBuffer = new Array(BUFFER_SIZE);
-        let head = 0;
-        let isBufferFull = false;
-        
-        // Accumulators for split stream chunks
-        let stdoutRemainder = '';
-        let stderrRemainder = '';
-
-        const writeToRing = (line) => {
-            ringBuffer[head] = line;
-            head = (head + 1) % BUFFER_SIZE;
-            if (head === 0) isBufferFull = true;
-        }
-
-        const processChunk = (data, isError) => {
-            const str = (isError ? stderrRemainder : stdoutRemainder) + data.toString();
-            const lines = str.split(/\r?\n/);
-            const newRemainder = lines.pop();
-            
-            if (isError) stderrRemainder = newRemainder;
-            else stdoutRemainder = newRemainder;
-
-            for (let i = 0; i < lines.length; i++) {
-                if(lines[i].trim()) writeToRing(lines[i]);
-            }
-        };
-
         child.stdout.on('data', (data) => {
-            processChunk(data, false);
             data.trim().split('\n').forEach(x => console.log(`\x1b[32m[Minecraft]\x1b[0m ${x}`))
         })
 
         child.stderr.on('data', (data) => {
-            processChunk(data, true);
             data.trim().split('\n').forEach(x => console.log(`\x1b[31m[Minecraft]\x1b[0m ${x}`))
         })
 
@@ -161,36 +130,63 @@ class ProcessBuilder {
         child.on('close', async (code, signal) => {
             logger.info('Exited with code', code)
 
-            // Flush remaining buffers
-            if (stdoutRemainder) writeToRing(stdoutRemainder);
-            if (stderrRemainder) writeToRing(stderrRemainder);
-
             const isCrash = code !== 0 && code !== 130 && code !== 137 && code !== 143 && code !== 255
 
             if (isCrash) {
-                // Reconstruct linear log from Ring Buffer
-                let recentLogContent = '';
-                if (!isBufferFull) {
-                    recentLogContent = ringBuffer.slice(0, head).join('\n');
-                } else {
-                    const part1 = ringBuffer.slice(head, BUFFER_SIZE);
-                    const part2 = ringBuffer.slice(0, head);
-                    recentLogContent = part1.concat(part2).join('\n');
+                const logPath = path.join(this.gameDir, 'logs', 'latest.log');
+                const crashReportsDir = path.join(this.gameDir, 'crash-reports');
+                let crashAnalysis = null;
+
+                // 1. Try reading from disk (Preferred, contains full context)
+                try {
+                    // Give the file a moment to flush if needed
+                    await new Promise(resolve => setTimeout(resolve, 1500));
+                    crashAnalysis = await CrashHandler.analyzeFile(logPath);
+                } catch (e) {
+                    logger.warn('Failed to analyze latest.log file', e);
                 }
 
-                let crashAnalysis = CrashHandler.analyzeLog(recentLogContent);
-
-                // Fallback to disk if memory log missed it (rare)
+                // 2. Fallback: Check for fresh crash report files
                 if (!crashAnalysis) {
-                    const logPath = path.join(this.gameDir, 'logs', 'latest.log');
-                    if (fs.existsSync(logPath)) {
-                        try {
-                            await new Promise(resolve => setTimeout(resolve, 1000));
-                            const fileLogContent = fs.readFileSync(logPath, 'utf-8');
-                            crashAnalysis = CrashHandler.analyzeLog(fileLogContent);
-                        } catch (e) {
-                            logger.warn('Failed to read latest.log', e);
+                    try {
+                        if (await fs.pathExists(crashReportsDir)) {
+                            const files = await fs.readdir(crashReportsDir);
+
+                            // Filter for text files and find the newest one
+                            const crashFiles = await Promise.all(files
+                                .filter(f => f.endsWith('.txt') || f.endsWith('.log'))
+                                .map(async f => {
+                                    const p = path.join(crashReportsDir, f);
+                                    const s = await fs.stat(p);
+                                    return { name: f, path: p, time: s.mtime.getTime() };
+                                }));
+
+                            // Sort: newest first
+                            crashFiles.sort((a, b) => b.time - a.time);
+
+                            if (crashFiles.length > 0) {
+                                const newestCrash = crashFiles[0];
+                                const now = Date.now();
+                                // If the file was created in the last 2 minutes, it's likely our crash
+                                if (now - newestCrash.time < 120 * 1000) {
+                                    logger.info(`Found fresh crash report: ${newestCrash.name}`);
+                                    crashAnalysis = await CrashHandler.analyzeFile(newestCrash.path);
+                                }
+                            }
                         }
+                    } catch (e) {
+                        logger.warn('Failed to find/read crash report file', e);
+                    }
+                }
+
+                // 3. Fallback: Check memory buffer if disk failed
+                if (!crashAnalysis) {
+                    logger.info('Disk log analysis failed or incomplete. Analyzing memory buffer...');
+                    const memoryLog = this.logBuffer ? this.logBuffer.join('\n') : '';
+                    crashAnalysis = CrashHandler.analyzeLog(memoryLog);
+
+                    if (crashAnalysis) {
+                        logger.info('Crash detected from memory buffer!');
                     }
                 }
 
@@ -216,6 +212,49 @@ class ProcessBuilder {
                             }
                             toggleOverlay(false);
                             // No auto-restart for this type as it requires re-download/validation which is triggered by "Play"
+                        } else if (crashAnalysis.type === 'incompatible-mods') {
+                            const modsDir = path.join(this.gameDir, 'mods');
+
+                            // 1. Delete Drop-in mods (user added mods)
+                            try {
+                                const dropinMods = DropinModUtil.scanForDropinMods(modsDir, this.server.rawServer.minecraftVersion);
+
+                                for (const mod of dropinMods) {
+                                    try {
+                                        const modPath = path.join(modsDir, mod.fullName);
+                                        fs.unlinkSync(modPath);
+                                        logger.info(`Deleted incompatible drop-in mod: ${modPath}`);
+                                    } catch (err) {
+                                        logger.error(`Failed to delete mod ${mod.fullName}`, err);
+                                    }
+                                }
+                            } catch (e) {
+                                logger.warn('Failed to scan/delete drop-in mods', e);
+                            }
+
+                            // 2. Reset optional mod configuration to defaults
+                            try {
+                                let modCfg = ConfigManager.getModConfiguration(this.server.rawServer.id);
+                                if (modCfg) {
+                                    modCfg.mods = {};
+                                    ConfigManager.setModConfiguration(this.server.rawServer.id, modCfg);
+                                    ConfigManager.save();
+                                    logger.info('Optional mods configuration reset to defaults.');
+                                }
+                            } catch (e) {
+                                logger.error('Failed to reset mod configuration', e);
+                            }
+
+                            // 3. Restart
+                            toggleOverlay(false);
+                            setTimeout(() => {
+                                const launchBtn = document.getElementById('launch_button');
+                                if (launchBtn) {
+                                    logger.info('Autostarting game after fix...');
+                                    launchBtn.click();
+                                }
+                            }, 1000);
+
                         } else {
                             const configPath = path.join(this.gameDir, 'config', crashAnalysis.file);
                             if (fs.existsSync(configPath)) {
@@ -292,9 +331,6 @@ class ProcessBuilder {
                 })
                 toggleOverlay(true)
             }
-
-            // Explicit cleanup
-            ringBuffer.length = 0; 
 
             try {
                 await retry(
