@@ -544,8 +544,9 @@ async function dlAsync(login = true) {
             })
             setDownloadPercentage(100)
         } catch(err) {
-            loggerLaunchSuite.warn('Error during file download. Continuing with local files.', err)
-            isOfflineLaunch = true
+            loggerLaunchSuite.warn('Error during file download. Stopping launch.', err)
+            showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringFileDownloadTitle'), Lang.queryJS('landing.dlAsync.unableToLoadDistributionIndex'))
+            return
         }
     } else {
         loggerLaunchSuite.info('No invalid files, skipping download.')
