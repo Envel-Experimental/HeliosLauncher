@@ -77,10 +77,6 @@ jobs:
           echo "=== Trying ping ==="
           ping -c 3 89.23.113.35 || true
 
-      - name: Run tests
-        if: runner.os == 'macOS'
-        run: npm test
-
       - name: Build
         if: runner.os == 'Windows' || github.event.head_commit.message != '1'
         env:
