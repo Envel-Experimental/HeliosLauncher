@@ -9,16 +9,18 @@ describe('CrashHandler', () => {
     // Reset mocks before each test
     beforeEach(() => {
         jest.clearAllMocks();
+        // Mock pathExists to return true by default
+        fs.pathExists.mockResolvedValue(true);
     });
 
     describe('analyzeLog (synchronous)', () => {
         it('should detect corrupted TOML config files', () => {
-            const log = 'Some log\nException loading config file example.toml\nMore log';
+            const log = 'Some log\nFailed loading config file example.toml\nMore log';
             const result = CrashHandler.analyzeLog(log);
             expect(result).toEqual({
                 type: 'corrupted-config',
                 file: 'example.toml',
-                description: 'The configuration file example.toml appears to be corrupted.'
+                description: 'Ошибка загрузки конфига: example.toml'
             });
         });
 
@@ -28,7 +30,7 @@ describe('CrashHandler', () => {
             expect(result).toEqual({
                 type: 'corrupted-config',
                 file: 'example.cfg',
-                description: 'The configuration file example.cfg appears to be corrupted.'
+                description: 'Файл конфигурации example.cfg поврежден.'
             });
         });
 
@@ -38,7 +40,7 @@ describe('CrashHandler', () => {
             expect(result).toEqual({
                 type: 'corrupted-config',
                 file: 'example.json',
-                description: 'The configuration file example.json appears to be corrupted.'
+                description: 'Файл конфигурации example.json поврежден (ошибка синтаксиса).'
             });
         });
 
@@ -63,7 +65,7 @@ describe('CrashHandler', () => {
         const filePath = '/mock/path/to/latest.log';
 
         it('should read the file tail and detect crash', async () => {
-            const crashLog = 'Some log content\nException loading config file corrupted.toml\nEnd of log';
+            const crashLog = 'Some log content\nFailed loading config file corrupted.toml\nEnd of log';
             const fileSize = 2000;
             const buffer = Buffer.from(crashLog);
 
@@ -95,7 +97,7 @@ describe('CrashHandler', () => {
             expect(result).toEqual({
                 type: 'corrupted-config',
                 file: 'corrupted.toml',
-                description: 'The configuration file corrupted.toml appears to be corrupted.'
+                description: 'Ошибка загрузки конфига: corrupted.toml'
             });
         });
 

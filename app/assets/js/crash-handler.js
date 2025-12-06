@@ -84,7 +84,20 @@ exports.analyzeLog = function(logContent) {
         }
     }
 
-    // 3. Generic "is corrupt" message
+    // 3. JsonSyntaxException (Corrupted JSON)
+    // Matches: "com.google.gson.JsonSyntaxException: ... path/to/example.json"
+    // Regex logic: Look for JsonSyntaxException and then find the next .json file.
+    const jsonSyntaxRegex = /com\.google\.gson\.JsonSyntaxException:.*?([^\s]+\.json)/i;
+    match = jsonSyntaxRegex.exec(logContent);
+    if (match && match[1]) {
+        return {
+            type: 'corrupted-config',
+            file: path.basename(match[1]),
+            description: `Файл конфигурации ${path.basename(match[1])} поврежден (ошибка синтаксиса).`
+        };
+    }
+
+    // 4. Generic "is corrupt" message
     const corruptedCfgRegex = /Configuration file\s+.*?([^\s]+\.(?:cfg|toml|json))\s+is corrupt/i;
     match = corruptedCfgRegex.exec(logContent);
     if (match && match[1]) {
@@ -95,7 +108,7 @@ exports.analyzeLog = function(logContent) {
         };
     }
 
-    // 4. Missing version json file (ENOENT)
+    // 5. Missing version json file (ENOENT)
     const missingVersionJsonRegex = /ENOENT: no such file or directory, open '.*[\\/]versions[\\/](.+)[\\/]\1\.json'/;
     match = missingVersionJsonRegex.exec(logContent);
     if (match && match[1]) {
@@ -106,7 +119,7 @@ exports.analyzeLog = function(logContent) {
         };
     }
 
-    // 5. Incompatible Mods (Fabric/Quilt dependency errors)
+    // 6. Incompatible Mods (Fabric/Quilt dependency errors)
     // Matches: "net.fabricmc.loader.impl.FormattedException: Some of your mods are incompatible"
     // OR: "[main/ERROR]: Incompatible mods found!"
     if (logContent.includes('Incompatible mods found!') || 
