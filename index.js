@@ -110,6 +110,12 @@ function isIgnorableError(err) {
 
 // Global synchronous error handler
 process.on('uncaughtException', (err) => {
+    // Ignore network suspended errors (common during sleep/wake cycles)
+    if (err.message.includes('ERR_NETWORK_IO_SUSPENDED') || err.stack.includes('ERR_NETWORK_IO_SUSPENDED')) {
+        console.warn('[Warning] Suppressed ERR_NETWORK_IO_SUSPENDED error.')
+        return
+    }
+
     // 1. Check if this is a non-critical error we can ignore
     if (isIgnorableError(err)) {
         console.warn('[Warning] Suppressed non-critical EPERM error:', err.path)
@@ -148,6 +154,12 @@ process.on('unhandledRejection', (reason, promise) => {
     err.code = reason.code || err.code
     err.path = reason.path || err.path
     err.syscall = reason.syscall || reason.syscall
+
+    // Ignore network suspended errors (common during sleep/wake cycles)
+    if (err.message.includes('ERR_NETWORK_IO_SUSPENDED') || (err.stack && err.stack.includes('ERR_NETWORK_IO_SUSPENDED'))) {
+        console.warn('[Warning] Suppressed ERR_NETWORK_IO_SUSPENDED rejection.')
+        return
+    }
 
     if (isIgnorableError(err)) {
         console.warn('[Warning] Suppressed non-critical Async EPERM error:', err.path)
