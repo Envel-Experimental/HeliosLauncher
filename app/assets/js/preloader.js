@@ -57,7 +57,7 @@ async function preloader() {
         logger.info('Loaded distribution index.')
 
         if (heliosDistro) {
-            if (ConfigManager.getSelectedServer() == null || heliosDistro.getServerById(ConfigManager.getSelectedServer()) == null) {
+            if (ConfigManager.getSelectedServer() == null) {
                 logger.info('Determining default selected server..')
                 ConfigManager.setSelectedServer(heliosDistro.getMainServer().rawServer.id)
                 await ConfigManager.save()
