@@ -1,5 +1,50 @@
 const fs = require('fs-extra');
 const path = require('path');
+const { app } = require('@electron/remote');
+
+/**
+ * Checks for graphics driver issues that might have caused the crash.
+ * Specifically checks for outdated NVIDIA drivers when using Sodium.
+ *
+ * @param {number} code The process exit code.
+ * @param {Array<Object>} mods The list of enabled mods.
+ * @returns {Promise<Object | null>} An object with crash details if a driver issue is found, null otherwise.
+ */
+exports.checkGraphicsDrivers = async function(code, mods) {
+    // Check for NVIDIA driver issues with Sodium (Code -1/4294967295)
+    if (code === -1 || code === 4294967295 || code === 1) {
+        const isSodium = mods.some(m => m.getVersionlessMavenIdentifier().toLowerCase().includes('sodium'));
+        if (isSodium) {
+            try {
+                const gpuInfo = await app.getGPUInfo('basic');
+                const gpus = gpuInfo?.gpuDevice || [];
+
+                for (const gpu of gpus) {
+                    // NVIDIA vendor ID is 0x10DE (4318)
+                    const isNvidia = (gpu.vendorId === 4318 || (gpu.driverVendor && gpu.driverVendor.toUpperCase().includes('NVIDIA')));
+
+                    if (isNvidia && gpu.driverVersion) {
+                        const cleanVersion = gpu.driverVersion.replace(/\./g, '');
+                        if (cleanVersion.length >= 5) {
+                            const versionNum = parseInt(cleanVersion.slice(-5));
+                            // Check if version is less than 536.23
+                            if (versionNum < 53623) {
+                                return {
+                                    type: 'gpu-driver',
+                                    title: 'Драйвер видеокарты устарел',
+                                    description: 'Обновите драйвер видеокарты.',
+                                };
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('[CrashHandler] Failed to check GPU info', e);
+            }
+        }
+    }
+    return null;
+}
 
 /**
  * Reads the last N bytes of a file.

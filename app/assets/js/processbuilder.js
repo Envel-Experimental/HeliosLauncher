@@ -133,6 +133,24 @@ class ProcessBuilder {
             const isCrash = code !== 0 && code !== 130 && code !== 137 && code !== 143 && code !== 255
 
             if (isCrash) {
+                // 1. Check for system-specific crash causes (e.g. GPU drivers)
+                const sysCrash = await CrashHandler.checkGraphicsDrivers(code, uberModArr);
+                if (sysCrash) {
+                    setOverlayContent(
+                        sysCrash.title,
+                        sysCrash.description,
+                        Lang.queryJS('processbuilder.crash.close')
+                    )
+                    setOverlayHandler(() => toggleOverlay(false))
+                    toggleOverlay(true)
+
+                    // Cleanup and return to avoid showing generic crash overlay
+                    try {
+                        await retry(() => fs.remove(tempNativePath), 3, 1000, (err) => err.code === 'EPERM' || err.code === 'EBUSY')
+                    } catch (err) {}
+                    return
+                }
+
                 const logPath = path.join(this.gameDir, 'logs', 'latest.log');
                 const crashReportsDir = path.join(this.gameDir, 'crash-reports');
                 let crashAnalysis = null;

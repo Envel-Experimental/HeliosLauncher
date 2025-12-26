@@ -4,6 +4,14 @@ const fs = require('fs-extra');
 // Mock fs-extra
 jest.mock('fs-extra');
 
+// Mock @electron/remote
+const mockGetGPUInfo = jest.fn();
+jest.mock('@electron/remote', () => ({
+    app: {
+        getGPUInfo: (...args) => mockGetGPUInfo(...args)
+    }
+}));
+
 describe('CrashHandler', () => {
 
     // Reset mocks before each test
@@ -11,6 +19,97 @@ describe('CrashHandler', () => {
         jest.clearAllMocks();
         // Mock pathExists to return true by default
         fs.pathExists.mockResolvedValue(true);
+    });
+
+    describe('checkGraphicsDrivers', () => {
+        const createSodiumMod = () => ({
+            getVersionlessMavenIdentifier: () => 'sodium'
+        });
+        const createOtherMod = () => ({
+            getVersionlessMavenIdentifier: () => 'other-mod'
+        });
+
+        it('should return error for outdated NVIDIA driver with Sodium', async () => {
+            mockGetGPUInfo.mockResolvedValue({
+                gpuDevice: [{
+                    vendorId: 4318, // NVIDIA
+                    driverVersion: '31.0.15.3197', // < 536.23
+                    driverVendor: 'NVIDIA'
+                }]
+            });
+
+            const result = await CrashHandler.checkGraphicsDrivers(-1, [createSodiumMod()]);
+
+            expect(result).not.toBeNull();
+            expect(result.type).toBe('gpu-driver');
+            expect(result.title).toBe('Драйвер видеокарты устарел');
+            expect(result.description).toBe('Обновите драйвер видеокарты.');
+        });
+
+        it('should return null for up-to-date NVIDIA driver', async () => {
+            mockGetGPUInfo.mockResolvedValue({
+                gpuDevice: [{
+                    vendorId: 4318,
+                    driverVersion: '31.0.15.4000', // > 536.23
+                    driverVendor: 'NVIDIA'
+                }]
+            });
+
+            const result = await CrashHandler.checkGraphicsDrivers(-1, [createSodiumMod()]);
+
+            expect(result).toBeNull();
+        });
+
+        it('should return null for non-NVIDIA GPU', async () => {
+            mockGetGPUInfo.mockResolvedValue({
+                gpuDevice: [{
+                    vendorId: 0x8086, // Intel
+                    driverVersion: '10.0.0.0',
+                    driverVendor: 'Intel'
+                }]
+            });
+
+            const result = await CrashHandler.checkGraphicsDrivers(-1, [createSodiumMod()]);
+
+            expect(result).toBeNull();
+        });
+
+        it('should return null if Sodium is not present', async () => {
+            mockGetGPUInfo.mockResolvedValue({
+                gpuDevice: [{
+                    vendorId: 4318,
+                    driverVersion: '31.0.15.3197', // Outdated
+                    driverVendor: 'NVIDIA'
+                }]
+            });
+
+            // Pass mod list without Sodium
+            const result = await CrashHandler.checkGraphicsDrivers(-1, [createOtherMod()]);
+
+            expect(result).toBeNull();
+        });
+
+        it('should return null if exit code is not a crash code', async () => {
+             mockGetGPUInfo.mockResolvedValue({
+                gpuDevice: [{
+                    vendorId: 4318,
+                    driverVersion: '31.0.15.3197',
+                    driverVendor: 'NVIDIA'
+                }]
+            });
+
+            const result = await CrashHandler.checkGraphicsDrivers(0, [createSodiumMod()]);
+
+            expect(result).toBeNull();
+        });
+
+        it('should handle getGPUInfo failure gracefully', async () => {
+            mockGetGPUInfo.mockRejectedValue(new Error('Failed to get info'));
+
+            // Should catch error and return null
+            const result = await CrashHandler.checkGraphicsDrivers(-1, [createSodiumMod()]);
+            expect(result).toBeNull();
+        });
     });
 
     describe('analyzeLog (synchronous)', () => {
