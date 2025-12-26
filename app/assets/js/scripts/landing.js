@@ -639,7 +639,7 @@ async function dlAsync(login = true) {
 
         try {
             // Build Minecraft process.
-            proc = pb.build()
+            proc = await pb.build()
 
             // Bind listeners to stdout.
             proc.stdout.on('data', tempListener)
@@ -651,7 +651,7 @@ async function dlAsync(login = true) {
         } catch(err) {
 
             loggerLaunchSuite.error('Error during launch', err)
-            showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringLaunchTitle'), Lang.queryJS('landing.dlAsync.checkConsoleForDetails'))
+            showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringLaunchTitle'), err.message || Lang.queryJS('landing.dlAsync.checkConsoleForDetails'))
 
         }
     }

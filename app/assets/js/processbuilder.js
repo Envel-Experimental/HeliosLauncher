@@ -13,6 +13,8 @@ const { retry }             = require('./util')
 const pathutil              = require('./pathutil')
 const CrashHandler          = require('./crash-handler')
 const DropinModUtil         = require('./dropinmodutil')
+const FileUtils             = require('./fileutils')
+const ProcessManager        = require('./processmanager')
 
 const ConfigManager         = require('./configmanager')
 const Lang                  = require('./langloader')
@@ -51,8 +53,12 @@ class ProcessBuilder {
     /**
      * Convenience method to run the functions typically used to build a process.
      */
-    build() {
-        fs.ensureDirSync(this.gameDir)
+    async build() {
+        // Step 1: Check for zombie processes
+        await ProcessManager.cleanupJavaProcesses(this.gameDir)
+
+        // Step 2: Safe directory creation
+        await FileUtils.safeEnsureDir(this.gameDir)
 
         const currentSystemTemp = os.tmpdir()
         let nativeBasePath = currentSystemTemp
@@ -65,7 +71,7 @@ class ProcessBuilder {
         if ((isWindows && currentSystemTemp.includes('~')) || !pathutil.isPathValid(currentSystemTemp) || isUsingFallback) {
             nativeBasePath = path.join(fallbackPath, 'temp_natives')
             try {
-                fs.ensureDirSync(nativeBasePath)
+                await FileUtils.safeEnsureDir(nativeBasePath)
                 console.log(`[ProcessBuilder] Natives redirected to safe path: ${nativeBasePath}`)
             } catch (err) {
                 console.error(`[ProcessBuilder] Failed to create safe native folder:`, err)
@@ -83,17 +89,29 @@ class ProcessBuilder {
 
         // Mod list below 1.13
         if (!mcVersionAtLeast('1.13', this.server.rawServer.minecraftVersion)) {
-            this.constructJSONModList('forge', modObj.fMods, true)
+            await this.constructJSONModList('forge', modObj.fMods, true)
             if (this.usingLiteLoader) {
-                this.constructJSONModList('liteloader', modObj.lMods, true)
+                await this.constructJSONModList('liteloader', modObj.lMods, true)
             }
         }
 
         const uberModArr = modObj.fMods.concat(modObj.lMods)
+        // Note: constructJVMArguments calls classpathArg which calls _resolveMojangLibraries which EXTRACTS files.
+        // We need to await that. But constructJVMArguments is synchronous in structure.
+        // We need to refactor _resolveMojangLibraries to be async and call it before args construction or make this async.
+
+        // Let's pre-resolve libraries asynchronously
+        await this._resolveMojangLibraries(tempNativePath)
+
+        // Now calling this will use the already extracted libs (we'll need to adjust _resolveMojangLibraries to check existence or just re-run safeWrite)
+        // Wait, _resolveMojangLibraries does the writing.
+        // I should split the logic or just let it run. But _resolveMojangLibraries currently uses synchronous fs.
+        // I must change _resolveMojangLibraries to use FileUtils.
+
         let args = this.constructJVMArguments(uberModArr, tempNativePath)
 
         if (mcVersionAtLeast('1.13', this.server.rawServer.minecraftVersion)) {
-            args = args.concat(this.constructModList(modObj.fMods))
+            args = args.concat(await this.constructModList(modObj.fMods))
         }
 
         logger.info('Launch Arguments:', args)
@@ -333,24 +351,10 @@ class ProcessBuilder {
             }
 
             try {
-                await retry(
-                    () => fs.remove(tempNativePath),
-                    3,
-                    1000,
-                    (err) => {
-                        return err.code === 'EPERM' || err.code === 'EBUSY'
-                    }
-                )
+                await FileUtils.safeRemove(tempNativePath)
                 logger.info('Temp dir deleted successfully.')
             } catch (err) {
-                if (err.code === 'EACCES' || err.code === 'EPERM') {
-                    logger.warn('Could not delete temp dir due to permissions.', err)
-                } else if (err.code === 'ENOENT') {
-                    logger.info('Temp dir already deleted.')
-                } else {
-                    logger.warn('Error while deleting temp dir', err)
-                    sendToSentry(err)
-                }
+               logger.warn('Error while deleting temp dir', err)
             }
         })
 
@@ -503,7 +507,7 @@ class ProcessBuilder {
      * @param {Array.<Object>} mods An array of mods to add to the mod list.
      * @param {boolean} save Optional. Whether or not we should save the mod list file.
      */
-    constructJSONModList(type, mods, save = false){
+    async constructJSONModList(type, mods, save = false){
         const modList = {
             repositoryRoot: ((type === 'forge' && this._requiresAbsolute()) ? 'absolute:' : '') + path.join(this.commonDir, 'modstore')
         }
@@ -522,7 +526,7 @@ class ProcessBuilder {
 
         if(save){
             const json = JSON.stringify(modList, null, 4)
-            fs.writeFileSync(type === 'forge' ? this.fmlDir : this.llDir, json, 'UTF-8')
+            await FileUtils.safeWriteFile(type === 'forge' ? this.fmlDir : this.llDir, json, 'UTF-8')
         }
 
         return modList
@@ -556,13 +560,13 @@ class ProcessBuilder {
      *
      * @param {Array.<Object>} mods An array of mods to add to the mod list.
      */
-    constructModList(mods) {
+    async constructModList(mods) {
         const writeBuffer = mods.map(mod => {
             return this.usingFabricLoader ? mod.getPath() : mod.getExtensionlessMavenIdentifier()
         }).join('\n')
 
         if(writeBuffer) {
-            fs.writeFileSync(this.forgeModListFile, writeBuffer, 'UTF-8')
+            await FileUtils.safeWriteFile(this.forgeModListFile, writeBuffer, 'UTF-8')
             return this.usingFabricLoader ? [
                 '--fabric.addMods',
                 `@${this.forgeModListFile}`
@@ -942,7 +946,7 @@ class ProcessBuilder {
         }
 
         // Resolve the Mojang declared libraries.
-        const mojangLibs = this._resolveMojangLibraries(tempNativePath)
+        const mojangLibs = this._getMojangLibraryPaths()
 
         // Resolve the server declared libraries.
         const servLibs = this._resolveServerLibraries(mods)
@@ -967,12 +971,13 @@ class ProcessBuilder {
      * @param {string} tempNativePath The path to store the native libraries.
      * @returns {{[id: string]: string}} An object containing the paths of each library mojang declares.
      */
-    _resolveMojangLibraries(tempNativePath){
+    async _resolveMojangLibraries(tempNativePath){
+        // This is now purely an extraction method.
+        // It does NOT return libs anymore, because we split that logic.
         const nativesRegex = /.+:natives-([^-]+)(?:-(.+))?/
-        const libs = {}
 
         const libArr = this.vanillaManifest.libraries
-        fs.ensureDirSync(tempNativePath)
+        await FileUtils.safeEnsureDir(tempNativePath)
         for(let i=0; i<libArr.length; i++){
             const lib = libArr[i]
             if(isLibraryCompatible(lib.rules, lib.natives)){
@@ -986,32 +991,36 @@ class ProcessBuilder {
                     // Location of native zip.
                     const to = path.join(this.libPath, artifact.path)
 
-                    let zip = new AdmZip(to)
-                    let zipEntries = zip.getEntries()
+                    try {
+                        let zip = new AdmZip(to)
+                        let zipEntries = zip.getEntries()
 
-                    // Unzip the native zip.
-                    for(let i=0; i<zipEntries.length; i++){
-                        const fileName = zipEntries[i].entryName
+                        // Unzip the native zip.
+                        for(let i=0; i<zipEntries.length; i++){
+                            const fileName = zipEntries[i].entryName
 
-                        let shouldExclude = false
+                            let shouldExclude = false
 
-                        // Exclude noted files.
-                        exclusionArr.forEach(function(exclusion){
-                            if(fileName.indexOf(exclusion) > -1){
-                                shouldExclude = true
+                            // Exclude noted files.
+                            exclusionArr.forEach(function(exclusion){
+                                if(fileName.indexOf(exclusion) > -1){
+                                    shouldExclude = true
+                                }
+                            })
+
+                            // Extract the file.
+                            if(!shouldExclude){
+                                // Using safe write to ensure natives are completely written before game launch.
+                                try {
+                                    await FileUtils.safeWriteFile(path.join(tempNativePath, fileName), zipEntries[i].getData())
+                                } catch (e) {
+                                    logger.error('Error while extracting native library:', e)
+                                }
                             }
-                        })
 
-                        // Extract the file.
-                        if(!shouldExclude){
-                            // Using synchronous write to ensure natives are completely written before game launch.
-                            try {
-                                fs.writeFileSync(path.join(tempNativePath, fileName), zipEntries[i].getData())
-                            } catch (e) {
-                                logger.error('Error while extracting native library:', e)
-                            }
                         }
-
+                    } catch (e) {
+                        logger.warn(`Failed to open zip ${to}`, e)
                     }
                 }
                 // 1.19+ logic
@@ -1032,42 +1041,55 @@ class ProcessBuilder {
                     // Location of native zip.
                     const to = path.join(this.libPath, artifact.path)
 
-                    let zip = new AdmZip(to)
-                    let zipEntries = zip.getEntries()
+                    try {
+                        let zip = new AdmZip(to)
+                        let zipEntries = zip.getEntries()
 
-                    // Unzip the native zip.
-                    for(let i=0; i<zipEntries.length; i++){
-                        if(zipEntries[i].isDirectory) {
-                            continue
-                        }
-
-                        const fileName = zipEntries[i].entryName
-
-                        let shouldExclude = false
-
-                        // Exclude noted files.
-                        exclusionArr.forEach(function(exclusion){
-                            if(fileName.indexOf(exclusion) > -1){
-                                shouldExclude = true
+                        // Unzip the native zip.
+                        for(let i=0; i<zipEntries.length; i++){
+                            if(zipEntries[i].isDirectory) {
+                                continue
                             }
-                        })
 
-                        const extractName = fileName.includes('/') ? fileName.substring(fileName.lastIndexOf('/')) : fileName
+                            const fileName = zipEntries[i].entryName
 
-                        // Extract the file.
-                        if(!shouldExclude){
-                            // Using synchronous write to ensure natives are completely written before game launch.
-                            try {
-                                fs.writeFileSync(path.join(tempNativePath, extractName), zipEntries[i].getData())
-                            } catch (e) {
-                                logger.error('Error while extracting native library:', e)
+                            let shouldExclude = false
+
+                            // Exclude noted files.
+                            exclusionArr.forEach(function(exclusion){
+                                if(fileName.indexOf(exclusion) > -1){
+                                    shouldExclude = true
+                                }
+                            })
+
+                            const extractName = fileName.includes('/') ? fileName.substring(fileName.lastIndexOf('/')) : fileName
+
+                            // Extract the file.
+                            if(!shouldExclude){
+                                // Using safe write to ensure natives are completely written before game launch.
+                                try {
+                                    await FileUtils.safeWriteFile(path.join(tempNativePath, extractName), zipEntries[i].getData())
+                                } catch (e) {
+                                    logger.error('Error while extracting native library:', e)
+                                }
                             }
-                        }
 
+                        }
+                    } catch (e) {
+                         logger.warn(`Failed to open zip ${to}`, e)
                     }
                 }
-                // No natives
-                else {
+            }
+        }
+    }
+
+    _getMojangLibraryPaths() {
+        const libs = {}
+        const libArr = this.vanillaManifest.libraries
+        for(let i=0; i<libArr.length; i++){
+            const lib = libArr[i]
+            if(isLibraryCompatible(lib.rules, lib.natives)){
+                if(lib.natives == null && !lib.name.includes('natives-')) {
                     const dlInfo = lib.downloads
                     const artifact = dlInfo.artifact
                     const to = path.join(this.libPath, artifact.path)
@@ -1076,7 +1098,6 @@ class ProcessBuilder {
                 }
             }
         }
-
         return libs
     }
 
