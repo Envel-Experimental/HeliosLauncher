@@ -54,12 +54,15 @@ exports.getAbsoluteMinRAM = function(ram){
         return ram.minimum / 1024
     } else {
         const mem = os.totalmem()
+        if (!mem) return 1; // Fallback if os.totalmem() returns 0 or null
         return mem <= (8*1073741824) ? 1 : 3
     }
 }
 
 exports.getAbsoluteMaxRAM = function(ram){
     const mem = os.totalmem()
+    if (!mem) return 2; // Fallback 2GB
+
     if (mem <= (16*1073741824)) {
         return Math.floor((mem * 3) / (4 * 1073741824))
     } else {

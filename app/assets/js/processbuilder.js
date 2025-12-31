@@ -49,9 +49,92 @@ class ProcessBuilder {
     }
 
     /**
+     * Checks if the system has enough physical memory to run the game.
+     * @throws {Error} If memory is insufficient.
+     */
+    checkPhysicalMemory() {
+        const freeMem = os.freemem();
+        const maxRamStr = ConfigManager.getMaxRAM(this.server.rawServer.id);
+        let maxRamBytes = 0;
+
+        if (typeof maxRamStr === 'number') {
+            maxRamBytes = maxRamStr;
+        } else if (typeof maxRamStr === 'string') {
+            if (maxRamStr.endsWith('G')) {
+                maxRamBytes = parseFloat(maxRamStr) * 1024 * 1024 * 1024;
+            } else if (maxRamStr.endsWith('M')) {
+                maxRamBytes = parseFloat(maxRamStr) * 1024 * 1024;
+            } else {
+                maxRamBytes = parseFloat(maxRamStr);
+            }
+        }
+
+        // Hard check: Available RAM < Xmx
+        if (freeMem < maxRamBytes) {
+             throw new Error("Insufficient system memory. Please close high-load applications (Browser, Discord) and try again.");
+        }
+    }
+
+    /**
+     * Checks if the instance directory is locked by another process.
+     * @returns {boolean} True if locked, false otherwise.
+     */
+    checkInstanceLock() {
+        const lockPath = path.join(this.gameDir, 'session.lock');
+        try {
+            if (fs.existsSync(lockPath)) {
+                const fd = fs.openSync(lockPath, 'r+');
+                fs.closeSync(fd);
+            }
+        } catch (err) {
+            if (err.code === 'EBUSY' || err.code === 'EPERM' || err.code === 'EACCES') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Validates critical files before launch.
+     */
+    validateFiles() {
+        const versionJsonPath = path.join(this.commonDir, 'versions', this.vanillaManifest.id, this.vanillaManifest.id + '.json');
+        if (!fs.existsSync(versionJsonPath)) {
+             throw new Error(`Critical file missing: ${versionJsonPath}`);
+        }
+    }
+
+    /**
+     * Reads latest.log to check for previous crash patterns.
+     */
+    optimizeGC() {
+        const logPath = path.join(this.gameDir, 'logs', 'latest.log');
+        if (!fs.existsSync(logPath)) return false;
+        try {
+            const content = fs.readFileSync(logPath, 'utf8');
+             if (content.includes('Native memory allocation (mmap) failed') ||
+                content.includes('G1 virtual space')) {
+                logger.info('Detected previous memory crash. switching to ParallelGC.');
+                return true;
+            }
+        } catch (err) {
+            // ignore
+        }
+        return false;
+    }
+
+    /**
      * Convenience method to run the functions typically used to build a process.
      */
     build() {
+        // Pre-flight checks
+        this.checkPhysicalMemory();
+        if (this.checkInstanceLock()) {
+            throw new Error("Instance directory is locked by another process. Is the game already running?");
+        }
+        this.validateFiles();
+        this.shouldOptimizeGC = this.optimizeGC();
+
         fs.ensureDirSync(this.gameDir)
 
         const currentSystemTemp = os.tmpdir()
@@ -200,7 +283,43 @@ class ProcessBuilder {
 
                     // Button 1 Handler
                     setOverlayHandler(() => {
-                        if (crashAnalysis.type === 'missing-version-file') {
+                        if (crashAnalysis.type === 'gl-error' || crashAnalysis.type === 'gpu-driver-error') {
+                             try {
+                                 const optionsPath = path.join(this.gameDir, 'options.txt');
+                                 // Check if exists, if not create empty
+                                 if (!fs.existsSync(optionsPath)) {
+                                     fs.writeFileSync(optionsPath, '');
+                                 }
+
+                                 let optionsContent = fs.readFileSync(optionsPath, 'utf8');
+                                 const replaceOrAdd = (key, val) => {
+                                     const regex = new RegExp(`^${key}:.*`, 'm');
+                                     if (regex.test(optionsContent)) {
+                                         optionsContent = optionsContent.replace(regex, `${key}:${val}`);
+                                     } else {
+                                         optionsContent += `\n${key}:${val}`;
+                                     }
+                                 };
+
+                                 replaceOrAdd('renderDistance', '4');
+                                 replaceOrAdd('graphicsMode', 'fast');
+
+                                 fs.writeFileSync(optionsPath, optionsContent);
+                                 logger.info('Applied Graphics Safe-Mode.');
+                             } catch (err) {
+                                 logger.error('Failed to apply Graphics Safe-Mode', err);
+                             }
+                             toggleOverlay(false);
+                             // Auto restart?
+                             setTimeout(() => {
+                                const launchBtn = document.getElementById('launch_button');
+                                if (launchBtn) {
+                                    logger.info('Autostarting game after fix...');
+                                    launchBtn.click();
+                                }
+                            }, 1000);
+
+                        } else if (crashAnalysis.type === 'missing-version-file') {
                             const versionPath = path.join(this.commonDir, 'versions', path.basename(crashAnalysis.file, '.json'));
                             if (fs.existsSync(versionPath)) {
                                 try {
@@ -630,7 +749,14 @@ class ProcessBuilder {
         }
         args.push('-Xmx' + ConfigManager.getMaxRAM(this.server.rawServer.id))
         args.push('-Xms' + ConfigManager.getMinRAM(this.server.rawServer.id))
-        args = args.concat(ConfigManager.getJVMOptions(this.server.rawServer.id))
+
+        let jvmOpts = ConfigManager.getJVMOptions(this.server.rawServer.id);
+        if (this.shouldOptimizeGC) {
+            jvmOpts = jvmOpts.filter(a => a !== '-XX:+UseG1GC');
+            jvmOpts.push('-XX:+UseParallelGC');
+        }
+        args = args.concat(jvmOpts)
+
         args.push('-Djava.library.path=' + tempNativePath)
 
         // Main Java Class
@@ -681,7 +807,13 @@ class ProcessBuilder {
         }
         args.push('-Xmx' + ConfigManager.getMaxRAM(this.server.rawServer.id))
         args.push('-Xms' + ConfigManager.getMinRAM(this.server.rawServer.id))
-        args = args.concat(ConfigManager.getJVMOptions(this.server.rawServer.id))
+
+        let jvmOpts = ConfigManager.getJVMOptions(this.server.rawServer.id);
+        if (this.shouldOptimizeGC) {
+            jvmOpts = jvmOpts.filter(a => a !== '-XX:+UseG1GC');
+            jvmOpts.push('-XX:+UseParallelGC');
+        }
+        args = args.concat(jvmOpts)
 
         // Main Java Class
         args.push(this.modManifest.mainClass)

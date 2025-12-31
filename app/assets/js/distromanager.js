@@ -37,7 +37,8 @@ api.getDistribution = async () => {
         MAX_DOWNLOAD_RETRIES,
         DOWNLOAD_RETRY_DELAY,
         (err) => {
-            return err.error === FAILED_DOWNLOAD_ERROR_CODE
+             // Handle standard failure or connection timeouts
+            return err.error === FAILED_DOWNLOAD_ERROR_CODE || err.code === 'ETIMEDOUT' || err.code === 'ESOCKETTIMEDOUT'
         }
     ).catch((err) => {
         // Log the error, but do not throw it.

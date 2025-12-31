@@ -3,6 +3,10 @@
  */
 // Requirements
 const { URL }                 = require('url')
+// Increase default socket timeout
+require('http').globalAgent.timeout = 60000;
+require('https').globalAgent.timeout = 60000;
+
 const {
     MojangRestAPI,
     getServerStatus
@@ -539,13 +543,25 @@ async function dlAsync(login = true) {
         setLaunchDetails(Lang.queryJS('landing.dlAsync.downloadingFiles'))
         setLaunchPercentage(0)
         try {
+            // Set global timeout to 60s for this operation if possible, or just rely on retries.
+            // But we can't easily access the agent here.
+            // We'll rely on improved verification.
+
             await fullRepairModule.download(percent => {
                 setDownloadPercentage(percent)
             })
             setDownloadPercentage(100)
+
+            // Re-verify files after download
+            loggerLaunchSuite.info('Re-validating files after download.')
+            const invalidAfterDownload = await fullRepairModule.verifyFiles(() => {})
+            if (invalidAfterDownload > 0) {
+                 throw new Error(`File validation failed after download. ${invalidAfterDownload} files are still invalid.`)
+            }
+
         } catch(err) {
             loggerLaunchSuite.warn('Error during file download. Stopping launch.', err)
-            showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringFileDownloadTitle'), Lang.queryJS('landing.dlAsync.unableToLoadDistributionIndex'))
+            showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringFileDownloadTitle'), err.message || Lang.queryJS('landing.dlAsync.unableToLoadDistributionIndex'))
             return
         }
     } else {

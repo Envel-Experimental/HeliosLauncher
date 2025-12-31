@@ -132,6 +132,24 @@ exports.analyzeLog = function(logContent) {
         };
     }
 
+    // 7. GL Error (GL_OUT_OF_MEMORY)
+    if (logContent.includes('GL_OUT_OF_MEMORY')) {
+        return {
+            type: 'gl-error',
+            file: 'options.txt',
+            description: "Ошибка видеопамяти (GL_OUT_OF_MEMORY). Включен безопасный режим графики."
+        };
+    }
+
+    // 8. LdrLoadDll / GPU Driver Error
+    if (logContent.includes('LdrLoadDll')) {
+        return {
+            type: 'gpu-driver-error',
+            file: 'drivers',
+            description: "Сбой драйвера видеокарты. Пожалуйста, обновите драйверы."
+        };
+    }
+
     return null;
 }
 

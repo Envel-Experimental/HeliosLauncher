@@ -1163,9 +1163,10 @@ const settingsJavaReqDesc     = document.getElementById('settingsJavaReqDesc')
 const settingsJvmOptsLink     = document.getElementById('settingsJvmOptsLink')
 
 // Bind on change event for min memory container.
-settingsMinRAMRange.onchange = (e) => {
+if (settingsMinRAMRange) settingsMinRAMRange.onchange = (e) => {
 
     // Current range values
+    if (!settingsMaxRAMRange || !settingsMinRAMRange) return;
     const sMaxV = Number(settingsMaxRAMRange.getAttribute('value'))
     const sMinV = Number(settingsMinRAMRange.getAttribute('value'))
 
@@ -1196,8 +1197,9 @@ settingsMinRAMRange.onchange = (e) => {
 }
 
 // Bind on change event for max memory container.
-settingsMaxRAMRange.onchange = (e) => {
+if (settingsMaxRAMRange) settingsMaxRAMRange.onchange = (e) => {
     // Current range values
+    if (!settingsMaxRAMRange || !settingsMinRAMRange) return;
     const sMaxV = Number(settingsMaxRAMRange.getAttribute('value'))
     const sMinV = Number(settingsMinRAMRange.getAttribute('value'))
 
@@ -1381,10 +1383,14 @@ function bindMinMaxRam(server) {
     const SETTINGS_MIN_MEMORY = ConfigManager.getAbsoluteMinRAM(server.rawServer.javaOptions?.ram)
 
     // Set the max and min values for the ranged sliders.
-    settingsMaxRAMRange.setAttribute('max', SETTINGS_MAX_MEMORY)
-    settingsMaxRAMRange.setAttribute('min', SETTINGS_MIN_MEMORY)
-    settingsMinRAMRange.setAttribute('max', SETTINGS_MAX_MEMORY)
-    settingsMinRAMRange.setAttribute('min', SETTINGS_MIN_MEMORY)
+    if (settingsMaxRAMRange) {
+        settingsMaxRAMRange.setAttribute('max', SETTINGS_MAX_MEMORY)
+        settingsMaxRAMRange.setAttribute('min', SETTINGS_MIN_MEMORY)
+    }
+    if (settingsMinRAMRange) {
+        settingsMinRAMRange.setAttribute('max', SETTINGS_MAX_MEMORY)
+        settingsMinRAMRange.setAttribute('min', SETTINGS_MIN_MEMORY)
+    }
 }
 
 /**
