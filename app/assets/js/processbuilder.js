@@ -46,12 +46,18 @@ class ProcessBuilder {
         this.usingLiteLoader = false
         this.usingFabricLoader = false
         this.llPath = null
+        this.lockFd = null
     }
 
     /**
      * Convenience method to run the functions typically used to build a process.
      */
     build() {
+        // 1. Pre-flight Checks
+        this.validateFiles()
+        this.verifyMemory()
+        this.checkInstanceLock()
+
         fs.ensureDirSync(this.gameDir)
 
         const currentSystemTemp = os.tmpdir()
@@ -130,7 +136,36 @@ class ProcessBuilder {
         child.on('close', async (code, signal) => {
             logger.info('Exited with code', code)
 
+            // Release lock
+            if (this.lockFd) {
+                try {
+                    fs.closeSync(this.lockFd)
+                    fs.unlinkSync(path.join(this.gameDir, 'instance.lock'))
+                } catch (e) {
+                    // ignore
+                }
+            }
+
             const isCrash = code !== 0 && code !== 130 && code !== 137 && code !== 143 && code !== 255
+
+            // GPU Driver Check (Exit Code 4294967295)
+            if (code === 4294967295 || code === -1) { // 4294967295 is -1 in 32-bit signed
+                setOverlayContent(
+                    'Ошибка драйвера видеокарты',
+                    'Процесс завершился с кодом 4294967295. Это часто вызвано устаревшими драйверами NVIDIA или несовместимостью с Sodium/OptiFine.',
+                    'Обновить драйверы',
+                    'Закрыть'
+                )
+                setOverlayHandler(() => {
+                    const { shell } = require('electron')
+                    shell.openExternal('https://www.nvidia.com/Download/index.aspx')
+                    toggleOverlay(false)
+                })
+                toggleOverlay(true)
+                // Also apply safe mode
+                await CrashHandler.applyGraphicsSafeMode(this.gameDir)
+                return
+            }
 
             if (isCrash) {
                 const logPath = path.join(this.gameDir, 'logs', 'latest.log');
@@ -187,6 +222,16 @@ class ProcessBuilder {
 
                     if (crashAnalysis) {
                         logger.info('Crash detected from memory buffer!');
+                    }
+                }
+
+                // Act on analysis
+                if (crashAnalysis) {
+                    if (crashAnalysis.type === 'native-memory-error') {
+                        ConfigManager.setSafeGC(this.server.rawServer.id, true)
+                        ConfigManager.save()
+                    } else if (crashAnalysis.type === 'gpu-error') {
+                        await CrashHandler.applyGraphicsSafeMode(this.gameDir)
                     }
                 }
 
@@ -355,6 +400,87 @@ class ProcessBuilder {
         })
 
         return child
+    }
+
+    /**
+     * Checks if available physical memory is sufficient for the selected Xmx.
+     */
+    verifyMemory() {
+        const xmxStr = ConfigManager.getMaxRAM(this.server.rawServer.id);
+        let xmxBytes = 0;
+        if (xmxStr.endsWith('M')) {
+            xmxBytes = parseInt(xmxStr) * 1024 * 1024;
+        } else if (xmxStr.endsWith('G')) {
+            xmxBytes = parseInt(xmxStr) * 1024 * 1024 * 1024;
+        } else {
+            xmxBytes = parseInt(xmxStr); // assuming bytes if no suffix, but config usually has G/M
+        }
+
+        const freeMem = os.freemem();
+
+        // Add a small buffer (e.g., 256MB) for OS overhead
+        const requiredFree = xmxBytes + (256 * 1024 * 1024);
+
+        if (freeMem < requiredFree) {
+            const freeGB = (freeMem / 1024 / 1024 / 1024).toFixed(2);
+            const reqGB = (xmxBytes / 1024 / 1024 / 1024).toFixed(2);
+
+            throw new Error(`Insufficient system memory.\nAvailable: ${freeGB} GB\nRequired (Xmx): ${reqGB} GB\nPlease close high-load applications (Browser, Discord) and try again.`);
+        }
+    }
+
+    /**
+     * Verifies existence of critical JSON files.
+     */
+    validateFiles() {
+        if (!this.vanillaManifest) {
+            throw new Error('Vanilla manifest is missing.');
+        }
+        // Check if version file actually exists on disk?
+        // this.vanillaManifest is an object, so it's already loaded.
+        // But we can check if the file path it came from exists if we knew it.
+        // Instead, let's check basic fields.
+        if (!this.vanillaManifest.id) throw new Error('Invalid vanilla manifest.');
+
+        // Check mods manifest if applicable
+        if (this.modManifest && !this.modManifest.id) {
+             throw new Error('Invalid mod manifest.');
+        }
+    }
+
+    /**
+     * Checks if the instance directory is locked by another process.
+     */
+    checkInstanceLock() {
+        fs.ensureDirSync(this.gameDir);
+        const lockPath = path.join(this.gameDir, 'instance.lock');
+        try {
+            // Try to open with write access and exclusive creation flag
+            // If it exists, we try to open it for write. If that fails, it's locked.
+            // But if it exists from a crash, we should be able to overwrite it if no process holds it.
+            // So we just use 'w' and see if we can get a file descriptor.
+            // If another process has it open, fs.openSync should fail on Windows.
+
+            // Note: On Windows, opening a file that is already open by another process with incompatible sharing mode fails with EBUSY or EPERM.
+            // Node's fs.open with 'w' might not lock it against other node processes unless we use 'wx', but here we want to lock against Java?
+            // Java locks files it keeps open.
+
+            // We will create a lock file and keep it open.
+            // If we can't open it, someone else has it.
+
+            // First, try to open 'r+' to check if locked.
+            // But if it doesn't exist, we create it.
+
+            this.lockFd = fs.openSync(lockPath, 'w');
+
+            // If we got here, we have the lock. We keep it open!
+
+        } catch (err) {
+            if (err.code === 'EBUSY' || err.code === 'EPERM' || err.code === 'EACCES') {
+                throw new Error('Instance is already running or directory is locked by another process.');
+            }
+            throw err;
+        }
     }
 
     /**
@@ -528,29 +654,6 @@ class ProcessBuilder {
         return modList
     }
 
-    // /**
-    //  * Construct the mod argument list for forge 1.13
-    //  *
-    //  * @param {Array.<Object>} mods An array of mods to add to the mod list.
-    //  */
-    // constructModArguments(mods){
-    //     const argStr = mods.map(mod => {
-    //         return mod.getExtensionlessMavenIdentifier()
-    //     }).join(',')
-
-    //     if(argStr){
-    //         return [
-    //             '--fml.mavenRoots',
-    //             path.join('..', '..', 'common', 'modstore'),
-    //             '--fml.mods',
-    //             argStr
-    //         ]
-    //     } else {
-    //         return []
-    //     }
-
-    // }
-
     /**
      * Construct the mod argument list for forge 1.13 and Fabric
      *
@@ -630,7 +733,18 @@ class ProcessBuilder {
         }
         args.push('-Xmx' + ConfigManager.getMaxRAM(this.server.rawServer.id))
         args.push('-Xms' + ConfigManager.getMinRAM(this.server.rawServer.id))
-        args = args.concat(ConfigManager.getJVMOptions(this.server.rawServer.id))
+
+        let jvmOpts = ConfigManager.getJVMOptions(this.server.rawServer.id)
+
+        // Dynamic GC
+        if (ConfigManager.getSafeGC(this.server.rawServer.id)) {
+            logger.info('Using Safe GC (ParallelGC) due to previous crash.')
+            // Remove G1GC if present and add ParallelGC
+            jvmOpts = jvmOpts.filter(opt => !opt.includes('UseG1GC'))
+            jvmOpts.push('-XX:+UseParallelGC')
+        }
+
+        args = args.concat(jvmOpts)
         args.push('-Djava.library.path=' + tempNativePath)
 
         // Main Java Class
@@ -681,7 +795,17 @@ class ProcessBuilder {
         }
         args.push('-Xmx' + ConfigManager.getMaxRAM(this.server.rawServer.id))
         args.push('-Xms' + ConfigManager.getMinRAM(this.server.rawServer.id))
-        args = args.concat(ConfigManager.getJVMOptions(this.server.rawServer.id))
+
+        let jvmOpts = ConfigManager.getJVMOptions(this.server.rawServer.id)
+
+        // Dynamic GC
+        if (ConfigManager.getSafeGC(this.server.rawServer.id)) {
+            logger.info('Using Safe GC (ParallelGC) due to previous crash.')
+            jvmOpts = jvmOpts.filter(opt => !opt.includes('UseG1GC'))
+            jvmOpts.push('-XX:+UseParallelGC')
+        }
+
+        args = args.concat(jvmOpts)
 
         // Main Java Class
         args.push(this.modManifest.mainClass)

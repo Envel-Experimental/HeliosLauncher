@@ -13,7 +13,8 @@ exports.retry = async function(func, retries = 3, delay = 1000, isRetryable = ()
             return await func()
         } catch (err) {
             if (isRetryable(err) && i < retries - 1) {
-                await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, i)))
+                const nextDelay = delay * Math.pow(2, i)
+                await new Promise(resolve => setTimeout(resolve, nextDelay))
             } else {
                 throw err
             }

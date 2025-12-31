@@ -45,6 +45,23 @@ async function readLastBytes(filePath, maxBytes = 1024 * 200) {
 exports.analyzeLog = function(logContent) {
     let match;
 
+    // 0. Native Memory / JVM Initialization
+    if (logContent.includes('Native memory allocation (mmap) failed') ||
+        logContent.includes('G1 virtual space')) {
+        return {
+            type: 'native-memory-error',
+            description: "Ошибка выделения нативной памяти (mmap failed). Система переключится на Safe GC при следующем запуске."
+        };
+    }
+
+    // 0.5 GPU / GL Errors
+    if (logContent.includes('GL_OUT_OF_MEMORY') || logContent.includes('LdrLoadDll')) {
+         return {
+            type: 'gpu-error',
+            description: "Ошибка видеодрайвера или нехватка видеопамяти. Настройки графики будут сброшены."
+        };
+    }
+
     // 1. Config Loading Exception (Specific & Generic)
     // Matches: "ModConfig$ConfigLoadingException: ... farmersdelight-client.toml"
     // Regex logic: Find "ConfigLoadingException" OR "Failed loading config", 
@@ -166,4 +183,46 @@ exports.analyzeFile = async function(filePath) {
         }
     }
     return result;
+}
+
+/**
+ * Modifies options.txt to set safe graphics settings.
+ * @param {string} gameDir The game directory.
+ */
+exports.applyGraphicsSafeMode = async function(gameDir) {
+    const optionsPath = path.join(gameDir, 'options.txt');
+    try {
+        if (await fs.pathExists(optionsPath)) {
+            let content = await fs.readFile(optionsPath, 'utf8');
+            let lines = content.split('\n');
+            let newLines = [];
+            let rdSet = false;
+            let gmSet = false;
+
+            for (let line of lines) {
+                if (line.startsWith('renderDistance:')) {
+                    newLines.push('renderDistance:4');
+                    rdSet = true;
+                } else if (line.startsWith('graphicsMode:')) {
+                    newLines.push('graphicsMode:fast');
+                    gmSet = true;
+                } else {
+                    newLines.push(line);
+                }
+            }
+
+            if (!rdSet) newLines.push('renderDistance:4');
+            if (!gmSet) newLines.push('graphicsMode:fast');
+
+            await fs.writeFile(optionsPath, newLines.join('\n'), 'utf8');
+            console.log('[CrashHandler] Applied graphics safe mode to options.txt');
+        } else {
+            // Create minimal options.txt
+            const content = 'renderDistance:4\ngraphicsMode:fast\n';
+            await fs.writeFile(optionsPath, content, 'utf8');
+            console.log('[CrashHandler] Created new options.txt with safe mode.');
+        }
+    } catch (err) {
+        console.error('[CrashHandler] Failed to apply graphics safe mode:', err);
+    }
 }

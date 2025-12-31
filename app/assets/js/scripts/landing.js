@@ -543,6 +543,18 @@ async function dlAsync(login = true) {
                 setDownloadPercentage(percent)
             })
             setDownloadPercentage(100)
+
+            // Mandatory SHA-1 re-validation
+            loggerLaunchSuite.info('Re-validating files after download.')
+            setLaunchDetails(Lang.queryJS('landing.dlAsync.validatingFileIntegrity'))
+            const reInvalidCount = await fullRepairModule.verifyFiles(percent => {
+                setLaunchPercentage(percent)
+            })
+
+            if (reInvalidCount > 0) {
+                 throw new Error(`File integrity check failed after download. ${reInvalidCount} files are still invalid.`)
+            }
+
         } catch(err) {
             loggerLaunchSuite.warn('Error during file download. Stopping launch.', err)
             showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringFileDownloadTitle'), Lang.queryJS('landing.dlAsync.unableToLoadDistributionIndex'))

@@ -27,8 +27,8 @@ api.pullRemote = async () => {
 }
 
 const FAILED_DOWNLOAD_ERROR_CODE = 1
-const MAX_DOWNLOAD_RETRIES = 3
-const DOWNLOAD_RETRY_DELAY = 2000
+const MAX_DOWNLOAD_RETRIES = 5
+const DOWNLOAD_RETRY_DELAY = 1000
 
 const realGetDistribution = api.getDistribution.bind(api)
 api.getDistribution = async () => {
@@ -37,7 +37,7 @@ api.getDistribution = async () => {
         MAX_DOWNLOAD_RETRIES,
         DOWNLOAD_RETRY_DELAY,
         (err) => {
-            return err.error === FAILED_DOWNLOAD_ERROR_CODE
+            return err.error === FAILED_DOWNLOAD_ERROR_CODE || err.code === 'ETIMEDOUT' || err.code === 'ESOCKETTIMEDOUT'
         }
     ).catch((err) => {
         // Log the error, but do not throw it.

@@ -590,7 +590,7 @@ exports.ensureJavaConfig = function(serverid, effectiveJavaOptions, ram) {
  * @returns {string} The minimum amount of memory for JVM initialization.
  */
 exports.getMinRAM = function(serverid){
-    return config.javaConfig[serverid].minRAM
+    return config.javaConfig[serverid] ? config.javaConfig[serverid].minRAM : '1G'
 }
 
 /**
@@ -602,6 +602,7 @@ exports.getMinRAM = function(serverid){
  * @param {string} minRAM The new minimum amount of memory for JVM initialization.
  */
 exports.setMinRAM = function(serverid, minRAM){
+    if (!config.javaConfig[serverid]) return;
     config.javaConfig[serverid].minRAM = minRAM
 }
 
@@ -614,7 +615,7 @@ exports.setMinRAM = function(serverid, minRAM){
  * @returns {string} The maximum amount of memory for JVM initialization.
  */
 exports.getMaxRAM = function(serverid){
-    return config.javaConfig[serverid].maxRAM
+    return config.javaConfig[serverid] ? config.javaConfig[serverid].maxRAM : '2G'
 }
 
 /**
@@ -626,7 +627,29 @@ exports.getMaxRAM = function(serverid){
  * @param {string} maxRAM The new maximum amount of memory for JVM initialization.
  */
 exports.setMaxRAM = function(serverid, maxRAM){
+    if (!config.javaConfig[serverid]) return;
     config.javaConfig[serverid].maxRAM = maxRAM
+}
+
+/**
+ * Check if Safe GC should be used for this server.
+ *
+ * @param {string} serverid The server id.
+ * @returns {boolean} True if safe GC is enabled.
+ */
+exports.getSafeGC = function(serverid){
+    return config.javaConfig[serverid] ? (config.javaConfig[serverid].safeGC || false) : false
+}
+
+/**
+ * Set whether Safe GC should be used for this server.
+ *
+ * @param {string} serverid The server id.
+ * @param {boolean} value True to enable safe GC.
+ */
+exports.setSafeGC = function(serverid, value){
+    if (!config.javaConfig[serverid]) return;
+    config.javaConfig[serverid].safeGC = value
 }
 
 /**
@@ -638,7 +661,7 @@ exports.setMaxRAM = function(serverid, maxRAM){
  * @returns {string} The path of the Java Executable.
  */
 exports.getJavaExecutable = function(serverid){
-    return config.javaConfig[serverid].executable
+    return config.javaConfig[serverid] ? config.javaConfig[serverid].executable : null
 }
 
 /**
