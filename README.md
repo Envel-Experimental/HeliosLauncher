@@ -4,6 +4,8 @@
 
 [<p align="center"><img src="https://img.shields.io/github/actions/workflow/status/Envel-Experimental/HeliosLauncher/build.yml?branch=master&style=for-the-badge" alt="gh actions">](https://github.com/Envel-Experimental/HeliosLauncher/actions) [<img src="https://img.shields.io/github/downloads/Envel-Experimental/HeliosLauncher/total.svg?style=for-the-badge" alt="downloads">](https://github.com/Envel-Experimental/HeliosLauncher/releases) <img src="https://forthebadge.com/images/badges/winter-is-coming.svg"  height="28px" alt="winter-is-coming"></p>
 
+This software is a custom application manager and launcher designed for educational purposes in programming courses. It does not contain, distribute, or bundle any third-party proprietary assets or game data. The software is a tool for managing local development environments. Users are solely responsible for ensuring they have the necessary rights and licenses to any third-party content they access through this tool.
+
 ## Downloads
 
 You can download from [GitHub Releases](https://github.com/Envel-Experimental/HeliosLauncher/releases)
