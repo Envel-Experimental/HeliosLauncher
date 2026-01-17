@@ -1,4 +1,5 @@
 const fs = require('fs/promises')
+const { createReadStream } = require('fs')
 const crypto = require('crypto')
 const path = require('path')
 const AdmZip = require('adm-zip')
@@ -7,13 +8,34 @@ const util = require('util')
 const execAsync = util.promisify(exec)
 
 async function validateLocalFile(filePath, algo, hash) {
+    if (!hash) return true; // No hash to check
     try {
-        const fileBuffer = await fs.readFile(filePath)
-        const computedHash = crypto.createHash(algo).update(fileBuffer).digest('hex')
-        return computedHash === hash
-    } catch (e) {
-        return false
+        await fs.access(filePath);
+    } catch(e) {
+        return false;
     }
+
+    return new Promise((resolve, reject) => {
+        const stream = createReadStream(filePath);
+        // Normalize algorithm name
+        const algorithm = algo.toLowerCase().replace('-', '');
+        const hashStream = crypto.createHash(algorithm);
+
+        stream.on('error', err => {
+            // File read error
+            resolve(false);
+        });
+
+        hashStream.on('error', err => {
+            // Algorithm error
+             resolve(false);
+        });
+
+        stream.pipe(hashStream).on('finish', () => {
+            const computedHash = hashStream.read().toString('hex');
+            resolve(computedHash === hash.toLowerCase());
+        });
+    });
 }
 
 async function safeEnsureDir(dirPath) {
@@ -37,23 +59,19 @@ function getVersionJarPath(commonDir, version) {
 }
 
 function calculateHashByBuffer(buffer, algo) {
-    return crypto.createHash(algo).update(buffer).digest('hex');
+    const algorithm = algo.toLowerCase().replace('-', '');
+    return crypto.createHash(algorithm).update(buffer).digest('hex');
 }
 
 async function extractZip(archivePath, onEntry) {
     const zip = new AdmZip(archivePath);
     const entries = zip.getEntries();
 
-    // Mocking the zip interface expected by JavaGuard (onEntry)
-    // JavaGuard uses `await zip.entries()` then object keys.
-    // Here we can just extract all.
     zip.extractAllTo(path.dirname(archivePath), true);
 
     if(onEntry) {
-        // JavaGuard expects an object where keys are entry names.
         const entriesObj = {};
         entries.forEach(e => entriesObj[e.entryName] = e);
-        // We pass a mock object with entries method
         await onEntry({ entries: () => entriesObj });
     }
 }
@@ -63,17 +81,9 @@ async function extractTarGz(archivePath, onEntry) {
     await execAsync(`tar -xzf "${archivePath}" -C "${destDir}"`);
 
     if(onEntry) {
-        // We need to list files to simulate onEntry
-        const files = await fs.readdir(destDir);
-        // This is a bit weak but enough for JavaGuard to find the root folder if it's the only new thing.
-        // But JavaGuard uses the entry name from the archive.
-        // We can run `tar -tf` to list files.
         const { stdout } = await execAsync(`tar -tf "${archivePath}"`);
         const lines = stdout.split('\n');
-        const entriesObj = {};
-        lines.forEach(l => { if(l) entriesObj[l] = true; });
-
-        await onEntry({ name: lines[0] }); // JavaGuard passes header which has .name
+        await onEntry({ name: lines[0] });
     }
 }
 

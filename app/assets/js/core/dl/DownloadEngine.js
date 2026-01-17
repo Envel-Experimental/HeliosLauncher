@@ -55,10 +55,12 @@ async function downloadFile(asset, onProgress) {
         await fs.access(decodedPath);
         if (CONFIG_EXTENSIONS.includes(extname(decodedPath))) {
              log.debug(`Skipping download of ${decodedPath} as it already exists.`);
+             if(onProgress) onProgress(asset.size); // Account for skipping
              return;
         }
         if (await validateLocalFile(decodedPath, algo, hash)) {
              log.debug(`File already exists and is valid: ${decodedPath}`);
+             if(onProgress) onProgress(asset.size); // Account for skipping
              return;
         }
     } catch(e) {}
@@ -109,6 +111,7 @@ async function downloadFile(asset, onProgress) {
 
             await fs.writeFile(decodedPath, bodyBuffer);
 
+            // Re-validate
             if (await validateLocalFile(decodedPath, algo, hash)) {
                 return;
             } else {

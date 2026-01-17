@@ -8,6 +8,7 @@ const { mcVersionAtLeast } = require('../common/MojangUtils');
 const fs = require('fs/promises');
 const path = require('path');
 const AdmZip = require('adm-zip');
+const pLimit = require('p-limit');
 
 class DistributionIndexProcessor extends IndexProcessor {
     static logger = LoggerUtil.getLogger('DistributionIndexProcessor');
@@ -31,8 +32,8 @@ class DistributionIndexProcessor extends IndexProcessor {
         if (server == null) {
             throw new AssetGuardError(`Invalid server id ${this.serverId}`);
         }
-        const notValid = [];
-        await this.validateModules(server.modules, notValid);
+
+        const notValid = await this.validateModules(server.modules);
         if(onStageComplete) await onStageComplete();
         return {
             distribution: notValid
@@ -43,23 +44,40 @@ class DistributionIndexProcessor extends IndexProcessor {
         await this.loadModLoaderVersionJson();
     }
 
-    async validateModules(modules, accumulator) {
-        for (const module of modules) {
-            const hash = module.rawModule.artifact.MD5;
-            if (!await validateLocalFile(module.getPath(), HashAlgo.MD5, hash)) {
-                accumulator.push({
-                    id: module.rawModule.id,
-                    hash: hash,
-                    algo: HashAlgo.MD5,
-                    size: module.rawModule.artifact.size,
-                    url: module.rawModule.artifact.url,
-                    path: module.getPath()
-                });
+    async validateModules(modules) {
+        const limit = pLimit(32);
+
+        // Flatten module tree for validation
+        const flatModules = [];
+        const traverse = (modList) => {
+            for(const mod of modList) {
+                flatModules.push(mod);
+                if(mod.hasSubModules()) {
+                    traverse(mod.subModules);
+                }
             }
-            if (module.hasSubModules()) {
-                await this.validateModules(module.subModules, accumulator);
-            }
-        }
+        };
+        traverse(modules);
+
+        const tasks = flatModules.map(module => {
+            return limit(async () => {
+                const hash = module.rawModule.artifact.MD5;
+                if (!await validateLocalFile(module.getPath(), HashAlgo.MD5, hash)) {
+                    return {
+                        id: module.rawModule.id,
+                        hash: hash,
+                        algo: HashAlgo.MD5,
+                        size: module.rawModule.artifact.size,
+                        url: module.rawModule.artifact.url,
+                        path: module.getPath()
+                    };
+                }
+                return null;
+            });
+        });
+
+        const results = await Promise.all(tasks);
+        return results.filter(Boolean);
     }
 
     async loadModLoaderVersionJson() {

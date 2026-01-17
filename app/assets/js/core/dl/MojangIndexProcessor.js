@@ -7,6 +7,7 @@ const { getVersionJsonPath, validateLocalFile, getLibraryDir, getVersionJarPath,
 const { mcVersionAtLeast, isLibraryCompatible, getMojangOS } = require('../common/MojangUtils');
 const { LoggerUtil } = require('../util/LoggerUtil');
 const { handleFetchError } = require('../common/RestResponse');
+const pLimit = require('p-limit');
 
 class MojangIndexProcessor extends IndexProcessor {
     static LAUNCHER_JSON_ENDPOINT = 'https://launchermeta.mojang.com/mc/launcher.json';
@@ -151,56 +152,68 @@ class MojangIndexProcessor extends IndexProcessor {
 
     async validateAssets(assetIndex) {
         const objectDir = path.join(this.assetPath, 'objects');
-        const notValid = [];
-        for (const assetEntry of Object.entries(assetIndex.objects)) {
-            const hash = assetEntry[1].hash;
-            const filePath = path.join(objectDir, hash.substring(0, 2), hash);
-            const url = `${MojangIndexProcessor.ASSET_RESOURCE_ENDPOINT}/${hash.substring(0, 2)}/${hash}`;
-            if (!await validateLocalFile(filePath, HashAlgo.SHA1, hash)) {
-                notValid.push({
-                    id: assetEntry[0],
-                    hash,
-                    algo: HashAlgo.SHA1,
-                    size: assetEntry[1].size,
-                    url,
-                    path: filePath
-                });
-            }
-        }
-        return notValid;
+        const limit = pLimit(32); // Concurrency limit 32
+
+        const tasks = Object.entries(assetIndex.objects).map(([id, meta]) => {
+            return limit(async () => {
+                const hash = meta.hash;
+                const filePath = path.join(objectDir, hash.substring(0, 2), hash);
+                const url = `${MojangIndexProcessor.ASSET_RESOURCE_ENDPOINT}/${hash.substring(0, 2)}/${hash}`;
+                if (!await validateLocalFile(filePath, HashAlgo.SHA1, hash)) {
+                    return {
+                        id,
+                        hash,
+                        algo: HashAlgo.SHA1,
+                        size: meta.size,
+                        url,
+                        path: filePath
+                    };
+                }
+                return null;
+            });
+        });
+
+        const results = await Promise.all(tasks);
+        return results.filter(Boolean);
     }
 
     async validateLibraries(versionJson) {
         const libDir = getLibraryDir(this.commonDir);
-        const notValid = [];
-        for (const libEntry of versionJson.libraries) {
-            if (isLibraryCompatible(libEntry.rules, libEntry.natives)) {
-                let artifact;
-                if (libEntry.natives == null) {
-                    artifact = libEntry.downloads.artifact;
-                }
-                else {
-                    const classifier = libEntry.natives[getMojangOS()].replace('${arch}', process.arch.replace('x', ''));
-                    artifact = libEntry.downloads.classifiers[classifier];
-                }
+        const limit = pLimit(32);
 
-                if (artifact) {
-                    const filePath = path.join(libDir, artifact.path);
-                    const hash = artifact.sha1;
-                    if (!await validateLocalFile(filePath, HashAlgo.SHA1, hash)) {
-                        notValid.push({
-                            id: libEntry.name,
-                            hash,
-                            algo: HashAlgo.SHA1,
-                            size: artifact.size,
-                            url: artifact.url,
-                            path: filePath
-                        });
+        const tasks = versionJson.libraries.map(libEntry => {
+            return limit(async () => {
+                if (isLibraryCompatible(libEntry.rules, libEntry.natives)) {
+                    let artifact;
+                    if (libEntry.natives == null) {
+                        artifact = libEntry.downloads.artifact;
+                    }
+                    else {
+                        const classifier = libEntry.natives[getMojangOS()].replace('${arch}', process.arch.replace('x', ''));
+                        artifact = libEntry.downloads.classifiers[classifier];
+                    }
+
+                    if (artifact) {
+                        const filePath = path.join(libDir, artifact.path);
+                        const hash = artifact.sha1;
+                        if (!await validateLocalFile(filePath, HashAlgo.SHA1, hash)) {
+                            return {
+                                id: libEntry.name,
+                                hash,
+                                algo: HashAlgo.SHA1,
+                                size: artifact.size,
+                                url: artifact.url,
+                                path: filePath
+                            };
+                        }
                     }
                 }
-            }
-        }
-        return notValid;
+                return null;
+            });
+        });
+
+        const results = await Promise.all(tasks);
+        return results.filter(Boolean);
     }
 
     async validateClient(versionJson) {
