@@ -8,9 +8,10 @@
  */
 
 const ConfigManager          = require('./configmanager')
-const { LoggerUtil }         = require('@envel/helios-core')
-const { RestResponseStatus } = require('@envel/helios-core/common')
-const { MicrosoftAuth, MicrosoftErrorCode } = require('@envel/helios-core/microsoft')
+const { LoggerUtil }         = require('./core/util/LoggerUtil')
+const { RestResponseStatus } = require('./core/common/RestResponse')
+const { MicrosoftAuth }      = require('./core/microsoft/MicrosoftAuth')
+const { MicrosoftErrorCode } = require('./core/microsoft/MicrosoftResponse')
 const { AZURE_CLIENT_ID }    = require('./ipcconstants')
 const Lang = require('./langloader')
 

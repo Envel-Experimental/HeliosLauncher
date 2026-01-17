@@ -1,5 +1,5 @@
 // Work in progress
-const { LoggerUtil } = require('@envel/helios-core')
+const { LoggerUtil } = require('./core/util/LoggerUtil')
 
 const logger = LoggerUtil.getLogger('DiscordWrapper')
 
