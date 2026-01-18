@@ -3,6 +3,9 @@ const { validateLocalFile, safeEnsureDir } = require('../common/FileUtils');
 const { ensureDecodedPath, sleep } = require('../util/NodeUtil');
 const { dirname, extname } = require('path');
 const fs = require('fs/promises');
+const fsSync = require('fs');
+const { pipeline } = require('stream/promises');
+const { Readable } = require('stream');
 const P2PManager = require('./P2PManager');
 
 const log = LoggerUtil.getLogger('DownloadEngine');
@@ -102,29 +105,35 @@ async function downloadFile(asset, onProgress) {
 
             // Progress tracking
             const contentLength = response.headers.get('content-length');
-            const total = parseInt(contentLength, 10);
+            const total = parseInt(contentLength, 10) || asset.size || 0;
             let loaded = 0;
+            let lastProgressTime = 0;
 
-            const reader = response.body.getReader();
-            const chunks = [];
+            const fileStream = fsSync.createWriteStream(decodedPath);
 
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                chunks.push(value);
-                loaded += value.length;
-                if (onProgress) onProgress(loaded);
+            // Use streaming instead of buffering
+            if (response.body) {
+                const reader = response.body.getReader();
+                const nodeStream = new Readable({
+                    async read() {
+                        const { done, value } = await reader.read();
+                        if (done) {
+                            this.push(null);
+                        } else {
+                            loaded += value.length;
+                            const now = Date.now();
+                            if (onProgress && (now - lastProgressTime >= 100 || loaded === total)) {
+                                onProgress(loaded);
+                                lastProgressTime = now;
+                            }
+                            this.push(Buffer.from(value));
+                        }
+                    }
+                });
+                await pipeline(nodeStream, fileStream);
+            } else {
+                 throw new Error('No response body');
             }
-
-            // Combine chunks
-            const bodyBuffer = new Uint8Array(loaded);
-            let offset = 0;
-            for (const chunk of chunks) {
-                bodyBuffer.set(chunk, offset);
-                offset += chunk.length;
-            }
-
-            await fs.writeFile(decodedPath, bodyBuffer);
 
             // Re-validate
             if (await validateLocalFile(decodedPath, algo, hash)) {

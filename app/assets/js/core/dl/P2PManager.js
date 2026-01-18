@@ -11,6 +11,7 @@ const ConfigManager = require('../../configmanager');
 const logger = LoggerUtil.getLogger('P2PManager');
 
 const DISCOVERY_PORT = 45565;
+const DISCOVERY_MULTICAST_ADDR = '239.255.255.250';
 const DISCOVERY_INTERVAL = 5000;
 const PEER_TIMEOUT = 15000; // Remove peer if not seen for 15s
 
@@ -37,6 +38,9 @@ class P2PManager {
         this.httpServer = http.createServer((req, res) => {
             this.handleRequest(req, res);
         });
+
+        // Limit concurrent connections to prevent DoS
+        this.httpServer.maxConnections = 20;
 
         this.httpServer.on('error', (err) => {
             logger.warn('P2P HTTP Server error:', err);
@@ -83,20 +87,26 @@ class P2PManager {
             const commonDir = ConfigManager.getCommonDirectory();
             const filePath = path.join(commonDir, relPath);
 
-            // Verify file exists
-            fs.access(filePath, fs.constants.R_OK, (err) => {
-                if (err) {
-                    res.writeHead(404);
-                    res.end('File not found');
-                    return;
-                }
+            // Serve file
+            const stream = fs.createReadStream(filePath);
 
-                // Serve file
-                const stream = fs.createReadStream(filePath);
-                res.writeHead(200, {
-                    'Content-Type': 'application/octet-stream'
-                });
-                stream.pipe(res);
+            res.writeHead(200, {
+                'Content-Type': 'application/octet-stream'
+            });
+
+            pipeline(stream, res).catch(err => {
+                if (err.code === 'ENOENT') {
+                    if (!res.headersSent) {
+                        res.writeHead(404);
+                        res.end('File not found');
+                    }
+                } else {
+                    logger.error(`Error serving P2P file ${relPath}:`, err);
+                    if (!res.headersSent) {
+                        res.writeHead(500);
+                        res.end('Internal Server Error');
+                    }
+                }
             });
         } else {
             res.writeHead(404);
@@ -117,7 +127,12 @@ class P2PManager {
         });
 
         this.udpSocket.bind(DISCOVERY_PORT, () => {
-            this.udpSocket.setBroadcast(true);
+            try {
+                this.udpSocket.addMembership(DISCOVERY_MULTICAST_ADDR);
+                this.udpSocket.setMulticastTTL(1); // Local network only
+            } catch (err) {
+                logger.warn('Failed to add multicast membership:', err);
+            }
 
             // Start broadcasting
             this.discoveryInterval = setInterval(() => {
@@ -132,7 +147,7 @@ class P2PManager {
     broadcastPresence() {
         if (!this.httpPort) return;
         const message = Buffer.from(`HELIOS_P2P:${this.id}:${this.httpPort}`);
-        this.udpSocket.send(message, 0, message.length, DISCOVERY_PORT, '255.255.255.255');
+        this.udpSocket.send(message, 0, message.length, DISCOVERY_PORT, DISCOVERY_MULTICAST_ADDR);
     }
 
     handleDiscoveryMessage(msg, rinfo) {
@@ -175,19 +190,37 @@ class P2PManager {
         const commonDir = ConfigManager.getCommonDirectory();
         let relPath = null;
 
-        const assetPath = path.resolve(asset.path);
+        // Use destPath (absolute path where file will be saved) to calculate relative path
+        const absDestPath = path.resolve(destPath);
         const root = path.resolve(commonDir);
 
-        if (assetPath.startsWith(root)) {
-            relPath = path.relative(root, assetPath);
+        if (absDestPath.startsWith(root)) {
+            relPath = path.relative(root, absDestPath);
         } else {
+            // If the file is not in the common directory, we can't request it via P2P
+            // because peers only serve from their common directory.
             return false;
         }
 
         relPath = relPath.replace(/\\/g, '/');
-        const peers = Array.from(this.peers.values());
 
-        const peerRequests = peers.map(peer => {
+        // Optimize: Select a random subset of peers (max 3) to prevent broadcast storm
+        const allPeers = Array.from(this.peers.values());
+        const selectedPeers = [];
+        const maxPeers = 3;
+
+        if (allPeers.length <= maxPeers) {
+            selectedPeers.push(...allPeers);
+        } else {
+            // Shuffle and pick
+            for (let i = allPeers.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [allPeers[i], allPeers[j]] = [allPeers[j], allPeers[i]];
+            }
+            selectedPeers.push(...allPeers.slice(0, maxPeers));
+        }
+
+        const peerRequests = selectedPeers.map(peer => {
             const controller = new AbortController();
             const url = `http://${peer.ip}:${peer.port}/file?hash=${asset.hash}&path=${encodeURIComponent(relPath)}`;
 

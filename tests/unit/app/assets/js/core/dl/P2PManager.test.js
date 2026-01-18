@@ -10,6 +10,8 @@ jest.mock('dgram', () => ({
         on: jest.fn(),
         bind: jest.fn((port, cb) => cb && cb()),
         setBroadcast: jest.fn(),
+        addMembership: jest.fn(),
+        setMulticastTTL: jest.fn(),
         send: jest.fn(),
         close: jest.fn()
     }))
