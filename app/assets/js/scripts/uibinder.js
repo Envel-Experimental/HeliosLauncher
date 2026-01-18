@@ -485,3 +485,8 @@ async function devModeToggle() {
     updateSelectedServer(data.servers[0])
     syncModConfigurations(data)
 }
+
+// Graceful shutdown for P2P Manager
+window.addEventListener('beforeunload', () => {
+    P2PManager.stop()
+})
