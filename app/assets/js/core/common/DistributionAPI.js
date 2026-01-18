@@ -88,19 +88,27 @@ class DistributionAPI {
     }
 
     async pullRemote() {
-        try {
-            const res = await fetch(this.remoteUrl);
-            const data = await res.json();
-             if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const urls = Array.isArray(this.remoteUrl) ? this.remoteUrl : [this.remoteUrl];
+        let lastError;
 
-            return {
-                data: data,
-                responseStatus: RestResponseStatus.SUCCESS
-            };
+        for (const url of urls) {
+            try {
+                const res = await fetch(url);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+
+                return {
+                    data: data,
+                    responseStatus: RestResponseStatus.SUCCESS
+                };
+            }
+            catch (error) {
+                lastError = error;
+                DistributionAPI.log.warn(`Failed to pull distribution from ${url}: ${error.message}`);
+            }
         }
-        catch (error) {
-            return handleFetchError('Pull Remote', error, DistributionAPI.log);
-        }
+
+        return handleFetchError('Pull Remote', lastError || new Error('All mirrors failed'), DistributionAPI.log);
     }
 
     async writeDistributionToDisk(distribution) {

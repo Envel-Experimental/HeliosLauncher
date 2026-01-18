@@ -7,6 +7,7 @@ const { LoggerUtil } = require('../util/LoggerUtil');
 const { HashAlgo } = require('../dl/Asset');
 const { extractZip, extractTarGz } = require('../common/FileUtils');
 const { Platform, JdkDistribution } = require('../common/DistributionClasses');
+const { ADOPTIUM_BASE_URLS, CORRETTO_BASE_URLS } = require('../../config/constants');
 
 const log = LoggerUtil.getLogger('JavaGuard');
 const execAsync = util.promisify(exec);
@@ -173,37 +174,39 @@ async function latestOpenJDK(major, dataDir, distribution) {
 async function latestAdoptium(major, dataDir) {
     const sanitizedOS = process.platform === Platform.WIN32 ? 'windows' : (process.platform === Platform.DARWIN ? 'mac' : process.platform);
     const arch = process.arch === 'arm64' ? 'aarch64' : 'x64';
-    const url = `https://api.adoptium.net/v3/assets/latest/${major}/hotspot?vendor=eclipse`;
-    try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const body = await res.json();
 
-        if (body.length > 0) {
-            const targetBinary = body.find(entry => {
-                return entry.version.major === major
-                    && entry.binary.os === sanitizedOS
-                    && entry.binary.image_type === 'jdk'
-                    && entry.binary.architecture === arch;
-            });
-            if (targetBinary != null) {
-                return {
-                    url: targetBinary.binary.package.link,
-                    size: targetBinary.binary.package.size,
-                    id: targetBinary.binary.package.name,
-                    hash: targetBinary.binary.package.checksum,
-                    algo: HashAlgo.SHA256,
-                    path: path.join(getLauncherRuntimeDir(dataDir), targetBinary.binary.package.name)
-                };
+    for (const baseUrl of ADOPTIUM_BASE_URLS) {
+        const url = `${baseUrl}/${major}/hotspot?vendor=eclipse`;
+        try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const body = await res.json();
+
+            if (body.length > 0) {
+                const targetBinary = body.find(entry => {
+                    return entry.version.major === major
+                        && entry.binary.os === sanitizedOS
+                        && entry.binary.image_type === 'jdk'
+                        && entry.binary.architecture === arch;
+                });
+                if (targetBinary != null) {
+                    return {
+                        url: targetBinary.binary.package.link,
+                        size: targetBinary.binary.package.size,
+                        id: targetBinary.binary.package.name,
+                        hash: targetBinary.binary.package.checksum,
+                        algo: HashAlgo.SHA256,
+                        path: path.join(getLauncherRuntimeDir(dataDir), targetBinary.binary.package.name)
+                    };
+                }
             }
         }
-        log.error(`Failed to find a suitable Adoptium binary for JDK ${major} (${sanitizedOS} ${arch}).`);
-        return null;
+        catch (err) {
+            log.warn(`Error while retrieving latest Adoptium JDK ${major} binaries from ${url}.`, err);
+        }
     }
-    catch (err) {
-        log.error(`Error while retrieving latest Adoptium JDK ${major} binaries.`, err);
-        return null;
-    }
+    log.error(`Failed to find a suitable Adoptium binary for JDK ${major} (${sanitizedOS} ${arch}) after checking all mirrors.`);
+    return null;
 }
 
 async function latestCorretto(major, dataDir) {
@@ -227,31 +230,34 @@ async function latestCorretto(major, dataDir) {
             ext = 'tar.gz';
             break;
     }
-    const url = `https://corretto.aws/downloads/latest/amazon-corretto-${major}-${arch}-${sanitizedOS}-jdk.${ext}`;
-    const md5url = `https://corretto.aws/downloads/latest_checksum/amazon-corretto-${major}-${arch}-${sanitizedOS}-jdk.${ext}`;
-    try {
-        const res = await fetch(url, { method: 'HEAD' });
-        if (res.ok) {
-            const checksumRes = await fetch(md5url);
-            const checksum = await checksumRes.text();
-            const finalUrl = res.url;
-            const name = finalUrl.substring(finalUrl.lastIndexOf('/') + 1);
-            return {
-                url: finalUrl,
-                size: parseInt(res.headers.get('content-length')),
-                id: name,
-                hash: checksum.trim(),
-                algo: HashAlgo.MD5,
-                path: path.join(getLauncherRuntimeDir(dataDir), name)
-            };
+
+    for (const baseUrl of CORRETTO_BASE_URLS) {
+        const url = `${baseUrl}/latest/amazon-corretto-${major}-${arch}-${sanitizedOS}-jdk.${ext}`;
+        const md5url = `${baseUrl}/latest_checksum/amazon-corretto-${major}-${arch}-${sanitizedOS}-jdk.${ext}`;
+        try {
+            const res = await fetch(url, { method: 'HEAD' });
+            if (res.ok) {
+                const checksumRes = await fetch(md5url);
+                if (!checksumRes.ok) throw new Error(`Checksum HTTP ${checksumRes.status}`);
+                const checksum = await checksumRes.text();
+                const finalUrl = res.url;
+                const name = finalUrl.substring(finalUrl.lastIndexOf('/') + 1);
+                return {
+                    url: finalUrl,
+                    size: parseInt(res.headers.get('content-length')),
+                    id: name,
+                    hash: checksum.trim(),
+                    algo: HashAlgo.MD5,
+                    path: path.join(getLauncherRuntimeDir(dataDir), name)
+                };
+            }
         }
-        log.error(`Error while retrieving latest Corretto JDK ${major} (${sanitizedOS} ${arch}): ${res.status}`);
-        return null;
+        catch (err) {
+            log.warn(`Error while retrieving latest Corretto JDK ${major} (${sanitizedOS} ${arch}) from ${baseUrl}.`, err);
+        }
     }
-    catch (err) {
-        log.error(`Error while retrieving latest Corretto JDK ${major} (${sanitizedOS} ${arch}).`, err);
-        return null;
-    }
+    log.error(`Failed to find a suitable Corretto binary for JDK ${major} (${sanitizedOS} ${arch}) after checking all mirrors.`);
+    return null;
 }
 
 async function extractJdk(archivePath) {

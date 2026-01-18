@@ -47,7 +47,8 @@ async function downloadFile(asset, onProgress) {
     if (!asset || !asset.path) {
         throw new Error('Asset or asset path is null or undefined.');
     }
-    const { url, path, algo, hash } = asset;
+    const { path, algo, hash } = asset;
+    const urls = Array.isArray(asset.url) ? asset.url : [asset.url];
     const decodedPath = ensureDecodedPath(path);
     const CONFIG_EXTENSIONS = ['.txt', '.json', '.yml', '.yaml', '.dat'];
 
@@ -68,61 +69,73 @@ async function downloadFile(asset, onProgress) {
     await safeEnsureDir(dirname(decodedPath));
 
     const MAX_RETRIES = 5;
-    let retryCount = 0;
 
-    while (retryCount <= MAX_RETRIES) {
-        if (retryCount > 0) {
-            const delay = Math.pow(2, retryCount) * 1000;
-            await sleep(delay);
-        }
+    for (let i = 0; i < urls.length; i++) {
+        const url = urls[i];
+        let retryCount = 0;
+        const isLastMirror = i === urls.length - 1;
 
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 15000); // Connect timeout
-
-            const response = await fetch(url, { signal: controller.signal });
-            clearTimeout(timeoutId);
-
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-            // Progress tracking
-            const contentLength = response.headers.get('content-length');
-            const total = parseInt(contentLength, 10);
-            let loaded = 0;
-
-            const reader = response.body.getReader();
-            const chunks = [];
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                chunks.push(value);
-                loaded += value.length;
-                if (onProgress) onProgress(loaded);
+        while (retryCount <= MAX_RETRIES) {
+            if (retryCount > 0) {
+                const delay = Math.pow(2, retryCount) * 1000;
+                await sleep(delay);
             }
 
-            // Combine chunks
-            const bodyBuffer = new Uint8Array(loaded);
-            let offset = 0;
-            for (const chunk of chunks) {
-                bodyBuffer.set(chunk, offset);
-                offset += chunk.length;
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 15000); // Connect timeout
+
+                const response = await fetch(url, { signal: controller.signal });
+                clearTimeout(timeoutId);
+
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                // Progress tracking
+                const contentLength = response.headers.get('content-length');
+                // const total = parseInt(contentLength, 10);
+                let loaded = 0;
+
+                const reader = response.body.getReader();
+                const chunks = [];
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    chunks.push(value);
+                    loaded += value.length;
+                    if (onProgress) onProgress(loaded);
+                }
+
+                // Combine chunks
+                const bodyBuffer = new Uint8Array(loaded);
+                let offset = 0;
+                for (const chunk of chunks) {
+                    bodyBuffer.set(chunk, offset);
+                    offset += chunk.length;
+                }
+
+                await fs.writeFile(decodedPath, bodyBuffer);
+
+                // Re-validate
+                if (await validateLocalFile(decodedPath, algo, hash)) {
+                    return;
+                } else {
+                    throw new Error(`File validation failed: ${decodedPath}`);
+                }
+
+            } catch (err) {
+                if (onProgress) onProgress(0);
+                retryCount++;
+                if (retryCount > MAX_RETRIES) {
+                    if (isLastMirror) {
+                        throw err;
+                    } else {
+                        log.warn(`Mirror failed: ${url}. Switching to next mirror...`);
+                        break; // Try next mirror
+                    }
+                }
+                log.warn(`Download failed for ${url} (Attempt ${retryCount}): ${err.message}`);
             }
-
-            await fs.writeFile(decodedPath, bodyBuffer);
-
-            // Re-validate
-            if (await validateLocalFile(decodedPath, algo, hash)) {
-                return;
-            } else {
-                throw new Error(`File validation failed: ${decodedPath}`);
-            }
-
-        } catch (err) {
-            if (onProgress) onProgress(0);
-            retryCount++;
-            if (retryCount > MAX_RETRIES) throw err;
-            log.warn(`Download failed for ${url} (Attempt ${retryCount}): ${err.message}`);
         }
     }
 }

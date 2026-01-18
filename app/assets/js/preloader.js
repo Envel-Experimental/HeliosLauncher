@@ -9,6 +9,7 @@ const { DistroAPI } = require('./distromanager')
 const LangLoader = require('./langloader')
 const { LoggerUtil } = require('./core/util/LoggerUtil')
 const { retry } = require('./util')
+const { APP_URLS } = require('./config/constants')
 let Sentry
 
 const logger = LoggerUtil.getLogger('Preloader')
@@ -21,7 +22,7 @@ async function preloader() {
     try {
         Sentry = require('@sentry/electron/renderer')
         Sentry.init({
-            dsn: 'https://f02442d2a0733ac2c810b8d8d7f4a21e@o4508545424359424.ingest.de.sentry.io/4508545432027216',
+            dsn: APP_URLS.SENTRY_DSN,
             release: 'FLauncher@' + app.getVersion(),
         })
 

@@ -11,6 +11,7 @@ const remote                         = require('@electron/remote')
 const isDev                          = require('./assets/js/isdev')
 const { LoggerUtil }                 = require('./assets/js/core/util/LoggerUtil')
 const Lang                           = require('./assets/js/langloader')
+const { APP_URLS }                   = require('./assets/js/config/constants')
 
 const loggerUICore             = LoggerUtil.getLogger('UICore')
 const loggerAutoUpdater        = LoggerUtil.getLogger('AutoUpdater')
@@ -46,7 +47,7 @@ ipcRenderer.on('autoUpdateNotification', (event, arg, info) => {
                 loggerAutoUpdater.info('New update available', info.version)
 
                 if(process.platform === 'darwin'){
-                    info.darwindownload = `https://github.com/Envel-Experimental/HeliosLauncher/releases/download/v${info.version}/Foxford-Launcher-setup-${info.version}${process.arch === 'arm64' ? '-arm64' : '-x64'}.dmg`
+                    info.darwindownload = `${APP_URLS.RELEASES_DOWNLOAD_BASE}/v${info.version}/Foxford-Launcher-setup-${info.version}${process.arch === 'arm64' ? '-arm64' : '-x64'}.dmg`
                     showUpdateUI(info)
                 }
 
@@ -119,7 +120,7 @@ function showUpdateUI(info){
         }
     })
     setMiddleButtonHandler(() => {
-        shell.openExternal(`https://f-launcher.ru/`)
+        shell.openExternal(APP_URLS.HOME)
         toggleOverlay(false)
     })
     setDismissHandler(() => {

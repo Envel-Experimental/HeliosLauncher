@@ -7,11 +7,9 @@ const { getVersionJsonPath, validateLocalFile, getLibraryDir, getVersionJarPath,
 const { mcVersionAtLeast, isLibraryCompatible, getMojangOS } = require('../common/MojangUtils');
 const { LoggerUtil } = require('../util/LoggerUtil');
 const { handleFetchError } = require('../common/RestResponse');
+const { MOJANG_URLS } = require('../../config/constants');
 
 class MojangIndexProcessor extends IndexProcessor {
-    static LAUNCHER_JSON_ENDPOINT = 'https://launchermeta.mojang.com/mc/launcher.json';
-    static VERSION_MANIFEST_ENDPOINT = 'https://piston-meta.mojang.com/mc/game/version_manifest_v2.json';
-    static ASSET_RESOURCE_ENDPOINT = 'https://resources.download.minecraft.net';
     static logger = LoggerUtil.getLogger('MojangIndexProcessor');
 
     constructor(commonDir, version) {
@@ -93,29 +91,45 @@ class MojangIndexProcessor extends IndexProcessor {
              // File doesn't exist or invalid
         }
 
-        try {
-            const res = await fetch(url);
-            if(!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
+        // Handle array of URLs for mirroring
+        const urls = Array.isArray(url) ? url : [url];
+        let lastError;
 
-            await safeEnsureDir(path.dirname(filePath));
-            await fs.writeFile(filePath, JSON.stringify(data));
-            return data;
-        } catch (error) {
-             handleFetchError(url, error, MojangIndexProcessor.logger);
-             return null;
+        for (const u of urls) {
+            try {
+                const res = await fetch(u);
+                if(!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+
+                await safeEnsureDir(path.dirname(filePath));
+                await fs.writeFile(filePath, JSON.stringify(data));
+                return data;
+            } catch (error) {
+                lastError = error;
+                MojangIndexProcessor.logger.warn(`Failed to load content from ${u}: ${error.message}`);
+            }
         }
+
+        handleFetchError(urls[0], lastError || new Error('All mirrors failed'), MojangIndexProcessor.logger);
+        return null;
     }
 
     async loadVersionManifest() {
-        try {
-            const res = await fetch(MojangIndexProcessor.VERSION_MANIFEST_ENDPOINT);
-            if(!res.ok) throw new Error(`HTTP ${res.status}`);
-            return await res.json();
-        } catch (error) {
-            handleFetchError('Load Mojang Version Manifest', error, MojangIndexProcessor.logger);
-            return null;
+        const urls = MOJANG_URLS.VERSION_MANIFEST;
+        let lastError;
+
+        for (const url of urls) {
+            try {
+                const res = await fetch(url);
+                if(!res.ok) throw new Error(`HTTP ${res.status}`);
+                return await res.json();
+            } catch (error) {
+                lastError = error;
+                MojangIndexProcessor.logger.warn(`Failed to load version manifest from ${url}: ${error.message}`);
+            }
         }
+        handleFetchError('Load Mojang Version Manifest', lastError || new Error('All mirrors failed'), MojangIndexProcessor.logger);
+        return null;
     }
 
     getAssetIndexPath(id) {
@@ -159,14 +173,15 @@ class MojangIndexProcessor extends IndexProcessor {
             return limit(async () => {
                 const hash = meta.hash;
                 const filePath = path.join(objectDir, hash.substring(0, 2), hash);
-                const url = `${MojangIndexProcessor.ASSET_RESOURCE_ENDPOINT}/${hash.substring(0, 2)}/${hash}`;
+                const urls = MOJANG_URLS.ASSET_RESOURCE.map(base => `${base}/${hash.substring(0, 2)}/${hash}`);
+
                 if (!await validateLocalFile(filePath, HashAlgo.SHA1, hash)) {
                     return {
                         id,
                         hash,
                         algo: HashAlgo.SHA1,
                         size: meta.size,
-                        url,
+                        url: urls,
                         path: filePath
                     };
                 }

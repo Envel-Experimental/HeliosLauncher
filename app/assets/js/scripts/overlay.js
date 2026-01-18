@@ -2,6 +2,8 @@
  * Script for overlay.ejs
  */
 
+const { APP_URLS } = require('./assets/js/config/constants')
+
 /* Overlay Wrapper Functions */
 
 /**
@@ -329,7 +331,7 @@ function populateAccountListings(){
     let htmlString = ''
     for(let i=0; i<accounts.length; i++){
         htmlString += `<button class="accountListing" uuid="${accounts[i].uuid}" ${i===0 ? 'selected' : ''}>
-            <img src="https://mc-heads.net/head/${accounts[i].uuid}/40">
+            <img src="${APP_URLS.SKIN_DATA_URL}/head/${accounts[i].uuid}/40">
             <div class="accountListingName">${accounts[i].displayName}</div>
         </button>`
     }

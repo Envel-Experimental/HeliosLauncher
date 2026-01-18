@@ -5,6 +5,7 @@
 const { URL }                 = require('url')
 const { MojangRestAPI }       = require('./assets/js/core/mojang/MojangRestAPI')
 const { getServerStatus }     = require('./assets/js/core/mojang/ServerStatusAPI')
+const { APP_URLS }            = require('./assets/js/config/constants')
 const {
     RestResponseStatus,
     isDisplayableError
@@ -153,7 +154,7 @@ function updateSelectedAccount(authUser){
             username = authUser.displayName
         }
         if(authUser.uuid != null){
-            document.getElementById('avatarContainer').style.backgroundImage = `url('https://mc-heads.net/body/${authUser.uuid}/right')`
+            document.getElementById('avatarContainer').style.backgroundImage = `url('${APP_URLS.SKIN_DATA_URL}/body/${authUser.uuid}/right')`
         }
     }
     user_text.innerHTML = username

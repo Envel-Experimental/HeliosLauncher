@@ -1,26 +1,22 @@
 const { LoggerUtil } = require('../util/LoggerUtil')
 const { RestResponseStatus, handleFetchError } = require('../common/RestResponse')
 const { MicrosoftErrorCode, decipherErrorCode } = require('./MicrosoftResponse')
+const { MICROSOFT_URLS } = require('../../config/constants')
 
 class MicrosoftAuth {
     static logger = LoggerUtil.getLogger('MicrosoftAuth');
-    static TOKEN_ENDPOINT = 'https://login.microsoftonline.com/consumers/oauth2/v2.0/token';
-    static XBL_AUTH_ENDPOINT = 'https://user.auth.xboxlive.com/user/authenticate';
-    static XSTS_AUTH_ENDPOINT = 'https://xsts.auth.xboxlive.com/xsts/authorize';
-    static MC_AUTH_ENDPOINT = 'https://api.minecraftservices.com/authentication/login_with_xbox';
-    static MC_PROFILE_ENDPOINT = 'https://api.minecraftservices.com/minecraft/profile';
 
     static async getAccessToken(code, refresh, clientId) {
         try {
             const body = new URLSearchParams({
                 client_id: clientId,
                 scope: 'XboxLive.signin',
-                redirect_uri: 'https://login.microsoftonline.com/common/oauth2/nativeclient',
+                redirect_uri: MICROSOFT_URLS.REDIRECT_URI,
                 [refresh ? 'refresh_token' : 'code']: code,
                 grant_type: refresh ? 'refresh_token' : 'authorization_code'
             });
 
-            const res = await fetch(this.TOKEN_ENDPOINT, {
+            const res = await fetch(MICROSOFT_URLS.TOKEN, {
                 method: 'POST',
                 body: body,
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
@@ -39,7 +35,7 @@ class MicrosoftAuth {
 
     static async getXBLToken(accessToken) {
         try {
-            const res = await fetch(this.XBL_AUTH_ENDPOINT, {
+            const res = await fetch(MICROSOFT_URLS.XBL_AUTH, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                 body: JSON.stringify({
@@ -48,7 +44,7 @@ class MicrosoftAuth {
                         SiteName: 'user.auth.xboxlive.com',
                         RpsTicket: `d=${accessToken}`
                     },
-                    RelyingParty: 'http://auth.xboxlive.com',
+                    RelyingParty: MICROSOFT_URLS.RELYING_PARTY_XBOX,
                     TokenType: 'JWT'
                 })
             });
@@ -66,7 +62,7 @@ class MicrosoftAuth {
 
     static async getXSTSToken(xblResponse) {
         try {
-            const res = await fetch(this.XSTS_AUTH_ENDPOINT, {
+            const res = await fetch(MICROSOFT_URLS.XSTS_AUTH, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                 body: JSON.stringify({
@@ -74,7 +70,7 @@ class MicrosoftAuth {
                         SandboxId: 'RETAIL',
                         UserTokens: [xblResponse.Token]
                     },
-                    RelyingParty: 'rp://api.minecraftservices.com/',
+                    RelyingParty: MICROSOFT_URLS.RELYING_PARTY_MC,
                     TokenType: 'JWT'
                 })
             });
@@ -103,7 +99,7 @@ class MicrosoftAuth {
 
     static async getMCAccessToken(xstsResponse) {
         try {
-            const res = await fetch(this.MC_AUTH_ENDPOINT, {
+            const res = await fetch(MICROSOFT_URLS.MC_AUTH, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                 body: JSON.stringify({
@@ -124,7 +120,7 @@ class MicrosoftAuth {
 
     static async getMCProfile(mcAccessToken) {
         try {
-            const res = await fetch(this.MC_PROFILE_ENDPOINT, {
+            const res = await fetch(MICROSOFT_URLS.MC_PROFILE, {
                 headers: {
                     Authorization: `Bearer ${mcAccessToken}`
                 }

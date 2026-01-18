@@ -137,6 +137,33 @@ For instructions on setting up Microsoft Authentication, see https://github.com/
 
 ---
 
+## Configuration
+
+### Mirrors
+
+You can configure mirror URLs for the distribution manifest and Java downloads by editing the file `app/assets/js/config/constants.js`.
+
+The file exports arrays of URLs. To add a mirror, simply add the URL string to the corresponding array. The launcher will try each URL in order until one succeeds.
+
+Example `constants.js`:
+
+```javascript
+exports.DISTRO_URLS = [
+    'https://primary.server.com/distribution.json',
+    'https://mirror.server.com/distribution.json'
+];
+
+exports.ADOPTIUM_BASE_URLS = [
+    'https://api.adoptium.net/v3/assets/latest'
+];
+
+exports.CORRETTO_BASE_URLS = [
+    'https://corretto.aws/downloads'
+];
+```
+
+---
+
 ## Resources
 
 * [Wiki][wiki]

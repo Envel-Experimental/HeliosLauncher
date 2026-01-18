@@ -1,22 +1,29 @@
 const { LoggerUtil } = require('../util/LoggerUtil')
 const { RestResponseStatus, handleFetchError } = require('../common/RestResponse')
+const { MOJANG_URLS } = require('../../config/constants')
 
 class MojangRestAPI {
     static logger = LoggerUtil.getLogger('MojangRestAPI');
-    static STATUS_ENDPOINT = 'https://status.mojang.com/check';
 
     static async status() {
-        try {
-            const res = await fetch(this.STATUS_ENDPOINT);
-            const data = await res.json();
-             if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            return {
-                data: data,
-                responseStatus: RestResponseStatus.SUCCESS
+        const urls = MOJANG_URLS.STATUS;
+        let lastError;
+
+        for (const url of urls) {
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return {
+                    data: data,
+                    responseStatus: RestResponseStatus.SUCCESS
+                }
+            } catch (error) {
+                lastError = error;
+                this.logger.warn(`Failed to fetch Mojang status from ${url}: ${error.message}`);
             }
-        } catch (error) {
-            return handleFetchError('Mojang Status', error, this.logger);
         }
+        return handleFetchError('Mojang Status', lastError || new Error('All mirrors failed'), this.logger);
     }
 
     static getDefaultStatuses() {
