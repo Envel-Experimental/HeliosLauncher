@@ -13,9 +13,9 @@ async function downloadQueue(assets, onProgress) {
 
     const runDownload = async (asset) => {
         const onEachProgress = (transferred) => {
-             receivedGlobal += (transferred - receivedTotals[asset.id]);
-             receivedTotals[asset.id] = transferred;
-             if(onProgress) onProgress(receivedGlobal);
+            receivedGlobal += (transferred - receivedTotals[asset.id]);
+            receivedTotals[asset.id] = transferred;
+            if (onProgress) onProgress(receivedGlobal);
         };
         await downloadFile(asset, onEachProgress);
     };
@@ -24,7 +24,7 @@ async function downloadQueue(assets, onProgress) {
     const workers = [];
 
     const worker = async () => {
-        while(queue.length > 0) {
+        while (queue.length > 0) {
             const asset = queue.shift();
             try {
                 await runDownload(asset);
@@ -35,7 +35,7 @@ async function downloadQueue(assets, onProgress) {
         }
     };
 
-    for(let i=0; i<limit; i++) {
+    for (let i = 0; i < limit; i++) {
         workers.push(worker());
     }
 
@@ -44,7 +44,7 @@ async function downloadQueue(assets, onProgress) {
 }
 
 async function downloadFile(asset, onProgress) {
-     if (!asset || !asset.path) {
+    if (!asset || !asset.path) {
         throw new Error('Asset or asset path is null or undefined.');
     }
     const { url, path, algo, hash } = asset;
@@ -54,26 +54,26 @@ async function downloadFile(asset, onProgress) {
     try {
         await fs.access(decodedPath);
         if (CONFIG_EXTENSIONS.includes(extname(decodedPath))) {
-             log.debug(`Skipping download of ${decodedPath} as it already exists.`);
-             if(onProgress) onProgress(asset.size); // Account for skipping
-             return;
+            log.debug(`Skipping download of ${decodedPath} as it already exists.`);
+            if (onProgress) onProgress(asset.size); // Account for skipping
+            return;
         }
         if (await validateLocalFile(decodedPath, algo, hash)) {
-             log.debug(`File already exists and is valid: ${decodedPath}`);
-             if(onProgress) onProgress(asset.size); // Account for skipping
-             return;
+            log.debug(`File already exists and is valid: ${decodedPath}`);
+            if (onProgress) onProgress(asset.size); // Account for skipping
+            return;
         }
-    } catch(e) {}
+    } catch (e) { }
 
     await safeEnsureDir(dirname(decodedPath));
 
     const MAX_RETRIES = 5;
     let retryCount = 0;
 
-    while(retryCount <= MAX_RETRIES) {
-        if(retryCount > 0) {
-             const delay = Math.pow(2, retryCount) * 1000;
-             await sleep(delay);
+    while (retryCount <= MAX_RETRIES) {
+        if (retryCount > 0) {
+            const delay = Math.pow(2, retryCount) * 1000;
+            await sleep(delay);
         }
 
         try {
@@ -83,7 +83,7 @@ async function downloadFile(asset, onProgress) {
             const response = await fetch(url, { signal: controller.signal });
             clearTimeout(timeoutId);
 
-            if(!response.ok) throw new Error(`HTTP ${response.status}`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
             // Progress tracking
             const contentLength = response.headers.get('content-length');
@@ -93,18 +93,18 @@ async function downloadFile(asset, onProgress) {
             const reader = response.body.getReader();
             const chunks = [];
 
-            while(true) {
+            while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
                 chunks.push(value);
                 loaded += value.length;
-                if(onProgress) onProgress(loaded);
+                if (onProgress) onProgress(loaded);
             }
 
             // Combine chunks
             const bodyBuffer = new Uint8Array(loaded);
             let offset = 0;
-            for(const chunk of chunks) {
+            for (const chunk of chunks) {
                 bodyBuffer.set(chunk, offset);
                 offset += chunk.length;
             }
@@ -115,12 +115,13 @@ async function downloadFile(asset, onProgress) {
             if (await validateLocalFile(decodedPath, algo, hash)) {
                 return;
             } else {
-                 throw new Error(`File validation failed: ${decodedPath}`);
+                throw new Error(`File validation failed: ${decodedPath}`);
             }
 
-        } catch(err) {
+        } catch (err) {
+            if (onProgress) onProgress(0);
             retryCount++;
-            if(retryCount > MAX_RETRIES) throw err;
+            if (retryCount > MAX_RETRIES) throw err;
             log.warn(`Download failed for ${url} (Attempt ${retryCount}): ${err.message}`);
         }
     }

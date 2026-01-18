@@ -1,4 +1,4 @@
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
 const fs = require('fs/promises');
 const path = require('path');
 const util = require('util');
@@ -10,15 +10,9 @@ const { Platform, JdkDistribution } = require('../common/DistributionClasses');
 
 const log = LoggerUtil.getLogger('JavaGuard');
 const execAsync = util.promisify(exec);
+const execFileAsync = util.promisify(execFile);
 
-let Winreg;
-if (process.platform === 'win32') {
-    try {
-        Winreg = require('winreg');
-    } catch (e) {
-        log.warn('Winreg not found, registry discovery disabled.');
-    }
-}
+// Winreg removed in favor of native reg.exe calls to avoid DEP0190
 
 async function getHotSpotSettings(execPath) {
     const javaExecutable = execPath.includes('javaw.exe') ? execPath.replace('javaw.exe', 'java.exe') : execPath;
@@ -31,7 +25,7 @@ async function getHotSpotSettings(execPath) {
 
     let stderr;
     try {
-        stderr = (await execAsync(`"${javaExecutable.replace(/"/g, '\\"')}" -XshowSettings:properties -version`, {
+        stderr = (await execFileAsync(javaExecutable, ['-XshowSettings:properties', '-version'], {
             cwd: path.dirname(javaExecutable)
         })).stderr;
     }
@@ -144,7 +138,7 @@ async function discoverBestJvmInstallation(dataDir, semverRange) {
 async function validateSelectedJvm(path, semverRange) {
     try {
         await fs.access(path);
-    } catch(e) { return null; }
+    } catch (e) { return null; }
 
     const resolvedSettings = await resolveJvmSettings([path]);
     const jvmDetails = filterApplicableJavaPaths(resolvedSettings, semverRange);
@@ -182,7 +176,7 @@ async function latestAdoptium(major, dataDir) {
     const url = `https://api.adoptium.net/v3/assets/latest/${major}/hotspot?vendor=eclipse`;
     try {
         const res = await fetch(url);
-        if(!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const body = await res.json();
 
         if (body.length > 0) {
@@ -403,7 +397,7 @@ async function getWin32Discoverers(dataDir) {
             getLauncherRuntimeDir(dataDir)
         ])
     ];
-    if(Winreg) {
+    if (Winreg) {
         list.push(new Win32RegistryJavaDiscoverer());
     }
     return list;
@@ -475,7 +469,7 @@ class PathBasedJavaDiscoverer {
             try {
                 await fs.access(javaExecFromRoot(p));
                 res.add(p);
-            } catch(e) {}
+            } catch (e) { }
         }
         return [...res];
     }
@@ -495,9 +489,9 @@ class DirectoryBasedJavaDiscoverer {
                     try {
                         await fs.access(javaExecFromRoot(fullPath));
                         res.add(fullPath);
-                    } catch(e) {}
+                    } catch (e) { }
                 }
-            } catch(e) {}
+            } catch (e) { }
         }
         return [...res];
     }
@@ -516,7 +510,7 @@ class EnvironmentBasedJavaDiscoverer {
                 try {
                     await fs.access(asRoot);
                     res.add(asRoot);
-                } catch(e) {}
+                } catch (e) { }
             }
         }
         return [...res];
@@ -524,55 +518,50 @@ class EnvironmentBasedJavaDiscoverer {
 }
 
 class Win32RegistryJavaDiscoverer {
-    discover() {
-        return new Promise((resolve) => {
-            if(!Winreg) { resolve([]); return; }
-            const regKeys = [
-                '\\SOFTWARE\\JavaSoft\\Java Runtime Environment',
-                '\\SOFTWARE\\JavaSoft\\Java Development Kit',
-                '\\SOFTWARE\\JavaSoft\\JRE',
-                '\\SOFTWARE\\JavaSoft\\JDK'
-            ];
-            let keysDone = 0;
-            const candidates = new Set();
-            for (let i = 0; i < regKeys.length; i++) {
-                const key = new Winreg({
-                    hive: Winreg.HKLM,
-                    key: regKeys[i],
-                    arch: 'x64'
-                });
-                key.keyExists((err, exists) => {
-                    if (exists) {
-                        key.keys((err, javaVers) => {
-                            if (err || javaVers.length === 0) {
-                                keysDone++;
-                                if (keysDone === regKeys.length) resolve([...candidates]);
+    async discover() {
+        if (process.platform !== 'win32') return [];
+
+        const regKeys = [
+            '\\SOFTWARE\\JavaSoft\\Java Runtime Environment',
+            '\\SOFTWARE\\JavaSoft\\Java Development Kit',
+            '\\SOFTWARE\\JavaSoft\\JRE',
+            '\\SOFTWARE\\JavaSoft\\JDK'
+        ];
+
+        const candidates = new Set();
+
+        for (const keyPath of regKeys) {
+            try {
+                // List subkeys (versions)
+                const { stdout } = await execFileAsync('reg', ['query', 'HKLM' + keyPath]);
+                if (!stdout) continue;
+
+                const lines = stdout.split('\n');
+                const subkeys = lines.filter(line => line.trim().startsWith('HKEY_LOCAL_MACHINE'));
+
+                for (const subkey of subkeys) {
+                    try {
+                        // Get JavaHome for each subkey
+                        const { stdout: valStdout } = await execFileAsync('reg', ['query', subkey.trim(), '/v', 'JavaHome']);
+                        if (!valStdout) continue;
+
+                        // Parse JavaHome    REG_SZ    Path
+                        const match = valStdout.match(/\sJavaHome\s+REG_SZ\s+(.*)/i);
+                        if (match && match[1]) {
+                            const javaHome = match[1].trim();
+                            if (javaHome && !javaHome.includes('(x86)')) {
+                                candidates.add(javaHome);
                             }
-                            else {
-                                let numDone = 0;
-                                for (let j = 0; j < javaVers.length; j++) {
-                                    const javaVer = javaVers[j];
-                                    javaVer.get('JavaHome', (err, res) => {
-                                        if(res && res.value && !res.value.includes('(x86)')) {
-                                            candidates.add(res.value);
-                                        }
-                                        numDone++;
-                                        if (numDone === javaVers.length) {
-                                            keysDone++;
-                                            if (keysDone === regKeys.length) resolve([...candidates]);
-                                        }
-                                    });
-                                }
-                            }
-                        });
+                        }
+                    } catch (e) {
+                        // Ignore errors reading specific subkey
                     }
-                    else {
-                        keysDone++;
-                        if (keysDone === regKeys.length) resolve([...candidates]);
-                    }
-                });
+                }
+            } catch (e) {
+                // Key might not exist, ignore
             }
-        });
+        }
+        return [...candidates];
     }
 }
 
