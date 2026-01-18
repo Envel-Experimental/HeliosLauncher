@@ -8,7 +8,6 @@ const { mcVersionAtLeast } = require('../common/MojangUtils');
 const fs = require('fs/promises');
 const path = require('path');
 const AdmZip = require('adm-zip');
-const pLimit = require('p-limit');
 
 class DistributionIndexProcessor extends IndexProcessor {
     static logger = LoggerUtil.getLogger('DistributionIndexProcessor');
@@ -45,6 +44,8 @@ class DistributionIndexProcessor extends IndexProcessor {
     }
 
     async validateModules(modules) {
+        // Dynamic import for ESM module
+        const { default: pLimit } = await import('p-limit');
         const limit = pLimit(32);
 
         // Flatten module tree for validation

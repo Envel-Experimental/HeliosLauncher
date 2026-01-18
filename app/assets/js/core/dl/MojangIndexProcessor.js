@@ -7,7 +7,6 @@ const { getVersionJsonPath, validateLocalFile, getLibraryDir, getVersionJarPath,
 const { mcVersionAtLeast, isLibraryCompatible, getMojangOS } = require('../common/MojangUtils');
 const { LoggerUtil } = require('../util/LoggerUtil');
 const { handleFetchError } = require('../common/RestResponse');
-const pLimit = require('p-limit');
 
 class MojangIndexProcessor extends IndexProcessor {
     static LAUNCHER_JSON_ENDPOINT = 'https://launchermeta.mojang.com/mc/launcher.json';
@@ -152,6 +151,8 @@ class MojangIndexProcessor extends IndexProcessor {
 
     async validateAssets(assetIndex) {
         const objectDir = path.join(this.assetPath, 'objects');
+        // Dynamic import for ESM module
+        const { default: pLimit } = await import('p-limit');
         const limit = pLimit(32); // Concurrency limit 32
 
         const tasks = Object.entries(assetIndex.objects).map(([id, meta]) => {
@@ -179,6 +180,8 @@ class MojangIndexProcessor extends IndexProcessor {
 
     async validateLibraries(versionJson) {
         const libDir = getLibraryDir(this.commonDir);
+        // Dynamic import for ESM module
+        const { default: pLimit } = await import('p-limit');
         const limit = pLimit(32);
 
         const tasks = versionJson.libraries.map(libEntry => {
