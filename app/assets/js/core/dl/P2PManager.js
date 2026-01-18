@@ -25,54 +25,15 @@ class P2PManager {
         this.discoveryInterval = null;
         this.httpPort = 0;
         this.started = false;
-        this.localAddress = null;
-    }
-
-    getBestLocalIP() {
-        const interfaces = os.networkInterfaces();
-        const candidates = [];
-
-        for (const name of Object.keys(interfaces)) {
-            const lowerName = name.toLowerCase();
-            // Filter out virtual and VPN adapters
-            if (lowerName.includes('vethernet') || 
-                lowerName.includes('wsl') || 
-                lowerName.includes('tap') || 
-                lowerName.includes('tun') || 
-                lowerName.includes('docker') ||
-                lowerName.includes('virtual') ||
-                lowerName.includes('vmware') ||
-                lowerName.includes('pseudo')) {
-                continue;
-            }
-
-            for (const iface of interfaces[name]) {
-                if (iface.family === 'IPv4' && !iface.internal) {
-                    // Prioritize standard local networks
-                    if (iface.address.startsWith('192.168.')) {
-                        return iface.address;
-                    }
-                    candidates.push(iface.address);
-                }
-            }
-        }
-        return candidates.length > 0 ? candidates[0] : null;
     }
 
     start() {
         if (this.started) return;
         this.started = true;
         
-        this.localAddress = this.getBestLocalIP();
-        if (this.localAddress) {
-            logger.info(`P2P Network Mode: Interface bound to ${this.localAddress}`);
-        } else {
-            logger.warn('P2P: Could not detect specific LAN interface, using default.');
-        }
-
         this.startHttpServer();
         this.startDiscovery();
-        logger.info('P2P Delivery Optimization started.');
+        logger.info('P2P Delivery Optimization started (Universal Mode).');
     }
 
     startHttpServer() {
@@ -86,6 +47,7 @@ class P2PManager {
             logger.warn('P2P HTTP Server error:', err);
         });
 
+        // Listen on 0.0.0.0 (All interfaces)
         this.httpServer.listen(0, '0.0.0.0', () => {
             this.httpPort = this.httpServer.address().port;
             logger.info(`P2P HTTP Server listening on port ${this.httpPort}`);
@@ -99,44 +61,26 @@ class P2PManager {
         res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
         
         if (req.method === 'OPTIONS') {
-            res.writeHead(200);
-            res.end();
-            return;
+            res.writeHead(200); res.end(); return;
         }
 
         if (url.pathname === '/file') {
             const hash = url.searchParams.get('hash');
             const relPath = url.searchParams.get('path');
 
-            if (!hash || !relPath) {
-                res.writeHead(400);
-                res.end('Missing hash or path');
-                return;
-            }
-
-            if (relPath.includes('..') || path.isAbsolute(relPath)) {
-                res.writeHead(403);
-                res.end('Invalid path');
-                return;
-            }
+            if (!hash || !relPath) { res.writeHead(400); res.end('Missing data'); return; }
+            if (relPath.includes('..') || path.isAbsolute(relPath)) { res.writeHead(403); res.end('Invalid path'); return; }
 
             const commonDir = ConfigManager.getCommonDirectory();
             const filePath = path.join(commonDir, relPath);
             const stream = fs.createReadStream(filePath);
 
-            res.writeHead(200, {
-                'Content-Type': 'application/octet-stream'
-            });
-
+            res.writeHead(200, { 'Content-Type': 'application/octet-stream' });
             pipeline(stream, res).catch(err => {
-                if (!res.headersSent) {
-                    res.writeHead(404);
-                    res.end('File not found');
-                }
+                if (!res.headersSent) { res.writeHead(404); res.end('File not found'); }
             });
         } else {
-            res.writeHead(404);
-            res.end();
+            res.writeHead(404); res.end();
         }
     }
 
@@ -145,28 +89,50 @@ class P2PManager {
 
         this.udpSocket.on('error', (err) => {
             logger.warn('P2P Discovery error:', err);
-            try { this.udpSocket.close(); } catch(e){}
         });
 
         this.udpSocket.on('message', (msg, rinfo) => {
             this.handleDiscoveryMessage(msg.toString(), rinfo);
         });
 
-        this.udpSocket.bind(DISCOVERY_PORT, () => {
-            try {
-                if (this.localAddress) {
-                    this.udpSocket.addMembership(DISCOVERY_MULTICAST_ADDR, this.localAddress);
-                    this.udpSocket.setMulticastInterface(this.localAddress);
-                } else {
-                    this.udpSocket.addMembership(DISCOVERY_MULTICAST_ADDR);
+        // Bind to 0.0.0.0 (Any interface)
+        this.udpSocket.bind(DISCOVERY_PORT, '0.0.0.0', () => {
+            this.udpSocket.setMulticastTTL(2);
+            this.udpSocket.setBroadcast(true);
+
+            // KEY CHANGE: Iterate ALL interfaces and join the group on ALL of them
+            const interfaces = os.networkInterfaces();
+            let joinedCount = 0;
+            let bestInterface = null;
+
+            for (const name of Object.keys(interfaces)) {
+                for (const iface of interfaces[name]) {
+                    // Skip internal (localhost)
+                    if (iface.family === 'IPv4' && !iface.internal) {
+                        try {
+                            this.udpSocket.addMembership(DISCOVERY_MULTICAST_ADDR, iface.address);
+                            joinedCount++;
+                            
+                            // Try to find a good candidate for sending (standard LAN)
+                            if (iface.address.startsWith('192.168.') && !iface.address.startsWith('192.168.56.')) {
+                                bestInterface = iface.address;
+                            }
+                        } catch (err) {
+                            // Ignore errors (some interfaces don't support multicast)
+                        }
+                    }
                 }
-                
-                this.udpSocket.setMulticastTTL(2);
-                this.udpSocket.setBroadcast(true);
-            } catch (err) {
-                logger.warn('Failed to configure multicast:', err);
             }
             
+            logger.info(`P2P Listening on ${joinedCount} interfaces.`);
+
+            // If we found a "Real" LAN IP, set it for outgoing packets to avoid VPN
+            if (bestInterface) {
+                try {
+                    this.udpSocket.setMulticastInterface(bestInterface);
+                } catch(e) {}
+            }
+
             this.discoveryInterval = setInterval(() => {
                 this.broadcastPresence();
                 this.prunePeers();
@@ -220,7 +186,6 @@ class P2PManager {
 
         const commonDir = ConfigManager.getCommonDirectory();
         let relPath = null;
-        
         const absDestPath = path.resolve(destPath);
         const root = path.resolve(commonDir);
 
