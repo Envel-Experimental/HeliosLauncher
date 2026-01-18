@@ -397,9 +397,7 @@ async function getWin32Discoverers(dataDir) {
             getLauncherRuntimeDir(dataDir)
         ])
     ];
-    if (Winreg) {
-        list.push(new Win32RegistryJavaDiscoverer());
-    }
+    list.push(new Win32RegistryJavaDiscoverer());
     return list;
 }
 
