@@ -1,4 +1,4 @@
-const { DistributionAPI } = require('@envel/helios-core/common')
+const { DistributionAPI } = require('./core/common/DistributionAPI')
 const { retry } = require('./util')
 
 const ConfigManager = require('./configmanager')

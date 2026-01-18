@@ -1,5 +1,5 @@
 const fs = require('fs-extra')
-const { LoggerUtil } = require('@envel/helios-core')
+const { LoggerUtil } = require('./core/util/LoggerUtil')
 const os = require('os')
 const path = require('path')
 const { retry } = require('./util')

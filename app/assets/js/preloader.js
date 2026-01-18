@@ -7,7 +7,7 @@ const path = require('path')
 const ConfigManager = require('./configmanager')
 const { DistroAPI } = require('./distromanager')
 const LangLoader = require('./langloader')
-const { LoggerUtil } = require('@envel/helios-core')
+const { LoggerUtil } = require('./core/util/LoggerUtil')
 const { retry } = require('./util')
 let Sentry
 

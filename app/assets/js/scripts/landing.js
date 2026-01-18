@@ -3,21 +3,17 @@
  */
 // Requirements
 const { URL }                 = require('url')
-const {
-    MojangRestAPI,
-    getServerStatus
-}                             = require('@envel/helios-core/mojang')
+const { MojangRestAPI }       = require('./assets/js/core/mojang/MojangRestAPI')
+const { getServerStatus }     = require('./assets/js/core/mojang/ServerStatusAPI')
 const {
     RestResponseStatus,
-    isDisplayableError,
-    validateLocalFile
-}                             = require('@envel/helios-core/common')
-const {
-    FullRepair,
-    DistributionIndexProcessor,
-    MojangIndexProcessor,
-    downloadFile
-}                             = require('@envel/helios-core/dl')
+    isDisplayableError
+}                             = require('./assets/js/core/common/RestResponse')
+const { validateLocalFile }   = require('./assets/js/core/common/FileUtils')
+const { FullRepair }          = require('./assets/js/core/dl/FullRepair')
+const { DistributionIndexProcessor } = require('./assets/js/core/dl/DistributionIndexProcessor')
+const { MojangIndexProcessor } = require('./assets/js/core/dl/MojangIndexProcessor')
+const { downloadFile }        = require('./assets/js/core/dl/DownloadEngine')
 const {
     validateSelectedJvm,
     ensureJavaDirIsRoot,
@@ -25,7 +21,7 @@ const {
     discoverBestJvmInstallation,
     latestOpenJDK,
     extractJdk
-}                             = require('@envel/helios-core/java')
+}                             = require('./assets/js/core/java/JavaGuard')
 
 // Internal Requirements
 const ProcessBuilder          = require('./assets/js/processbuilder')
@@ -506,18 +502,8 @@ async function dlAsync(login = true) {
         DistroAPI.isDevMode()
     )
 
-    fullRepairModule.spawnReceiver()
-
-    fullRepairModule.childProcess.on('error', (err) => {
-        loggerLaunchSuite.error('Error during launch', err)
-        showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringLaunchTitle'), err.message || Lang.queryJS('landing.dlAsync.errorDuringLaunchText'))
-    })
-    fullRepairModule.childProcess.on('close', (code, _signal) => {
-        if(code !== 0){
-            loggerLaunchSuite.error(`Full Repair Module exited with code ${code}, assuming error.`)
-            showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringLaunchTitle'), Lang.queryJS('landing.dlAsync.seeConsoleForDetails'))
-        }
-    })
+    // fullRepairModule.spawnReceiver() - Deprecated in monolith
+    // Child process events removed as logic is now in-process.
 
     loggerLaunchSuite.info('Validating files.')
     setLaunchDetails(Lang.queryJS('landing.dlAsync.validatingFileIntegrity'))
@@ -555,13 +541,7 @@ async function dlAsync(login = true) {
     // Remove download bar.
     remote.getCurrentWindow().setProgressBar(-1)
 
-    if (!isOfflineLaunch) {
-        try {
-            fullRepairModule.destroyReceiver()
-        } catch (err) {
-            loggerLaunchSuite.warn('Error destroying receiver', err)
-        }
-    }
+    // Receiver destruction removed.
 
     if (isOfflineLaunch) {
         setLaunchDetails(Lang.queryJS('landing.dlAsync.launchingOffline'))
