@@ -11,6 +11,7 @@ const remoteElectron = require('@electron/remote')
 const AuthManager   = require('./assets/js/authmanager')
 const ConfigManager = require('./assets/js/configmanager')
 const { DistroAPI } = require('./assets/js/distromanager')
+const P2PManager    = require('./assets/js/core/dl/P2PManager')
 
 let rscShouldLoad = false
 let fatalStartupError = false
@@ -65,6 +66,8 @@ async function showMainUI(data){
         loggerAutoUpdater.info('Initializing..')
         ipcRenderer.send('autoUpdateAction', 'initAutoUpdater', ConfigManager.getAllowPrerelease())
     }
+
+    P2PManager.start()
 
     await prepareSettings(true)
     updateSelectedServer(data.getServerById(ConfigManager.getSelectedServer()))
