@@ -3,10 +3,12 @@ const { validateLocalFile, safeEnsureDir } = require('../common/FileUtils');
 const { ensureDecodedPath, sleep } = require('../util/NodeUtil');
 const { dirname, extname } = require('path');
 const fs = require('fs/promises');
+const P2PManager = require('./P2PManager');
 
 const log = LoggerUtil.getLogger('DownloadEngine');
 
 async function downloadQueue(assets, onProgress) {
+    P2PManager.start();
     const limit = 15; // Concurrency
     const receivedTotals = assets.reduce((acc, a) => ({ ...acc, [a.id]: 0 }), {});
     let receivedGlobal = 0;
@@ -66,6 +68,19 @@ async function downloadFile(asset, onProgress) {
     } catch (e) { }
 
     await safeEnsureDir(dirname(decodedPath));
+
+    try {
+        const success = await P2PManager.downloadFile(asset, decodedPath);
+        if (success) {
+            if (await validateLocalFile(decodedPath, algo, hash)) {
+                log.debug(`Downloaded ${asset.id} from P2P peer.`);
+                if (onProgress) onProgress(asset.size);
+                return;
+            }
+        }
+    } catch (err) {
+        log.warn(`P2P download failed for ${asset.id}: ${err.message}`);
+    }
 
     const MAX_RETRIES = 5;
     let retryCount = 0;
