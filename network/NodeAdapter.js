@@ -41,16 +41,17 @@ class NodeAdapter {
 
         // Low End: < 4GB RAM or Single Core
         if (totalMem < FOUR_GB || cpuCount < 2) {
-            return PROFILES.LOW
+            return { ...PROFILES.LOW }
         }
 
         // High End: > 8GB RAM and >= 4 Cores
-        if (totalMem > EIGHT_GB && cpuCount >= 4) {
-            return PROFILES.HIGH
+        // High End: > 8GB RAM and >= 8 Cores
+        if (totalMem > EIGHT_GB && cpuCount >= 8) {
+            return { ...PROFILES.HIGH }
         }
 
         // Default to Mid
-        return PROFILES.MID
+        return { ...PROFILES.MID }
     }
 
     getProfile() {
@@ -60,9 +61,35 @@ class NodeAdapter {
     // Call this if network speed is determined to be high/stable
     boostWeight() {
         if (this.profile.weight < 20) {
-            this.profile.weight += 5
+            this.profile.weight += 1 // Increment slower
             console.log(`[NodeAdapter] Network boost applied. New weight: ${this.profile.weight}`)
         }
+    }
+
+    // Call this if connections are timing out or unreliable
+    penaltyWeight() {
+        if (this.profile.weight > 0) {
+            this.profile.weight -= 1
+            if (this.profile.weight < 0) this.profile.weight = 0
+            console.log(`[NodeAdapter] Performance penalty applied. New weight: ${this.profile.weight}`)
+        }
+        return this.profile.weight
+    }
+
+    // Force switch to LOW profile (Passive)
+    downgradeToLow() {
+        if (this.profile.name !== 'LOW') {
+            console.log('[NodeAdapter] Downgrading to LOW profile (Passive Mode) due to poor upload speed.')
+            this.profile = { ...PROFILES.LOW }
+            // Ensure we don't announce if we were penalized heavily before?
+            // LOW profile has default weight 1.
+            return true
+        }
+        return false
+    }
+
+    isCritical() {
+        return this.profile.weight <= 0
     }
 }
 

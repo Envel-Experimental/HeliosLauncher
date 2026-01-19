@@ -206,48 +206,58 @@ class PeerHandler {
 
             if (fs.existsSync(filePath)) {
                 this.engine.activeUploads++
-                this.engine.incrementUploadCountForIP(remoteIP) // FIX 3: Increment
+                this.engine.incrementUploadCountForIP(remoteIP)
 
                 const stream = fs.createReadStream(filePath)
-
-                // Throttle Stream
                 const throttled = stream.pipe(RateLimiter.throttle())
 
-                // FIX: If socket dies, kill file stream immediately
+                // Performance Monitoring
+                const startTime = Date.now()
+                let totalBytesSent = 0
+                let errorOccurred = false
+
                 const onSocketClose = () => {
-                    if (!stream.destroyed) stream.destroy()
+                    if (!stream.destroyed) {
+                        errorOccurred = true // Socket died during transfer
+                        stream.destroy()
+                    }
                 }
                 this.socket.on('close', onSocketClose)
                 this.socket.on('error', onSocketClose)
 
-                // VULNERABILITY FIX 3: Slot Exhaustion Protection
-                // Kill connection if client is too slow or halts
+                // Watchdog
                 let lastActivity = Date.now()
                 const watchdog = setInterval(() => {
-                    if (Date.now() - lastActivity > 15000) { // 15s Idle Timeout
-                        // console.warn('[P2P] Upload slot timed out (Slot Exhaustion Protection)')
+                    if (Date.now() - lastActivity > 15000) {
+                        errorOccurred = true // Timeout
                         stream.destroy()
                         clearInterval(watchdog)
                     }
                 }, 5000)
 
-                // Zombie Slot Protection: Safe Cleanup
                 let cleanupDone = false
                 const cleanup = () => {
                     if (cleanupDone) return
                     cleanupDone = true
 
-                    // Clean up listeners
                     this.socket.off('close', onSocketClose)
                     this.socket.off('error', onSocketClose)
-
                     clearInterval(watchdog)
+
+                    // Report Stats
+                    const duration = (Date.now() - startTime) / 1000
+                    if (duration > 2) { // Ignore micro-transactions
+                        const speed = totalBytesSent / duration // Bytes/sec
+                        this.engine.reportUploadStats(speed, errorOccurred)
+                    }
+
                     this.engine.activeUploads = Math.max(0, this.engine.activeUploads - 1)
                     this.engine.decrementUploadCountForIP(remoteIP)
                 }
 
                 throttled.on('data', (chunk) => {
                     lastActivity = Date.now()
+                    totalBytesSent += chunk.length
                     this.sendData(reqId, chunk)
                 })
 
@@ -256,21 +266,23 @@ class PeerHandler {
                     cleanup()
                 })
 
-                stream.on('close', () => {
+                stream.on('error', (err) => {
+                    errorOccurred = true
+                    this.sendError(reqId, 'Read Error')
                     cleanup()
                 })
 
-                stream.on('error', () => {
-                    this.sendError(reqId, 'Read error')
-                    cleanup()
-                })
+                // Allow cleanup via file close?
+                stream.on('close', cleanup)
+
             } else {
-                this.sendError(reqId, 'Not found')
+                this.sendError(reqId, 'Not Found')
             }
         } catch (err) {
-            this.sendError(reqId, 'Internal error')
+            this.sendError(reqId, 'Server Error')
         }
     }
+
 
     sendData(reqId, data) {
         if (this.socket.destroyed) return; // Guard against dead socket
@@ -356,6 +368,40 @@ class P2PEngine extends EventEmitter {
             // Check logging level?
             // User said "in debug mode system should inform".
         }
+    }
+
+    reportUploadStats(speed, isError) {
+        if (!this.uploadHistory) this.uploadHistory = []
+
+        if (isError) {
+            NodeAdapter.penaltyWeight()
+            if (NodeAdapter.isCritical()) {
+                console.log('[P2PEngine] Critical performance drop. Stopping announcement.')
+                this.reconfigureSwarm()
+            }
+            return
+        }
+
+        this.uploadHistory.push(speed)
+        if (this.uploadHistory.length > 5) this.uploadHistory.shift()
+
+        const avg = this.uploadHistory.reduce((a, b) => a + b, 0) / this.uploadHistory.length
+
+        // 150 KB/s
+        if (avg < 153600) {
+            const changed = NodeAdapter.downgradeToLow()
+            if (changed) {
+                this.reconfigureSwarm()
+            }
+        }
+    }
+
+    reconfigureSwarm() {
+        if (!this.swarm) return
+        const topic = SWARM_TOPIC
+        const isPassive = this.profile.passive || NodeAdapter.isCritical()
+        console.log(`[P2PEngine] Reconfiguring Swarm. Passive: ${isPassive}`)
+        this.swarm.join(topic, { client: true, server: !isPassive })
     }
 
     triggerCircuitBreaker() {
