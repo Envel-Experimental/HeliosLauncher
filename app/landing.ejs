@@ -2,7 +2,7 @@
     <div id="upper">
         <div id="left">
             <div id="image_seal_container">
-                <img id="image_seal" src="assets/images/full-icon.png"/>
+                <img id="image_seal" src="assets/images/full-icon.png" />
                 <div id="updateAvailableTooltip"><%- lang('landing.updateAvailableTooltip') %></div>
             </div>
         </div>
@@ -37,9 +37,15 @@
                         <div id="newsButtonAlert" style="display: none;"></div>
                         <svg id="newsButtonSVG" viewBox="0 0 24.87 13.97">
                             <defs>
-                                <style>.arrowLine{fill:none;stroke:#FFF;stroke-width:2px;}</style>
+                                <style>
+                                    .arrowLine {
+                                        fill: none;
+                                        stroke: #FFF;
+                                        stroke-width: 2px;
+                                    }
+                                </style>
                             </defs>
-                            <polyline class="arrowLine" points="0.71 13.26 12.56 1.41 24.16 13.02"/>
+                            <polyline class="arrowLine" points="0.71 13.26 12.56 1.41 24.16 13.02" />
                         </svg>
                         &#10;<span id="newsButtonText"><%- lang('landing.newsButton') %></span>
                     </button>
@@ -51,11 +57,16 @@
                 <div id="launch_content">
                     <button id="launch_button"><%- lang('landing.launchButton') %></button>
                     <div class="bot_divider"></div>
-                    <button id="server_selection_button" class="bot_label"><%- lang('landing.launchButtonPlaceholder') %></button>
+                    <button id="server_selection_button" class="bot_label"><%- lang('landing.launchButtonPlaceholder')
+                            %></button>
                 </div>
                 <div id="launch_details">
                     <div id="launch_details_left">
                         <span id="launch_progress_label">0%</span>
+                        <div id="p2p_status"
+                            style="display: none; margin-left: 10px; align-items: center; color: #7289da; font-weight: bold; font-size: 11px; white-space: nowrap;">
+                            <span id="p2p_status_text">P2P</span>
+                        </div>
                         <div class="bot_divider"></div>
                     </div>
                     <div id="launch_details_right">
@@ -87,18 +98,33 @@
                     <button id="newsNavigateLeft">
                         <svg id="newsNavigationLeftSVG" viewBox="0 0 24.87 13.97">
                             <defs>
-                                <style>.arrowLine{fill:none;stroke:#FFF;stroke-width:2px;transition: 0.25s ease;}</style>
+                                <style>
+                                    .arrowLine {
+                                        fill: none;
+                                        stroke: #FFF;
+                                        stroke-width: 2px;
+                                        transition: 0.25s ease;
+                                    }
+                                </style>
                             </defs>
-                            <polyline class="arrowLine" points="0.71 13.26 12.56 1.41 24.16 13.02"/>
+                            <polyline class="arrowLine" points="0.71 13.26 12.56 1.41 24.16 13.02" />
                         </svg>
                     </button>
-                    <span id="newsNavigationStatus"><%- lang('landing.newsNavigationStatus', { currentPage: 1, totalPages: 1 }) %></span>
+                    <span id="newsNavigationStatus"><%- lang('landing.newsNavigationStatus', { currentPage: 1,
+                            totalPages: 1 }) %></span>
                     <button id="newsNavigateRight">
                         <svg id="newsNavigationRightSVG" viewBox="0 0 24.87 13.97">
                             <defs>
-                                <style>.arrowLine{fill:none;stroke:#FFF;stroke-width:2px;transition: 0.25s ease;}</style>
+                                <style>
+                                    .arrowLine {
+                                        fill: none;
+                                        stroke: #FFF;
+                                        stroke-width: 2px;
+                                        transition: 0.25s ease;
+                                    }
+                                </style>
                             </defs>
-                            <polyline class="arrowLine" points="0.71 13.26 12.56 1.41 24.16 13.02"/>
+                            <polyline class="arrowLine" points="0.71 13.26 12.56 1.41 24.16 13.02" />
                         </svg>
                     </button>
                 </div>

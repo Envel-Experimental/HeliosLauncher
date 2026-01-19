@@ -6,6 +6,7 @@ const os = require('os');
 const { randomUUID } = require('crypto');
 const { Readable } = require('stream');
 const { pipeline } = require('stream/promises');
+const { EventEmitter } = require('events');
 const { LoggerUtil } = require('../util/LoggerUtil');
 const ConfigManager = require('../../configmanager');
 
@@ -16,8 +17,9 @@ const DISCOVERY_MULTICAST_ADDR = '239.255.255.250';
 const DISCOVERY_INTERVAL = 3000;
 const PEER_TIMEOUT = 15000;
 
-class P2PManager {
+class P2PManager extends EventEmitter {
     constructor() {
+        super();
         this.id = randomUUID();
         this.peers = new Map();
         this.httpServer = null;
@@ -25,12 +27,20 @@ class P2PManager {
         this.discoveryInterval = null;
         this.httpPort = 0;
         this.started = false;
+
+        // Stats
+        this.stats = {
+            downloaded: 0,
+            uploaded: 0,
+            filesDownloaded: 0,
+            filesUploaded: 0
+        };
     }
 
     start() {
         if (this.started) return;
         this.started = true;
-        
+
         this.startHttpServer();
         this.startDiscovery();
         logger.info('P2P Delivery Optimization started (Universal Mode).');
@@ -56,10 +66,10 @@ class P2PManager {
 
     handleRequest(req, res) {
         const url = new URL(req.url, `http://${req.headers.host}`);
-        
+
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-        
+
         if (req.method === 'OPTIONS') {
             res.writeHead(200); res.end(); return;
         }
@@ -75,8 +85,19 @@ class P2PManager {
             const filePath = path.join(commonDir, relPath);
             const stream = fs.createReadStream(filePath);
 
+            let bytesSent = 0;
+            stream.on('data', chunk => {
+                bytesSent += chunk.length;
+            });
+
             res.writeHead(200, { 'Content-Type': 'application/octet-stream' });
-            pipeline(stream, res).catch(err => {
+            pipeline(stream, res).then(() => {
+                this.stats.uploaded += bytesSent;
+                this.stats.filesUploaded++;
+                // Logging upload success (optional, maybe too verbose for upload, but good for debug)
+                // logger.debug(`Served P2P file: ${relPath} (${bytesSent} bytes)`);
+                this.emit('stats-update', this.stats);
+            }).catch(err => {
                 if (!res.headersSent) { res.writeHead(404); res.end('File not found'); }
             });
         } else {
@@ -112,7 +133,7 @@ class P2PManager {
                         try {
                             this.udpSocket.addMembership(DISCOVERY_MULTICAST_ADDR, iface.address);
                             joinedCount++;
-                            
+
                             // Try to find a good candidate for sending (standard LAN)
                             if (iface.address.startsWith('192.168.') && !iface.address.startsWith('192.168.56.')) {
                                 bestInterface = iface.address;
@@ -123,21 +144,21 @@ class P2PManager {
                     }
                 }
             }
-            
+
             logger.info(`P2P Listening on ${joinedCount} interfaces.`);
 
             // If we found a "Real" LAN IP, set it for outgoing packets to avoid VPN
             if (bestInterface) {
                 try {
                     this.udpSocket.setMulticastInterface(bestInterface);
-                } catch(e) {}
+                } catch (e) { }
             }
 
             this.discoveryInterval = setInterval(() => {
                 this.broadcastPresence();
                 this.prunePeers();
             }, DISCOVERY_INTERVAL);
-            
+
             this.broadcastPresence();
         });
     }
@@ -150,7 +171,7 @@ class P2PManager {
 
     handleDiscoveryMessage(msg, rinfo) {
         if (!msg.startsWith('HELIOS_P2P:')) return;
-        
+
         const parts = msg.split(':');
         if (parts.length < 4) return;
 
@@ -168,38 +189,51 @@ class P2PManager {
 
         if (!this.peers.has(peerId)) {
             logger.info(`Found new peer: ${peer.ip}:${peer.port}`);
+            this.peers.set(peerId, peer);
+            this.emit('peer-update', this.peers.size);
+        } else {
+            this.peers.set(peerId, peer);
         }
-        this.peers.set(peerId, peer);
     }
 
     prunePeers() {
         const now = Date.now();
+        let changed = false;
         for (const [id, peer] of this.peers) {
             if (now - peer.lastSeen > PEER_TIMEOUT) {
                 this.peers.delete(id);
+                changed = true;
             }
+        }
+        if (changed) {
+            this.emit('peer-update', this.peers.size);
         }
     }
 
     async downloadFile(asset, destPath) {
-        if (this.peers.size === 0) return false;
+        if (this.peers.size === 0) {
+            // logger.debug('[P2P] Skipped: No peers connected'); // Optional: uncomment if needed associated with verbose logs
+            return false;
+        }
 
         const commonDir = ConfigManager.getCommonDirectory();
         let relPath = null;
         const absDestPath = path.resolve(destPath);
         const root = path.resolve(commonDir);
 
-        if (absDestPath.startsWith(root)) {
+        // Case-insensitive check for Windows compatibility
+        if (absDestPath.toLowerCase().startsWith(root.toLowerCase())) {
             relPath = path.relative(root, absDestPath);
         } else {
+            logger.warn(`[P2P] Skipped: Destination path ${absDestPath} is not in common directory ${root}`);
             return false;
         }
 
         relPath = relPath.replace(/\\/g, '/');
-        
+
         const peers = Array.from(this.peers.values());
         const peer = peers[Math.floor(Math.random() * peers.length)];
-        
+
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 3000);
 
@@ -211,32 +245,50 @@ class P2PManager {
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
             const fileStream = fs.createWriteStream(destPath);
-            
+            let bytesReceived = 0;
+
             if (Readable.fromWeb) {
-                await pipeline(Readable.fromWeb(res.body), fileStream);
+                // Node 16+
+                const webStream = Readable.fromWeb(res.body);
+                webStream.on('data', chunk => bytesReceived += chunk.length);
+                await pipeline(webStream, fileStream);
             } else {
                 const reader = res.body.getReader();
                 const nodeStream = new Readable({
                     async read() {
                         const { done, value } = await reader.read();
                         if (done) this.push(null);
-                        else this.push(Buffer.from(value));
+                        else {
+                            bytesReceived += value.length;
+                            this.push(Buffer.from(value));
+                        }
                     }
                 });
                 await pipeline(nodeStream, fileStream);
             }
+
+            this.stats.downloaded += bytesReceived;
+            this.stats.filesDownloaded++;
+            this.emit('stats-update', this.stats);
+
+            // Detailed logging as requested
+            logger.info(`[P2P] Successfully downloaded ${asset.id || relPath} from ${peer.ip} (${bytesReceived} bytes). Total P2P: ${(this.stats.downloaded / 1024 / 1024).toFixed(2)} MB`);
+
             return true;
 
         } catch (err) {
+            logger.warn(`[P2P] Failed to download ${asset.id || relPath} from ${peer.ip}: ${err.message}`);
             return false;
         }
     }
-    
+
     stop() {
         if (this.httpServer) { this.httpServer.close(); this.httpServer = null; }
         if (this.udpSocket) { this.udpSocket.close(); this.udpSocket = null; }
         if (this.discoveryInterval) { clearInterval(this.discoveryInterval); this.discoveryInterval = null; }
         this.started = false;
+        this.peers.clear();
+        this.emit('peer-update', 0);
     }
 }
 
