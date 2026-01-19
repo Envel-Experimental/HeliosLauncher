@@ -44,7 +44,6 @@ class NodeAdapter {
             return { ...PROFILES.LOW }
         }
 
-        // High End: > 8GB RAM and >= 4 Cores
         // High End: > 8GB RAM and >= 8 Cores
         if (totalMem > EIGHT_GB && cpuCount >= 8) {
             return { ...PROFILES.HIGH }
