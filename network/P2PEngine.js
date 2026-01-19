@@ -19,6 +19,8 @@ const MSG_HELLO = 4
 const MSG_PING = 5
 const MSG_PONG = 6
 
+const MAX_CONCURRENT_UPLOADS = 5
+
 // Fixed topic for the "Zombie" network
 const SWARM_TOPIC = crypto.createHash('sha256').update('zombie-launcher-assets-v1').digest()
 
@@ -129,11 +131,18 @@ class PeerHandler {
             return
         }
 
+        // Check Concurrent Upload Limits
+        if (this.engine.activeUploads >= MAX_CONCURRENT_UPLOADS) {
+            this.sendError(reqId, 'Busy')
+            return
+        }
+
         try {
             const commonDir = ConfigManager.getCommonDirectory()
             const filePath = path.join(commonDir, 'assets', 'objects', hash.substring(0, 2), hash)
 
             if (fs.existsSync(filePath)) {
+                this.engine.activeUploads++
                 const stream = fs.createReadStream(filePath)
 
                 stream.on('data', (chunk) => {
@@ -141,10 +150,12 @@ class PeerHandler {
                 })
 
                 stream.on('end', () => {
+                    this.engine.activeUploads--
                     this.sendEnd(reqId)
                 })
 
                 stream.on('error', (err) => {
+                    this.engine.activeUploads--
                     this.sendError(reqId, 'Read error')
                 })
             } else {

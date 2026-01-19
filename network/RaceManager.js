@@ -2,8 +2,13 @@ const { Readable } = require('stream')
 const P2PEngine = require('./P2PEngine')
 const HashVerifierStream = require('./HashVerifierStream')
 const Config = require('./config')
+const NodeAdapter = require('./NodeAdapter')
 
 class RaceManager {
+
+    constructor() {
+        this.p2pConsecutiveWins = 0
+    }
 
     /**
      * Intercepts and handles the request using a Racing strategy.
@@ -77,9 +82,18 @@ class RaceManager {
                 abortController.abort() // Cancel HTTP
                 sourceStream = winner.result
                 // console.log(`[RaceManager] P2P won for ${hash.substring(0,8)}`)
+
+                this.p2pConsecutiveWins++
+                if (this.p2pConsecutiveWins >= 10) {
+                    NodeAdapter.boostWeight()
+                    this.p2pConsecutiveWins = 0
+                }
             } else {
                 // HTTP Won
                 if (p2pStream) p2pStream.destroy() // Cancel P2P
+
+                // Reset P2P win streak
+                this.p2pConsecutiveWins = 0
 
                 // Convert Web Stream to Node Stream for piping
                 if (winner.result.body) {
