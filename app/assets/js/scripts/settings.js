@@ -223,6 +223,7 @@ document.getElementById('settingsP2PInfoButton').onclick = async () => {
                 <br>
                 <h3 style="margin: 0 0 5px; border-bottom: 1px solid #555;">Глобальная сеть (WAN)</h3>
                 <div>Топик: <span style="color: #aaa;">${global.topic}</span></div>
+                <div>DHT Live Nodes: ${global.dhtNodes || 0} (Configured Bootstraps: ${global.bootstrapNodes})</div>
                 <div>Пиры: ${global.peers}</div>
                 <div>Активные запросы: ${global.requests}</div>
                 <div>Активные раздачи (Smart): ${global.uploads}</div>

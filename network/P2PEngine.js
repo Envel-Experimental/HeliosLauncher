@@ -448,12 +448,35 @@ class P2PEngine extends EventEmitter {
 
     getNetworkInfo() {
         if (!this.totalUploaded) this.totalUploaded = 0
+
+        // Try to get DHT node count (routing table) - Live "Seen" Nodes
+        let routingNodes = 0
+        const dhtRef = this.dht
+        if (dhtRef) {
+            // Inspect internals safely to find Routing Table (KBucket)
+            // HyperDHT typically wraps dht-rpc
+            const table = dhtRef.nodes || dhtRef.routingTable || (dhtRef._dht && dhtRef._dht.nodes)
+
+            if (table) {
+                // K-Bucket / Routing Table usually has .count() or .length or .size
+                if (typeof table.count === 'function') routingNodes = table.count()
+                else if (typeof table.toArray === 'function') routingNodes = table.toArray().length
+                else if (table.length !== undefined) routingNodes = table.length
+                else if (table.size !== undefined) routingNodes = table.size
+            }
+        }
+
+        // Check if bootstrapped (approximate)
+        // If we have routing nodes, we probably bootstrapped.
+
         return {
             peers: this.peers.length,
             topic: SWARM_TOPIC.toString('hex').substring(0, 8),
             requests: this.requests.size,
             uploads: this.activeUploads,
-            uploaded: this.totalUploaded
+            uploaded: this.totalUploaded,
+            dhtNodes: routingNodes,
+            bootstrapNodes: Config.BOOTSTRAP_NODES.length
         }
     }
 
@@ -483,14 +506,14 @@ class P2PEngine extends EventEmitter {
             // To prevent Hyperswarm from using MDNS (Local Discovery), we pass `local: false` or `mdns: false` depending on version?
             // Hyperswarm v4 doesn't support 'mdns' option directly in constructor, it's part of discovery.
             // But we can try passing it if it helps, mainly we rely on DHT.
-            const dht = new HyperDHT({
+            this.dht = new HyperDHT({
                 bootstrap: Config.BOOTSTRAP_NODES.map(n => ({ host: n.host, port: n.port }))
             })
 
             // Disable local discovery to avoid conflict with P2PManager (UDP)
             // Hyperswarm (if using recent version) might use 'local' option?
             // If not supported, we rely on P2PManager being faster.
-            this.swarm = new Hyperswarm({ dht, local: false, mdns: false })
+            this.swarm = new Hyperswarm({ dht: this.dht, local: false, mdns: false })
 
             this.swarm.on('connection', (socket, info) => {
                 const peer = new PeerHandler(socket, this)
