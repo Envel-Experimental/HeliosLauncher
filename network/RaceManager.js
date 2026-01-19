@@ -1,6 +1,7 @@
 const { Readable } = require('stream')
 const P2PEngine = require('./P2PEngine')
 const HashVerifierStream = require('./HashVerifierStream')
+const Config = require('./config')
 
 class RaceManager {
 
@@ -101,8 +102,39 @@ class RaceManager {
 
         } catch (err) {
             // console.error(`[RaceManager] Failed to fetch ${hash}:`, err)
-            // Fallback: If race fails (both failed), try original fetch again without signal?
-            // Or just return 404
+
+            // Retry with Mirrors defined in Config
+            if (Config.HTTP_MIRRORS && Config.HTTP_MIRRORS.length > 0) {
+                // Try to reconstruct path from original URL
+                // Common format: https://resources.download.minecraft.net/ab/abc123...
+                // or https://libraries.minecraft.net/...
+                let pathSuffix = ''
+                try {
+                    const u = new URL(url)
+                    pathSuffix = u.pathname
+                } catch(e) {
+                    // Fallback using hash logic if URL parsing fails
+                    pathSuffix = `/${hash.substring(0,2)}/${hash}`
+                }
+
+                for (const mirrorBase of Config.HTTP_MIRRORS) {
+                    try {
+                        const mirrorUrl = mirrorBase.replace(/\/$/, '') + pathSuffix
+                        // console.log(`[RaceManager] Retrying with mirror: ${mirrorUrl}`)
+
+                        const res = await fetch(mirrorUrl)
+                        if (res.ok) {
+                            let stream = Readable.fromWeb(res.body)
+                            const verifier = new HashVerifierStream(algo, hash)
+                            stream.pipe(verifier)
+                            return new Response(Readable.toWeb(verifier))
+                        }
+                    } catch (mirrorErr) {
+                        // Continue to next mirror
+                    }
+                }
+            }
+
             return new Response('Not Found', { status: 404 })
         }
     }

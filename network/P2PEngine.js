@@ -16,6 +16,8 @@ const MSG_DATA = 1
 const MSG_ERROR = 2
 const MSG_END = 3
 const MSG_HELLO = 4
+const MSG_PING = 5
+const MSG_PONG = 6
 
 // Fixed topic for the "Zombie" network
 const SWARM_TOPIC = crypto.createHash('sha256').update('zombie-launcher-assets-v1').digest()
@@ -43,6 +45,10 @@ class PeerHandler {
 
         // Send Hello with local weight
         this.sendHello()
+
+        // Measure Latency
+        this.pingTimestamp = Date.now()
+        this.sendPing()
     }
 
     processBuffer() {
@@ -85,6 +91,12 @@ class PeerHandler {
             case MSG_HELLO:
                 this.handleHello(payload)
                 break
+            case MSG_PING:
+                this.handlePing(reqId)
+                break
+            case MSG_PONG:
+                this.handlePong(reqId)
+                break
         }
     }
 
@@ -93,6 +105,18 @@ class PeerHandler {
             this.remoteWeight = payload.readUInt8(0)
             // console.log(`[PeerHandler] Peer weight set to ${this.remoteWeight}`)
         }
+    }
+
+    handlePing(reqId) {
+        // Reply with PONG
+        this.sendPong(reqId)
+    }
+
+    handlePong(reqId) {
+        // Calculate RTT
+        const now = Date.now()
+        this.rtt = now - this.pingTimestamp
+        // console.log(`[PeerHandler] RTT: ${this.rtt}ms`)
     }
 
     async handleRequest(reqId, payload) {
@@ -169,6 +193,22 @@ class PeerHandler {
         this.socket.write(b4a.concat([header, payload]))
     }
 
+    sendPing() {
+        const header = b4a.alloc(9)
+        header[0] = MSG_PING
+        header.writeUInt32BE(0, 1)
+        header.writeUInt32BE(0, 5)
+        this.socket.write(header)
+    }
+
+    sendPong(reqId) {
+        const header = b4a.alloc(9)
+        header[0] = MSG_PONG
+        header.writeUInt32BE(reqId, 1) // Echo reqId if needed, though usually 0 for system
+        header.writeUInt32BE(0, 5)
+        this.socket.write(header)
+    }
+
     sendRequest(reqId, hash) {
         const payload = b4a.from(hash, 'utf-8')
         const header = b4a.alloc(9)
@@ -204,10 +244,10 @@ class P2PEngine extends EventEmitter {
 
                 // Enforce connection limits from profile
                 if (this.peers.length > this.profile.maxPeers) {
-                    // Drop oldest or extra
-                    // For now, just keep them, but maybe stop accepting new ones?
-                    // Or we can drop:
-                    // socket.destroy()
+                    // Drop the new connection if we are at capacity
+                    // This is a simple strategy; a more complex one could drop the peer with the lowest score
+                    socket.destroy()
+                    return
                 }
 
                 socket.on('close', () => {
@@ -255,31 +295,35 @@ class P2PEngine extends EventEmitter {
 
         const reqId = this.reqIdCounter++
 
-        // Pick a peer using Weighted Random Selection
-        let peer = null
+        // Score-based Peer Selection (Weight / RTT)
+        // Default RTT to 500ms if unknown, avoid divide by zero
+        // Formula: Score = (Weight^2) * (1000 / (RTT + 50))
+        // Weight is squared to emphasize powerful nodes
 
-        // Calculate total weight
-        let totalWeight = 0
-        for (const p of this.peers) {
-            totalWeight += (p.remoteWeight || 1) // Default to 1 if unknown
-        }
+        let bestPeer = null
+        let maxScore = -1
 
-        if (totalWeight > 0) {
-            let random = Math.random() * totalWeight
+        // If we have peers, try to find the best one
+        if (this.peers.length > 0) {
+            // Sort peers by score and pick top one (deterministic) to ensure "Best" peer is used
+            // Or pick from top 3 to distribute load slightly?
+            // User complained about "random selection" picking slow peers.
+            // Let's go fully deterministic for now: Best Score Wins.
+
             for (const p of this.peers) {
-                const w = p.remoteWeight || 1
-                if (random < w) {
-                    peer = p
-                    break
+                const weight = p.remoteWeight || 1
+                const rtt = p.rtt || 200 // Default 200ms if not yet ponged
+
+                const score = (weight * weight) * (10000 / (rtt + 10))
+
+                if (score > maxScore) {
+                    maxScore = score
+                    bestPeer = p
                 }
-                random -= w
             }
         }
 
-        // Fallback or precision error check
-        if (!peer && this.peers.length > 0) {
-            peer = this.peers[Math.floor(Math.random() * this.peers.length)]
-        }
+        const peer = bestPeer
 
         if (!peer) {
              process.nextTick(() => {
