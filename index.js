@@ -48,7 +48,7 @@ const remoteMain = require('@electron/remote/main')
 remoteMain.initialize()
 
 // Requirements
-const { app, BrowserWindow, ipcMain, Menu, shell, powerMonitor, dialog } = require('electron')
+const { app, BrowserWindow, ipcMain, Menu, shell, powerMonitor, dialog, protocol, session } = require('electron')
 const autoUpdater                       = require('electron-updater').autoUpdater
 const { spawn }                         = require('child_process')
 const ejse                              = require('ejs-electron')
@@ -60,6 +60,9 @@ const { AZURE_CLIENT_ID, MSFT_OPCODE, MSFT_REPLY_TYPE, MSFT_ERROR, SHELL_OPCODE 
 const LangLoader                        = require('./app/assets/js/langloader')
 const SysUtil                           = require('./app/assets/js/sysutil')
 const ConfigManager                     = require('./app/assets/js/configmanager')
+
+const P2PEngine                         = require('./network/P2PEngine')
+const RaceManager                       = require('./network/RaceManager')
 
 // Set up single instance lock.
 const gotTheLock = app.requestSingleInstanceLock()
@@ -667,6 +670,24 @@ function handleEPERM() {
 }
 
 app.on('ready', async () => {
+
+    // Register P2P/Racing Protocol
+    protocol.handle('mc-asset', (req) => {
+        return RaceManager.handle(req)
+    })
+
+    // Initialize P2P Engine
+    P2PEngine.init()
+
+    // Intercept Minecraft Asset URLs
+    session.defaultSession.webRequest.onBeforeRequest(
+        { urls: ['*://resources.download.minecraft.net/*', '*://libraries.minecraft.net/*'] },
+        (details, callback) => {
+            const redirectURL = 'mc-asset://' + details.url.replace(/^https?:\/\//, '')
+            callback({ redirectURL })
+        }
+    )
+
     try {
         await ConfigManager.load()
     } catch (err) {

@@ -1,0 +1,292 @@
+const Hyperswarm = require('hyperswarm')
+const HyperDHT = require('hyperdht')
+const b4a = require('b4a')
+const crypto = require('crypto')
+const fs = require('fs')
+const path = require('path')
+const { EventEmitter } = require('events')
+const { Readable } = require('stream')
+const Config = require('./config')
+const NodeAdapter = require('./NodeAdapter')
+const ConfigManager = require('../app/assets/js/configmanager')
+
+// Protocol Constants
+const MSG_REQUEST = 0
+const MSG_DATA = 1
+const MSG_ERROR = 2
+const MSG_END = 3
+
+// Fixed topic for the "Zombie" network
+const SWARM_TOPIC = crypto.createHash('sha256').update('zombie-launcher-assets-v1').digest()
+
+class PeerHandler {
+    constructor(socket, engine) {
+        this.socket = socket
+        this.engine = engine
+        this.buffer = b4a.alloc(0)
+        this.processing = false
+
+        socket.on('data', (data) => {
+            this.buffer = b4a.concat([this.buffer, data])
+            this.processBuffer()
+        })
+
+        socket.on('error', (err) => {
+            // console.error('Peer socket error:', err.message)
+            this.engine.removePeer(this)
+        })
+
+        socket.on('close', () => {
+            this.engine.removePeer(this)
+        })
+    }
+
+    processBuffer() {
+        if (this.processing) return
+        this.processing = true
+
+        while (this.buffer.length >= 9) {
+            // Header: Type(1) + ReqID(4) + Len(4)
+            const type = this.buffer[0]
+            const reqId = this.buffer.readUInt32BE(1)
+            const len = this.buffer.readUInt32BE(5)
+
+            if (this.buffer.length < 9 + len) {
+                break // Wait for more data
+            }
+
+            const payload = this.buffer.subarray(9, 9 + len)
+            this.handleMessage(type, reqId, payload)
+
+            this.buffer = this.buffer.subarray(9 + len)
+        }
+
+        this.processing = false
+    }
+
+    handleMessage(type, reqId, payload) {
+        switch (type) {
+            case MSG_REQUEST:
+                this.handleRequest(reqId, payload)
+                break
+            case MSG_DATA:
+                this.engine.handleIncomingData(reqId, payload)
+                break
+            case MSG_ERROR:
+                this.engine.handleIncomingError(reqId, payload)
+                break
+            case MSG_END:
+                this.engine.handleIncomingEnd(reqId)
+                break
+        }
+    }
+
+    async handleRequest(reqId, payload) {
+        // Seeder Logic
+        const hash = payload.toString('utf-8')
+        // Sanitize hash to prevent directory traversal
+        if (!/^[a-f0-9]{40}$/i.test(hash)) {
+            this.sendError(reqId, 'Invalid hash')
+            return
+        }
+
+        try {
+            const commonDir = ConfigManager.getCommonDirectory()
+            const filePath = path.join(commonDir, 'assets', 'objects', hash.substring(0, 2), hash)
+
+            if (fs.existsSync(filePath)) {
+                const stream = fs.createReadStream(filePath)
+
+                stream.on('data', (chunk) => {
+                    this.sendData(reqId, chunk)
+                })
+
+                stream.on('end', () => {
+                    this.sendEnd(reqId)
+                })
+
+                stream.on('error', (err) => {
+                    this.sendError(reqId, 'Read error')
+                })
+            } else {
+                this.sendError(reqId, 'Not found')
+            }
+        } catch (err) {
+            this.sendError(reqId, 'Internal error')
+        }
+    }
+
+    sendData(reqId, data) {
+        const header = b4a.alloc(9)
+        header[0] = MSG_DATA
+        header.writeUInt32BE(reqId, 1)
+        header.writeUInt32BE(data.length, 5)
+        this.socket.write(b4a.concat([header, data]))
+    }
+
+    sendError(reqId, message) {
+        const payload = b4a.from(message, 'utf-8')
+        const header = b4a.alloc(9)
+        header[0] = MSG_ERROR
+        header.writeUInt32BE(reqId, 1)
+        header.writeUInt32BE(payload.length, 5)
+        this.socket.write(b4a.concat([header, payload]))
+    }
+
+    sendEnd(reqId) {
+        const header = b4a.alloc(9)
+        header[0] = MSG_END
+        header.writeUInt32BE(reqId, 1)
+        header.writeUInt32BE(0, 5) // No payload
+        this.socket.write(header)
+    }
+
+    sendRequest(reqId, hash) {
+        const payload = b4a.from(hash, 'utf-8')
+        const header = b4a.alloc(9)
+        header[0] = MSG_REQUEST
+        header.writeUInt32BE(reqId, 1)
+        header.writeUInt32BE(payload.length, 5)
+        this.socket.write(b4a.concat([header, payload]))
+    }
+}
+
+class P2PEngine extends EventEmitter {
+    constructor() {
+        super()
+        this.peers = [] // Array of PeerHandler
+        this.requests = new Map() // reqId -> { stream: Readable, timeout: Timer }
+        this.reqIdCounter = 1
+        this.profile = NodeAdapter.getProfile()
+    }
+
+    async init() {
+        try {
+            // Setup HyperDHT with bootstrap nodes
+            // Note: hyperswarm handles DHT internally but we can pass options
+            const dht = new HyperDHT({
+                 bootstrap: Config.BOOTSTRAP_NODES.map(n => ({ host: n.host, port: n.port }))
+            })
+
+            this.swarm = new Hyperswarm({ dht })
+
+            this.swarm.on('connection', (socket, info) => {
+                const peer = new PeerHandler(socket, this)
+                this.peers.push(peer)
+
+                // Enforce connection limits from profile
+                if (this.peers.length > this.profile.maxPeers) {
+                    // Drop oldest or extra
+                    // For now, just keep them, but maybe stop accepting new ones?
+                    // Or we can drop:
+                    // socket.destroy()
+                }
+
+                socket.on('close', () => {
+                    this.peers = this.peers.filter(p => p !== peer)
+                })
+            })
+
+            // Join the topic
+            // server: true (announce) if not passive or if we want to share
+            // client: true (lookup)
+            // Profile says "passive: true" means "passive seeding only".
+            // Usually passive seeding means you don't aggressively announce, OR you announce but prioritize own downloads.
+            // The prompt says: "Low-End Profile... passive seeding only."
+            // "Aggressive Announcement: The node should join the swarm topic and actively announce itself."
+            // I'll assume everyone joins, but maybe we adjust `announce` flag?
+            // Hyperswarm join(topic, { server: true, client: true })
+            const shouldAnnounce = !this.profile.passive
+
+            await this.swarm.join(SWARM_TOPIC, {
+                server: shouldAnnounce,
+                client: true
+            })
+
+            await this.swarm.flush() // Wait for announcement
+            console.log(`[P2PEngine] Initialized. Topic: ${b4a.toString(SWARM_TOPIC, 'hex').substring(0,8)}... Peers: ${this.peers.length}`)
+
+        } catch (err) {
+            console.error('[P2PEngine] Init failed:', err)
+        }
+    }
+
+    requestFile(hash) {
+        // Return a Readable stream
+        const stream = new Readable({
+            read() {}
+        })
+
+        if (this.peers.length === 0) {
+            // No peers, fail immediately so HTTP can take over
+            process.nextTick(() => {
+                stream.emit('error', new Error('No peers available'))
+            })
+            return stream
+        }
+
+        const reqId = this.reqIdCounter++
+
+        // Pick a peer
+        // Simple strategy: Round Robin or Random
+        const peer = this.peers[Math.floor(Math.random() * this.peers.length)]
+
+        if (!peer) {
+             process.nextTick(() => {
+                stream.emit('error', new Error('Peer selection failed'))
+            })
+            return stream
+        }
+
+        // Setup request tracking
+        this.requests.set(reqId, {
+            stream,
+            peer,
+            timestamp: Date.now()
+        })
+
+        // Send request
+        peer.sendRequest(reqId, hash)
+
+        // Timeout fallback
+        setTimeout(() => {
+            if (this.requests.has(reqId)) {
+                this.requests.delete(reqId)
+                stream.emit('error', new Error('P2P Timeout'))
+            }
+        }, Config.PROTOCOL.TIMEOUT)
+
+        return stream
+    }
+
+    handleIncomingData(reqId, data) {
+        const req = this.requests.get(reqId)
+        if (req) {
+            req.stream.push(data)
+        }
+    }
+
+    handleIncomingEnd(reqId) {
+        const req = this.requests.get(reqId)
+        if (req) {
+            req.stream.push(null) // EOF
+            this.requests.delete(reqId)
+        }
+    }
+
+    handleIncomingError(reqId, messageBuffer) {
+        const req = this.requests.get(reqId)
+        if (req) {
+            const msg = messageBuffer.toString('utf-8')
+            req.stream.emit('error', new Error(`Peer error: ${msg}`))
+            this.requests.delete(reqId)
+        }
+    }
+
+    removePeer(peer) {
+        const idx = this.peers.indexOf(peer)
+        if (idx > -1) this.peers.splice(idx, 1)
+    }
+}
+
+module.exports = new P2PEngine()
