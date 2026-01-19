@@ -51,7 +51,7 @@ class P2PManager extends EventEmitter {
             this.handleRequest(req, res);
         });
 
-        this.httpServer.maxConnections = 50;
+        this.httpServer.maxConnections = 200;
 
         this.httpServer.on('error', (err) => {
             logger.warn('P2P HTTP Server error:', err);

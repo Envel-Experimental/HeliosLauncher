@@ -12,7 +12,7 @@ const log = LoggerUtil.getLogger('DownloadEngine');
 
 async function downloadQueue(assets, onProgress) {
     P2PManager.start();
-    const limit = 15; // Concurrency
+    const limit = 32; // Concurrency
     const receivedTotals = assets.reduce((acc, a) => ({ ...acc, [a.id]: 0 }), {});
     let receivedGlobal = 0;
 
@@ -85,70 +85,83 @@ async function downloadFile(asset, onProgress) {
         log.warn(`P2P download failed for ${asset.id}: ${err.message}`);
     }
 
-    const MAX_RETRIES = 5;
     let retryCount = 0;
+    const MAX_RETRIES = 5;
+    const MAX_HTTP_CONCURRENCY = 15;
 
-    while (retryCount <= MAX_RETRIES) {
-        if (retryCount > 0) {
-            const delay = Math.pow(2, retryCount) * 1000;
-            await sleep(delay);
-        }
+    // Safety limit for HTTP requests (hybrid concurrency)
+    while (activeHttpRequests >= MAX_HTTP_CONCURRENCY) {
+        await sleep(50);
+    }
+    activeHttpRequests++;
 
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 15000); // Connect timeout
+    try {
+        while (retryCount <= MAX_RETRIES) {
+            if (retryCount > 0) {
+                const delay = Math.pow(2, retryCount) * 1000;
+                await sleep(delay);
+            }
 
-            const response = await fetch(url, { signal: controller.signal });
-            clearTimeout(timeoutId);
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 15000); // Connect timeout
 
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const response = await fetch(url, { signal: controller.signal });
+                clearTimeout(timeoutId);
 
-            // Progress tracking
-            const contentLength = response.headers.get('content-length');
-            const total = parseInt(contentLength, 10) || asset.size || 0;
-            let loaded = 0;
-            let lastProgressTime = 0;
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-            const fileStream = fsSync.createWriteStream(decodedPath);
+                // Progress tracking
+                const contentLength = response.headers.get('content-length');
+                const total = parseInt(contentLength, 10) || asset.size || 0;
+                let loaded = 0;
+                let lastProgressTime = 0;
 
-            // Use streaming instead of buffering
-            if (response.body) {
-                const reader = response.body.getReader();
-                const nodeStream = new Readable({
-                    async read() {
-                        const { done, value } = await reader.read();
-                        if (done) {
-                            this.push(null);
-                        } else {
-                            loaded += value.length;
-                            const now = Date.now();
-                            if (onProgress && (now - lastProgressTime >= 100 || loaded === total)) {
-                                onProgress(loaded);
-                                lastProgressTime = now;
+                const fileStream = fsSync.createWriteStream(decodedPath);
+
+                // Use streaming instead of buffering
+                if (response.body) {
+                    const reader = response.body.getReader();
+                    const nodeStream = new Readable({
+                        async read() {
+                            const { done, value } = await reader.read();
+                            if (done) {
+                                this.push(null);
+                            } else {
+                                loaded += value.length;
+                                const now = Date.now();
+                                if (onProgress && (now - lastProgressTime >= 100 || loaded === total)) {
+                                    onProgress(loaded);
+                                    lastProgressTime = now;
+                                }
+                                this.push(Buffer.from(value));
                             }
-                            this.push(Buffer.from(value));
                         }
-                    }
-                });
-                await pipeline(nodeStream, fileStream);
-            } else {
-                 throw new Error('No response body');
-            }
+                    });
+                    await pipeline(nodeStream, fileStream);
+                } else {
+                    throw new Error('No response body');
+                }
 
-            // Re-validate
-            if (await validateLocalFile(decodedPath, algo, hash)) {
-                return;
-            } else {
-                throw new Error(`File validation failed: ${decodedPath}`);
-            }
+                // Re-validate
+                if (await validateLocalFile(decodedPath, algo, hash)) {
+                    return;
+                } else {
+                    throw new Error(`File validation failed: ${decodedPath}`);
+                }
 
-        } catch (err) {
-            if (onProgress) onProgress(0);
-            retryCount++;
-            if (retryCount > MAX_RETRIES) throw err;
-            log.warn(`Download failed for ${url} (Attempt ${retryCount}): ${err.message}`);
+            } catch (err) {
+                if (onProgress) onProgress(0);
+                retryCount++;
+                if (retryCount > MAX_RETRIES) throw err;
+                log.warn(`Download failed for ${url} (Attempt ${retryCount}): ${err.message}`);
+            }
         }
+    } finally {
+        activeHttpRequests--;
     }
 }
+
+let activeHttpRequests = 0;
 
 module.exports = { downloadQueue, downloadFile }
