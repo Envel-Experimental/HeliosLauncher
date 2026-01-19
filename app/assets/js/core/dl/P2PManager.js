@@ -247,24 +247,25 @@ class P2PManager extends EventEmitter {
             const fileStream = fs.createWriteStream(destPath);
             let bytesReceived = 0;
 
-            if (Readable.fromWeb) {
-                // Node 16+
-                const webStream = Readable.fromWeb(res.body);
-                webStream.on('data', chunk => bytesReceived += chunk.length);
-                await pipeline(webStream, fileStream);
-            } else {
+            if (res.body.getReader) {
+                // Handle Web Stream manually to avoid context issues with Readable.fromWeb
                 const reader = res.body.getReader();
                 const nodeStream = new Readable({
                     async read() {
                         const { done, value } = await reader.read();
-                        if (done) this.push(null);
-                        else {
+                        if (done) {
+                            this.push(null);
+                        } else {
                             bytesReceived += value.length;
                             this.push(Buffer.from(value));
                         }
                     }
                 });
                 await pipeline(nodeStream, fileStream);
+            } else {
+                // Assume Node Stream
+                res.body.on('data', chunk => bytesReceived += chunk.length);
+                await pipeline(res.body, fileStream);
             }
 
             this.stats.downloaded += bytesReceived;
