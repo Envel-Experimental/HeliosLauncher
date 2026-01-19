@@ -1,4 +1,4 @@
-name: "Gemini Interactive Bot"
+name: "Gemini Interactive"
 
 on:
   workflow_dispatch:
@@ -6,10 +6,10 @@ on:
     types: [created]
 
 jobs:
-  gemini_chat:
+  gemini-chat:
     if: |
-      github.event.issue.pull_request &&
-      (contains(github.event.comment.body, '@gemini') || startsWith(github.event.comment.body, '/'))
+      github.event.issue.pull_request && 
+      contains(github.event.comment.body, '@gemini')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -17,18 +17,22 @@ jobs:
       issues: write
     steps:
       - uses: actions/checkout@v4
-      - name: Gemini 3 Flash Response
-        uses: google-github-actions/run-gemini-cli@v2
+      
+      - name: Gemini AI Interaction
+        uses: google-github-actions/run-gemini-cli@v1 
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           model: "gemini-3-flash"
-          thinking_level: "high" 
           prompt: |
-            You are a helpful AI engineer. A user mentioned you in a PR comment.
-            Context: ${{ github.event.comment.body }}
+            You are a senior software engineer. A user mentioned you in a PR comment:
+            "${{ github.event.comment.body }}"
             
-            Instructions:
-            1. If they say "hello" or just mention you, greet them warmly and ask how you can help.
-            2. If they use "/review", perform a full code review of the PR diff.
-            3. If they ask a specific question about the code, answer it using the current PR context.
+            Task:
+            1. If the user asks for a review or uses "/review", perform a comprehensive code review of the PR changes.
+            2. If the user asks a technical question, provide a detailed explanation.
+            3. If it is a general interaction, respond professionally.
             
+            Requirements:
+            - Technical accuracy using 2026 standards.
+            - Concise and actionable feedback.
+            - Language: English.
