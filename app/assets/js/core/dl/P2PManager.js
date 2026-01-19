@@ -88,11 +88,27 @@ class P2PManager extends EventEmitter {
             const hash = url.searchParams.get('hash');
             const relPath = url.searchParams.get('path');
 
-            if (!hash || !relPath) { res.writeHead(400); res.end('Missing data'); return; }
-            if (relPath.includes('..') || path.isAbsolute(relPath)) { res.writeHead(403); res.end('Invalid path'); return; }
+            if (!hash) { res.writeHead(400); res.end('Missing hash'); return; }
+            if (relPath && (relPath.includes('..') || path.isAbsolute(relPath))) { res.writeHead(403); res.end('Invalid path'); return; }
 
             const commonDir = ConfigManager.getCommonDirectory();
-            const filePath = path.join(commonDir, relPath);
+            let filePath;
+
+            if (relPath && relPath !== 'unknown') {
+                filePath = path.join(commonDir, relPath);
+            } else {
+                // Fallback: Try to locate by hash in assets/objects
+                // Standard Minecraft Asset Structure: assets/objects/xx/hash
+                const prefix = hash.substring(0, 2);
+                const candidate = path.join(commonDir, 'assets', 'objects', prefix, hash);
+
+                if (fs.existsSync(candidate)) {
+                    filePath = candidate;
+                } else {
+                    res.writeHead(404); res.end('File not found by hash'); return;
+                }
+            }
+
             const stream = fs.createReadStream(filePath);
 
             let bytesSent = 0;
@@ -218,6 +234,92 @@ class P2PManager extends EventEmitter {
         if (changed) {
             this.emit('peer-update', this.peers.size);
         }
+    }
+
+    async requestFile(hash, signal) {
+        // Simple implementation: Try to fetch from known local peers
+        // This is a "best effort" parallel try on LAN
+        const peers = Array.from(this.peers.values());
+        if (peers.length === 0) throw new Error('No local peers');
+
+        // Try a random peer or all? Let's try up to 3 random peers to avoid flooding
+        // For RaceManager context, we need a stream ASAP.
+
+        // Shuffle peers
+        const candidates = peers.sort(() => 0.5 - Math.random()).slice(0, 3);
+
+        return new Promise(async (resolve, reject) => {
+            let errors = 0;
+            let resolved = false;
+
+            // Abort if the external signal fires
+            if (signal) {
+                if (signal.aborted) return reject(new Error('Aborted'));
+                signal.addEventListener('abort', () => {
+                    if (!resolved) {
+                        resolved = true;
+                        reject(new Error('Aborted'));
+                    }
+                });
+            }
+
+            const tryPeer = async (peer) => {
+                if (resolved || (signal && signal.aborted)) return;
+
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 2000); // 2s connect timeout
+
+                const onAbort = () => controller.abort();
+                if (signal) signal.addEventListener('abort', onAbort);
+
+                try {
+                    // We don't know the path, but P2PManager server handles "hash" query?
+                    // handleRequest uses: `const hash = reqUrl.searchParams.get('hash');`
+                    // So path param is optional if hash is provided?
+                    // Looking at handleRequest: `const filePath = path.join(..., hash);` -- Yes, it uses hash directly if path is weird?
+                    // Wait, `handleRequest` logic:
+                    // `const relPath = reqUrl.searchParams.get('path');`
+                    // `const hash = reqUrl.searchParams.get('hash');`
+                    // It actually uses `relPath` to construct `filePath` in `handleRequest`?
+                    // Let's check `handleRequest`.
+                    // It seems we need to pass a mock path or update server to support hash-only lookup.
+                    // Assuming P2PManager server supports hash lookup if we implemented it correctly.
+
+                    // Let's assume for now we just try:
+                    const url = `http://${peer.ip}:${peer.port}/file?hash=${hash}&path=unknown`;
+
+                    const res = await fetch(url, { signal: controller.signal });
+                    clearTimeout(timeout);
+                    if (signal) signal.removeEventListener('abort', onAbort);
+
+                    if (res.ok && !resolved) {
+                        resolved = true;
+                        // Valid stream?
+                        if (res.body) {
+                            // Convert WebStream to NodeStream if needed, or pass-through
+                            // RaceManager expects a stream it can pipe.
+                            // Browser fetch body is WebStream. Node fetch body is NodeStream.
+                            // Electron uses Node fetch?
+                            // index.js overrides fetch? Or native? 
+                            // Assuming Node environment (Electron Main).
+                            // If `undici` or `node-fetch`, res.body is a stream.
+                            resolve(res.body);
+                        } else {
+                            reject(new Error('No body'));
+                        }
+                    } else {
+                        throw new Error('404');
+                    }
+                } catch (e) {
+                    clearTimeout(timeout);
+                    if (signal) signal.removeEventListener('abort', onAbort);
+                    errors++;
+                    if (!resolved && errors === candidates.length) reject(new Error('Local P2P failed'));
+                }
+            };
+
+            candidates.forEach(p => tryPeer(p));
+        });
     }
 
     async downloadFile(asset, destPath) {

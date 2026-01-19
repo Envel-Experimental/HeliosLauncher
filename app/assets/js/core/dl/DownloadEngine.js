@@ -7,6 +7,7 @@ const fsSync = require('fs');
 const { pipeline } = require('stream/promises');
 const { Readable } = require('stream');
 const P2PManager = require('./P2PManager');
+const RaceManager = require('../../../../../network/RaceManager');
 
 const log = LoggerUtil.getLogger('DownloadEngine');
 
@@ -72,93 +73,65 @@ async function downloadFile(asset, onProgress) {
 
     await safeEnsureDir(dirname(decodedPath));
 
+    // RaceManager Strategy
     try {
-        const success = await P2PManager.downloadFile(asset, decodedPath);
-        if (success) {
-            if (await validateLocalFile(decodedPath, algo, hash)) {
-                log.debug(`Downloaded ${asset.id} from P2P peer.`);
-                if (onProgress) onProgress(asset.size);
-                return;
-            }
-        }
-    } catch (err) {
-        log.warn(`P2P download failed for ${asset.id}: ${err.message}`);
-    }
+        // Construct headers
+        const headers = new Headers();
+        if (asset.size) headers.append('X-Expected-Size', asset.size.toString());
 
-    let retryCount = 0;
-    const MAX_RETRIES = 5;
-    const MAX_HTTP_CONCURRENCY = 15;
+        // Use RaceManager
+        const req = new Request(url, { headers });
 
-    // Safety limit for HTTP requests (hybrid concurrency)
-    while (activeHttpRequests >= MAX_HTTP_CONCURRENCY) {
-        await sleep(50);
-    }
-    activeHttpRequests++;
+        const response = await RaceManager.handle(req);
 
-    try {
-        while (retryCount <= MAX_RETRIES) {
-            if (retryCount > 0) {
-                const delay = Math.pow(2, retryCount) * 1000;
-                await sleep(delay);
-            }
+        if (!response.ok) throw new Error(`RaceManager failed: ${response.status}`);
 
-            try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 15000); // Connect timeout
+        const fileStream = fsSync.createWriteStream(decodedPath);
 
-                const response = await fetch(url, { signal: controller.signal });
-                clearTimeout(timeoutId);
+        // Progress tracking wrapper
+        let loaded = 0;
+        let lastProgressTime = 0;
+        const total = asset.size || 0;
 
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-                // Progress tracking
-                const contentLength = response.headers.get('content-length');
-                const total = parseInt(contentLength, 10) || asset.size || 0;
-                let loaded = 0;
-                let lastProgressTime = 0;
-
-                const fileStream = fsSync.createWriteStream(decodedPath);
-
-                // Use streaming instead of buffering
-                if (response.body) {
-                    const reader = response.body.getReader();
-                    const nodeStream = new Readable({
-                        async read() {
-                            const { done, value } = await reader.read();
-                            if (done) {
-                                this.push(null);
-                            } else {
-                                loaded += value.length;
-                                const now = Date.now();
-                                if (onProgress && (now - lastProgressTime >= 100 || loaded === total)) {
-                                    onProgress(loaded);
-                                    lastProgressTime = now;
-                                }
-                                this.push(Buffer.from(value));
+        if (response.body) {
+            const reader = response.body.getReader();
+            const nodeStream = new Readable({
+                async read() {
+                    try {
+                        const { done, value } = await reader.read();
+                        if (done) {
+                            this.push(null);
+                        } else {
+                            loaded += value.length;
+                            const now = Date.now();
+                            if (onProgress && (now - lastProgressTime >= 100 || loaded === total)) {
+                                onProgress(loaded);
+                                lastProgressTime = now;
                             }
+                            this.push(Buffer.from(value));
                         }
-                    });
-                    await pipeline(nodeStream, fileStream);
-                } else {
-                    throw new Error('No response body');
+                    } catch (e) {
+                        this.destroy(e);
+                    }
                 }
+            });
 
-                // Re-validate
-                if (await validateLocalFile(decodedPath, algo, hash)) {
-                    return;
-                } else {
-                    throw new Error(`File validation failed: ${decodedPath}`);
-                }
-
-            } catch (err) {
-                if (onProgress) onProgress(0);
-                retryCount++;
-                if (retryCount > MAX_RETRIES) throw err;
-                log.warn(`Download failed for ${url} (Attempt ${retryCount}): ${err.message}`);
-            }
+            await pipeline(nodeStream, fileStream);
+        } else {
+            throw new Error('No body in response');
         }
-    } finally {
-        activeHttpRequests--;
+
+        // Validate
+        if (await validateLocalFile(decodedPath, algo, hash)) {
+            return;
+        } else {
+            throw new Error('Validation failed');
+        }
+
+    } catch (err) {
+        log.error(`Failed to download ${asset.id}: ${err.message}`);
+        try { await fs.unlink(decodedPath) } catch (e) { }
+        throw err;
     }
 }
 

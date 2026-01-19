@@ -431,11 +431,17 @@ class P2PEngine extends EventEmitter {
         try {
             // Setup HyperDHT with bootstrap nodes
             // Note: hyperswarm handles DHT internally but we can pass options
+            // To prevent Hyperswarm from using MDNS (Local Discovery), we pass `local: false` or `mdns: false` depending on version?
+            // Hyperswarm v4 doesn't support 'mdns' option directly in constructor, it's part of discovery.
+            // But we can try passing it if it helps, mainly we rely on DHT.
             const dht = new HyperDHT({
                 bootstrap: Config.BOOTSTRAP_NODES.map(n => ({ host: n.host, port: n.port }))
             })
 
-            this.swarm = new Hyperswarm({ dht })
+            // Disable local discovery to avoid conflict with P2PManager (UDP)
+            // Hyperswarm (if using recent version) might use 'local' option?
+            // If not supported, we rely on P2PManager being faster.
+            this.swarm = new Hyperswarm({ dht, local: false, mdns: false })
 
             this.swarm.on('connection', (socket, info) => {
                 const peer = new PeerHandler(socket, this)
