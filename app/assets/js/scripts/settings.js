@@ -266,7 +266,7 @@ document.getElementById('settingsP2PInfoButton').onclick = async () => {
 /**
  * Save the settings values.
  */
-function saveSettingsValues() {
+async function saveSettingsValues() {
     const sEls = document.getElementById('settingsContainer').querySelectorAll('[cValue]')
     Array.from(sEls).map((v, index, arr) => {
         const cVal = v.getAttribute('cValue')
@@ -322,7 +322,7 @@ function saveSettingsValues() {
         }
     })
 
-    ConfigManager.save()
+    await ConfigManager.save()
 
     // Apply P2P Settings immediately
     if (ConfigManager.getLocalOptimization()) {
