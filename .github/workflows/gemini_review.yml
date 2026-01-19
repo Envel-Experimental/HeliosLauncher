@@ -17,13 +17,27 @@ jobs:
       issues: write
     steps:
       - uses: actions/checkout@v4
-      
+
+      - name: Cache npm global modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-gemini-cli
+          restore-keys: |
+            ${{ runner.os }}-gemini-cli
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
       - name: Gemini AI Interaction
         id: gemini_step
         uses: google-github-actions/run-gemini-cli@main
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
-          gemini_model: "gemini-3-flash"
+          gemini_model: "gemini-1.5-flash"
           prompt: |
             You are a senior software engineer. A user mentioned you in a PR comment:
             "${{ github.event.comment.body }}"
@@ -39,7 +53,7 @@ jobs:
             - Language: English.
 
       - name: Post Response to PR
-        if: success()
+        if: success() && steps.gemini_step.outputs.gemini_response != ''
         uses: peter-evans/create-or-update-comment@v4
         with:
           issue-number: ${{ github.event.issue.number }}
