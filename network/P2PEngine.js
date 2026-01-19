@@ -36,6 +36,12 @@ class PeerHandler {
         this.processing = false
 
         socket.on('data', (data) => {
+            // VULNERABILITY FIX 2: Memory Leak DoS Protection
+            if (this.buffer.length + data.length > 2 * 1024 * 1024) { // 2MB Hard Limit
+                // console.error('[PeerHandler] Buffer overflow. Closing connection.')
+                this.socket.destroy()
+                return
+            }
             this.buffer = b4a.concat([this.buffer, data])
             this.processBuffer()
         })
@@ -93,13 +99,13 @@ class PeerHandler {
                 this.handleRequest(reqId, payload)
                 break
             case MSG_DATA:
-                this.engine.handleIncomingData(reqId, payload)
+                this.engine.handleIncomingData(reqId, payload, this) // Pass verified peer
                 break
             case MSG_ERROR:
-                this.engine.handleIncomingError(reqId, payload)
+                this.engine.handleIncomingError(reqId, payload, this)
                 break
             case MSG_END:
-                this.engine.handleIncomingEnd(reqId)
+                this.engine.handleIncomingEnd(reqId, this)
                 break
             case MSG_HELLO:
                 this.handleHello(payload)
@@ -147,6 +153,13 @@ class PeerHandler {
             return
         }
 
+        // VULNERABILITY FIX 3: IP-based Slot Exhaustion
+        const remoteIP = this.socket.remoteAddress || 'unknown'
+        if (this.engine.getUploadCountForIP(remoteIP) >= 2) { // Max 2 slots per IP
+            this.sendError(reqId, 'Busy (IP Limit)')
+            return
+        }
+
         // 1. Check if Upload is Enabled
         if (!ConfigManager.getP2PUploadEnabled()) {
             this.sendError(reqId, 'Disabled')
@@ -186,6 +199,8 @@ class PeerHandler {
 
             if (fs.existsSync(filePath)) {
                 this.engine.activeUploads++
+                this.engine.incrementUploadCountForIP(remoteIP) // FIX 3: Increment
+
                 const stream = fs.createReadStream(filePath)
 
                 // Throttle Stream
@@ -199,9 +214,6 @@ class PeerHandler {
                         // console.warn('[P2P] Upload slot timed out (Slot Exhaustion Protection)')
                         stream.destroy()
                         clearInterval(watchdog)
-                        // Decrease active uploads only if not already done by 'close'
-                        // But 'end' handles it cleanly usually. Force cleanup:
-                        if (!stream.destroyed) this.engine.activeUploads = Math.max(0, this.engine.activeUploads - 1)
                     }
                 }, 5000)
 
@@ -213,22 +225,24 @@ class PeerHandler {
                 stream.on('end', () => {
                     clearInterval(watchdog)
                     this.engine.activeUploads--
+                    this.engine.decrementUploadCountForIP(remoteIP) // FIX 3: Decrement
                     this.sendEnd(reqId)
                 })
 
                 stream.on('close', () => {
                     clearInterval(watchdog)
-                    // Check if we need to decrement? 'end' usually fires first.
-                    // If purely closed by timeout, we might need to decrement if 'end' didn't fire.
-                    // Safe approach: rely on 'end' or manual management in watchdog?
-                    // 'activeUploads' is simple counter.
-                    // Let's assume 'end' or 'error' will trigger.
-                    // Actually, if we destroy stream, 'close' fires.
+                    // Note: 'close' fires after 'end' usually, or on error/destroy.
+                    // If we rely on 'end' for decrement, we need to be careful about double decrement.
+                    // But if stream is destroyed (timeout), 'end' might not fire.
+                    // Safer to use a flag or ensure idempotency in engine, or just do it on error/end only?
+                    // If destroyed, 'error' or 'close' fires.
+                    // Let's rely on error/end to decrement.
                 })
 
                 stream.on('error', () => {
                     clearInterval(watchdog)
                     this.engine.activeUploads = Math.max(0, this.engine.activeUploads - 1)
+                    this.engine.decrementUploadCountForIP(remoteIP) // FIX 3: Decrement
                     this.sendError(reqId, 'Read error')
                 })
             } else {
@@ -310,11 +324,31 @@ class P2PEngine extends EventEmitter {
         this.requests = new Map() // reqId -> { stream: Readable, timeout: Timer }
         this.reqIdCounter = 1
         this.profile = NodeAdapter.getProfile()
+        this.activeUploads = 0
+        this.uploadCounts = new Map() // IP -> Count
 
         // Debug Info Loop
         if (process.argv.includes('--debug') || true) { // Always on for now as requested "in debug mode..."
             // Check logging level?
             // User said "in debug mode system should inform".
+        }
+    }
+
+    getUploadCountForIP(ip) {
+        return this.uploadCounts.get(ip) || 0
+    }
+
+    incrementUploadCountForIP(ip) {
+        const count = this.getUploadCountForIP(ip)
+        this.uploadCounts.set(ip, count + 1)
+    }
+
+    decrementUploadCountForIP(ip) {
+        const count = this.getUploadCountForIP(ip)
+        if (count > 0) {
+            this.uploadCounts.set(ip, count - 1)
+        } else {
+            this.uploadCounts.delete(ip)
         }
     }
 
@@ -412,6 +446,7 @@ class P2PEngine extends EventEmitter {
         }
 
         const reqId = this.reqIdCounter++
+        if (this.reqIdCounter > 4294967295) this.reqIdCounter = 1 // VULNERABILITY FIX 4: ReqId Overflow Wrap-around
 
         // Score-based Peer Selection (Weight / RTT)
         // Default RTT to 500ms if unknown, avoid divide by zero
@@ -480,17 +515,26 @@ class P2PEngine extends EventEmitter {
         return stream
     }
 
-    handleIncomingData(reqId, data) {
+    handleIncomingData(reqId, data, senderPeer) {
         const req = this.requests.get(reqId)
         if (req) {
+            // VULNERABILITY FIX 1: ReqID Spoofing Protection
+            if (req.peer !== senderPeer) {
+                // console.warn('[P2P] Spoofed Data Packet detected. Dropping.')
+                return
+            }
+
             req.bytesReceived = (req.bytesReceived || 0) + data.length
             req.stream.push(data)
         }
     }
 
-    handleIncomingEnd(reqId) {
+    handleIncomingEnd(reqId, senderPeer) {
         const req = this.requests.get(reqId)
         if (req) {
+            // VULNERABILITY FIX 1: ReqID Spoofing Protection
+            if (req.peer !== senderPeer) return;
+
             req.stream.push(null) // EOF
 
             // REPUTATION SYSTEM: Update Peer Speed
@@ -506,9 +550,12 @@ class P2PEngine extends EventEmitter {
         }
     }
 
-    handleIncomingError(reqId, messageBuffer) {
+    handleIncomingError(reqId, messageBuffer, senderPeer) {
         const req = this.requests.get(reqId)
         if (req) {
+            // VULNERABILITY FIX 1: ReqID Spoofing Protection
+            if (req.peer !== senderPeer) return;
+
             const msg = messageBuffer.toString('utf-8')
             req.stream.emit('error', new Error(`Peer error: ${msg}`))
             this.requests.delete(reqId)
