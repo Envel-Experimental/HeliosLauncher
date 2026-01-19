@@ -213,6 +213,13 @@ class PeerHandler {
                 // Throttle Stream
                 const throttled = stream.pipe(RateLimiter.throttle())
 
+                // FIX: If socket dies, kill file stream immediately
+                const onSocketClose = () => {
+                    if (!stream.destroyed) stream.destroy()
+                }
+                this.socket.on('close', onSocketClose)
+                this.socket.on('error', onSocketClose)
+
                 // VULNERABILITY FIX 3: Slot Exhaustion Protection
                 // Kill connection if client is too slow or halts
                 let lastActivity = Date.now()
@@ -229,6 +236,11 @@ class PeerHandler {
                 const cleanup = () => {
                     if (cleanupDone) return
                     cleanupDone = true
+
+                    // Clean up listeners
+                    this.socket.off('close', onSocketClose)
+                    this.socket.off('error', onSocketClose)
+
                     clearInterval(watchdog)
                     this.engine.activeUploads = Math.max(0, this.engine.activeUploads - 1)
                     this.engine.decrementUploadCountForIP(remoteIP)
@@ -261,6 +273,7 @@ class PeerHandler {
     }
 
     sendData(reqId, data) {
+        if (this.socket.destroyed) return; // Guard against dead socket
         const header = b4a.alloc(9)
         header[0] = MSG_DATA
         header.writeUInt32BE(reqId, 1)
