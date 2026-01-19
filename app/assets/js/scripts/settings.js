@@ -226,6 +226,7 @@ document.getElementById('settingsP2PInfoButton').onclick = async () => {
                 <div>Пиры: ${global.peers}</div>
                 <div>Активные запросы: ${global.requests}</div>
                 <div>Активные раздачи (Smart): ${global.uploads}</div>
+                <div>Отдано: ${((global.uploaded || 0) / 1024 / 1024).toFixed(2)} MB</div>
             </div>
         `
     }

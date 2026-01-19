@@ -258,6 +258,7 @@ class PeerHandler {
                 throttled.on('data', (chunk) => {
                     lastActivity = Date.now()
                     totalBytesSent += chunk.length
+                    this.engine.totalUploaded = (this.engine.totalUploaded || 0) + chunk.length
                     this.sendData(reqId, chunk)
                 })
 
@@ -446,11 +447,13 @@ class P2PEngine extends EventEmitter {
     }
 
     getNetworkInfo() {
+        if (!this.totalUploaded) this.totalUploaded = 0
         return {
             peers: this.peers.length,
             topic: SWARM_TOPIC.toString('hex').substring(0, 8),
             requests: this.requests.size,
-            uploads: this.activeUploads
+            uploads: this.activeUploads,
+            uploaded: this.totalUploaded
         }
     }
 
