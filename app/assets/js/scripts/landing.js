@@ -2,38 +2,37 @@
  * Script for landing.ejs
  */
 // Requirements
-const { URL }                 = require('url')
-const { MojangRestAPI }       = require('./assets/js/core/mojang/MojangRestAPI')
-const { getServerStatus }     = require('./assets/js/core/mojang/ServerStatusAPI')
+const { URL } = require('url')
+const { MojangRestAPI } = require('./assets/js/core/mojang/MojangRestAPI')
+const { getServerStatus } = require('./assets/js/core/mojang/ServerStatusAPI')
 const {
     RestResponseStatus,
     isDisplayableError
-}                             = require('./assets/js/core/common/RestResponse')
-const { validateLocalFile }   = require('./assets/js/core/common/FileUtils')
-const { FullRepair }          = require('./assets/js/core/dl/FullRepair')
+} = require('./assets/js/core/common/RestResponse')
+const { validateLocalFile } = require('./assets/js/core/common/FileUtils')
+const { FullRepair } = require('./assets/js/core/dl/FullRepair')
 const { DistributionIndexProcessor } = require('./assets/js/core/dl/DistributionIndexProcessor')
 const { MojangIndexProcessor } = require('./assets/js/core/dl/MojangIndexProcessor')
-const { downloadFile }        = require('./assets/js/core/dl/DownloadEngine')
+const { downloadFile } = require('./assets/js/core/dl/DownloadEngine')
 const {
-    validateSelectedJvm,
-    ensureJavaDirIsRoot,
-    javaExecFromRoot,
-    discoverBestJvmInstallation,
     latestOpenJDK,
     extractJdk
-}                             = require('./assets/js/core/java/JavaGuard')
+} = require('./assets/js/core/java/JavaGuard')
+const P2PModule = require('./assets/js/core/dl/P2PManager')
 
 // Internal Requirements
-const ProcessBuilder          = require('./assets/js/processbuilder')
+const ProcessBuilder = require('./assets/js/processbuilder')
 
 // Launch Elements
-const launch_content          = document.getElementById('launch_content')
-const launch_details          = document.getElementById('launch_details')
-const launch_progress         = document.getElementById('launch_progress')
-const launch_progress_label   = document.getElementById('launch_progress_label')
-const launch_details_text     = document.getElementById('launch_details_text')
+const launch_content = document.getElementById('launch_content')
+const launch_details = document.getElementById('launch_details')
+const launch_progress = document.getElementById('launch_progress')
+const launch_progress_label = document.getElementById('launch_progress_label')
+const launch_details_text = document.getElementById('launch_details_text')
 const server_selection_button = document.getElementById('server_selection_button')
-const user_text               = document.getElementById('user_text')
+const user_text = document.getElementById('user_text')
+const p2p_status = document.getElementById('p2p_status')
+const p2p_status_text = document.getElementById('p2p_status_text')
 
 const loggerLanding = LoggerUtil.getLogger('Landing')
 
@@ -44,8 +43,8 @@ const loggerLanding = LoggerUtil.getLogger('Landing')
  *
  * @param {boolean} loading True if the loading area should be shown, otherwise false.
  */
-function toggleLaunchArea(loading){
-    if(loading){
+function toggleLaunchArea(loading) {
+    if (loading) {
         launch_details.style.display = 'flex'
         launch_content.style.display = 'none'
     } else {
@@ -59,7 +58,7 @@ function toggleLaunchArea(loading){
  *
  * @param {string} details The new text for the loading details.
  */
-function setLaunchDetails(details){
+function setLaunchDetails(details) {
     launch_details_text.innerHTML = details
 }
 
@@ -68,7 +67,7 @@ function setLaunchDetails(details){
  *
  * @param {number} percent Percentage (0-100)
  */
-function setLaunchPercentage(percent){
+function setLaunchPercentage(percent) {
     launch_progress.setAttribute('max', 100)
     launch_progress.setAttribute('value', percent)
     launch_progress_label.innerHTML = percent + '%'
@@ -79,36 +78,40 @@ function setLaunchPercentage(percent){
  *
  * @param {number} percent Percentage (0-100)
  */
-function setDownloadPercentage(percent){
-    remote.getCurrentWindow().setProgressBar(percent/100)
+function setDownloadPercentage(percent) {
+    remote.getCurrentWindow().setProgressBar(percent / 100)
     setLaunchPercentage(percent)
 }
 
-/**
- * Enable or disable the launch button.
- *
- * @param {boolean} val True to enable, false to disable.
- */
-function setLaunchEnabled(val){
-    document.getElementById('launch_button').disabled = !val
-}
+// Launch Button Logic Removed (moved to uibinder.js)
+
+// Bind P2P Status
+P2PModule.start() // Start discovery immediately
+P2PModule.on('peer-update', (count) => {
+    if (count > 0) {
+        p2p_status.style.display = 'flex'
+        p2p_status_text.innerHTML = `P2P (${count})`
+    } else {
+        p2p_status.style.display = 'none'
+    }
+})
 
 // Bind launch button
 document.getElementById('launch_button').addEventListener('click', async e => {
     loggerLanding.info('Launching game..')
     try {
         const distro = await DistroAPI.getDistribution()
-        if(distro == null){
+        if (distro == null) {
             showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), Lang.queryJS('landing.launch.noDistributionIndex'))
             return
         }
         const server = distro.getServerById(ConfigManager.getSelectedServer())
-        if(server == null) {
+        if (server == null) {
             showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), Lang.queryJS('landing.launch.noServerSelected'))
             return
         }
         const jExe = ConfigManager.getJavaExecutable(ConfigManager.getSelectedServer())
-        if(jExe == null){
+        if (jExe == null) {
             await asyncSystemScan(server.effectiveJavaOptions)
         } else {
 
@@ -117,7 +120,7 @@ document.getElementById('launch_button').addEventListener('click', async e => {
             setLaunchPercentage(0, 100)
 
             const details = await validateSelectedJvm(ensureJavaDirIsRoot(jExe), server.effectiveJavaOptions.supported)
-            if(details != null){
+            if (details != null) {
                 loggerLanding.info('Jvm Details', details)
                 await dlAsync()
 
@@ -125,7 +128,7 @@ document.getElementById('launch_button').addEventListener('click', async e => {
                 await asyncSystemScan(server.effectiveJavaOptions)
             }
         }
-    } catch(err) {
+    } catch (err) {
         loggerLanding.error('Unhandled error in during launch process.', err)
         showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), Lang.queryJS('landing.launch.failureText'))
     }
@@ -146,33 +149,9 @@ document.getElementById('avatarOverlay').onclick = async e => {
 }
 
 // Bind selected account
-function updateSelectedAccount(authUser){
-    let username = Lang.queryJS('landing.selectedAccount.noAccountSelected')
-    if(authUser != null){
-        if(authUser.displayName != null){
-            username = authUser.displayName
-        }
-        if(authUser.uuid != null){
-            document.getElementById('avatarContainer').style.backgroundImage = `url('https://mc-heads.net/body/${authUser.uuid}/right')`
-        }
-    }
-    user_text.innerHTML = username
-}
 updateSelectedAccount(ConfigManager.getSelectedAccount())
 
 // Bind selected server
-function updateSelectedServer(serv){
-    if(getCurrentView() === VIEWS.settings){
-        fullSettingsSave()
-    }
-    ConfigManager.setSelectedServer(serv != null ? serv.rawServer.id : null)
-    ConfigManager.save()
-    server_selection_button.innerHTML = '&#8226; ' + (serv != null ? serv.rawServer.name : Lang.queryJS('landing.noSelection'))
-    if(getCurrentView() === VIEWS.settings){
-        animateSettingsTabRefresh()
-    }
-    setLaunchEnabled(serv != null)
-}
 // Real text is set in uibinder.js on distributionIndexDone.
 server_selection_button.innerHTML = '&#8226; ' + Lang.queryJS('landing.selectedServer.loading')
 server_selection_button.onclick = async e => {
@@ -181,7 +160,7 @@ server_selection_button.onclick = async e => {
 }
 
 // Update Mojang Status Color
-const refreshMojangStatuses = async function(){
+const refreshMojangStatuses = async function () {
     loggerLanding.info('Refreshing Mojang Statuses..')
 
     let status = 'grey'
@@ -190,7 +169,7 @@ const refreshMojangStatuses = async function(){
 
     const response = await MojangRestAPI.status()
     let statuses
-    if(response.responseStatus === RestResponseStatus.SUCCESS) {
+    if (response.responseStatus === RestResponseStatus.SUCCESS) {
         statuses = response.data
     } else {
         loggerLanding.warn('Unable to refresh Mojang service status.')
@@ -200,25 +179,25 @@ const refreshMojangStatuses = async function(){
     greenCount = 0
     greyCount = 0
 
-    for(let i=0; i<statuses.length; i++){
+    for (let i = 0; i < statuses.length; i++) {
         const service = statuses[i]
 
         const tooltipHTML = `<div class="mojangStatusContainer">
             <span class="mojangStatusIcon" style="color: ${MojangRestAPI.statusToHex(service.status)};">&#8226;</span>
             <span class="mojangStatusName">${service.name}</span>
         </div>`
-        if(service.essential){
+        if (service.essential) {
             tooltipEssentialHTML += tooltipHTML
         } else {
             tooltipNonEssentialHTML += tooltipHTML
         }
 
-        if(service.status === 'yellow' && status !== 'red'){
+        if (service.status === 'yellow' && status !== 'red') {
             status = 'yellow'
-        } else if(service.status === 'red'){
+        } else if (service.status === 'red') {
             status = 'red'
         } else {
-            if(service.status === 'grey'){
+            if (service.status === 'grey') {
                 ++greyCount
             }
             ++greenCount
@@ -226,8 +205,8 @@ const refreshMojangStatuses = async function(){
 
     }
 
-    if(greenCount === statuses.length){
-        if(greyCount === statuses.length){
+    if (greenCount === statuses.length) {
+        if (greyCount === statuses.length) {
             status = 'grey'
         } else {
             status = 'green'
@@ -257,7 +236,7 @@ const refreshServerStatus = async (fade = false) => {
         loggerLanding.warn('Unable to refresh server status, assuming offline.')
         loggerLanding.debug(err)
     }
-    if(fade){
+    if (fade) {
         $('#server_status_wrapper').fadeOut(250, () => {
             document.getElementById('landingPlayerLabel').innerHTML = pLabel
             document.getElementById('player_count').innerHTML = pVal
@@ -276,7 +255,7 @@ const refreshServerStatus = async (fade = false) => {
  * @param {string} title The overlay title.
  * @param {string} desc The overlay description.
  */
-function showLaunchFailure(title, desc){
+function showLaunchFailure(title, desc) {
     setOverlayContent(
         title,
         desc,
@@ -312,7 +291,7 @@ async function showOfflineWarning() {
  *
  * @param {boolean} launchAfter Whether we should begin to launch after scanning.
  */
-async function asyncSystemScan(effectiveJavaOptions, launchAfter = true){
+async function asyncSystemScan(effectiveJavaOptions, launchAfter = true) {
 
     setLaunchDetails(Lang.queryJS('landing.systemScan.checking'))
     toggleLaunchArea(true)
@@ -323,7 +302,7 @@ async function asyncSystemScan(effectiveJavaOptions, launchAfter = true){
         effectiveJavaOptions.supported
     )
 
-    if(jvmDetails == null) {
+    if (jvmDetails == null) {
         // If the result is null, no valid Java installation was found.
         // Show this information to the user.
         setOverlayContent(
@@ -338,7 +317,7 @@ async function asyncSystemScan(effectiveJavaOptions, launchAfter = true){
 
             try {
                 downloadJava(effectiveJavaOptions, launchAfter)
-            } catch(err) {
+            } catch (err) {
                 loggerLanding.error('Unhandled error in Java Download', err)
                 showLaunchFailure(Lang.queryJS('landing.systemScan.javaDownloadFailureTitle'), Lang.queryJS('landing.systemScan.javaDownloadFailureText'))
             }
@@ -378,7 +357,7 @@ async function asyncSystemScan(effectiveJavaOptions, launchAfter = true){
 
         // TODO Callback hell, refactor
         // TODO Move this out, separate concerns.
-        if(launchAfter){
+        if (launchAfter) {
             await dlAsync()
         }
     }
@@ -394,20 +373,20 @@ async function downloadJava(effectiveJavaOptions, launchAfter = true) {
         ConfigManager.getDataDirectory(),
         effectiveJavaOptions.distribution)
 
-    if(asset == null) {
+    if (asset == null) {
         throw new Error(Lang.queryJS('landing.downloadJava.findJdkFailure'))
     }
 
     let received = 0
     await downloadFile(asset, ({ transferred }) => {
         received = transferred
-        setDownloadPercentage(Math.trunc((transferred/asset.size)*100))
+        setDownloadPercentage(Math.trunc((transferred / asset.size) * 100))
     })
     setDownloadPercentage(100)
 
-    if(received != asset.size) {
+    if (received != asset.size) {
         loggerLanding.warn(`Java Download: Expected ${asset.size} bytes but received ${received}`)
-        if(!await validateLocalFile(asset.path, asset.algo, asset.hash)) {
+        if (!await validateLocalFile(asset.path, asset.algo, asset.hash)) {
             log.error(`Hashes do not match, ${asset.id} may be corrupted.`)
             // Don't know how this could happen, but report it.
             throw new Error(Lang.queryJS('landing.downloadJava.javaDownloadCorruptedError'))
@@ -423,7 +402,7 @@ async function downloadJava(effectiveJavaOptions, launchAfter = true) {
     let dotStr = ''
     setLaunchDetails(eLStr)
     const extractListener = setInterval(() => {
-        if(dotStr.length >= 3){
+        if (dotStr.length >= 3) {
             dotStr = ''
         } else {
             dotStr += '.'
@@ -475,7 +454,7 @@ async function dlAsync(login = true) {
     try {
         distro = await DistroAPI.refreshDistributionOrFallback()
         onDistroRefresh(distro)
-    } catch(err) {
+    } catch (err) {
         loggerLaunchSuite.error('Unable to refresh distribution index.', err)
         showLaunchFailure(Lang.queryJS('landing.dlAsync.fatalError'), Lang.queryJS('landing.dlAsync.unableToLoadDistributionIndex'))
         return
@@ -483,8 +462,8 @@ async function dlAsync(login = true) {
 
     const serv = distro.getServerById(ConfigManager.getSelectedServer())
 
-    if(login) {
-        if(ConfigManager.getSelectedAccount() == null){
+    if (login) {
+        if (ConfigManager.getSelectedAccount() == null) {
             loggerLanding.error('You must be logged into an account.')
             return
         }
@@ -520,7 +499,7 @@ async function dlAsync(login = true) {
     }
 
 
-    if(invalidFileCount > 0) {
+    if (invalidFileCount > 0) {
         loggerLaunchSuite.info('Downloading files.')
         setLaunchDetails(Lang.queryJS('landing.dlAsync.downloadingFiles'))
         setLaunchPercentage(0)
@@ -529,7 +508,7 @@ async function dlAsync(login = true) {
                 setDownloadPercentage(percent)
             })
             setDownloadPercentage(100)
-        } catch(err) {
+        } catch (err) {
             loggerLaunchSuite.warn('Error during file download. Stopping launch.', err)
             showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringFileDownloadTitle'), Lang.queryJS('landing.dlAsync.unableToLoadDistributionIndex'))
             return
@@ -566,7 +545,7 @@ async function dlAsync(login = true) {
     } catch (err) {
         loggerLaunchSuite.warn('Unable to load Mojang version data, attempting to load from local cache.', err)
         versionData = await mojangIndexProcessor.getLocalVersionJson()
-        if(!versionData) {
+        if (!versionData) {
             loggerLaunchSuite.error('Unable to load Mojang version data from local cache.')
             showLaunchFailure(Lang.queryJS('landing.dlAsync.fatalError'), Lang.queryJS('landing.dlAsync.unableToLoadMojangVersionData'))
             return
@@ -578,7 +557,7 @@ async function dlAsync(login = true) {
         showOfflineWarning()
     }
 
-    if(login) {
+    if (login) {
         const authUser = ConfigManager.getSelectedAccount()
         loggerLaunchSuite.info(`Sending selected account (${authUser.displayName}) to ProcessBuilder.`)
         let pb = new ProcessBuilder(serv, versionData, modLoaderData, authUser, remote.app.getVersion())
@@ -598,20 +577,20 @@ async function dlAsync(login = true) {
         // Will wait for a certain bit of text meaning that
         // the client application has started, and we can hide
         // the progress bar stuff.
-        const tempListener = function(data){
-            if(GAME_LAUNCH_REGEX.test(data.trim())){
-                const diff = Date.now()-start
-                if(diff < MIN_LINGER) {
-                    setTimeout(onLoadComplete, MIN_LINGER-diff)
+        const tempListener = function (data) {
+            if (GAME_LAUNCH_REGEX.test(data.trim())) {
+                const diff = Date.now() - start
+                if (diff < MIN_LINGER) {
+                    setTimeout(onLoadComplete, MIN_LINGER - diff)
                 } else {
                     onLoadComplete()
                 }
             }
         }
 
-        const gameErrorListener = function(data){
+        const gameErrorListener = function (data) {
             data = data.trim()
-            if(data.indexOf('Could not find or load main class net.minecraft.launchwrapper.Launch') > -1){
+            if (data.indexOf('Could not find or load main class net.minecraft.launchwrapper.Launch') > -1) {
                 loggerLaunchSuite.error('Game launch failed, LaunchWrapper was not downloaded properly.')
                 showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringLaunchTitle'), Lang.queryJS('landing.dlAsync.launchWrapperNotDownloaded'))
             }
@@ -628,7 +607,7 @@ async function dlAsync(login = true) {
             setLaunchDetails(Lang.queryJS('landing.dlAsync.doneEnjoyServer'))
 
 
-        } catch(err) {
+        } catch (err) {
 
             loggerLaunchSuite.error('Error during launch', err)
             showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringLaunchTitle'), Lang.queryJS('landing.dlAsync.checkConsoleForDetails'))
@@ -645,7 +624,7 @@ document.getElementById('newsButton').onclick = async () => {
     try {
         const distro = await DistroAPI.getDistribution()
         const serv = distro.getServerById(ConfigManager.getSelectedServer())
-        if(serv) {
+        if (serv) {
             const serverId = serv.rawServer.id
             const instancePath = path.join(ConfigManager.getInstanceDirectory(), serverId)
             await shell.openPath(instancePath)
