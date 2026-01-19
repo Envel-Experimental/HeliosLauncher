@@ -35,6 +35,13 @@ class PeerHandler {
         this.buffer = b4a.alloc(0)
         this.processing = false
 
+        // VULNERABILITY FIX (Slowloris): 30s Timeout
+        this.socket.setTimeout(30000)
+        this.socket.on('timeout', () => {
+            // console.warn('[PeerHandler] Socket timeout (Slowloris protection).')
+            this.socket.destroy()
+        })
+
         socket.on('data', (data) => {
             // VULNERABILITY FIX 2: Memory Leak DoS Protection
             if (this.buffer.length + data.length > 2 * 1024 * 1024) { // 2MB Hard Limit
@@ -217,33 +224,33 @@ class PeerHandler {
                     }
                 }, 5000)
 
+                // Zombie Slot Protection: Safe Cleanup
+                let cleanupDone = false
+                const cleanup = () => {
+                    if (cleanupDone) return
+                    cleanupDone = true
+                    clearInterval(watchdog)
+                    this.engine.activeUploads = Math.max(0, this.engine.activeUploads - 1)
+                    this.engine.decrementUploadCountForIP(remoteIP)
+                }
+
                 throttled.on('data', (chunk) => {
                     lastActivity = Date.now()
                     this.sendData(reqId, chunk)
                 })
 
                 stream.on('end', () => {
-                    clearInterval(watchdog)
-                    this.engine.activeUploads--
-                    this.engine.decrementUploadCountForIP(remoteIP) // FIX 3: Decrement
                     this.sendEnd(reqId)
+                    cleanup()
                 })
 
                 stream.on('close', () => {
-                    clearInterval(watchdog)
-                    // Note: 'close' fires after 'end' usually, or on error/destroy.
-                    // If we rely on 'end' for decrement, we need to be careful about double decrement.
-                    // But if stream is destroyed (timeout), 'end' might not fire.
-                    // Safer to use a flag or ensure idempotency in engine, or just do it on error/end only?
-                    // If destroyed, 'error' or 'close' fires.
-                    // Let's rely on error/end to decrement.
+                    cleanup()
                 })
 
                 stream.on('error', () => {
-                    clearInterval(watchdog)
-                    this.engine.activeUploads = Math.max(0, this.engine.activeUploads - 1)
-                    this.engine.decrementUploadCountForIP(remoteIP) // FIX 3: Decrement
                     this.sendError(reqId, 'Read error')
+                    cleanup()
                 })
             } else {
                 this.sendError(reqId, 'Not found')
@@ -503,6 +510,13 @@ class P2PEngine extends EventEmitter {
 
         // Send request
         peer.sendRequest(reqId, hash)
+
+        // Memory Leak Fix for "Stale Request Map"
+        stream.on('close', () => {
+            if (this.requests.has(reqId)) {
+                this.requests.delete(reqId)
+            }
+        })
 
         // Timeout fallback
         setTimeout(() => {
