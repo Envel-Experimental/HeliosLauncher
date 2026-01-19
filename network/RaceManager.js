@@ -57,8 +57,24 @@ class RaceManager {
         let globalP2PStream = null
         const globalP2PTask = new Promise((resolve, reject) => {
             globalP2PStream = P2PEngine.requestFile(hash, expectedSize)
-            const onReadable = () => { cleanup(); resolve({ type: 'global_p2p', result: globalP2PStream }) }
-            const onError = (err) => { cleanup(); reject(err) }
+
+            // Timeout P2P strictly to avoid waiting too long if HTTP is also slow/failing
+            const timeout = setTimeout(() => {
+                cleanup()
+                console.log('[RaceManager] Global P2P Task Timed Out')
+                reject(new Error('Global P2P Timeout'))
+            }, 2500) // 2.5s timeout
+
+            const onReadable = () => {
+                clearTimeout(timeout)
+                cleanup()
+                resolve({ type: 'global_p2p', result: globalP2PStream })
+            }
+            const onError = (err) => {
+                clearTimeout(timeout)
+                cleanup()
+                reject(err)
+            }
             const cleanup = () => { globalP2PStream.off('readable', onReadable); globalP2PStream.off('error', onError) }
             globalP2PStream.on('readable', onReadable)
             globalP2PStream.on('error', onError)

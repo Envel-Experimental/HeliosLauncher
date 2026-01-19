@@ -65,6 +65,18 @@ class P2PManager extends EventEmitter {
     }
 
     handleRequest(req, res) {
+        // Security: Restrict to Local Network (Private IP ranges)
+        const remoteIP = req.socket.remoteAddress;
+        // Supports IPv4 and IPv4-mapped-IPv6
+        const isPrivate = /^(::ffff:)?(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|127\.)/.test(remoteIP) || remoteIP === '::1';
+
+        if (!isPrivate) {
+            // log.warn(`Rejected public connection from ${remoteIP}`);
+            res.writeHead(403);
+            res.end('Access Denied: LAN Only');
+            return;
+        }
+
         const url = new URL(req.url, `http://${req.headers.host}`);
 
         res.setHeader('Access-Control-Allow-Origin', '*');
