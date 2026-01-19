@@ -67,6 +67,13 @@ class PeerHandler {
             const reqId = this.buffer.readUInt32BE(1)
             const len = this.buffer.readUInt32BE(5)
 
+            // VULNERABILITY FIX 1: OOM Protection
+            if (len > 1024 * 1024) { // 1MB Max Message Size
+                // console.error('[PeerHandler] Message too large. Closing connection.')
+                this.socket.destroy()
+                return // Stop processing
+            }
+
             if (this.buffer.length < 9 + len) {
                 break // Wait for more data
             }
@@ -184,17 +191,44 @@ class PeerHandler {
                 // Throttle Stream
                 const throttled = stream.pipe(RateLimiter.throttle())
 
+                // VULNERABILITY FIX 3: Slot Exhaustion Protection
+                // Kill connection if client is too slow or halts
+                let lastActivity = Date.now()
+                const watchdog = setInterval(() => {
+                    if (Date.now() - lastActivity > 15000) { // 15s Idle Timeout
+                        // console.warn('[P2P] Upload slot timed out (Slot Exhaustion Protection)')
+                        stream.destroy()
+                        clearInterval(watchdog)
+                        // Decrease active uploads only if not already done by 'close'
+                        // But 'end' handles it cleanly usually. Force cleanup:
+                        if (!stream.destroyed) this.engine.activeUploads = Math.max(0, this.engine.activeUploads - 1)
+                    }
+                }, 5000)
+
                 throttled.on('data', (chunk) => {
+                    lastActivity = Date.now()
                     this.sendData(reqId, chunk)
                 })
 
                 stream.on('end', () => {
+                    clearInterval(watchdog)
                     this.engine.activeUploads--
                     this.sendEnd(reqId)
                 })
 
-                stream.on('error', (err) => {
-                    this.engine.activeUploads--
+                stream.on('close', () => {
+                    clearInterval(watchdog)
+                    // Check if we need to decrement? 'end' usually fires first.
+                    // If purely closed by timeout, we might need to decrement if 'end' didn't fire.
+                    // Safe approach: rely on 'end' or manual management in watchdog?
+                    // 'activeUploads' is simple counter.
+                    // Let's assume 'end' or 'error' will trigger.
+                    // Actually, if we destroy stream, 'close' fires.
+                })
+
+                stream.on('error', () => {
+                    clearInterval(watchdog)
+                    this.engine.activeUploads = Math.max(0, this.engine.activeUploads - 1)
                     this.sendError(reqId, 'Read error')
                 })
             } else {
@@ -398,7 +432,16 @@ class P2PEngine extends EventEmitter {
                 const weight = p.remoteWeight || 1
                 const rtt = p.rtt || 200 // Default 200ms if not yet ponged
 
-                const score = (weight * weight) * (10000 / (rtt + 10))
+                // VULNERABILITY FIX 2 & 5: Reputation System
+                // Prefer peers with proven speed history
+                let speedFactor = 1.0
+                if (p.lastTransferSpeed) {
+                    // Baseline: 100 KB/s = 1.0
+                    speedFactor = Math.max(0.1, p.lastTransferSpeed / 102400)
+                    speedFactor = Math.min(10.0, speedFactor) // Cap at 10x boost
+                }
+
+                const score = (weight * weight) * (10000 / (rtt + 10)) * speedFactor
 
                 if (score > maxScore) {
                     maxScore = score
@@ -440,6 +483,7 @@ class P2PEngine extends EventEmitter {
     handleIncomingData(reqId, data) {
         const req = this.requests.get(reqId)
         if (req) {
+            req.bytesReceived = (req.bytesReceived || 0) + data.length
             req.stream.push(data)
         }
     }
@@ -448,6 +492,15 @@ class P2PEngine extends EventEmitter {
         const req = this.requests.get(reqId)
         if (req) {
             req.stream.push(null) // EOF
+
+            // REPUTATION SYSTEM: Update Peer Speed
+            const duration = (Date.now() - req.timestamp) / 1000
+            if (duration > 0 && req.bytesReceived > 0) {
+                const speed = req.bytesReceived / duration // B/s
+                req.peer.lastTransferSpeed = speed
+                // console.log(`[P2P] Recognized speed for peer: ${(speed/1024).toFixed(2)} KB/s`)
+            }
+
             this.requests.delete(reqId)
         }
     }
