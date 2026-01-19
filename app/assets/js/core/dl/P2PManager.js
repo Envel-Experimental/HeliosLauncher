@@ -272,8 +272,7 @@ class P2PManager extends EventEmitter {
             this.stats.filesDownloaded++;
             this.emit('stats-update', this.stats);
 
-            // Detailed logging as requested
-            logger.info(`[P2P] Successfully downloaded ${asset.id || relPath} from ${peer.ip} (${bytesReceived} bytes). Total P2P: ${(this.stats.downloaded / 1024 / 1024).toFixed(2)} MB`);
+            logger.debug(`[P2P] Successfully downloaded ${asset.id || relPath} from ${peer.ip} (${bytesReceived} bytes). Total P2P: ${(this.stats.downloaded / 1024 / 1024).toFixed(2)} MB`);
 
             return true;
 
