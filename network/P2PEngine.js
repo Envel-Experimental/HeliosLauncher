@@ -495,7 +495,8 @@ class P2PEngine extends EventEmitter {
 
             // REPUTATION SYSTEM: Update Peer Speed
             const duration = (Date.now() - req.timestamp) / 1000
-            if (duration > 0 && req.bytesReceived > 0) {
+            // Ignore small files (<100KB) to avoid timer resolution jitter
+            if (duration > 0 && req.bytesReceived > 102400) {
                 const speed = req.bytesReceived / duration // B/s
                 req.peer.lastTransferSpeed = speed
                 // console.log(`[P2P] Recognized speed for peer: ${(speed/1024).toFixed(2)} KB/s`)
