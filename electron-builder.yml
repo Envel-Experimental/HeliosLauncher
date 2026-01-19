@@ -43,9 +43,7 @@ mac:
         - 'universal'
   artifactName: '${productName}-setup-${version}-${arch}.${ext}'
   category: 'public.app-category.games'
-  x64ArchFiles:
-    - "**/@sentry-internal/node-cpu-profiler/lib/*-darwin-*-*.node"
-    - "**/sodium-native/prebuilds/**"
+  x64ArchFiles: "**/{sodium-native/prebuilds/**,@sentry-internal/node-cpu-profiler/lib/*-darwin-*-*.node}"
 
 # Linux Configuration
 linux: 
