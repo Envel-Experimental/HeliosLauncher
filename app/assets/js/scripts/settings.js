@@ -203,7 +203,7 @@ document.getElementById('settingsP2PInfoButton').onclick = async () => {
         let statusText = 'Отключен'
         let statusColor = '#ff4444'
 
-        if (local.listening) {
+        if (local.listening && ConfigManager.getLocalOptimization()) {
             if (ConfigManager.getP2PUploadEnabled()) {
                 statusText = 'Активен'
                 statusColor = '#7dbb00'
