@@ -1,32 +1,34 @@
-name: "Gemini 3 Flash Code Review"
+name: "Gemini Interactive Bot"
+
 on:
-  pull_request:
-    types: [opened, synchronize]
+  workflow_dispatch:
+  issue_comment:
+    types: [created]
 
 jobs:
-  review:
+  gemini_chat:
+    if: |
+      github.event.issue.pull_request &&
+      (contains(github.event.comment.body, '@gemini') || startsWith(github.event.comment.body, '/'))
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
+      issues: write
     steps:
       - uses: actions/checkout@v4
-      - name: Gemini Review
-        uses: google-github-actions/run-gemini-cli@v1
+      - name: Gemini 3 Flash Response
+        uses: google-github-actions/run-gemini-cli@v2
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           model: "gemini-3-flash"
+          thinking_level: "high" 
           prompt: |
-            Act as a Senior Lead Developer. Review the provided PR diff following 2026 industry standards.
-            Use Thinking Level: High to analyze logic depth before responding.
+            You are a helpful AI engineer. A user mentioned you in a PR comment.
+            Context: ${{ github.event.comment.body }}
             
-            Focus on:
-            1. Critical logic flaws and edge cases.
-            2. Security vulnerabilities (OWASP 2025/2026).
-            3. Performance bottlenecks and resource leaks.
-            4. Maintainability and DRY/SOLID principles.
-
-            Output requirements:
-            - Provide concise, actionable feedback.
-            - Flag "CRITICAL", "WARNING", or "STYLE" for each point.
-            - If no issues found, reply with "LGTM".
+            Instructions:
+            1. If they say "hello" or just mention you, greet them warmly and ask how you can help.
+            2. If they use "/review", perform a full code review of the PR diff.
+            3. If they ask a specific question about the code, answer it using the current PR context.
+            
