@@ -19,16 +19,17 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Gemini AI Interaction
+        id: gemini_step
         uses: google-github-actions/run-gemini-cli@main
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
-          model: "gemini-3-flash"
+          gemini_model: "gemini-3-flash"
           prompt: |
             You are a senior software engineer. A user mentioned you in a PR comment:
             "${{ github.event.comment.body }}"
             
             Task:
-            1. If the user asks for a review or uses "/review", perform a comprehensive code review of the PR changes.
+            1. If the user asks for a review or uses "/review", perform a comprehensive code review.
             2. If the user asks a technical question, provide a detailed explanation.
             3. If it is a general interaction, respond professionally.
             
@@ -36,3 +37,11 @@ jobs:
             - Technical accuracy using 2026 standards.
             - Concise and actionable feedback.
             - Language: English.
+
+      - name: Post Response to PR
+        if: success()
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.issue.number }}
+          body: |
+            ${{ steps.gemini_step.outputs.gemini_response }}
