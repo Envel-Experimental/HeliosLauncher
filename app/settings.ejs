@@ -412,13 +412,15 @@
                 <div class="settingsMemoryContentItem" style="width: 100%; border: none; padding: 10px 0;">
                     <span class="settingsMemoryHeader" style="margin-bottom: 5px;"><%-
                             lang('settings.p2pUploadLimitTitle') %></span>
-                    <div class="settingsMemoryActionContainer">
+                    <div class="settingsMemoryActionContainer"
+                        style="display: flex; align-items: center; gap: 15px; justify-content: flex-start;">
                         <div id="settingsP2PUploadRange" class="rangeSlider" cValue="P2PUploadLimit" min="1" max="15"
-                            value="5" step="1">
+                            value="5" step="1" style="width: 250px;">
                             <div class="rangeSliderBar"></div>
                             <div class="rangeSliderTrack"></div>
                         </div>
-                        <span id="settingsP2PUploadLabel" class="settingsMemoryLabel">5 Mbit/s</span>
+                        <span id="settingsP2PUploadLabel" class="settingsMemoryLabel"
+                            style="min-width: 70px; text-align: left;">5 Mbit/s</span>
                     </div>
                 </div>
             </div>

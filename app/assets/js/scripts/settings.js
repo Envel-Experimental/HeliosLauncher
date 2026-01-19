@@ -195,34 +195,68 @@ function bindP2PSlider() {
 bindP2PSlider()
 
 document.getElementById('settingsP2PInfoButton').onclick = async () => {
-    try {
+
+    const getStatsHtml = async () => {
         const local = SettingsP2PManager.getNetworkInfo()
         const global = await ipcRenderer.invoke('p2p:getInfo')
 
-        const infoHtml = `
-            <div style="text-align: left; font-family: monospace;">
-                <strong>Локальная сеть (LAN):</strong><br>
-                Статус: ${local.listening ? 'Активен' : 'Отключен'}<br>
-                Пиры: ${local.peers}<br>
-                Отдано: ${(local.uploaded / 1024 / 1024).toFixed(2)} MB<br>
-                Скачано: ${(local.downloaded / 1024 / 1024).toFixed(2)} MB<br>
+        let statusText = 'Отключен'
+        let statusColor = '#ff4444'
+
+        if (local.listening) {
+            if (ConfigManager.getP2PUploadEnabled()) {
+                statusText = 'Активен'
+                statusColor = '#7dbb00'
+            } else {
+                statusText = 'Активен (Только скачивание)'
+                statusColor = '#ffbb00' // Orange warning
+            }
+        }
+
+        return `
+            <div id="p2pInfoStats" style="text-align: left; font-family: monospace; line-height: 1.6;">
+                <h3 style="margin: 0 0 5px; border-bottom: 1px solid #555;">Локальная сеть (LAN)</h3>
+                <div>Статус: <span style="color: ${statusColor}">${statusText}</span></div>
+                <div>Пиры: ${local.peers}</div>
+                <div>Отдано: ${(local.uploaded / 1024 / 1024).toFixed(2)} MB</div>
+                <div>Скачано: ${(local.downloaded / 1024 / 1024).toFixed(2)} MB</div>
                 <br>
-                <strong>Глобальная сеть (WAN):</strong><br>
-                Топик: ${global.topic}<br>
-                Пиры: ${global.peers}<br>
-                Активные запросы: ${global.requests}<br>
-                Активные раздачи: ${global.uploads}<br>
+                <h3 style="margin: 0 0 5px; border-bottom: 1px solid #555;">Глобальная сеть (WAN)</h3>
+                <div>Топик: <span style="color: #aaa;">${global.topic}</span></div>
+                <div>Пиры: ${global.peers}</div>
+                <div>Активные запросы: ${global.requests}</div>
+                <div>Активные раздачи (Smart): ${global.uploads}</div>
             </div>
         `
+    }
+
+    try {
+        const initialHtml = await getStatsHtml()
 
         setOverlayContent(
             'Статистика P2P Сети',
-            infoHtml,
+            initialHtml,
             'Закрыть'
         )
-        setOverlayHandler(() => {
+
+        const intervalId = setInterval(async () => {
+            const html = await getStatsHtml()
+            const container = document.getElementById('p2pInfoStats')
+            if (container && document.getElementById('overlayContainer').style.display !== 'none') {
+                container.parentElement.innerHTML = html
+            } else {
+                clearInterval(intervalId)
+            }
+        }, 1000)
+
+        const stopLoop = () => {
+            clearInterval(intervalId)
             toggleOverlay(false)
-        })
+        }
+
+        setOverlayHandler(stopLoop)
+        setDismissHandler(stopLoop)
+
         toggleOverlay(true)
     } catch (err) {
         console.error('Info Error', err)
