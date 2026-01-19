@@ -15,6 +15,7 @@ const MSG_REQUEST = 0
 const MSG_DATA = 1
 const MSG_ERROR = 2
 const MSG_END = 3
+const MSG_HELLO = 4
 
 // Fixed topic for the "Zombie" network
 const SWARM_TOPIC = crypto.createHash('sha256').update('zombie-launcher-assets-v1').digest()
@@ -39,6 +40,9 @@ class PeerHandler {
         socket.on('close', () => {
             this.engine.removePeer(this)
         })
+
+        // Send Hello with local weight
+        this.sendHello()
     }
 
     processBuffer() {
@@ -78,6 +82,16 @@ class PeerHandler {
             case MSG_END:
                 this.engine.handleIncomingEnd(reqId)
                 break
+            case MSG_HELLO:
+                this.handleHello(payload)
+                break
+        }
+    }
+
+    handleHello(payload) {
+        if (payload.length >= 1) {
+            this.remoteWeight = payload.readUInt8(0)
+            // console.log(`[PeerHandler] Peer weight set to ${this.remoteWeight}`)
         }
     }
 
@@ -139,6 +153,19 @@ class PeerHandler {
         header.writeUInt32BE(reqId, 1)
         header.writeUInt32BE(0, 5) // No payload
         this.socket.write(header)
+    }
+
+    sendHello() {
+        // Payload: [Weight (1 byte)]
+        const localWeight = this.engine.profile.weight
+        const payload = b4a.alloc(1)
+        payload.writeUInt8(localWeight, 0)
+
+        const header = b4a.alloc(9)
+        header[0] = MSG_HELLO
+        header.writeUInt32BE(0, 1) // reqId 0 for system messages
+        header.writeUInt32BE(payload.length, 5)
+        this.socket.write(b4a.concat([header, payload]))
     }
 
     sendRequest(reqId, hash) {
@@ -227,9 +254,31 @@ class P2PEngine extends EventEmitter {
 
         const reqId = this.reqIdCounter++
 
-        // Pick a peer
-        // Simple strategy: Round Robin or Random
-        const peer = this.peers[Math.floor(Math.random() * this.peers.length)]
+        // Pick a peer using Weighted Random Selection
+        let peer = null
+
+        // Calculate total weight
+        let totalWeight = 0
+        for (const p of this.peers) {
+            totalWeight += (p.remoteWeight || 1) // Default to 1 if unknown
+        }
+
+        if (totalWeight > 0) {
+            let random = Math.random() * totalWeight
+            for (const p of this.peers) {
+                const w = p.remoteWeight || 1
+                if (random < w) {
+                    peer = p
+                    break
+                }
+                random -= w
+            }
+        }
+
+        // Fallback or precision error check
+        if (!peer && this.peers.length > 0) {
+            peer = this.peers[Math.floor(Math.random() * this.peers.length)]
+        }
 
         if (!peer) {
              process.nextTick(() => {
