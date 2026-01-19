@@ -4043,3 +4043,25 @@ input:checked + .toggleSwitchSlider:before {
 .rotating {
     animation: rotating 10s linear infinite;
 }
+/* * *
+* Settings View (Delivery Optimization Tab)
+* * */
+
+#settingsP2PRateLimitContainer {
+    width: 75%;
+    display: flex;
+    flex-direction: column;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.50);
+}
+
+#settingsP2PRateLimitContent {
+    display: flex;
+    width: 100%;
+    margin-top: 10px;
+}
+
+#settingsP2PRateLimit {
+    width: 100px;
+    padding: 5px 10px;
+}

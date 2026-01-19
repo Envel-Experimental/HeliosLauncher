@@ -102,6 +102,11 @@ const DEFAULT_CONFIG = {
             allowPrerelease: false,
             dataDirectory: dataPath,
             totalRAMWarningShown: false
+        },
+        deliveryOptimization: {
+            localOptimization: true,
+            globalOptimization: true,
+            p2pRateLimit: 0 // 0 = unlimited, in KB/s
         }
     },
     newsCache: {
@@ -833,4 +838,63 @@ exports.getTotalRAMWarningShown = function(def = false){
  */
 exports.setTotalRAMWarningShown = function(shown){
     config.settings.launcher.totalRAMWarningShown = shown
+}
+
+// Delivery Optimization Settings
+
+/**
+ * Check if local optimization (LAN P2P) is enabled.
+ *
+ * @param {boolean} def Optional. If true, the default value will be returned.
+ * @returns {boolean} Whether local optimization is enabled.
+ */
+exports.getLocalOptimization = function(def = false){
+    return !def ? config.settings.deliveryOptimization.localOptimization : DEFAULT_CONFIG.settings.deliveryOptimization.localOptimization
+}
+
+/**
+ * Set the status of local optimization.
+ *
+ * @param {boolean} enabled Whether local optimization should be enabled.
+ */
+exports.setLocalOptimization = function(enabled){
+    config.settings.deliveryOptimization.localOptimization = enabled
+}
+
+/**
+ * Check if global optimization (WAN P2P) is enabled.
+ *
+ * @param {boolean} def Optional. If true, the default value will be returned.
+ * @returns {boolean} Whether global optimization is enabled.
+ */
+exports.getGlobalOptimization = function(def = false){
+    return !def ? config.settings.deliveryOptimization.globalOptimization : DEFAULT_CONFIG.settings.deliveryOptimization.globalOptimization
+}
+
+/**
+ * Set the status of global optimization.
+ *
+ * @param {boolean} enabled Whether global optimization should be enabled.
+ */
+exports.setGlobalOptimization = function(enabled){
+    config.settings.deliveryOptimization.globalOptimization = enabled
+}
+
+/**
+ * Get the P2P rate limit in KB/s.
+ *
+ * @param {boolean} def Optional. If true, the default value will be returned.
+ * @returns {number} The P2P rate limit.
+ */
+exports.getP2PRateLimit = function(def = false){
+    return !def ? config.settings.deliveryOptimization.p2pRateLimit : DEFAULT_CONFIG.settings.deliveryOptimization.p2pRateLimit
+}
+
+/**
+ * Set the P2P rate limit in KB/s.
+ *
+ * @param {number} limit The new rate limit.
+ */
+exports.setP2PRateLimit = function(limit){
+    config.settings.deliveryOptimization.p2pRateLimit = Number.parseInt(limit)
 }

@@ -11,6 +11,7 @@
                     <button class="settingsNavItem" rSc="settingsTabMods"><%- lang('settings.navMods') %></button>
                     <button class="settingsNavItem" rSc="settingsTabJava"><%- lang('settings.navJava') %></button>
                     <button class="settingsNavItem" rSc="settingsTabLauncher"><%- lang('settings.navLauncher') %></button>
+                    <button class="settingsNavItem" rSc="settingsTabDelivery"><%- lang('settings.navDelivery') %></button>
                     <div class="settingsNavSpacer"></div>
                     <button class="settingsNavItem" rSc="settingsTabAbout"><%- lang('settings.navAbout') %></button>
                     <button class="settingsNavItem" rSc="settingsTabUpdate" id="settingsNavUpdate"><%- lang('settings.navUpdates') %></button>
@@ -304,6 +305,43 @@
                     </div>
                 </div>
                 <div class="settingsFileSelDesc"><%- lang('settings.dataDirectoryDesc') %></div>
+            </div>
+        </div>
+        <div id="settingsTabDelivery" class="settingsTab" style="display: none;">
+            <div class="settingsTabHeader">
+                <span class="settingsTabHeaderText"><%- lang('settings.tabDeliveryHeaderText') %></span>
+                <span class="settingsTabHeaderDesc"><%- lang('settings.tabDeliveryHeaderDesc') %></span>
+            </div>
+            <div class="settingsFieldContainer">
+                <div class="settingsFieldLeft">
+                    <span class="settingsFieldTitle"><%- lang('settings.localOptimizationTitle') %></span>
+                    <span class="settingsFieldDesc"><%- lang('settings.localOptimizationDesc') %></span>
+                </div>
+                <div class="settingsFieldRight">
+                    <label class="toggleSwitch">
+                        <input type="checkbox" cValue="LocalOptimization">
+                        <span class="toggleSwitchSlider"></span>
+                    </label>
+                </div>
+            </div>
+            <div class="settingsFieldContainer">
+                <div class="settingsFieldLeft">
+                    <span class="settingsFieldTitle"><%- lang('settings.globalOptimizationTitle') %></span>
+                    <span class="settingsFieldDesc"><%- lang('settings.globalOptimizationDesc') %></span>
+                </div>
+                <div class="settingsFieldRight">
+                    <label class="toggleSwitch">
+                        <input type="checkbox" cValue="GlobalOptimization">
+                        <span class="toggleSwitchSlider"></span>
+                    </label>
+                </div>
+            </div>
+            <div id="settingsP2PRateLimitContainer">
+                <span class="settingsFieldTitle"><%- lang('settings.p2pRateLimitTitle') %></span>
+                <span class="settingsFieldDesc"><%- lang('settings.p2pRateLimitDesc') %></span>
+                <div id="settingsP2PRateLimitContent">
+                    <input type="number" id="settingsP2PRateLimit" min="0" cValue="P2PRateLimit">
+                </div>
             </div>
         </div>
         <div id="settingsTabAbout" class="settingsTab" style="display: none;">
