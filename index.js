@@ -63,6 +63,7 @@ const ConfigManager                     = require('./app/assets/js/configmanager
 
 const P2PEngine                         = require('./network/P2PEngine')
 const RaceManager                       = require('./network/RaceManager')
+const NetworkMonitor                    = require('./network/NetworkMonitor')
 
 // Set up single instance lock.
 const gotTheLock = app.requestSingleInstanceLock()
