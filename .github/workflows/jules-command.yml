@@ -1,29 +1,34 @@
-name: "Jules Remote Command"
+name: "Jules Interactive Bot"
 
 on:
   issue_comment:
     types: [created]
 
 jobs:
-  jules-trigger:
+  jules-chat:
     if: github.event.issue.pull_request && contains(github.event.comment.body, '@jules')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
-      - name: Invoke Jules Agent
-        uses: google-labs-code/jules-invoke@v1
+      - uses: actions/checkout@v4
+      
+      - name: Invoke Jules
+        uses: google-labs-code/jules-invoke@main
         with:
           jules_api_key: ${{ secrets.JULES_API_KEY }}
           include_last_commit: true
           prompt: |
-            You are a senior software engineer. 
-            Analyze the current Pull Request based on the user request: "${{ github.event.comment.body }}"
+            You are a senior software engineer (Jules Agent).
+            A user mentioned you in a PR comment: "${{ github.event.comment.body }}"
             
-            If the request is "/review":
-            1. Scrutinize all changes in the PR for bugs, security risks, and 2026 best practices.
-            2. Provide a summary of the review in a comment.
-            3. If critical fixes are needed, propose or implement them in a new commit.
+            Task:
+            1. If they ask for "/review", analyze all PR changes for bugs, performance, and security.
+            2. If they ask to "fix" or "refactor", implement the changes in the cloud VM and push a new commit.
+            3. Use 2026 coding standards and best practices.
             
-            If the request is a general question:
-            1. Explain the technical logic of the changed files.
-            
-            Language: English.
+            Requirements:
+            - Professional tone.
+            - Concise actionable feedback.
+            - Language: English.
