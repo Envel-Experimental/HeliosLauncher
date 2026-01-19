@@ -3,8 +3,8 @@ module.exports = {
 
     // Array of host:port strings for private RF-based VPS fleet
     BOOTSTRAP_NODES: [
-        { host: 'bootstrap1.zombie-net.org', port: 49737 }, // Placeholder for private fleet
-        { host: 'bootstrap2.zombie-net.org', port: 49737 }
+        { host: 'bootstrap1.f-launcher.ru', port: 49737 },
+        { host: '89.23.113.35', port: 49737 }
     ],
 
     // Backup URLs in case Mojang is totally blocked

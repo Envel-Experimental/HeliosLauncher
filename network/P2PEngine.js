@@ -347,10 +347,37 @@ class P2PEngine extends EventEmitter {
         this.activeUploads = 0
         this.uploadCounts = new Map() // IP -> Count
 
+        // Circuit Breaker (Panic Mode)
+        this.panicMode = false
+        this.attackCounter = 0
+
         // Debug Info Loop
         if (process.argv.includes('--debug') || true) { // Always on for now as requested "in debug mode..."
             // Check logging level?
             // User said "in debug mode system should inform".
+        }
+    }
+
+    triggerCircuitBreaker() {
+        if (this.panicMode) return
+        this.attackCounter++
+
+        // Threshold: 5 critical verification failures or attacks in short succession
+        // To be safe, let's say 3 serious attacks trigger it.
+        if (this.attackCounter >= 3) {
+            console.error('[P2PEngine] ⚠️ CIRCUIT BREAKER TRIGGERED! ⚠️')
+            console.error('[P2PEngine] Excessive attacks detected. Shutting down P2P mesh for protection.')
+
+            this.panicMode = true
+            this.stop() // Immediate Shutdown
+
+            // Cool-down: 5 Minutes
+            setTimeout(() => {
+                console.log('[P2PEngine] Circuit breaker cooling down. Attempting restart...')
+                this.panicMode = false
+                this.attackCounter = 0
+                this.start()
+            }, 5 * 60 * 1000)
         }
     }
 
@@ -451,7 +478,7 @@ class P2PEngine extends EventEmitter {
         }
     }
 
-    requestFile(hash) {
+    requestFile(hash, expectedSize = 0) {
         // Return a Readable stream
         const stream = new Readable({
             read() { }
@@ -518,6 +545,7 @@ class P2PEngine extends EventEmitter {
         this.requests.set(reqId, {
             stream,
             peer,
+            expectedSize,
             timestamp: Date.now()
         })
 
@@ -552,6 +580,16 @@ class P2PEngine extends EventEmitter {
             }
 
             req.bytesReceived = (req.bytesReceived || 0) + data.length
+
+            // VULNERABILITY FIX ("Infinite File"): Size Check
+            if (req.expectedSize > 0 && req.bytesReceived > req.expectedSize) {
+                req.stream.emit('error', new Error('File size exceeded expected limit'))
+                this.requests.delete(reqId)
+                // Trigger Circuit Breaker on obvious attack
+                this.triggerCircuitBreaker()
+                return
+            }
+
             req.stream.push(data)
         }
     }

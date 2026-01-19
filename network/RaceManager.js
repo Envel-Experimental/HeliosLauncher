@@ -22,6 +22,12 @@ class RaceManager {
     async handle(request) {
         let url = request.url
 
+        let expectedSize = 0
+        try {
+            const sizeHeader = request.headers.get('X-Expected-Size')
+            if (sizeHeader) expectedSize = parseInt(sizeHeader, 10)
+        } catch (e) { }
+
         // Convert mc-asset protocol back to https for the HTTP fetch leg
         if (url.startsWith('mc-asset://')) {
             url = 'https://' + url.substring('mc-asset://'.length)
@@ -57,7 +63,7 @@ class RaceManager {
         // 2. P2P Task
         let p2pStream = null
         const p2pTask = new Promise((resolve, reject) => {
-            p2pStream = P2PEngine.requestFile(hash)
+            p2pStream = P2PEngine.requestFile(hash, expectedSize)
 
             // We consider P2P "ready" when it becomes readable
             const onReadable = () => {
