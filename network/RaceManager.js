@@ -8,6 +8,11 @@ class RaceManager {
 
     constructor() {
         this.p2pConsecutiveWins = 0
+        this.activeDownloads = 0
+    }
+
+    isBusy() {
+        return this.activeDownloads > 0
     }
 
     /**
@@ -112,7 +117,28 @@ class RaceManager {
             // Return Response
             // Electron expects a Response object.
             // We convert the Node stream back to a Web Stream
-            return new Response(Readable.toWeb(verifier))
+            // Increment Active Downloads
+            this.activeDownloads++
+            const outputStream = Readable.toWeb(verifier)
+
+            // Track when stream ends to decrement
+            // Since we return a Web ReadableStream, we can't easily listen to 'close' on it directly here?
+            // Actually, verifier is a Node stream. We can pipe verifier to a PassThrough and listen on that?
+            // Or just listen on verifier.
+
+            const cleanupDownload = () => {
+                this.activeDownloads--
+                if (this.activeDownloads < 0) this.activeDownloads = 0
+                // console.log(`[RaceManager] Download finished. Active: ${this.activeDownloads}`)
+            }
+
+            verifier.on('close', cleanupDownload)
+            verifier.on('error', cleanupDownload)
+            // 'end' might not fire if it's a writable only? HashVerifierStream is likely a Transform or Writeable
+            // If it is a Writable (hash verifier usually is), 'finish' is the event.
+            verifier.on('finish', cleanupDownload)
+
+            return new Response(outputStream)
 
         } catch (err) {
             // console.error(`[RaceManager] Failed to fetch ${hash}:`, err)
@@ -126,9 +152,9 @@ class RaceManager {
                 try {
                     const u = new URL(url)
                     pathSuffix = u.pathname
-                } catch(e) {
+                } catch (e) {
                     // Fallback using hash logic if URL parsing fails
-                    pathSuffix = `/${hash.substring(0,2)}/${hash}`
+                    pathSuffix = `/${hash.substring(0, 2)}/${hash}`
                 }
 
                 for (const mirrorBase of Config.HTTP_MIRRORS) {

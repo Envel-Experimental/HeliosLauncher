@@ -16,7 +16,7 @@ function tryFixCyrillicTemp() {
 
         if (hasNonAscii) {
             console.log('[Setup] Non-ASCII characters detected in TEMP path. Attempting redirect...')
-            
+
             // Define a safe path in the root data directory (C:\.foxford\temp_natives)
             const safePath = 'C:\\.foxford\\temp_natives'
 
@@ -27,7 +27,7 @@ function tryFixCyrillicTemp() {
             // Override system environment variables for this process only
             process.env.TEMP = safePath
             process.env.TMP = safePath
-            
+
             // Override Node's internal function
             const oldTmpDir = os.tmpdir
             os.tmpdir = () => safePath
@@ -49,21 +49,20 @@ remoteMain.initialize()
 
 // Requirements
 const { app, BrowserWindow, ipcMain, Menu, shell, powerMonitor, dialog, protocol, session } = require('electron')
-const autoUpdater                       = require('electron-updater').autoUpdater
-const { spawn }                         = require('child_process')
-const ejse                              = require('ejs-electron')
+const autoUpdater = require('electron-updater').autoUpdater
+const { spawn } = require('child_process')
+const ejse = require('ejs-electron')
 // fs, os, path are already imported at the top
-const isDev                             = require('./app/assets/js/isdev')
-const semver                            = require('semver')
-const { pathToFileURL }                 = require('url')
+const isDev = require('./app/assets/js/isdev')
+const semver = require('semver')
+const { pathToFileURL } = require('url')
 const { AZURE_CLIENT_ID, MSFT_OPCODE, MSFT_REPLY_TYPE, MSFT_ERROR, SHELL_OPCODE } = require('./app/assets/js/ipcconstants')
-const LangLoader                        = require('./app/assets/js/langloader')
-const SysUtil                           = require('./app/assets/js/sysutil')
-const ConfigManager                     = require('./app/assets/js/configmanager')
+const LangLoader = require('./app/assets/js/langloader')
+const SysUtil = require('./app/assets/js/sysutil')
+const ConfigManager = require('./app/assets/js/configmanager')
 
-const P2PEngine                         = require('./network/P2PEngine')
-const RaceManager                       = require('./network/RaceManager')
-const NetworkMonitor                    = require('./network/NetworkMonitor')
+const P2PEngine = require('./network/P2PEngine')
+const RaceManager = require('./network/RaceManager')
 
 // Set up single instance lock.
 const gotTheLock = app.requestSingleInstanceLock()
@@ -107,7 +106,7 @@ function isIgnorableError(err) {
 
     // Ignore errors occurring within standard system temporary folders or native library cache (non-critical collateral damage).
     const isTemp = err.path && (err.path.includes('Temp') || err.path.includes('WCNatives'))
-    
+
     // Ignore the error if it involves standard temporary file paths OR is a general cleanup operation.
     return isTemp || isCleanup
 }
@@ -131,7 +130,7 @@ process.on('uncaughtException', (err) => {
 
     if (err.code === 'EPERM') {
         // If returns true: we are handling/relaunching, stop execution.
-        if (handleEPERM()) return 
+        if (handleEPERM()) return
     } else {
         console.error('An uncaught exception occurred:', err)
         dialog.showMessageBoxSync({
@@ -185,7 +184,7 @@ process.on('unhandledRejection', (reason, promise) => {
 try {
     const Sentry = require('@sentry/electron/main')
     Sentry.init({
-        dsn: 'https://f02442d2a0733ac2c810b8d8d7f4a21e@o4508545424359424.ingest.de.sentry.io/4508545432027216',
+        dsn: '',
         release: 'FLauncher@' + app.getVersion(),
     })
 } catch (error) {
@@ -197,15 +196,15 @@ try {
 let autoUpdateListeners = {}
 
 function initAutoUpdater(event, data) {
-    if(data){
+    if (data) {
         autoUpdater.allowPrerelease = true
     }
-    
-    if(isDev){
+
+    if (isDev) {
         autoUpdater.autoInstallOnAppQuit = false
         autoUpdater.updateConfigPath = path.join(__dirname, 'dev-app-update.yml')
     }
-    if(process.platform === 'darwin'){
+    if (process.platform === 'darwin') {
         autoUpdater.autoDownload = false
     }
 
@@ -255,7 +254,7 @@ function initAutoUpdater(event, data) {
 
 ipcMain.on('autoUpdateAction', (event, arg, data) => {
     if (!event.sender.isDestroyed()) {
-        switch(arg){
+        switch (arg) {
             case 'initAutoUpdater':
                 console.log('Initializing auto updater.')
                 initAutoUpdater(event, data)
@@ -274,9 +273,9 @@ ipcMain.on('autoUpdateAction', (event, arg, data) => {
                     })
                 break
             case 'allowPrereleaseChange':
-                if(!data){
+                if (!data) {
                     const preRelComp = semver.prerelease(app.getVersion())
-                    if(preRelComp != null && preRelComp.length > 0){
+                    if (preRelComp != null && preRelComp.length > 0) {
                         autoUpdater.allowPrerelease = true
                     } else {
                         autoUpdater.allowPrerelease = data
@@ -305,7 +304,7 @@ ipcMain.handle(SHELL_OPCODE.TRASH_ITEM, async (event, ...args) => {
     try {
         await shell.trashItem(args[0])
         return { result: true }
-    } catch(error) {
+    } catch (error) {
         return { result: false, error: error }
     }
 })
@@ -340,7 +339,7 @@ ipcMain.on(MSFT_OPCODE.OPEN_LOGIN, (ipcEvent, ...arguments_) => {
     })
 
     msftAuthWindow.on('close', () => {
-        if(!msftAuthSuccess) {
+        if (!msftAuthSuccess) {
             ipcEvent.reply(MSFT_OPCODE.REPLY_LOGIN, MSFT_REPLY_TYPE.ERROR, MSFT_ERROR.NOT_FINISHED, msftAuthViewOnClose)
         }
     })
@@ -401,31 +400,31 @@ ipcMain.on(MSFT_OPCODE.OPEN_LOGOUT, (ipcEvent, uuid, isLastAccount) => {
             clearTimeout(msftLogoutTimeout)
             msftLogoutTimeout = null
         }
-        if(!msftLogoutSuccess) {
+        if (!msftLogoutSuccess) {
             ipcEvent.reply(MSFT_OPCODE.REPLY_LOGOUT, MSFT_REPLY_TYPE.ERROR, MSFT_ERROR.NOT_FINISHED)
-        } else if(!msftLogoutSuccessSent) {
+        } else if (!msftLogoutSuccessSent) {
             msftLogoutSuccessSent = true
             ipcEvent.reply(MSFT_OPCODE.REPLY_LOGOUT, MSFT_REPLY_TYPE.SUCCESS, uuid, isLastAccount)
         }
     })
-    
+
     msftLogoutWindow.webContents.on('did-navigate', (_, uri) => {
-        if(uri.startsWith('https://login.microsoftonline.com/common/oauth2/v2.0/logoutsession')) {
+        if (uri.startsWith('https://login.microsoftonline.com/common/oauth2/v2.0/logoutsession')) {
             msftLogoutSuccess = true
             msftLogoutTimeout = setTimeout(() => {
-                if(!msftLogoutSuccessSent) {
+                if (!msftLogoutSuccessSent) {
                     msftLogoutSuccessSent = true
                     ipcEvent.reply(MSFT_OPCODE.REPLY_LOGOUT, MSFT_REPLY_TYPE.SUCCESS, uuid, isLastAccount)
                 }
 
-                if(msftLogoutWindow) {
+                if (msftLogoutWindow) {
                     msftLogoutWindow.close()
                     msftLogoutWindow = null
                 }
             }, 5000)
         }
     })
-    
+
     msftLogoutWindow.removeMenu()
     msftLogoutWindow.loadURL('https://login.microsoftonline.com/common/oauth2/v2.0/logout')
 })
@@ -459,7 +458,7 @@ function createWindow() {
     win.once('ready-to-show', async () => {
         const warnings = await SysUtil.performChecks()
         if (win && !win.isDestroyed()) {
-            
+
             // Protect against crashes when saving config
             try {
                 if (!ConfigManager.getTotalRAMWarningShown()) {
@@ -474,7 +473,7 @@ function createWindow() {
                 if (err.code === 'EPERM') {
                     // If true (relaunch needed), stop execution.
                     // If false (ignore), continue showing window.
-                    if (handleEPERM()) return 
+                    if (handleEPERM()) return
                 } else {
                     console.error('Failed to save config during ready-to-show:', err)
                 }
@@ -490,7 +489,7 @@ function createWindow() {
                 // 1. Safety check: Ensure the window still exists (user hasn't closed the app)
                 if (win && !win.isDestroyed()) {
                     console.log('[AutoUpdate] Starting delayed update check...')
-                    
+
                     // 2. Initialize logic (simulate an IPC event by passing the current window)
                     // Note: 'false' means we are not forcing pre-release settings
                     initAutoUpdater({ sender: win.webContents }, false)
@@ -515,7 +514,7 @@ function createWindow() {
 }
 
 function createMenu() {
-    if(process.platform === 'darwin') {
+    if (process.platform === 'darwin') {
         let applicationSubMenu = {
             label: 'Application',
             submenu: [{
@@ -569,9 +568,9 @@ function createMenu() {
     }
 }
 
-function getPlatformIcon(filename){
+function getPlatformIcon(filename) {
     let ext
-    switch(process.platform) {
+    switch (process.platform) {
         case 'win32':
             ext = 'ico'
             break
@@ -590,28 +589,28 @@ function getPlatformIcon(filename){
  */
 function relaunchAsAdmin() {
     if (process.platform === 'win32') {
-        
+
         // 1. Release the single instance lock immediately so the new admin instance
         // can start without being blocked by this current instance.
         app.releaseSingleInstanceLock()
-        
+
         const exe = process.execPath
         // 2. Explicitly set working directory to the app's folder (avoids System32 default).
         const cwd = path.dirname(exe)
 
         // 3. Pass --relaunch-admin to signal that we've already tried elevating permissions.
         const command = `Start-Process -FilePath '${exe}' -WorkingDirectory '${cwd}' -ArgumentList '--relaunch-admin' -Verb RunAs`
-        
+
         const ps = spawn('powershell.exe', ['-Command', command], {
             // windowsHide: true -> Hides the black console window but keeps it attached
             // to the session, allowing the UAC prompt to appear.
-            windowsHide: true, 
+            windowsHide: true,
             stdio: 'ignore'
         })
 
         ps.on('error', (err) => {
             // If PowerShell failed to start, reclaim the lock and notify the user.
-            app.requestSingleInstanceLock() 
+            app.requestSingleInstanceLock()
             dialog.showMessageBoxSync({
                 type: 'error',
                 title: 'Ошибка',
@@ -661,7 +660,7 @@ function handleEPERM() {
         defaultId: 0,
         cancelId: 1
     })
-    
+
     if (choice === 0) {
         relaunchAsAdmin()
     } else {
@@ -680,6 +679,10 @@ app.on('ready', async () => {
     // Initialize P2P Engine
     P2PEngine.init()
 
+    ipcMain.handle('p2p:getInfo', () => {
+        return P2PEngine.getNetworkInfo()
+    })
+
     // Intercept Minecraft Asset URLs
     session.defaultSession.webRequest.onBeforeRequest(
         { urls: ['*://resources.download.minecraft.net/*', '*://libraries.minecraft.net/*'] },
@@ -697,7 +700,7 @@ app.on('ready', async () => {
             if (!handleEPERM()) {
                 console.log('Proceeding despite config load failure...')
             } else {
-                return 
+                return
             }
         } else {
             console.error('Error loading config:', err)

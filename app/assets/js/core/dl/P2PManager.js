@@ -75,6 +75,11 @@ class P2PManager extends EventEmitter {
         }
 
         if (url.pathname === '/file') {
+            // Check if Upload is Enabled
+            if (!ConfigManager.getP2PUploadEnabled()) {
+                res.writeHead(403); res.end('P2P Upload Disabled'); return;
+            }
+
             const hash = url.searchParams.get('hash');
             const relPath = url.searchParams.get('path');
 
@@ -289,6 +294,17 @@ class P2PManager extends EventEmitter {
         this.started = false;
         this.peers.clear();
         this.emit('peer-update', 0);
+    }
+
+    getNetworkInfo() {
+        return {
+            peers: this.peers.size,
+            downloaded: this.stats.downloaded,
+            uploaded: this.stats.uploaded,
+            filesDownloaded: this.stats.filesDownloaded,
+            filesUploaded: this.stats.filesUploaded,
+            listening: this.started
+        }
     }
 }
 

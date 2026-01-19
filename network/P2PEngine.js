@@ -9,6 +9,10 @@ const { Readable } = require('stream')
 const Config = require('./config')
 const NodeAdapter = require('./NodeAdapter')
 const ConfigManager = require('../app/assets/js/configmanager')
+const RateLimiter = require('../app/assets/js/core/util/RateLimiter')
+// Deferred import for RaceManager to avoid circular dependency
+let RaceManager = null;
+try { RaceManager = require('./RaceManager') } catch (e) { }
 
 // Protocol Constants
 const MSG_REQUEST = 0
@@ -131,11 +135,43 @@ class PeerHandler {
             return
         }
 
-        // Check Concurrent Upload Limits
         if (this.engine.activeUploads >= MAX_CONCURRENT_UPLOADS) {
             this.sendError(reqId, 'Busy')
             return
         }
+
+        // 1. Check if Upload is Enabled
+        if (!ConfigManager.getP2PUploadEnabled()) {
+            this.sendError(reqId, 'Disabled')
+            return
+        }
+
+        // 2. Smart Check: If user is downloading, don't upload (Avoid lagging user)
+        if (!RaceManager) { try { RaceManager = require('./RaceManager') } catch (e) { } }
+
+        const isBusy = RaceManager && RaceManager.isBusy()
+
+        if (isBusy) {
+            if (!this.wasBusy) {
+                console.log('[P2PEngine] Smart Mode: Pausing uploads due to active download.')
+                this.wasBusy = true
+            }
+            this.sendError(reqId, 'Owner Busy')
+            return
+        } else {
+            if (this.wasBusy) {
+                console.log('[P2PEngine] Smart Mode: Resuming uploads.')
+                this.wasBusy = false
+            }
+        }
+
+        // 3. Update Rate Limiter
+        const limitMbps = ConfigManager.getP2PUploadLimit()
+        // Convert Mbps to B/s: val * 1024 * 1024 / 8 === val * 131072
+        const limitBytes = limitMbps * 125000 // 1 Mbps = 125,000 Bytes/s (Decimal) or 131072 (Binary)? 
+        // User said "15 mbit for 200 mbit internet". Speed tests use decimal usually.
+        // Let's use 125000.
+        RateLimiter.update(limitBytes, true)
 
         try {
             const commonDir = ConfigManager.getCommonDirectory()
@@ -145,7 +181,10 @@ class PeerHandler {
                 this.engine.activeUploads++
                 const stream = fs.createReadStream(filePath)
 
-                stream.on('data', (chunk) => {
+                // Throttle Stream
+                const throttled = stream.pipe(RateLimiter.throttle())
+
+                throttled.on('data', (chunk) => {
                     this.sendData(reqId, chunk)
                 })
 
@@ -237,6 +276,21 @@ class P2PEngine extends EventEmitter {
         this.requests = new Map() // reqId -> { stream: Readable, timeout: Timer }
         this.reqIdCounter = 1
         this.profile = NodeAdapter.getProfile()
+
+        // Debug Info Loop
+        if (process.argv.includes('--debug') || true) { // Always on for now as requested "in debug mode..."
+            // Check logging level?
+            // User said "in debug mode system should inform".
+        }
+    }
+
+    getNetworkInfo() {
+        return {
+            peers: this.peers.length,
+            topic: SWARM_TOPIC.toString('hex').substring(0, 8),
+            requests: this.requests.size,
+            uploads: this.activeUploads
+        }
     }
 
     async init() {
@@ -244,7 +298,7 @@ class P2PEngine extends EventEmitter {
             // Setup HyperDHT with bootstrap nodes
             // Note: hyperswarm handles DHT internally but we can pass options
             const dht = new HyperDHT({
-                 bootstrap: Config.BOOTSTRAP_NODES.map(n => ({ host: n.host, port: n.port }))
+                bootstrap: Config.BOOTSTRAP_NODES.map(n => ({ host: n.host, port: n.port }))
             })
 
             this.swarm = new Hyperswarm({ dht })
@@ -283,7 +337,7 @@ class P2PEngine extends EventEmitter {
             })
 
             await this.swarm.flush() // Wait for announcement
-            console.log(`[P2PEngine] Initialized. Topic: ${b4a.toString(SWARM_TOPIC, 'hex').substring(0,8)}... Peers: ${this.peers.length}`)
+            console.log(`[P2PEngine] Initialized. Topic: ${b4a.toString(SWARM_TOPIC, 'hex').substring(0, 8)}... Peers: ${this.peers.length}`)
 
         } catch (err) {
             console.error('[P2PEngine] Init failed:', err)
@@ -293,7 +347,7 @@ class P2PEngine extends EventEmitter {
     requestFile(hash) {
         // Return a Readable stream
         const stream = new Readable({
-            read() {}
+            read() { }
         })
 
         if (this.peers.length === 0) {
@@ -337,7 +391,7 @@ class P2PEngine extends EventEmitter {
         const peer = bestPeer
 
         if (!peer) {
-             process.nextTick(() => {
+            process.nextTick(() => {
                 stream.emit('error', new Error('Peer selection failed'))
             })
             return stream

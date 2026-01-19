@@ -3,6 +3,7 @@ const os = require('os')
 const semver = require('semver')
 
 const DropinModUtil = require('./assets/js/dropinmodutil')
+const SettingsP2PManager = require('./assets/js/core/dl/P2PManager')
 const { MSFT_OPCODE, MSFT_REPLY_TYPE, MSFT_ERROR } = require('./assets/js/ipcconstants')
 const { validateSelectedJvm, ensureJavaDirIsRoot } = require('./assets/js/core/java/JavaGuard')
 
@@ -163,6 +164,10 @@ async function initSettingsValues() {
                         }
 
                         v.setAttribute('value', val)
+                    } else if (cVal === 'P2PUploadLimit') {
+                        const val = gFn.apply(null, gFnOpts)
+                        v.setAttribute('value', val)
+                        document.getElementById('settingsP2PUploadLabel').innerHTML = val + ' Mbit/s'
                     } else {
                         v.setAttribute('value', Number.parseFloat(gFn.apply(null, gFnOpts)))
                     }
@@ -171,6 +176,57 @@ async function initSettingsValues() {
         }
     }
 
+}
+
+function bindP2PSlider() {
+    const slider = document.getElementById('settingsP2PUploadRange')
+    const label = document.getElementById('settingsP2PUploadLabel')
+
+    // Observer for value change
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'value') {
+                label.innerHTML = slider.getAttribute('value') + ' Mbit/s'
+            }
+        })
+    })
+    observer.observe(slider, { attributes: true })
+}
+bindP2PSlider()
+
+document.getElementById('settingsP2PInfoButton').onclick = async () => {
+    try {
+        const local = SettingsP2PManager.getNetworkInfo()
+        const global = await ipcRenderer.invoke('p2p:getInfo')
+
+        const infoHtml = `
+            <div style="text-align: left; font-family: monospace;">
+                <strong>Локальная сеть (LAN):</strong><br>
+                Статус: ${local.listening ? 'Активен' : 'Отключен'}<br>
+                Пиры: ${local.peers}<br>
+                Отдано: ${(local.uploaded / 1024 / 1024).toFixed(2)} MB<br>
+                Скачано: ${(local.downloaded / 1024 / 1024).toFixed(2)} MB<br>
+                <br>
+                <strong>Глобальная сеть (WAN):</strong><br>
+                Топик: ${global.topic}<br>
+                Пиры: ${global.peers}<br>
+                Активные запросы: ${global.requests}<br>
+                Активные раздачи: ${global.uploads}<br>
+            </div>
+        `
+
+        setOverlayContent(
+            'Статистика P2P Сети',
+            infoHtml,
+            'Закрыть'
+        )
+        setOverlayHandler(() => {
+            toggleOverlay(false)
+        })
+        toggleOverlay(true)
+    } catch (err) {
+        console.error('Info Error', err)
+    }
 }
 
 /**
