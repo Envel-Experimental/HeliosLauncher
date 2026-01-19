@@ -16,12 +16,12 @@ class RaceManager {
             url = 'https://' + url.substring('mc-asset://'.length)
         }
 
-        // Attempt to extract SHA1 hash from URL
+        // Attempt to extract hash from URL (SHA1 or MD5)
         // Minecraft assets usually end with the hash or have it in the path
-        // Pattern: .../objects/ab/abc123...
-        // or just filename being the hash
+        // Pattern: .../objects/ab/abc123... or just filename being the hash
         let hash = null
-        const match = url.match(/([a-f0-9]{40})/i)
+        // Match 40 chars (SHA1) or 32 chars (MD5)
+        const match = url.match(/([a-f0-9]{40}|[a-f0-9]{32})/i)
         if (match) {
             hash = match[1]
         }
@@ -30,6 +30,9 @@ class RaceManager {
         if (!hash) {
             return fetch(url)
         }
+
+        // Determine algorithm based on length
+        const algo = hash.length === 32 ? 'md5' : 'sha1'
 
         const abortController = new AbortController()
 
@@ -88,7 +91,7 @@ class RaceManager {
             }
 
             // Verify Integrity
-            const verifier = new HashVerifierStream('sha1', hash)
+            const verifier = new HashVerifierStream(algo, hash)
             sourceStream.pipe(verifier)
 
             // Return Response
