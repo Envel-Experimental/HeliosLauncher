@@ -676,11 +676,36 @@ app.on('ready', async () => {
         return RaceManager.handle(req)
     })
 
-    // Initialize P2P Engine
-    P2PEngine.init()
+    // Load Config First
+    try {
+        await ConfigManager.load()
+    } catch (err) {
+        if (err.code === 'EPERM') {
+            // Check if we should ignore the error and proceed, or stop for a restart.
+            if (!handleEPERM()) {
+                // If it returned true, it means we handled it (e.g. by quitting), so we stop here.
+                return
+            }
+        } else {
+            console.error('Failed to load config:', err)
+        }
+    }
+
+    // Initialize P2P Engine (After Config is loaded)
+    P2PEngine.start()
 
     ipcMain.handle('p2p:getInfo', () => {
         return P2PEngine.getNetworkInfo()
+    })
+
+    ipcMain.handle('p2p:configUpdate', async () => {
+        try {
+            await ConfigManager.load()
+            // Re-eval P2P State
+            await P2PEngine.start() // start() checks config internally
+        } catch (err) {
+            console.error('Failed to update P2P Config:', err)
+        }
     })
 
     // Intercept Minecraft Asset URLs
@@ -692,20 +717,7 @@ app.on('ready', async () => {
         }
     )
 
-    try {
-        await ConfigManager.load()
-    } catch (err) {
-        if (err.code === 'EPERM') {
-            // Check if we should ignore the error and proceed, or stop for a restart.
-            if (!handleEPERM()) {
-                console.log('Proceeding despite config load failure...')
-            } else {
-                return
-            }
-        } else {
-            console.error('Error loading config:', err)
-        }
-    }
+
     createWindow()
     createMenu()
     powerMonitor.on('resume', () => {

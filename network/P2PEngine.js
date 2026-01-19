@@ -293,6 +293,25 @@ class P2PEngine extends EventEmitter {
         }
     }
 
+    async start() {
+        if (!ConfigManager.getGlobalOptimization()) {
+            console.log('[P2PEngine] Global Optimization Disabled. Not starting.')
+            this.stop()
+            return
+        }
+        if (this.swarm) return // Already running
+        await this.init()
+    }
+
+    async stop() {
+        if (this.swarm) {
+            console.log('[P2PEngine] Stopping...')
+            await this.swarm.destroy()
+            this.swarm = null
+            this.peers = []
+        }
+    }
+
     async init() {
         try {
             // Setup HyperDHT with bootstrap nodes

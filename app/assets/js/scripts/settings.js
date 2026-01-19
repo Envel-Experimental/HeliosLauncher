@@ -321,6 +321,18 @@ function saveSettingsValues() {
             }
         }
     })
+
+    ConfigManager.save()
+
+    // Apply P2P Settings immediately
+    if (ConfigManager.getLocalOptimization()) {
+        SettingsP2PManager.start()
+    } else {
+        SettingsP2PManager.stop()
+    }
+
+    // Notify Main Process to update P2P Engine
+    ipcRenderer.invoke('p2p:configUpdate')
 }
 
 let selectedSettingsTab = 'settingsTabAccount'

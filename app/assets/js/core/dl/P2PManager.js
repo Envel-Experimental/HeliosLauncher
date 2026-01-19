@@ -75,6 +75,11 @@ class P2PManager extends EventEmitter {
         }
 
         if (url.pathname === '/file') {
+            // Check if Local Optimization is Enabled
+            if (!ConfigManager.getLocalOptimization()) {
+                res.writeHead(403); res.end('P2P Local Optimization Disabled'); return;
+            }
+
             // Check if Upload is Enabled
             if (!ConfigManager.getP2PUploadEnabled()) {
                 res.writeHead(403); res.end('P2P Upload Disabled'); return;
