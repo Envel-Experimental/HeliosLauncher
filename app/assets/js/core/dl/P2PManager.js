@@ -101,13 +101,17 @@ class P2PManager extends EventEmitter {
             const relPath = url.searchParams.get('path');
 
             if (!hash) { res.writeHead(400); res.end('Missing hash'); return; }
-            if (relPath && (relPath.includes('..') || path.isAbsolute(relPath))) { res.writeHead(403); res.end('Invalid path'); return; }
 
-            const commonDir = ConfigManager.getCommonDirectory();
+            const commonDir = path.resolve(ConfigManager.getCommonDirectory());
             let filePath;
 
             if (relPath && relPath !== 'unknown') {
-                filePath = path.join(commonDir, relPath);
+                const resolvedPath = path.resolve(commonDir, relPath);
+                // Secure Directory Traversal Check
+                if (!resolvedPath.toLowerCase().startsWith(commonDir.toLowerCase())) {
+                    res.writeHead(403); res.end('Access Denied: Path Traversal'); return;
+                }
+                filePath = resolvedPath;
             } else {
                 // Fallback: Try to locate by hash in assets/objects
                 // Standard Minecraft Asset Structure: assets/objects/xx/hash
