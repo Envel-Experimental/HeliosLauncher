@@ -213,6 +213,18 @@ document.getElementById('settingsP2PInfoButton').onclick = async () => {
             }
         }
 
+        let globalStatusText = 'Отключен'
+        let globalStatusColor = '#ff4444'
+
+        if (global.running) {
+            globalStatusText = 'Активен'
+            globalStatusColor = '#7dbb00'
+            if (global.mode && global.mode.includes('Passive')) {
+                globalStatusText = 'Активен (Passive)'
+                globalStatusColor = '#ffbb00'
+            }
+        }
+
         return `
             <div id="p2pInfoStats" style="text-align: left; font-family: monospace; line-height: 1.6;">
                 <h3 style="margin: 0 0 5px; border-bottom: 1px solid #555;">Локальная сеть (LAN)</h3>
@@ -222,6 +234,7 @@ document.getElementById('settingsP2PInfoButton').onclick = async () => {
                 <div>Скачано: ${(local.downloaded / 1024 / 1024).toFixed(2)} MB</div>
                 <br>
                 <h3 style="margin: 0 0 5px; border-bottom: 1px solid #555;">Глобальная сеть (WAN)</h3>
+                <div>Статус: <span style="color: ${globalStatusColor}">${globalStatusText}</span></div>
                 <div>Топик: <span style="color: #aaa;">${global.topic}</span></div>
                 <div>DHT Live Nodes: ${global.dhtNodes || 0} (Configured Bootstraps: ${global.bootstrapNodes})</div>
                 <div>Пиры: ${global.peers}</div>

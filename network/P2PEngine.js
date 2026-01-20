@@ -476,7 +476,9 @@ class P2PEngine extends EventEmitter {
             uploads: this.activeUploads,
             uploaded: this.totalUploaded,
             dhtNodes: routingNodes,
-            bootstrapNodes: Config.BOOTSTRAP_NODES.length
+            bootstrapNodes: Config.BOOTSTRAP_NODES.length,
+            running: !!this.swarm,
+            mode: this.profile ? (this.profile.passive ? 'Passive (Leech)' : 'Active (Seed)') : 'Unknown'
         }
     }
 
