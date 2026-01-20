@@ -501,7 +501,11 @@ class P2PEngine extends EventEmitter {
             this.stop()
             return
         }
-        if (this.swarm) return // Already running
+        if (this.swarm) {
+            // Already running, but settings might have changed (e.g. passive mode)
+            this.reconfigureSwarm()
+            return
+        }
         await this.init()
     }
 
@@ -539,7 +543,7 @@ class P2PEngine extends EventEmitter {
                     if (currentNodes === 0 && !this.dht.bootstrapped) {
                         console.warn(`[P2PEngine] [WARNING] No DHT connections established after 5s. \nPossible causes: UDP blocked, Bootstraps offline. \nTarget Bootstraps: ${JSON.stringify(Config.BOOTSTRAP_NODES)}`)
                     } else if (currentNodes > 0 || this.dht.bootstrapped) {
-                        console.log(`[P2PEngine] DHT Bootstrapped successfully. Connected Nodes: ${currentNodes} (Flag: ${this.dht.bootstrapped})`)
+                        console.log(`[P2PEngine] DHT Status: ${this.dht.bootstrapped ? 'Connected to Bootstrap' : 'Searching...'} | Nodes in Routing Table: ${currentNodes}`)
                     }
                 }, 5000)
             })
@@ -552,6 +556,7 @@ class P2PEngine extends EventEmitter {
             this.swarm.on('connection', (socket, info) => {
                 const peer = new PeerHandler(socket, this)
                 this.peers.push(peer)
+                console.log(`[P2PEngine] Connected to peer: ${info.publicKey.toString('hex').substring(0, 8)}... (Total: ${this.peers.length})`)
 
                 // Enforce connection limits from profile
                 if (this.peers.length > this.profile.maxPeers) {
