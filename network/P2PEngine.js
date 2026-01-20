@@ -527,6 +527,7 @@ class P2PEngine extends EventEmitter {
             // Hyperswarm v4 doesn't support 'mdns' option directly in constructor, it's part of discovery.
             // But we can try passing it if it helps, mainly we rely on DHT.
             this.dht = new HyperDHT({
+                ephemeral: false, // Ensure node is visible in the network
                 bootstrap: Config.BOOTSTRAP_NODES.map(n => ({
                     host: n.host,
                     port: n.port,
@@ -539,8 +540,8 @@ class P2PEngine extends EventEmitter {
             })
 
             this.dht.on('ready', () => {
-                const nodes = this._getRoutingTableSize()
-                console.log('[P2PEngine] HyperDHT Ready. Routing Bucket Size:', nodes)
+                const nodesCount = this.dht.nodes ? this.dht.nodes.count() : 0
+                console.log('[P2PEngine] HyperDHT Ready. Nodes in Table:', nodesCount)
 
                 // Delayed Bootsrap Check to warn user if connection fails
                 setTimeout(() => {
@@ -579,12 +580,17 @@ class P2PEngine extends EventEmitter {
             // Join the topic
             const isPassive = this.profile.passive || !ConfigManager.getP2PUploadEnabled() || NodeAdapter.isCritical()
 
-            await this.swarm.join(SWARM_TOPIC, {
+            const discovery = this.swarm.join(SWARM_TOPIC, {
                 server: !isPassive,
                 client: true
             })
 
-            await this.swarm.flush() // Wait for announcement
+
+
+            discovery.flushed().then(() => {
+                console.log('[P2PEngine] Topic successfully published to DHT')
+            })
+
             console.log(`[P2PEngine] Initialized. Topic: ${b4a.toString(SWARM_TOPIC, 'hex').substring(0, 8)}... Passive: ${isPassive}`)
 
         } catch (err) {

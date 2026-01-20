@@ -1,5 +1,5 @@
 const { Readable } = require('stream')
-const P2PEngine = require('./P2PEngine')
+// const P2PEngine = require('./P2PEngine') // Circular Dependency Fix: Require lazily
 const HashVerifierStream = require('./HashVerifierStream')
 const Config = require('./config')
 const NodeAdapter = require('./NodeAdapter')
@@ -56,6 +56,7 @@ class RaceManager {
         // 2. Global P2P Task (Hyperswarm)
         let globalP2PStream = null
         const globalP2PTask = new Promise((resolve, reject) => {
+            const P2PEngine = require('./P2PEngine')
             globalP2PStream = P2PEngine.requestFile(hash, expectedSize)
 
             // Timeout P2P strictly to avoid waiting too long if HTTP is also slow/failing
@@ -108,20 +109,16 @@ class RaceManager {
                 // console.log('[RaceManager] Local P2P Won')
                 return this._createVerifiedStream(winner.result, algo, hash, expectedSize)
             } else {
+
                 // HTTP Won
                 if (globalP2PStream) globalP2PStream.destroy() // Cancel Global P2P
                 localP2PController.abort() // Cancel Local P2P
 
                 this.p2pConsecutiveWins = 0
-                // Convert WebStream to NodeStream if needed.
-                // If using 'undici' or similar in Electron, res.body might be iterable/stream.
-                // We need a Readable.
-                // Assuming res.body is compatible or we wrap it.
-                // For safety, let's use the helper or assume it's a stream.
-                // If it's a DOM Response (fetch), body is ReadableStream (Web).
-                // Create a node Readable from it.
-                const nodeStream = Readable.fromWeb(winner.result.body)
-                return this._createVerifiedStream(nodeStream, algo, hash, expectedSize)
+                // Standard HTTP: Return the native Response object directly.
+                // This avoids double-stream conversion overhead and compatibility issues.
+                // Validation is handled by DownloadEngine at the end.
+                return winner.result
             }
         } catch (err) {
             // All failed? Should not happen if HTTP is valid.
@@ -146,9 +143,8 @@ class RaceManager {
                         // console.log(`[RaceManager] Retrying with mirror: ${mirrorUrl}`)
 
                         const res = await fetch(mirrorUrl)
-                        if (res.ok && res.body) {
-                            const nodeStream = Readable.fromWeb(res.body)
-                            return this._createVerifiedStream(nodeStream, algo, hash, expectedSize)
+                        if (res.ok) {
+                            return res
                         }
                     } catch (e) {
                         // console.warn(`Mirror ${mirrorBase} failed`)
@@ -159,6 +155,8 @@ class RaceManager {
             throw err
         }
     }
+
+
 
     /**
      * Helper to create a verified response stream.
