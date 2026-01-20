@@ -400,7 +400,7 @@ class P2PEngine extends EventEmitter {
     reconfigureSwarm() {
         if (!this.swarm) return
         const topic = SWARM_TOPIC
-        const isPassive = this.profile.passive || NodeAdapter.isCritical()
+        const isPassive = this.profile.passive || NodeAdapter.isCritical() || !ConfigManager.getP2PUploadEnabled()
         console.log(`[P2PEngine] Reconfiguring Swarm. Passive: ${isPassive}`)
         this.swarm.join(topic, { client: true, server: !isPassive })
     }
@@ -480,6 +480,8 @@ class P2PEngine extends EventEmitter {
         // Check if bootstrapped (approximate)
         // If we have routing nodes, we probably bootstrapped.
 
+        const isEffectivelyPassive = this.profile.passive || !ConfigManager.getP2PUploadEnabled() || NodeAdapter.isCritical()
+
         return {
             peers: this.peers.length,
             topic: SWARM_TOPIC.toString('hex').substring(0, 8),
@@ -489,7 +491,7 @@ class P2PEngine extends EventEmitter {
             dhtNodes: routingNodes,
             bootstrapNodes: Config.BOOTSTRAP_NODES.length,
             running: !!this.swarm,
-            mode: this.profile ? (this.profile.passive ? 'Passive (Leech)' : 'Active (Seed)') : 'Unknown'
+            mode: isEffectivelyPassive ? 'Passive (Leech)' : 'Active (Seed)'
         }
     }
 
@@ -530,14 +532,6 @@ class P2PEngine extends EventEmitter {
             this.dht.on('ready', () => {
                 const nodes = this._getRoutingTableSize()
                 console.log('[P2PEngine] HyperDHT Ready. Routing Bucket Size:', nodes)
-                console.log('[P2PEngine] DEBUG Bootstrapped:', this.dht.bootstrapped)
-
-                if (this.dht.nodes) {
-                    // Check what this object is
-                    try {
-                        console.log('[P2PEngine] DEBUG dht.nodes:', JSON.stringify(this.dht.nodes).substring(0, 100))
-                    } catch (e) { console.log('[P2PEngine] DEBUG dht.nodes (circular/complex)', this.dht.nodes) }
-                }
 
                 // Delayed Bootsrap Check to warn user if connection fails
                 setTimeout(() => {
@@ -573,23 +567,15 @@ class P2PEngine extends EventEmitter {
             })
 
             // Join the topic
-            // server: true (announce) if not passive or if we want to share
-            // client: true (lookup)
-            // Profile says "passive: true" means "passive seeding only".
-            // Usually passive seeding means you don't aggressively announce, OR you announce but prioritize own downloads.
-            // The prompt says: "Low-End Profile... passive seeding only."
-            // "Aggressive Announcement: The node should join the swarm topic and actively announce itself."
-            // I'll assume everyone joins, but maybe we adjust `announce` flag?
-            // Hyperswarm join(topic, { server: true, client: true })
-            const shouldAnnounce = !this.profile.passive
+            const isPassive = this.profile.passive || !ConfigManager.getP2PUploadEnabled() || NodeAdapter.isCritical()
 
             await this.swarm.join(SWARM_TOPIC, {
-                server: shouldAnnounce,
+                server: !isPassive,
                 client: true
             })
 
             await this.swarm.flush() // Wait for announcement
-            console.log(`[P2PEngine] Initialized. Topic: ${b4a.toString(SWARM_TOPIC, 'hex').substring(0, 8)}... Peers: ${this.peers.length}`)
+            console.log(`[P2PEngine] Initialized. Topic: ${b4a.toString(SWARM_TOPIC, 'hex').substring(0, 8)}... Passive: ${isPassive}`)
 
         } catch (err) {
             console.error('[P2PEngine] Init failed:', err)
