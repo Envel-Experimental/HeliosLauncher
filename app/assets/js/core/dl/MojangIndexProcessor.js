@@ -87,34 +87,49 @@ class MojangIndexProcessor extends IndexProcessor {
                     return JSON.parse(buf.toString());
                 }
             } else {
-                 return JSON.parse(buf.toString());
+                return JSON.parse(buf.toString());
             }
         } catch (error) {
-             // File doesn't exist or invalid
+            // File doesn't exist or invalid
         }
 
         try {
             const res = await fetch(url);
-            if(!res.ok) throw new Error(`HTTP ${res.status}`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
 
             await safeEnsureDir(path.dirname(filePath));
             await fs.writeFile(filePath, JSON.stringify(data));
             return data;
         } catch (error) {
-             handleFetchError(url, error, MojangIndexProcessor.logger);
-             return null;
+            handleFetchError(url, error, MojangIndexProcessor.logger);
+            return null;
         }
     }
 
     async loadVersionManifest() {
+        const manifestPath = path.join(this.commonDir, 'version_manifest_v2.json');
+
         try {
             const res = await fetch(MojangIndexProcessor.VERSION_MANIFEST_ENDPOINT);
-            if(!res.ok) throw new Error(`HTTP ${res.status}`);
-            return await res.json();
+            if (res.ok) {
+                const data = await res.json();
+                await safeEnsureDir(path.dirname(manifestPath));
+                await fs.writeFile(manifestPath, JSON.stringify(data));
+                return data;
+            } else {
+                throw new Error(`HTTP ${res.status}`);
+            }
         } catch (error) {
-            handleFetchError('Load Mojang Version Manifest', error, MojangIndexProcessor.logger);
-            return null;
+            MojangIndexProcessor.logger.warn('Failed to fetch Mojang Version Manifest from network. Falling back to cache.', error);
+            try {
+                await fs.access(manifestPath);
+                const data = await fs.readFile(manifestPath, 'utf8');
+                return JSON.parse(data);
+            } catch (e) {
+                handleFetchError('Load Mojang Version Manifest', error, MojangIndexProcessor.logger);
+                return null;
+            }
         }
     }
 
@@ -128,13 +143,13 @@ class MojangIndexProcessor extends IndexProcessor {
 
     async validate(onStageComplete) {
         const assets = await this.validateAssets(this.assetIndex);
-        if(onStageComplete) await onStageComplete();
+        if (onStageComplete) await onStageComplete();
         const libraries = await this.validateLibraries(this.versionJson);
-         if(onStageComplete) await onStageComplete();
+        if (onStageComplete) await onStageComplete();
         const client = await this.validateClient(this.versionJson);
-         if(onStageComplete) await onStageComplete();
+        if (onStageComplete) await onStageComplete();
         const logConfig = await this.validateLogConfig(this.versionJson);
-         if(onStageComplete) await onStageComplete();
+        if (onStageComplete) await onStageComplete();
         return {
             assets,
             libraries,
@@ -225,31 +240,31 @@ class MojangIndexProcessor extends IndexProcessor {
         const hash = versionJson.downloads.client.sha1;
         if (!await validateLocalFile(versionJarPath, HashAlgo.SHA1, hash)) {
             return [{
-                    id: `${version} client`,
-                    hash,
-                    algo: HashAlgo.SHA1,
-                    size: versionJson.downloads.client.size,
-                    url: versionJson.downloads.client.url,
-                    path: versionJarPath
-                }];
+                id: `${version} client`,
+                hash,
+                algo: HashAlgo.SHA1,
+                size: versionJson.downloads.client.size,
+                url: versionJson.downloads.client.url,
+                path: versionJarPath
+            }];
         }
         return [];
     }
 
     async validateLogConfig(versionJson) {
-        if(!versionJson.logging || !versionJson.logging.client) return [];
+        if (!versionJson.logging || !versionJson.logging.client) return [];
         const logFile = versionJson.logging.client.file;
         const filePath = path.join(this.assetPath, 'log_configs', logFile.id);
         const hash = logFile.sha1;
         if (!await validateLocalFile(filePath, HashAlgo.SHA1, hash)) {
             return [{
-                    id: logFile.id,
-                    hash,
-                    algo: HashAlgo.SHA1,
-                    size: logFile.size,
-                    url: logFile.url,
-                    path: filePath
-                }];
+                id: logFile.id,
+                hash,
+                algo: HashAlgo.SHA1,
+                size: logFile.size,
+                url: logFile.url,
+                path: filePath
+            }];
         }
         return [];
     }
