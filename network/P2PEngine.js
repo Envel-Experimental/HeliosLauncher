@@ -446,25 +446,36 @@ class P2PEngine extends EventEmitter {
         }
     }
 
+    _getRoutingTableSize() {
+        if (!this.dht) return 0
+        // Extensive search for K-Bucket/RoutingTable in HyperDHT structure
+        const candidates = [
+            this.dht.nodes,
+            this.dht.routingTable,
+            this.dht.table,
+            this.dht._dht?.nodes,
+            this.dht._dht?.routingTable,
+            this.dht._dht?.table,
+            this.dht.io?.table,
+            this.dht.rpc?.nodes,
+            this.dht._rpc?.nodes
+        ]
+
+        for (const table of candidates) {
+            if (!table) continue
+            if (typeof table.count === 'function') return table.count()
+            if (typeof table.toArray === 'function') return table.toArray().length
+            if (Number.isInteger(table.length)) return table.length
+            if (Number.isInteger(table.size)) return table.size
+        }
+        return 0
+    }
+
     getNetworkInfo() {
         if (!this.totalUploaded) this.totalUploaded = 0
 
         // Try to get DHT node count (routing table) - Live "Seen" Nodes
-        let routingNodes = 0
-        const dhtRef = this.dht
-        if (dhtRef) {
-            // Inspect internals safely to find Routing Table (KBucket)
-            // HyperDHT typically wraps dht-rpc
-            const table = dhtRef.nodes || dhtRef.routingTable || (dhtRef._dht && dhtRef._dht.nodes)
-
-            if (table) {
-                // K-Bucket / Routing Table usually has .count() or .length or .size
-                if (typeof table.count === 'function') routingNodes = table.count()
-                else if (typeof table.toArray === 'function') routingNodes = table.toArray().length
-                else if (table.length !== undefined) routingNodes = table.length
-                else if (table.size !== undefined) routingNodes = table.size
-            }
-        }
+        const routingNodes = this._getRoutingTableSize()
 
         // Check if bootstrapped (approximate)
         // If we have routing nodes, we probably bootstrapped.
@@ -510,6 +521,33 @@ class P2PEngine extends EventEmitter {
             // But we can try passing it if it helps, mainly we rely on DHT.
             this.dht = new HyperDHT({
                 bootstrap: Config.BOOTSTRAP_NODES.map(n => ({ host: n.host, port: n.port }))
+            })
+
+            this.dht.on('error', (err) => {
+                console.error('[P2PEngine] HyperDHT Error:', err)
+            })
+
+            this.dht.on('ready', () => {
+                const nodes = this._getRoutingTableSize()
+                console.log('[P2PEngine] HyperDHT Ready. Routing Bucket Size:', nodes)
+                console.log('[P2PEngine] DEBUG Bootstrapped:', this.dht.bootstrapped)
+
+                if (this.dht.nodes) {
+                    // Check what this object is
+                    try {
+                        console.log('[P2PEngine] DEBUG dht.nodes:', JSON.stringify(this.dht.nodes).substring(0, 100))
+                    } catch (e) { console.log('[P2PEngine] DEBUG dht.nodes (circular/complex)', this.dht.nodes) }
+                }
+
+                // Delayed Bootsrap Check to warn user if connection fails
+                setTimeout(() => {
+                    const currentNodes = this._getRoutingTableSize()
+                    if (currentNodes === 0 && !this.dht.bootstrapped) {
+                        console.warn(`[P2PEngine] [WARNING] No DHT connections established after 5s. \nPossible causes: UDP blocked, Bootstraps offline. \nTarget Bootstraps: ${JSON.stringify(Config.BOOTSTRAP_NODES)}`)
+                    } else if (currentNodes > 0 || this.dht.bootstrapped) {
+                        console.log(`[P2PEngine] DHT Bootstrapped successfully. Connected Nodes: ${currentNodes} (Flag: ${this.dht.bootstrapped})`)
+                    }
+                }, 5000)
             })
 
             // Disable local discovery to avoid conflict with P2PManager (UDP)
