@@ -225,24 +225,145 @@ document.getElementById('settingsP2PInfoButton').onclick = async () => {
             }
         }
 
+        const spinner = '<span class="p2p-status-spinner"></span>'
+
         return `
-            <div id="p2pInfoStats" style="text-align: left; font-family: monospace; line-height: 1.6;">
-                <h3 style="margin: 0 0 5px; border-bottom: 1px solid #555;">Локальная сеть (LAN)</h3>
-                <div>Статус: <span style="color: ${statusColor}">${statusText}</span></div>
-                <div>Пиры: ${local.peers}</div>
-                <div>Отдано: ${(local.uploaded / 1024 / 1024).toFixed(2)} MB</div>
-                <div>Скачано: ${(local.downloaded / 1024 / 1024).toFixed(2)} MB</div>
-                <br>
-                <h3 style="margin: 0 0 5px; border-bottom: 1px solid #555;">Глобальная сеть (WAN)</h3>
-                <div>Статус: <span style="color: ${globalStatusColor}">${globalStatusText}</span></div>
-                ${global.running ? `
-                <div>Топик: <span style="color: #aaa;">${global.topic}</span></div>
-                <div>DHT Live Nodes: <span style="color: ${global.dhtNodes > 0 ? '#7dbb00' : '#ff4444'}">${global.dhtNodes || 0}</span> (Bootstraps: ${global.bootstrapNodes})</div>
-                <div>Пиры: ${global.peers}</div>
-                <div>Активные запросы: ${global.requests}</div>
-                <div>Активные раздачи (Smart): ${global.uploads}</div>
-                <div>Отдано: ${((global.uploaded || 0) / 1024 / 1024).toFixed(2)} MB</div>
-                ` : '<div style="color: #666; font-style: italic; margin-top: 5px;">Глобальная оптимизация выключена</div>'}
+            <style>
+                @keyframes p2p-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+                .p2p-stats-wrapper {
+                    display: flex;
+                    gap: 20px;
+                    background: rgba(20, 20, 20, 0.75);
+                    padding: 26px;
+                    border-radius: 18px;
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    box-shadow: 0 12px 45px rgba(0,0,0,0.45);
+                    width: 740px;
+                    box-sizing: border-box;
+                    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                }
+                .p2p-column {
+                    flex: 1;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 10px;
+                }
+                .p2p-divider {
+                    width: 1px;
+                    background: linear-gradient(to bottom, transparent, rgba(255,255,255,0.12), transparent);
+                }
+                .p2p-title {
+                    font-size: 11px;
+                    font-weight: 800;
+                    text-transform: uppercase;
+                    letter-spacing: 1.5px;
+                    color: #888;
+                    margin-bottom: 2px;
+                }
+                .p2p-data-row {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 8px 0;
+                    border-bottom: 1px solid rgba(255,255,255,0.05);
+                }
+                .p2p-data-label {
+                    font-size: 13.5px;
+                    color: #aaa;
+                }
+                .p2p-data-value {
+                    font-size: 14.5px;
+                    font-weight: 600;
+                    color: #fff;
+                    display: flex;
+                    align-items: center;
+                }
+                .p2p-status-spinner {
+                    display: inline-block;
+                    width: 12px;
+                    height: 12px;
+                    border: 2px solid rgba(255,255,255,0.1);
+                    border-top: 2px solid #7dbb00;
+                    border-radius: 50%;
+                    animation: p2p-spin 1s linear infinite;
+                    margin-left: 8px;
+                }
+                .p2p-topic-tag {
+                    font-family: monospace;
+                    background: rgba(255,255,255,0.05);
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    color: #999;
+                }
+            </style>
+            <div id="p2pInfoStats" class="p2p-stats-wrapper">
+                <!-- Local Column -->
+                <div class="p2p-column">
+                    <div class="p2p-title">Локальная сеть (LAN)</div>
+                    <div class="p2p-data-row">
+                        <span class="p2p-data-label">Статус</span>
+                        <span class="p2p-data-value" style="color: ${statusColor}">
+                            ${statusText} ${local.listening ? spinner : ''}
+                        </span>
+                    </div>
+                    <div class="p2p-data-row">
+                        <span class="p2p-data-label">Активные пиры</span>
+                        <span class="p2p-data-value">${local.peers}</span>
+                    </div>
+                    <div class="p2p-data-row">
+                        <span class="p2p-data-label">Отдано</span>
+                        <span class="p2p-data-value">${(local.uploaded / 1024 / 1024).toFixed(2)} MB</span>
+                    </div>
+                    <div class="p2p-data-row">
+                        <span class="p2p-data-label">Принято</span>
+                        <span class="p2p-data-value">${(local.downloaded / 1024 / 1024).toFixed(2)} MB</span>
+                    </div>
+                </div>
+
+                <div class="p2p-divider"></div>
+
+                <!-- Global Column -->
+                <div class="p2p-column">
+                    <div class="p2p-title">Глобальная сеть (WAN)</div>
+                    <div class="p2p-data-row">
+                        <span class="p2p-data-label">Статус</span>
+                        <span class="p2p-data-value" style="color: ${globalStatusColor}">
+                            ${globalStatusText} ${global.running ? spinner : ''}
+                        </span>
+                    </div>
+                    
+                    ${global.running ? `
+                        <div class="p2p-data-row">
+                            <span class="p2p-data-label">Топик</span>
+                            <span class="p2p-data-value"><span class="p2p-topic-tag">${global.topic}</span></span>
+                        </div>
+                        <div class="p2p-data-row">
+                            <span class="p2p-data-label">DHT Узлы</span>
+                            <span class="p2p-data-value" style="color: ${global.dhtNodes > 0 ? '#7dbb00' : '#ff4444'}">
+                                ${global.dhtNodes || 0} <span style="color: #666; margin-left: 4px; font-weight: normal;">(${global.bootstrapNodes})</span>
+                            </span>
+                        </div>
+                        <div class="p2p-data-row">
+                            <span class="p2p-data-label">Глобальные пиры</span>
+                            <span class="p2p-data-value">${global.peers}</span>
+                        </div>
+                        <div class="p2p-data-row">
+                            <span class="p2p-data-label">Активные сессии</span>
+                            <span class="p2p-data-value">
+                                ${global.uploads} <span style="color: #666; font-size: 11px; margin-left: 4px;">(Upload)</span>
+                                ${global.uploads > 0 ? spinner : ''}
+                            </span>
+                        </div>
+                        <div class="p2p-data-row">
+                            <span class="p2p-data-label">Всего передано</span>
+                            <span class="p2p-data-value">${((global.uploaded || 0) / 1024 / 1024).toFixed(2)} MB</span>
+                        </div>
+                    ` : `
+                        <div style="flex: 1; display: flex; align-items: center; justify-content: center; color: #555; font-style: italic; font-size: 13px; text-align: center;">
+                            Глобальная оптимизация<br>отключена в настройках
+                        </div>
+                    `}
+                </div>
             </div>
         `
     }
