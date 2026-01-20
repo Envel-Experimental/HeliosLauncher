@@ -235,12 +235,14 @@ document.getElementById('settingsP2PInfoButton').onclick = async () => {
                 <br>
                 <h3 style="margin: 0 0 5px; border-bottom: 1px solid #555;">Глобальная сеть (WAN)</h3>
                 <div>Статус: <span style="color: ${globalStatusColor}">${globalStatusText}</span></div>
+                ${global.running ? `
                 <div>Топик: <span style="color: #aaa;">${global.topic}</span></div>
-                <div>DHT Live Nodes: ${global.dhtNodes || 0} (Configured Bootstraps: ${global.bootstrapNodes})</div>
+                <div>DHT Live Nodes: <span style="color: ${global.dhtNodes > 0 ? '#7dbb00' : '#ff4444'}">${global.dhtNodes || 0}</span> (Bootstraps: ${global.bootstrapNodes})</div>
                 <div>Пиры: ${global.peers}</div>
                 <div>Активные запросы: ${global.requests}</div>
                 <div>Активные раздачи (Smart): ${global.uploads}</div>
                 <div>Отдано: ${((global.uploaded || 0) / 1024 / 1024).toFixed(2)} MB</div>
+                ` : '<div style="color: #666; font-style: italic; margin-top: 5px;">Глобальная оптимизация выключена</div>'}
             </div>
         `
     }
