@@ -15,6 +15,7 @@ let RaceManager = null;
 try { RaceManager = require('./RaceManager') } catch (e) { }
 
 // Protocol Constants
+// Protocol Constants
 const MSG_REQUEST = 0
 const MSG_DATA = 1
 const MSG_ERROR = 2
@@ -22,8 +23,10 @@ const MSG_END = 3
 const MSG_HELLO = 4
 const MSG_PING = 5
 const MSG_PONG = 6
+const MSG_BATCH_REQUEST = 7
 
 const MAX_CONCURRENT_UPLOADS = 5
+const BATCH_SIZE_LIMIT = 50 // Group up to 50 requests per packet
 
 // Fixed topic for the "Zombie" network
 const SWARM_TOPIC = crypto.createHash('sha256').update('zombie-launcher-assets-v1').digest()
@@ -34,6 +37,7 @@ class PeerHandler {
         this.engine = engine
         this.buffer = b4a.alloc(0)
         this.processing = false
+        this.batchSupport = false
 
         // VULNERABILITY FIX (Slowloris): 30s Timeout
         this.socket.setTimeout(30000)
@@ -123,12 +127,20 @@ class PeerHandler {
             case MSG_PONG:
                 this.handlePong(reqId)
                 break
+            case MSG_BATCH_REQUEST:
+                this.handleBatchRequest(payload)
+                break
         }
     }
 
     handleHello(payload) {
         if (payload.length >= 1) {
             this.remoteWeight = payload.readUInt8(0)
+            // Caps (byte 1)
+            if (payload.length >= 2) {
+                const caps = payload.readUInt8(1)
+                this.batchSupport = (caps & 0x01) === 0x01
+            }
             // console.log(`[PeerHandler] Peer weight set to ${this.remoteWeight}`)
         }
     }
@@ -143,6 +155,29 @@ class PeerHandler {
         const now = Date.now()
         this.rtt = now - this.pingTimestamp
         // console.log(`[PeerHandler] RTT: ${this.rtt}ms`)
+    }
+
+    // Unpack Batch and process individually
+    handleBatchRequest(payload) {
+        let offset = 0
+        if (payload.length < 2) return
+        const count = payload.readUInt16BE(offset)
+        offset += 2
+
+        for (let i = 0; i < count; i++) {
+            if (offset + 5 > payload.length) break
+            const reqId = payload.readUInt32BE(offset)
+            offset += 4
+            const hashLen = payload.readUInt8(offset)
+            offset += 1
+
+            if (offset + hashLen > payload.length) break
+            const hash = payload.subarray(offset, offset + hashLen)
+            offset += hashLen
+
+            // Process individual request (fire and forget / async)
+            this.handleRequest(reqId, hash).catch(e => { })
+        }
     }
 
     async handleRequest(reqId, payload) {
@@ -312,10 +347,12 @@ class PeerHandler {
     }
 
     sendHello() {
-        // Payload: [Weight (1 byte)]
+        // Payload: [Weight (1 byte), Capabilities (1 byte)]
+        // Capabilities: Bit 0 = Batch Support
         const localWeight = this.engine.profile.weight
-        const payload = b4a.alloc(1)
+        const payload = b4a.alloc(2)
         payload.writeUInt8(localWeight, 0)
+        payload.writeUInt8(0x01, 1) // Advertise Batch Support
 
         const header = b4a.alloc(9)
         header[0] = MSG_HELLO
@@ -348,6 +385,37 @@ class PeerHandler {
         header.writeUInt32BE(payload.length, 5)
         this.socket.write(b4a.concat([header, payload]))
     }
+
+    sendBatchRequest(requests) {
+        // requests: Array<{ reqId, hash }>
+        // Payload: Count(2) + [ReqId(4) + Len(1) + Hash(N)]...
+
+        let totalSize = 2;
+        for (const req of requests) {
+            totalSize += 4 + 1 + Buffer.byteLength(req.hash);
+        }
+
+        const payload = b4a.alloc(totalSize);
+        let offset = 0;
+        payload.writeUInt16BE(requests.length, offset);
+        offset += 2;
+
+        for (const req of requests) {
+            payload.writeUInt32BE(req.reqId, offset);
+            offset += 4;
+            const hashBuf = b4a.from(req.hash, 'utf-8');
+            payload.writeUInt8(hashBuf.length, offset);
+            offset += 1;
+            hashBuf.copy(payload, offset)
+            offset += hashBuf.length
+        }
+
+        const header = b4a.alloc(9)
+        header[0] = MSG_BATCH_REQUEST
+        header.writeUInt32BE(0, 1) // ReqID 0 for container messages usually
+        header.writeUInt32BE(payload.length, 5)
+        this.socket.write(b4a.concat([header, payload]))
+    }
 }
 
 class P2PEngine extends EventEmitter {
@@ -360,6 +428,10 @@ class P2PEngine extends EventEmitter {
         this.activeUploads = 0
         this.uploadCounts = new Map() // IP -> Count
 
+        // Batching
+        this.batchQueue = new Map() // Peer -> Array<{ reqId, hash }>
+        this.batchFlushScheduled = false
+
         // Circuit Breaker (Panic Mode)
         this.panicMode = false
         this.attackCounter = 0
@@ -369,6 +441,34 @@ class P2PEngine extends EventEmitter {
             // Check logging level?
             // User said "in debug mode system should inform".
         }
+    }
+
+    // ... (rest of the file will need to be preserved by careful range replace, OR I replace constructor and add flushBatches)
+
+    flushBatches() {
+        this.batchFlushScheduled = false
+        for (const [peer, initialRequests] of this.batchQueue) {
+            // peer turned dead?
+            if (peer.socket.destroyed || !this.peers.includes(peer)) {
+                this.batchQueue.delete(peer)
+                // Fail the requests?
+                // The timeouts in requestFile will handle the failure.
+                continue
+            }
+
+            // Split into chunks of BATCH_SIZE_LIMIT
+            let requests = initialRequests
+            while (requests.length > 0) {
+                const chunk = requests.slice(0, BATCH_SIZE_LIMIT)
+                requests = requests.slice(BATCH_SIZE_LIMIT)
+                try {
+                    peer.sendBatchRequest(chunk)
+                } catch (e) {
+                    console.error('[P2PEngine] Failed to send batch', e)
+                }
+            }
+        }
+        this.batchQueue.clear() // All processed
     }
 
     reportUploadStats(speed, isError) {
@@ -677,8 +777,24 @@ class P2PEngine extends EventEmitter {
             timestamp: Date.now()
         })
 
-        // Send request
-        peer.sendRequest(reqId, hash)
+        // Batching or Direct Send
+        // Optimization: Only batch small files (< 1MB) to reduce overhead.
+        const useBatching = peer.batchSupport && (expectedSize > 0 && expectedSize < 1024 * 1024)
+
+        if (useBatching) {
+            if (!this.batchQueue.has(peer)) {
+                this.batchQueue.set(peer, [])
+            }
+            this.batchQueue.get(peer).push({ reqId, hash })
+
+            if (!this.batchFlushScheduled) {
+                this.batchFlushScheduled = true
+                // Buffer requests for a short period (20ms) to group them effectively
+                setTimeout(() => this.flushBatches(), 20)
+            }
+        } else {
+            peer.sendRequest(reqId, hash)
+        }
 
         // Memory Leak Fix for "Stale Request Map"
         stream.on('close', () => {
