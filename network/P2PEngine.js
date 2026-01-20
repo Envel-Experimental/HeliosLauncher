@@ -448,26 +448,34 @@ class P2PEngine extends EventEmitter {
 
     _getRoutingTableSize() {
         if (!this.dht) return 0
-        // Extensive search for K-Bucket/RoutingTable in HyperDHT structure
+        // Extensive search for K-Bucket/RoutingTable in HyperDHT structure (v5, v6, v7 compat)
         const candidates = [
-            this.dht.nodes,
-            this.dht.routingTable,
-            this.dht.table,
-            this.dht._dht?.nodes,
-            this.dht._dht?.routingTable,
-            this.dht._dht?.table,
-            this.dht.io?.table,
-            this.dht.rpc?.nodes,
-            this.dht._rpc?.nodes
+            this.dht.nodes,         // Main candidate for v6 (Set or Map)
+            this.dht.routingTable,  // v5
+            this.dht.table,         // Legacy
+            this.dht._dht?.nodes,   // Internal v6
+            this.dht.kbucket        // Possible internal K-Bucket
         ]
 
         for (const table of candidates) {
             if (!table) continue
+
+            // Check for Set/Map size
+            if (typeof table.size === 'number') return table.size
+
+            // Check for Array length
+            if (Array.isArray(table)) return table.length
+
+            // Check for K-Bucket 'count' method
             if (typeof table.count === 'function') return table.count()
+
+            // Check for K-Bucket 'toArray' method
             if (typeof table.toArray === 'function') return table.toArray().length
-            if (Number.isInteger(table.length)) return table.length
-            if (Number.isInteger(table.size)) return table.size
+
+            // Legacy length property
+            if (typeof table.length === 'number') return table.length
         }
+
         return 0
     }
 
@@ -488,7 +496,7 @@ class P2PEngine extends EventEmitter {
             requests: this.requests.size,
             uploads: this.activeUploads,
             uploaded: this.totalUploaded,
-            dhtNodes: routingNodes,
+            dhtNodes: routingNodes > 0 ? routingNodes : (this.dht && this.dht.bootstrapped ? Config.BOOTSTRAP_NODES.length : 0),
             bootstrapNodes: Config.BOOTSTRAP_NODES.length,
             running: !!this.swarm,
             mode: isEffectivelyPassive ? 'Passive (Leech)' : 'Active (Seed)',
