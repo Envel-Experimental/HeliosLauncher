@@ -39,6 +39,12 @@ class P2PManager extends EventEmitter {
 
     start() {
         if (this.started) return;
+
+        if (!ConfigManager.getLocalOptimization()) {
+            logger.info('P2P Delivery Optimization (Local) is disabled.');
+            return;
+        }
+
         this.started = true;
 
         this.startHttpServer();
