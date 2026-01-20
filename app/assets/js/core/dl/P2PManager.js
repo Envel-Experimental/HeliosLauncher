@@ -9,6 +9,7 @@ const { pipeline } = require('stream/promises');
 const { EventEmitter } = require('events');
 const { LoggerUtil } = require('../util/LoggerUtil');
 const ConfigManager = require('../../configmanager');
+const PeerPersistence = require('../../../../../network/PeerPersistence');
 
 const logger = LoggerUtil.getLogger('P2PManager');
 
@@ -37,13 +38,30 @@ class P2PManager extends EventEmitter {
         };
     }
 
-    start() {
+    async start() {
         if (this.started) return;
 
         if (!ConfigManager.getLocalOptimization()) {
             logger.info('P2P Delivery Optimization (Local) is disabled.');
             return;
         }
+
+        // Load Persistent Peers
+        await PeerPersistence.load();
+        const stored = PeerPersistence.getPeers('local');
+        stored.forEach(p => {
+            const id = `stored_${p.ip}_${p.port}`;
+            if (!this.peers.has(id)) {
+                this.peers.set(id, {
+                    id,
+                    ip: p.ip,
+                    port: p.port,
+                    lastSeen: p.lastSeen,
+                    source: 'persistence'
+                });
+            }
+        });
+        if (stored.length > 0) logger.info(`[P2PManager] Restored ${stored.length} peers from cache.`);
 
         this.started = true;
 
@@ -405,6 +423,14 @@ class P2PManager extends EventEmitter {
             this.emit('stats-update', this.stats);
 
             logger.debug(`[P2P] Successfully downloaded ${asset.id || relPath} from ${peer.ip} (${bytesReceived} bytes). Total P2P: ${(this.stats.downloaded / 1024 / 1024).toFixed(2)} MB`);
+
+            // Persist good peer
+            PeerPersistence.updatePeer('local', {
+                ip: peer.ip,
+                port: peer.port,
+                score: 100, // Boost score for success
+                avgSpeed: (bytesReceived / 1024)
+            });
 
             return true;
 
