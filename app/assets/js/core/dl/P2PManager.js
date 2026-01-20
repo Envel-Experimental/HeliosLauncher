@@ -71,13 +71,11 @@ class P2PManager extends EventEmitter {
     }
 
     handleRequest(req, res) {
-        // Security: Restrict to Local Network (Private IP ranges)
+        // Security: Restrict to Local Network and Trusted Peers
         const remoteIP = req.socket.remoteAddress;
-        // Supports IPv4 and IPv4-mapped-IPv6
-        const isPrivate = /^(::ffff:)?(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|127\.)/.test(remoteIP) || remoteIP === '::1';
 
-        if (!isPrivate) {
-            // log.warn(`Rejected public connection from ${remoteIP}`);
+        if (!this.isAuthorizedIP(remoteIP)) {
+            // logger.warn(`Rejected connection from ${remoteIP}`);
             res.writeHead(403);
             res.end('Access Denied: LAN Only');
             return;
@@ -434,6 +432,78 @@ class P2PManager extends EventEmitter {
             filesUploaded: this.stats.filesUploaded,
             listening: this.started
         }
+    }
+
+    isAuthorizedIP(remoteIP) {
+        let cleanIP = remoteIP;
+        if (cleanIP.startsWith('::ffff:')) {
+            cleanIP = cleanIP.substring(7);
+        }
+
+        // 1. Allow Localhost
+        if (cleanIP === '127.0.0.1' || cleanIP === '::1') return true;
+
+        // 2. Allow Unknown Trusted Peers (from UDP Discovery)
+        // If we heard from them via UDP multicast recently, they are likely on LAN.
+        for (const peer of this.peers.values()) {
+            let peerIP = peer.ip;
+            if (peerIP && peerIP.startsWith('::ffff:')) peerIP = peerIP.substring(7);
+            if (peerIP === cleanIP) return true;
+        }
+
+        // 3. Subnet Verification (The user's requested "Robust" check)
+        const interfaces = os.networkInterfaces();
+        for (const name of Object.keys(interfaces)) {
+            for (const iface of interfaces[name]) {
+                // Skip internal as we already checked localhost
+                if (iface.internal) continue;
+
+                if (iface.family === 'IPv4') {
+                    // IPv4 Subnet Check
+                    // If remote is IPv4
+                    if (cleanIP.includes('.')) {
+                        if (this.isInSubnet(cleanIP, iface.address, iface.netmask)) {
+                            return true;
+                        }
+                    }
+                } else if (iface.family === 'IPv6') {
+                    // IPv6 Checks
+                    // 1. ULA (Unique Local Address) fc00::/7
+                    // 2. Link-Local fe80::/10
+                    if (cleanIP.includes(':')) {
+                        // Check for ULA (fc/fd) or Link-Local (fe80)
+                        const firstHechet = cleanIP.split(':')[0]; // hextet
+                        const firstWord = parseInt(firstHechet, 16);
+
+                        // fd00::/8 is valid ULA. fc00::/7 includes fd/fc. 
+                        // fe80::/10 includes fe80-febf.
+                        if ((firstWord >= 0xfc00 && firstWord <= 0xfdff) ||
+                            (firstWord >= 0xfe80 && firstWord <= 0xfebf)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    isInSubnet(ip, network, mask) {
+        if (!ip || !network || !mask) return false;
+        const ipL = this.ipToLong(ip);
+        const netL = this.ipToLong(network);
+        const maskL = this.ipToLong(mask);
+        return (ipL & maskL) === (netL & maskL);
+    }
+
+    ipToLong(ip) {
+        const parts = ip.split('.');
+        if (parts.length !== 4) return 0;
+        return ((parseInt(parts[0], 10) << 24) |
+            (parseInt(parts[1], 10) << 16) |
+            (parseInt(parts[2], 10) << 8) |
+            parseInt(parts[3], 10)) >>> 0;
     }
 }
 
