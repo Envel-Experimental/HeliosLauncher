@@ -491,7 +491,8 @@ class P2PEngine extends EventEmitter {
             dhtNodes: routingNodes,
             bootstrapNodes: Config.BOOTSTRAP_NODES.length,
             running: !!this.swarm,
-            mode: isEffectivelyPassive ? 'Passive (Leech)' : 'Active (Seed)'
+            mode: isEffectivelyPassive ? 'Passive (Leech)' : 'Active (Seed)',
+            profile: this.profile.name
         }
     }
 
@@ -526,7 +527,11 @@ class P2PEngine extends EventEmitter {
             // Hyperswarm v4 doesn't support 'mdns' option directly in constructor, it's part of discovery.
             // But we can try passing it if it helps, mainly we rely on DHT.
             this.dht = new HyperDHT({
-                bootstrap: Config.BOOTSTRAP_NODES.map(n => ({ host: n.host, port: n.port }))
+                bootstrap: Config.BOOTSTRAP_NODES.map(n => ({
+                    host: n.host,
+                    port: n.port,
+                    publicKey: n.publicKey ? b4a.from(n.publicKey, 'hex') : undefined
+                }))
             })
 
             this.dht.on('error', (err) => {

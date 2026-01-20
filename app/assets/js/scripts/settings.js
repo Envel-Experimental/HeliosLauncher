@@ -176,6 +176,19 @@ async function initSettingsValues() {
         }
     }
 
+    // Update P2P Profile Label
+    try {
+        const p2pInfo = await ipcRenderer.invoke('p2p:getInfo')
+        const profileEl = document.getElementById('settingsP2PProfileLabel')
+        if (profileEl && p2pInfo && p2pInfo.profile) {
+            const profiles = {
+                'LOW': 'Экономный (Пассивный)',
+                'MID': 'Сбалансированный',
+                'HIGH': 'Высокопроизводительный'
+            }
+            profileEl.innerHTML = profiles[p2pInfo.profile] || p2pInfo.profile
+        }
+    } catch (e) { /* ignore */ }
 }
 
 function bindP2PSlider() {
@@ -220,7 +233,7 @@ document.getElementById('settingsP2PInfoButton').onclick = async () => {
             globalStatusText = 'Активен'
             globalStatusColor = '#7dbb00'
             if (global.mode && global.mode.includes('Passive')) {
-                globalStatusText = 'Активен (Passive)'
+                globalStatusText = 'Активен (Режим экономии)'
                 globalStatusColor = '#ffbb00'
             }
         }
@@ -352,6 +365,12 @@ document.getElementById('settingsP2PInfoButton').onclick = async () => {
                             <span class="p2p-data-value">
                                 ${global.uploads} <span style="color: #666; font-size: 11px; margin-left: 4px;">(Upload)</span>
                                 ${global.uploads > 0 ? spinner : ''}
+                            </span>
+                        </div>
+                        <div class="p2p-data-row">
+                            <span class="p2p-data-label">Сетевой статус</span>
+                            <span class="p2p-data-value" style="color: ${global.mode.includes('Active') ? '#7dbb00' : '#ffbb00'}">
+                                ${global.mode.includes('Active') ? 'Активный (Полный)' : 'Ограниченный (Загрузка)'}
                             </span>
                         </div>
                         <div class="p2p-data-row">
@@ -568,6 +587,7 @@ function fullSettingsSave() {
     ConfigManager.save()
     saveDropinModConfiguration()
     saveShaderpackSettings()
+    ipcRenderer.invoke('p2p:configUpdate')
 }
 
 /* Closes the settings view and saves all data. */
