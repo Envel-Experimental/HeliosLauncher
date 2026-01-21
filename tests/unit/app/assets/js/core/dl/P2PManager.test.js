@@ -2,13 +2,17 @@ const P2PManager = require('../../../../../../../app/assets/js/core/dl/P2PManage
 const ConfigManager = require('../../../../../../../app/assets/js/configmanager');
 
 jest.mock('../../../../../../../app/assets/js/configmanager', () => ({
-    getCommonDirectory: jest.fn(() => '/mock/common')
+    getCommonDirectory: jest.fn(() => '/mock/common'),
+    getLocalOptimization: jest.fn(() => true)
 }));
 
 jest.mock('dgram', () => ({
     createSocket: jest.fn(() => ({
         on: jest.fn(),
-        bind: jest.fn((port, cb) => cb && cb()),
+        bind: jest.fn((port, address, cb) => {
+            if (typeof address === 'function') address();
+            if (typeof cb === 'function') cb();
+        }),
         setBroadcast: jest.fn(),
         addMembership: jest.fn(),
         setMulticastTTL: jest.fn(),
@@ -20,7 +24,10 @@ jest.mock('dgram', () => ({
 jest.mock('http', () => ({
     createServer: jest.fn(() => ({
         on: jest.fn(),
-        listen: jest.fn((port, cb) => cb && cb()),
+        listen: jest.fn((...args) => {
+            const cb = args[args.length - 1];
+            if (typeof cb === 'function') cb();
+        }),
         address: jest.fn(() => ({ port: 12345 })),
         close: jest.fn()
     }))
@@ -49,7 +56,7 @@ describe('P2PManager', () => {
         const onMessage = socket.on.mock.calls.find(call => call[0] === 'message')[1];
 
         const rinfo = { address: '192.168.1.5', port: 5555 };
-        const msg = Buffer.from(`HELIOS_P2P:other-id:5000`);
+        const msg = Buffer.from(`HELIOS_P2P:v1:other-id:5000`);
 
         onMessage(msg, rinfo);
 

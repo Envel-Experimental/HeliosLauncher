@@ -5,6 +5,12 @@ jest.mock('@sentry/electron/renderer', () => ({
     captureMessage: jest.fn(),
 }));
 
+jest.mock('@electron/remote', () => ({
+    app: {
+        getVersion: jest.fn(() => '1.0.0')
+    }
+}));
+
 const preloader = require('@app/assets/js/preloader');
 
 describe('preloader', () => {
