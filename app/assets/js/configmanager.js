@@ -104,11 +104,12 @@ const DEFAULT_CONFIG = {
             totalRAMWarningShown: false
         },
         deliveryOptimization: {
-            localOptimization: true,
-            globalOptimization: true,
-            p2pUploadEnabled: true,
+            localOptimization: false,
+            globalOptimization: false,
+            p2pUploadEnabled: false,
             p2pUploadLimit: 5 // Mbps
-        }
+        },
+        p2pPromptShown: false
     },
     newsCache: {
         date: null,
@@ -917,4 +918,22 @@ exports.getP2PUploadLimit = function (def = false) {
  */
 exports.setP2PUploadLimit = function (limit) {
     config.settings.deliveryOptimization.p2pUploadLimit = Number.parseInt(limit)
+}
+
+/**
+ * Check if the P2P prompt has been shown.
+ *
+ * @returns {boolean} Whether or not the P2P prompt has been shown.
+ */
+exports.getP2PPromptShown = function () {
+    return config.p2pPromptShown
+}
+
+/**
+ * Set the status of whether or not the P2P prompt has been shown.
+ *
+ * @param {boolean} shown Whether or not the P2P prompt has been shown.
+ */
+exports.setP2PPromptShown = function (shown) {
+    config.p2pPromptShown = shown
 }
