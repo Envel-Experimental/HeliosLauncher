@@ -1,12 +1,20 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const os = require('os');
 const ConfigManager = require('../app/assets/js/configmanager');
 
 class PeerPersistence {
     constructor() {
         this.filePath = path.join(ConfigManager.getLauncherDirectory(), 'peers.enc');
-        this.secret = 'XFc7SgZJ';
+        // Machine-specific encryption
+        try {
+            this.secret = 'XFc7SgZJ' + os.userInfo().username;
+            this.salt = os.hostname();
+        } catch (e) {
+            this.secret = 'XFc7SgZJDefault';
+            this.salt = 'DefaultHost';
+        }
         this.algorithm = 'aes-256-cbc';
         this.cache = {
             local: [],
@@ -16,7 +24,7 @@ class PeerPersistence {
     }
 
     _getKey() {
-        return crypto.scryptSync(this.secret, 'salt', 32);
+        return crypto.scryptSync(this.secret, this.salt, 32);
     }
 
     async load() {

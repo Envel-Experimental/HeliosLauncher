@@ -9,8 +9,7 @@ const {
     MAX_CONCURRENT_UPLOADS, BATCH_SIZE_LIMIT
 } = require('./constants')
 
-// Deferred import for RaceManager to avoid circular dependency
-let RaceManager = null;
+const TrafficState = require('./TrafficState')
 
 class PeerHandler {
     constructor(socket, engine) {
@@ -192,12 +191,8 @@ class PeerHandler {
             return
         }
 
-        // 2. Smart Check: If user is downloading, don't upload (Avoid lagging user)
-        if (!RaceManager) { try { RaceManager = require('./RaceManager') } catch (e) { } }
-
-        // Use injected RaceManager from engine if available (preferred)
-        const raceManager = this.engine.raceManager || RaceManager;
-        const isBusy = raceManager && raceManager.isBusy()
+        // Use TrafficState to check global busy status
+        const isBusy = TrafficState.isBusy()
 
         if (isBusy) {
             if (!this.wasBusy) {

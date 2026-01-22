@@ -1,19 +1,18 @@
 const { Readable } = require('stream')
-// const P2PEngine = require('./P2PEngine') // Circular Dependency Fix: Require lazily
 const HashVerifierStream = require('./HashVerifierStream')
 const Config = require('./config')
 const NodeAdapter = require('./NodeAdapter')
 const P2PManager = require('../app/assets/js/core/dl/P2PManager')
+const TrafficState = require('./TrafficState')
 
 class RaceManager {
 
     constructor() {
         this.p2pConsecutiveWins = 0
-        this.activeDownloads = 0
     }
 
     isBusy() {
-        return this.activeDownloads > 0
+        return TrafficState.isBusy()
     }
 
     /**
@@ -32,6 +31,16 @@ class RaceManager {
         // Convert mc-asset protocol back to https for the HTTP fetch leg
         if (url.startsWith('mc-asset://')) {
             url = 'https://' + url.substring('mc-asset://'.length)
+        }
+
+        let relPath = null
+        if (url.includes('libraries.minecraft.net/')) {
+            relPath = 'libraries/' + url.split('libraries.minecraft.net/')[1]
+        } else if (url.includes('piston-meta.mojang.com/v1/packages/')) {
+            // Version jar... tricky, might need regex or just pass null. 
+            // Usually versions/1.20/1.20.jar
+        } else if (url.includes('/assets/objects/')) {
+            // Already handled by hash fallback, but we can be explicit if we want
         }
 
         // Attempt to extract hash from URL (SHA1 or MD5)
@@ -86,7 +95,7 @@ class RaceManager {
         // 3. Local P2P Task (UDP/LAN)
         let localP2PStream = null
         const localP2PController = new AbortController()
-        const localP2PTask = P2PManager.requestFile(hash, localP2PController.signal)
+        const localP2PTask = P2PManager.requestFile(hash, localP2PController.signal, relPath)
             .then(stream => {
                 localP2PStream = stream
                 return { type: 'local_p2p', result: stream }
@@ -147,13 +156,12 @@ class RaceManager {
         // Return Response
         // Electron expects a Response object.
         // We convert the Node stream back to a Web Stream
-        this.activeDownloads++
+        TrafficState.incrementDownloads()
         const outputStream = Readable.toWeb(verifier)
 
         const cleanupDownload = () => {
-            this.activeDownloads--
-            if (this.activeDownloads < 0) this.activeDownloads = 0
-            // console.log(`[RaceManager] Download finished. Active: ${this.activeDownloads}`)
+            TrafficState.decrementDownloads()
+            // console.log(`[RaceManager] Download finished. Active: ${TrafficState.activeDownloads}`)
         }
 
         verifier.on('close', cleanupDownload)

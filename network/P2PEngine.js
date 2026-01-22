@@ -8,6 +8,9 @@ const Config = require('./config')
 const NodeAdapter = require('./NodeAdapter')
 const ConfigManager = require('../app/assets/js/configmanager')
 const PeerHandler = require('./PeerHandler')
+const TrafficState = require('./TrafficState')
+
+// Fixed topic for the "Zombie" network
 const { SWARM_TOPIC_SEED } = require('./constants')
 
 // Fixed topic for the "Zombie" network

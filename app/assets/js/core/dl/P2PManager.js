@@ -277,7 +277,7 @@ class P2PManager extends EventEmitter {
         }
     }
 
-    async requestFile(hash, signal) {
+    async requestFile(hash, signal, relPath) {
         // Simple implementation: Try to fetch from known local peers
         // This is a "best effort" parallel try on LAN
         const peers = Array.from(this.peers.values());
@@ -329,7 +329,9 @@ class P2PManager extends EventEmitter {
                     // Assuming P2PManager server supports hash lookup if we implemented it correctly.
 
                     // Let's assume for now we just try:
-                    const url = `http://${peer.ip}:${peer.port}/file?hash=${hash}&path=unknown`;
+                    // Logic Bomb Fix: Pass relPath if available
+                    const pathParam = relPath ? `&path=${encodeURIComponent(relPath)}` : '&path=unknown';
+                    const url = `http://${peer.ip}:${peer.port}/file?hash=${hash}${pathParam}`;
 
                     const res = await fetch(url, { signal: controller.signal });
                     clearTimeout(timeout);
