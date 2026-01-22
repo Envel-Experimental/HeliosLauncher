@@ -62,9 +62,9 @@ class RaceManager {
             // Timeout P2P strictly to avoid waiting too long if HTTP is also slow/failing
             const timeout = setTimeout(() => {
                 cleanup()
-                console.log('[RaceManager] Global P2P Task Timed Out')
+                console.log('[RaceManager] Global P2P Task Timed Out (Soft)')
                 reject(new Error('Global P2P Timeout'))
-            }, 20000) // 20s timeout for cold start
+            }, 3000) // 3s Soft Timeout for First Byte
 
             const onReadable = () => {
                 clearTimeout(timeout)
