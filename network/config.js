@@ -7,12 +7,7 @@ module.exports = {
         { host: '89.23.113.35', port: 49737, publicKey: 'd29747a47fd8a67bcebdd2b0c6668700f41eb4ff809676346551e17512642439' }
     ],
 
-    // Backup URLs in case Mojang is totally blocked
-    HTTP_MIRRORS: [
-        'https://piston-meta.mojang.com',
-        'https://launchermeta.mojang.com',
-        'https://files.minecraftforge.net/maven'
-    ],
+
 
     // Discovery settings
     DISCOVERY: {

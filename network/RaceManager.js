@@ -64,7 +64,7 @@ class RaceManager {
                 cleanup()
                 console.log('[RaceManager] Global P2P Task Timed Out')
                 reject(new Error('Global P2P Timeout'))
-            }, 2500) // 2.5s timeout
+            }, 20000) // 20s timeout for cold start
 
             const onReadable = () => {
                 clearTimeout(timeout)
@@ -128,29 +128,7 @@ class RaceManager {
             console.error('[RaceManager] All primary transfer methods failed for ' + hash, err)
 
             // Retry with Mirrors defined in Config
-            if (Config.HTTP_MIRRORS && Config.HTTP_MIRRORS.length > 0) {
-                let pathSuffix = ''
-                try {
-                    const u = new URL(url)
-                    pathSuffix = u.pathname
-                } catch (e) {
-                    pathSuffix = `/${hash.substring(0, 2)}/${hash}`
-                }
 
-                for (const mirrorBase of Config.HTTP_MIRRORS) {
-                    try {
-                        const mirrorUrl = mirrorBase.replace(/\/$/, '') + pathSuffix
-                        // console.log(`[RaceManager] Retrying with mirror: ${mirrorUrl}`)
-
-                        const res = await fetch(mirrorUrl)
-                        if (res.ok) {
-                            return res
-                        }
-                    } catch (e) {
-                        // console.warn(`Mirror ${mirrorBase} failed`)
-                    }
-                }
-            }
 
             throw err
         }
