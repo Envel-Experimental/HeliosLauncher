@@ -132,8 +132,12 @@ let config = null
  * Save the current configuration to a file.
  */
 exports.save = async function () {
+    const tempPath = configPath + '.tmp'
     return await retry(
-        () => fs.writeFile(configPath, JSON.stringify(config, null, 4), 'UTF-8'),
+        async () => {
+            await fs.writeFile(tempPath, JSON.stringify(config, null, 4), 'UTF-8')
+            await fs.move(tempPath, configPath, { overwrite: true })
+        },
         3,
         1000,
         err => err.code === 'EPERM' || err.code === 'EBUSY'
