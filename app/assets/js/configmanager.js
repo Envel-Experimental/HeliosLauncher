@@ -132,7 +132,9 @@ let config = null
  * Save the current configuration to a file.
  */
 exports.save = async function () {
-    const tempPath = configPath + '.tmp'
+    // Generate a unique temporary path to avoid race conditions (ENOENT on rename)
+    // when multiple processes (Main/Renderer) save simultaneously.
+    const tempPath = configPath + '.' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2) + '.tmp'
     return await retry(
         async () => {
             await fs.writeFile(tempPath, JSON.stringify(config, null, 4), 'UTF-8')
@@ -140,7 +142,7 @@ exports.save = async function () {
         },
         3,
         1000,
-        err => err.code === 'EPERM' || err.code === 'EBUSY'
+        err => err.code === 'EPERM' || err.code === 'EBUSY' || err.code === 'ENOENT'
     )
 }
 
