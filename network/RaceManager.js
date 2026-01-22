@@ -33,15 +33,14 @@ class RaceManager {
             url = 'https://' + url.substring('mc-asset://'.length)
         }
 
-        let relPath = null
-        if (url.includes('libraries.minecraft.net/')) {
-            relPath = 'libraries/' + url.split('libraries.minecraft.net/')[1]
-        } else if (url.includes('piston-meta.mojang.com/v1/packages/')) {
-            // Version jar... tricky, might need regex or just pass null. 
-            // Usually versions/1.20/1.20.jar
-        } else if (url.includes('/assets/objects/')) {
-            // Already handled by hash fallback, but we can be explicit if we want
-        }
+        // Retrieve X-File-Path header passed by DownloadEngine
+        let relPath = null;
+        try {
+            const pathHeader = request.headers.get('X-File-Path');
+            if (pathHeader) {
+                relPath = pathHeader;
+            }
+        } catch (e) { }
 
         // Attempt to extract hash from URL (SHA1 or MD5)
         let hash = null
