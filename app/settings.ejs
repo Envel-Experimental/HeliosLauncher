@@ -438,6 +438,18 @@
                     style="background: rgba(255,255,255,0.1); border: none; color: white; padding: 8px 16px; border-radius: 4px; cursor: pointer; transition: 0.2s;"><%-
                         lang('settings.p2pNetworkInfoButton') %></button>
             </div>
+            <div class="settingsFieldContainer" style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
+                <div class="settingsFieldLeft">
+                    <span class="settingsFieldTitle" style="color: #ffcc00;"><%- lang('settings.p2pOnlyModeTitle') %></span>
+                    <span class="settingsFieldDesc" style="color: #aaa;"><%- lang('settings.p2pOnlyModeDesc') %></span>
+                </div>
+                <div class="settingsFieldRight">
+                    <label class="toggleSwitch">
+                        <input type="checkbox" cValue="P2POnlyMode">
+                        <span class="toggleSwitchSlider"></span>
+                    </label>
+                </div>
+            </div>
         </div>
         <div id="settingsTabAbout" class="settingsTab" style="display: none;">
             <div class="settingsTabHeader">

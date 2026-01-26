@@ -11,7 +11,7 @@ const remoteElectron = require('@electron/remote')
 const AuthManager = require('./assets/js/authmanager')
 const ConfigManager = require('./assets/js/configmanager')
 const { DistroAPI } = require('./assets/js/distromanager')
-const P2PManager = require('./assets/js/core/dl/P2PManager')
+
 
 let rscShouldLoad = false
 let fatalStartupError = false
@@ -112,7 +112,7 @@ async function showMainUI(data) {
         ipcRenderer.send('autoUpdateAction', 'initAutoUpdater', ConfigManager.getAllowPrerelease())
     }
 
-    P2PManager.start()
+
 
     await prepareSettings(true)
     updateSelectedServer(data.getServerById(ConfigManager.getSelectedServer()))
@@ -533,10 +533,7 @@ async function devModeToggle() {
     syncModConfigurations(data)
 }
 
-// Graceful shutdown for P2P Manager
-window.addEventListener('beforeunload', () => {
-    P2PManager.stop()
-})
+
 
 /**
  * Check if the P2P prompt should be showed.
@@ -558,7 +555,7 @@ function checkAndShowP2PPrompt() {
             ConfigManager.setP2PUploadEnabled(true)
             ConfigManager.save()
             toggleOverlay(false)
-            P2PManager.start()
+            ipcRenderer.invoke('p2p:configUpdate') // Notify Main Process
         })
 
         setMiddleButtonHandler(() => {
@@ -568,7 +565,7 @@ function checkAndShowP2PPrompt() {
             ConfigManager.setP2PUploadEnabled(false)
             ConfigManager.save()
             toggleOverlay(false)
-            P2PManager.stop()
+            ipcRenderer.invoke('p2p:configUpdate') // Notify Main Process
         })
 
         toggleOverlay(true, false)

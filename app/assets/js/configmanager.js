@@ -107,7 +107,8 @@ const DEFAULT_CONFIG = {
             localOptimization: false,
             globalOptimization: false,
             p2pUploadEnabled: false,
-            p2pUploadLimit: 5 // Mbps
+            p2pUploadLimit: 5, // Mbps
+            p2pOnlyMode: false
         },
         p2pPromptShown: false
     },
@@ -924,6 +925,25 @@ exports.getP2PUploadLimit = function (def = false) {
  */
 exports.setP2PUploadLimit = function (limit) {
     config.settings.deliveryOptimization.p2pUploadLimit = Number.parseInt(limit)
+}
+
+/**
+ * Check if P2P Only Mode is enabled.
+ *
+ * @param {boolean} def Optional. If true, the default value will be returned.
+ * @returns {boolean} Whether or not P2P Only Mode is enabled.
+ */
+exports.getP2POnlyMode = function (def = false) {
+    return !def ? config.settings.deliveryOptimization.p2pOnlyMode : DEFAULT_CONFIG.settings.deliveryOptimization.p2pOnlyMode
+}
+
+/**
+ * Set whether or not P2P Only Mode is enabled.
+ *
+ * @param {boolean} p2pOnlyMode Whether or not P2P Only Mode is enabled.
+ */
+exports.setP2POnlyMode = function (p2pOnlyMode) {
+    config.settings.deliveryOptimization.p2pOnlyMode = p2pOnlyMode
 }
 
 /**

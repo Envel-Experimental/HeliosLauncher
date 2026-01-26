@@ -3,7 +3,7 @@ const os = require('os')
 const semver = require('semver')
 
 const DropinModUtil = require('./assets/js/dropinmodutil')
-const SettingsP2PManager = require('./assets/js/core/dl/P2PManager')
+
 const { MSFT_OPCODE, MSFT_REPLY_TYPE, MSFT_ERROR } = require('./assets/js/ipcconstants')
 var { validateSelectedJvm, ensureJavaDirIsRoot } = require('./assets/js/core/java/JavaGuard')
 
@@ -210,8 +210,10 @@ bindP2PSlider()
 document.getElementById('settingsP2PInfoButton').onclick = async () => {
 
     const getStatsHtml = async () => {
-        const local = SettingsP2PManager.getNetworkInfo()
+
         const global = await ipcRenderer.invoke('p2p:getInfo')
+
+        const local = global
 
         let statusText = 'Отключен'
         let statusColor = '#ff4444'
@@ -228,6 +230,8 @@ document.getElementById('settingsP2PInfoButton').onclick = async () => {
 
         let globalStatusText = 'Отключен'
         let globalStatusColor = '#ff4444'
+        // ... (rest of logic using global)
+
 
         if (global.running) {
             globalStatusText = 'Активен'

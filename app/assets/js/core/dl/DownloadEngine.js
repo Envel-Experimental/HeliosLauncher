@@ -6,13 +6,13 @@ const fs = require('fs/promises');
 const fsSync = require('fs');
 const { pipeline } = require('stream/promises');
 const { Readable } = require('stream');
-const P2PManager = require('./P2PManager');
+const P2PEngine = require('../../../../../network/P2PEngine');
 const RaceManager = require('../../../../../network/RaceManager');
 
 const log = LoggerUtil.getLogger('DownloadEngine');
 
 async function downloadQueue(assets, onProgress) {
-    P2PManager.start();
+    P2PEngine.start();
     const limit = 32; // Concurrency
     const receivedTotals = assets.reduce((acc, a) => ({ ...acc, [a.id]: 0 }), {});
     let receivedGlobal = 0;

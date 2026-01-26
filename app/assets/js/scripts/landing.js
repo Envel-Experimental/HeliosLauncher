@@ -21,7 +21,7 @@ var {
     ensureJavaDirIsRoot,
     javaExecFromRoot
 } = require('./assets/js/core/java/JavaGuard')
-const P2PModule = require('./assets/js/core/dl/P2PManager')
+
 
 // Internal Requirements
 const ProcessBuilder = require('./assets/js/processbuilder')
@@ -89,15 +89,23 @@ function setDownloadPercentage(percent) {
 // Launch Button Logic Removed (moved to uibinder.js)
 
 // Bind P2P Status
-P2PModule.start() // Start discovery immediately
-P2PModule.on('peer-update', (count) => {
-    if (count > 0) {
-        p2p_status.style.display = 'flex'
-        p2p_status_text.innerHTML = `P2P (${count})`
-    } else {
-        p2p_status.style.display = 'none'
-    }
-})
+// Bind P2P Status
+
+
+
+// Poll P2P Status every 5 seconds
+setInterval(async () => {
+    try {
+        const stats = await ipcRenderer.invoke('p2p:getInfo')
+        const count = stats.connections
+        if (count > 0) {
+            p2p_status.style.display = 'flex'
+            p2p_status_text.innerHTML = `P2P (${count})`
+        } else {
+            p2p_status.style.display = 'none'
+        }
+    } catch (e) { }
+}, 5000)
 
 // Bind launch button
 document.getElementById('launch_button').addEventListener('click', async e => {

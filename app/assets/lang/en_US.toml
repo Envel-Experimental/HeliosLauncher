@@ -134,7 +134,8 @@ p2pUploadEnabledTitle = "Разрешить раздачу файлов"
 p2pUploadEnabledDesc = "Помогать другим игрокам скачивать файлы (Seeding)."
 p2pUploadLimitTitle = "Лимит отдачи"
 p2pNetworkInfoButton = "Статистика P2P сети"
-
+p2pOnlyModeTitle = "Только P2P (Без Mojang)"
+p2pOnlyModeDesc = "Не использовать сервера Mojang. Внимание: может повлиять на стабильность!"
 [ejs.waiting]
 waitingText = "Ожидание Microsoft.."
 

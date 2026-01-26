@@ -66,6 +66,15 @@ class P2PEngine extends EventEmitter {
         }
     }
 
+    isLocalIP(ip) {
+        if (!ip) return false
+        // IPv4 Local Ranges: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+        // IPv6 Link-Local: fe80::/10
+        if (ip.startsWith('::ffff:')) ip = ip.substring(7) // Unmap IPv4
+
+        return /^(127\.|192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.|fe80::)/.test(ip) || ip === '::1'
+    }
+
     async init() {
         try {
             if (Config.BOOTSTRAP_URL) {
@@ -113,7 +122,12 @@ class P2PEngine extends EventEmitter {
             this.swarm.on('connection', (socket, info) => {
                 const peer = new PeerHandler(socket, this)
                 this.peers.push(peer)
-                // console.log(`[P2PEngine] Connected to peer: ${info.publicKey.toString('hex').substring(0, 8)}...`)
+
+                const ip = socket.remoteAddress
+                const isLocal = this.isLocalIP(ip)
+                const type = isLocal ? 'LOCAL (LAN)' : 'GLOBAL (WAN)'
+
+                console.log(`[P2PEngine] Peer Connected: [${type}] ${ip}`)
 
                 if (this.peers.length > this.profile.maxPeers) {
                     socket.destroy()
@@ -413,6 +427,7 @@ class P2PEngine extends EventEmitter {
             dhtNodes: routingNodes > 0 ? routingNodes : (this.dht && this.dht.bootstrapped ? Config.BOOTSTRAP_NODES.length : 0),
             bootstrapNodes: Config.BOOTSTRAP_NODES.length,
             running: !!this.swarm,
+            listening: !!this.swarm, // Added for UI compatibility
             mode: isEffectivelyPassive ? 'Passive (Leech)' : 'Active (Seed)',
             profile: this.profile.name
         }

@@ -2,7 +2,7 @@ const { Readable } = require('stream')
 const HashVerifierStream = require('./HashVerifierStream')
 const Config = require('./config')
 const NodeAdapter = require('./NodeAdapter')
-const P2PManager = require('../app/assets/js/core/dl/P2PManager')
+const ConfigManager = require('../app/assets/js/configmanager')
 const TrafficState = require('./TrafficState')
 
 class RaceManager {
@@ -63,12 +63,20 @@ class RaceManager {
         } catch (e) { }
 
         // 1. HTTP Task
-        const httpTask = fetch(url, { signal: abortController.signal })
-            .then(res => {
-                if (!res.ok) throw new Error(`HTTP ${res.status}`)
-                if (!res.body) throw new Error('HTTP No Body')
-                return { type: 'http', result: res }
-            })
+        const httpTask = new Promise((resolve, reject) => {
+            if (ConfigManager.getP2POnlyMode()) {
+                reject(new Error('HTTP Blocked: P2P Only Mode is Enabled'))
+                return
+            }
+
+            fetch(url, { signal: abortController.signal })
+                .then(res => {
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+                    if (!res.body) throw new Error('HTTP No Body')
+                    resolve({ type: 'http', result: res })
+                })
+                .catch(reject)
+        })
 
         // 2. Global P2P Task (Hyperswarm)
         let globalP2PStream = null
@@ -106,15 +114,8 @@ class RaceManager {
             globalP2PStream.on('error', onError)
         })
 
-        // 3. Local P2P Task (UDP/LAN)
-        // Wraps P2PManager.requestFile which returns a Promise<Stream>
         // 3. Local P2P Task (Legacy UDP/HTTP - DISABLED in favor of HyperDHT Local)
-        // const localP2PController = new AbortController()
-        // const localP2PTask = P2PManager.requestFile(hash, localP2PController.signal, relPath)
-        //     .then(stream => {
-        //         localP2PStream = stream
-        //         return { type: 'local_p2p', result: stream }
-        //     })
+        // Local P2P logic removed as P2PManager is deprecated.
 
         try {
             // Race: HTTP vs Global (now Universal) P2P
@@ -122,7 +123,6 @@ class RaceManager {
 
             if (winner.type === 'global_p2p') {
                 abortController.abort() // Cancel HTTP
-                // localP2PController.abort() // Cancel Local P2P
 
                 this.p2pConsecutiveWins++
                 if (this.p2pConsecutiveWins >= 10) { NodeAdapter.boostWeight(); this.p2pConsecutiveWins = 0 }
@@ -131,7 +131,6 @@ class RaceManager {
 
                 // HTTP Won
                 if (globalP2PStream) globalP2PStream.destroy() // Cancel Global P2P
-                // localP2PController.abort() // Cancel Local P2P
 
                 this.p2pConsecutiveWins = 0
                 // Standard HTTP: Return the native Response object directly.
@@ -143,8 +142,11 @@ class RaceManager {
             // All failed? Should not happen if HTTP is valid.
             if (globalP2PStream) globalP2PStream.destroy()
             abortController.abort()
-            // localP2PController.abort() // Cancel Local P2P
-            console.error('[RaceManager] All primary transfer methods failed for ' + hash, err)
+            if (ConfigManager.getP2POnlyMode()) {
+                console.warn(`[RaceManager] P2P Download failed for ${hash}. (P2P Only Mode Active)`)
+            } else {
+                console.warn(`[RaceManager] Primary transfer methods failed for ${hash}. Retrying...`)
+            }
 
             // Retry with Mirrors defined in Config
 
@@ -171,7 +173,17 @@ class RaceManager {
 
         const cleanupDownload = () => {
             TrafficState.decrementDownloads()
-            // console.log(`[RaceManager] Download finished. Active: ${TrafficState.activeDownloads}`)
+
+            if (!TrafficState.isBusy()) {
+                const P2PEngine = require('./P2PEngine')
+                const stats = P2PEngine.getNetworkInfo()
+                const downMB = (stats.downloaded / 1024 / 1024).toFixed(2)
+                const upMB = (stats.uploaded / 1024 / 1024).toFixed(2)
+
+                if (stats.downloaded > 0 || stats.uploaded > 0) {
+                    console.log(`[P2P Stats] Session Finished. Total Downloaded: ${downMB} MB, Total Uploaded: ${upMB} MB`)
+                }
+            }
         }
 
         verifier.on('close', cleanupDownload)
