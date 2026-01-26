@@ -176,8 +176,11 @@ class P2PEngine extends EventEmitter {
             this.swarm.on('connection', (socket, info) => {
                 const peer = new PeerHandler(socket, this, info)
                 this.peers.push(peer)
+                this.emit('peer_added', peer)
 
-                const ip = socket.remoteAddress || (info.peer && info.peer.host) || 'unknown'
+                let ip = socket.remoteAddress || (info.peer && info.peer.host) || (socket.rawStream && socket.rawStream.remoteAddress) || 'unknown'
+                if (ip.startsWith('::ffff:')) ip = ip.substring(7)
+
                 const isLocal = this.isLocalIP(ip)
                 const type = isLocal ? 'LOCAL (LAN)' : 'GLOBAL (WAN)'
                 const peerInfoStr = info.peer ? `${info.peer.host}:${info.peer.port}` : 'unknown'
@@ -227,15 +230,36 @@ class P2PEngine extends EventEmitter {
             read() { }
         })
 
-        if (this.peers.length === 0) {
-            console.warn(`[P2PEngine] Request failed: No peers available for ${hash.substring(0, 8)}`)
-            process.nextTick(() => {
-                stream.emit('error', new Error('No peers available'))
-            })
-            return stream
-        }
+        // Use a persistent task to handle the request (allows waiting for peers)
+        this._handleRequestAsync(stream, hash, expectedSize, relPath)
 
-        if (isDev) console.debug(`[P2P Debug] Requesting ${hash.substring(0, 8)}. Peers available: ${this.peers.length}`)
+        return stream
+    }
+
+    async _handleRequestAsync(stream, hash, expectedSize, relPath) {
+        // If no peers, wait up to 5 seconds
+        if (this.peers.length === 0) {
+            if (isDev) console.debug(`[P2P Debug] No peers for ${hash.substring(0, 8)}. Waiting...`)
+
+            const hasPeer = await new Promise(resolve => {
+                const onConn = () => {
+                    this.off('peer_added', onConn)
+                    clearTimeout(t)
+                    resolve(true)
+                }
+                const t = setTimeout(() => {
+                    this.off('peer_added', onConn)
+                    resolve(false)
+                }, 5000)
+                this.once('peer_added', onConn)
+            })
+
+            if (!hasPeer) {
+                console.warn(`[P2PEngine] Request failed: No peers available for ${hash.substring(0, 8)} after 5s wait.`)
+                stream.emit('error', new Error('No peers available'))
+                return
+            }
+        }
 
         const reqId = this.reqIdCounter++
         if (this.reqIdCounter > 4294967295) this.reqIdCounter = 1
@@ -243,34 +267,29 @@ class P2PEngine extends EventEmitter {
         let bestPeer = null
         let maxScore = -1
 
-        if (this.peers.length > 0) {
-            for (const p of this.peers) {
-                const weight = p.remoteWeight || 1
-                const rtt = p.rtt || 200
-
-                let speedFactor = 1.0
-                if (p.lastTransferSpeed) {
-                    speedFactor = Math.max(0.1, p.lastTransferSpeed / 102400)
-                    speedFactor = Math.min(10.0, speedFactor)
-                }
-
-                const score = (weight * weight) * (10000 / (rtt + 10)) * speedFactor
-
-                if (score > maxScore) {
-                    maxScore = score
-                    bestPeer = p
-                }
+        // Select best peer
+        for (const p of this.peers) {
+            const weight = p.remoteWeight || 1
+            const rtt = p.rtt || 200
+            let speedFactor = 1.0
+            if (p.lastTransferSpeed) {
+                speedFactor = Math.max(0.1, p.lastTransferSpeed / 102400)
+                speedFactor = Math.min(10.0, speedFactor)
+            }
+            const score = (weight * weight) * (10000 / (rtt + 10)) * speedFactor
+            if (score > maxScore) {
+                maxScore = score
+                bestPeer = p
             }
         }
 
         const peer = bestPeer
-
         if (!peer) {
-            process.nextTick(() => {
-                stream.emit('error', new Error('Peer selection failed'))
-            })
-            return stream
+            stream.emit('error', new Error('Peer selection failed'))
+            return
         }
+
+        if (isDev) console.debug(`[P2P Debug] Requesting ${hash.substring(0, 8)} from ${peer.socket.remoteAddress || 'unknown'}. Peers available: ${this.peers.length}`)
 
         // Setup request tracking
         this.requests.set(reqId, {
