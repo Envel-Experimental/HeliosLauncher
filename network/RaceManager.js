@@ -12,10 +12,12 @@ class RaceManager {
         this.p2pConsecutiveWins = 0
         this.failureBuffer = []
         this.failureFlushTimer = null
+        this.failureHistory = new Set()
     }
 
     logFailure(hash, relPath, context) {
-        // Deduplicate: If hash already in buffer, ignore (retries)
+        // Deduplicate: If hash already in buffer or recently logged, ignore
+        if (this.failureHistory.has(hash)) return
         if (this.failureBuffer.find(x => x.hash === hash)) return
 
         const name = relPath ? path.basename(relPath) : hash.substring(0, 8)
@@ -27,6 +29,13 @@ class RaceManager {
             if (this.failureBuffer.length === 0) return
 
             const count = this.failureBuffer.length
+
+            // Add to history to avoid repeat logs for 30s
+            for (const item of this.failureBuffer) {
+                this.failureHistory.add(item.hash)
+                setTimeout(() => this.failureHistory.delete(item.hash), 30000)
+            }
+
             if (count === 1) {
                 const item = this.failureBuffer[0]
                 console.warn(`[RaceManager] P2P Download failed for ${item.name}. (${item.context})`)

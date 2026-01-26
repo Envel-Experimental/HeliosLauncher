@@ -224,7 +224,9 @@ class PeerHandler {
 
         hash = hash.trim()
 
-        const remoteIP = this.socket.remoteAddress || this.socket.remoteHost || (this.socket.rawStream && this.socket.rawStream.remoteAddress) || 'unknown'
+        let remoteIP = this.socket.remoteAddress || this.socket.remoteHost || (this.socket.rawStream && this.socket.rawStream.remoteAddress)
+        if (!remoteIP && this.info && this.info.peer) remoteIP = this.info.peer.host
+        if (!remoteIP) remoteIP = 'unknown'
 
         if (isDev) {
             console.log(`%c[P2PEngine] Connection Established with ${remoteIP}`, 'color: #00ff00; font-weight: bold')

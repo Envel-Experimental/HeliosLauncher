@@ -207,12 +207,6 @@ class P2PEngine extends EventEmitter {
                 client: true
             })
 
-            if (isDev) {
-                discovery.on('peer', (peer) => {
-                    console.debug(`[P2P Debug] Peer Found on Swarm: ${peer.host}:${peer.port} (Referrer: ${peer.referrer ? peer.referrer.host : 'none'})`)
-                })
-            }
-
             await discovery.flushed()
             console.log(`[P2PEngine] P2P Service Started. Debug Mode: ${isDev}`)
             if (shouldAnnounce) {
