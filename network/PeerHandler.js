@@ -185,8 +185,11 @@ class PeerHandler {
             return
         }
 
-        // 1. Check if Upload is Enabled
-        if (!ConfigManager.getP2PUploadEnabled()) {
+        // 1. Check if Upload is Enabled (Global OR Local Override)
+        const isGlobalUpload = ConfigManager.getP2PUploadEnabled()
+        const isLocalUpload = ConfigManager.getLocalOptimization() && this.engine.isLocalIP(remoteIP)
+
+        if (!isGlobalUpload && !isLocalUpload) {
             this.sendError(reqId, 'Disabled')
             return
         }

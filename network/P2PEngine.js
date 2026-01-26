@@ -138,15 +138,15 @@ class P2PEngine extends EventEmitter {
             })
 
             // Join the topic
-            const isPassive = this.profile.passive || !ConfigManager.getP2PUploadEnabled() || NodeAdapter.isCritical()
+            const shouldAnnounce = !this.profile.passive && !NodeAdapter.isCritical() && (ConfigManager.getP2PUploadEnabled() || ConfigManager.getLocalOptimization())
 
             const discovery = this.swarm.join(SWARM_TOPIC, {
-                server: !isPassive,
+                server: shouldAnnounce,
                 client: true
             })
 
             await discovery.flushed()
-            // console.log(`[P2PEngine] Initialized. Passive: ${isPassive}`)
+            // console.log(`[P2PEngine] Initialized. Announcing: ${shouldAnnounce}`)
 
         } catch (err) {
             console.error('[P2PEngine] Init failed:', err)
@@ -349,9 +349,9 @@ class P2PEngine extends EventEmitter {
     reconfigureSwarm() {
         if (!this.swarm) return
         const topic = SWARM_TOPIC
-        const isPassive = this.profile.passive || NodeAdapter.isCritical() || !ConfigManager.getP2PUploadEnabled()
-        // console.log(`[P2PEngine] Reconfiguring Swarm. Passive: ${isPassive}`)
-        this.swarm.join(topic, { client: true, server: !isPassive })
+        const shouldAnnounce = !this.profile.passive && !NodeAdapter.isCritical() && (ConfigManager.getP2PUploadEnabled() || ConfigManager.getLocalOptimization())
+        // console.log(`[P2PEngine] Reconfiguring Swarm. Announcing: ${shouldAnnounce}`)
+        this.swarm.join(topic, { client: true, server: shouldAnnounce })
     }
 
     triggerCircuitBreaker() {
