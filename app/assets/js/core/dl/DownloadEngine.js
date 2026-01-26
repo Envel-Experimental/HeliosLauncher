@@ -81,7 +81,7 @@ async function downloadFile(asset, onProgress) {
         try {
             if (attempt > 0) {
                 await sleep(attempt * 1000);
-                log.warn(`Retrying download for ${asset.id} (Attempt ${attempt + 1}/5)...`);
+                log.debug(`Retrying download for ${asset.id} (Attempt ${attempt + 1}/5)...`);
             }
 
             // RaceManager Strategy

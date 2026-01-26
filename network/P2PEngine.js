@@ -214,7 +214,7 @@ class P2PEngine extends EventEmitter {
         }
     }
 
-    requestFile(hash, expectedSize = 0) {
+    requestFile(hash, expectedSize = 0, relPath = null) {
         const stream = new Readable({
             read() { }
         })
@@ -270,7 +270,7 @@ class P2PEngine extends EventEmitter {
             bytesReceived: 0
         })
 
-        const useBatching = peer.batchSupport && (expectedSize > 0 && expectedSize < 1024 * 1024)
+        const useBatching = peer.batchSupport && (expectedSize > 0 && expectedSize < 1024 * 1024) && !relPath
 
         if (useBatching) {
             if (!this.batchQueue.has(peer)) {
@@ -283,8 +283,8 @@ class P2PEngine extends EventEmitter {
                 setTimeout(() => this.flushBatches(), 20)
             }
         } else {
-            if (isDev) console.debug(`[P2P Debug] Sending Request ${reqId} for ${hash.substring(0, 8)} to ${peer.socket.remoteAddress}`)
-            peer.sendRequest(reqId, hash)
+            if (isDev) console.debug(`[P2P Debug] Sending Request ${reqId} for ${hash.substring(0, 8)} to ${peer.socket.remoteAddress || 'unknown'}`)
+            peer.sendRequest(reqId, hash, relPath)
         }
 
         stream.on('close', () => {

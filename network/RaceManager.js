@@ -4,11 +4,41 @@ const Config = require('./config')
 const NodeAdapter = require('./NodeAdapter')
 const ConfigManager = require('../app/assets/js/configmanager')
 const TrafficState = require('./TrafficState')
+const path = require('path')
 
 class RaceManager {
 
     constructor() {
         this.p2pConsecutiveWins = 0
+        this.failureBuffer = []
+        this.failureFlushTimer = null
+    }
+
+    logFailure(hash, relPath, context) {
+        // Deduplicate: If hash already in buffer, ignore (retries)
+        if (this.failureBuffer.find(x => x.hash === hash)) return
+
+        const name = relPath ? path.basename(relPath) : hash.substring(0, 8)
+        this.failureBuffer.push({ hash, name, context })
+
+        if (this.failureFlushTimer) clearTimeout(this.failureFlushTimer)
+
+        this.failureFlushTimer = setTimeout(() => {
+            if (this.failureBuffer.length === 0) return
+
+            const count = this.failureBuffer.length
+            if (count === 1) {
+                const item = this.failureBuffer[0]
+                console.warn(`[RaceManager] P2P Download failed for ${item.name}. (${item.context})`)
+            } else {
+                console.warn(`[RaceManager] P2P Download failed for ${count} files. Last context: ${this.failureBuffer[count - 1].context}`)
+                // Readable List
+                const names = this.failureBuffer.map(i => i.name).join(', ')
+                console.warn('[RaceManager] Failed Files:', names)
+            }
+            this.failureBuffer = []
+            this.failureFlushTimer = null
+        }, 2000)
     }
 
     isBusy() {
@@ -90,7 +120,7 @@ class RaceManager {
             }
 
             const P2PEngine = require('./P2PEngine')
-            globalP2PStream = P2PEngine.requestFile(hash, expectedSize)
+            globalP2PStream = P2PEngine.requestFile(hash, expectedSize, relPath)
 
             // Timeout P2P strictly to avoid waiting too long if HTTP is also slow/failing
             const timeout = setTimeout(() => {
@@ -143,9 +173,9 @@ class RaceManager {
             if (globalP2PStream) globalP2PStream.destroy()
             abortController.abort()
             if (ConfigManager.getP2POnlyMode()) {
-                console.warn(`[RaceManager] P2P Download failed for ${hash}. (P2P Only Mode Active)`)
+                this.logFailure(hash, relPath, 'P2P Only Mode Active')
             } else {
-                console.warn(`[RaceManager] Primary transfer methods failed for ${hash}. Retrying...`)
+                this.logFailure(hash, relPath, 'Retrying...')
             }
 
             // Retry with Mirrors defined in Config

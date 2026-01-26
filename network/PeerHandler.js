@@ -193,12 +193,31 @@ class PeerHandler {
 
     async handleRequest(reqId, payload) {
         // Seeder Logic
-        const hash = payload.toString('utf-8')
+        let hash = payload.toString('utf-8')
+        let relPath = null
+
+        // Detect JSON Payload (Starts with '{')
+        if (hash.startsWith('{')) {
+            try {
+                const data = JSON.parse(hash)
+                hash = data.h
+                relPath = data.p
+            } catch (e) {
+                // Ignore JSON error, treat as raw hash? Or fail.
+            }
+        }
+
         // Sanitize hash to prevent directory traversal
         // Support SHA1 (40 chars) and MD5 (32 chars)
         if (!/^([a-f0-9]{40}|[a-f0-9]{32})$/i.test(hash)) {
             this.sendError(reqId, 'Invalid hash')
             return
+        }
+
+        // Sanitize relPath (Allow a-z, 0-9, /, ., _, -)
+        if (relPath) {
+            // Basic sanitization: No '..'
+            if (relPath.includes('..')) relPath = null // Security Risk
         }
 
         if (isDev) {
@@ -259,6 +278,12 @@ class PeerHandler {
                 path.join(dataDir, 'assets', 'objects', hash.substring(0, 2), hash),   // Legacy/Root
                 path.join(dataDir, 'common', 'assets', 'objects', hash.substring(0, 2), hash) // Explicit Common
             ]
+
+            if (relPath) {
+                // e.g. libraries/com/example/lib.jar
+                candidates.push(path.join(commonDir, relPath))
+                candidates.push(path.join(dataDir, relPath))
+            }
 
             let foundPath = null
             for (const p of candidates) {
@@ -415,8 +440,14 @@ class PeerHandler {
         this.socket.write(header)
     }
 
-    sendRequest(reqId, hash) {
-        const payload = b4a.from(hash, 'utf-8')
+    sendRequest(reqId, hash, relPath = null) {
+        let payload
+        if (relPath) {
+            payload = b4a.from(JSON.stringify({ h: hash, p: relPath }), 'utf-8')
+        } else {
+            payload = b4a.from(hash, 'utf-8')
+        }
+
         const header = b4a.alloc(9)
         header[0] = MSG_REQUEST
         header.writeUInt32BE(reqId, 1)
