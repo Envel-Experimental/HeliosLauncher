@@ -251,18 +251,38 @@ class PeerHandler {
 
         try {
             const commonDir = ConfigManager.getCommonDirectory()
-            const filePath = path.join(commonDir, 'assets', 'objects', hash.substring(0, 2), hash)
+            const dataDir = ConfigManager.getDataDirectory()
 
-            if (isDev) {
-                console.debug(`[P2P Debug] Checking for file at: ${filePath}`)
+            // Candidate Paths
+            const candidates = [
+                path.join(commonDir, 'assets', 'objects', hash.substring(0, 2), hash), // Standard
+                path.join(dataDir, 'assets', 'objects', hash.substring(0, 2), hash),   // Legacy/Root
+                path.join(dataDir, 'common', 'assets', 'objects', hash.substring(0, 2), hash) // Explicit Common
+            ]
+
+            let foundPath = null
+            for (const p of candidates) {
+                if (fs.existsSync(p)) {
+                    foundPath = p
+                    break
+                }
             }
 
-            if (fs.existsSync(filePath)) {
+            if (isDev && !foundPath) {
+                console.debug(`[P2P Debug] File ${hash.substring(0, 8)} not found in candidates:`, candidates)
+            }
+
+            if (foundPath) {
                 this.engine.activeUploads++
                 this.engine.incrementUploadCountForIP(remoteIP)
 
-                const stream = fs.createReadStream(filePath)
-                const throttled = stream.pipe(RateLimiter.throttle())
+                const stream = fs.createReadStream(foundPath)
+
+                // Only throttle Global traffic
+                let throttled = stream
+                if (!this.engine.isLocalIP(remoteIP)) {
+                    throttled = stream.pipe(RateLimiter.throttle())
+                }
 
                 // Performance Monitoring
                 const startTime = Date.now()
