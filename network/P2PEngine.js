@@ -63,8 +63,24 @@ class P2PEngine extends EventEmitter {
         if (knownPeers.length > 0) {
             console.log(`[P2PEngine] Pre-warming: Adding ${knownPeers.length} persistent peers to DHT...`)
             for (const p of knownPeers) {
-                if (this.dht) {
-                    this.dht.addNode({ host: p.ip, port: p.port })
+                try {
+                    let ip = p.ip
+                    if (!ip || typeof ip !== 'string') continue
+
+                    // Unmap IPv4-mapped IPv6 addresses (::ffff:x.x.x.x)
+                    if (ip.startsWith('::ffff:')) {
+                        ip = ip.substring(7)
+                    }
+
+                    if (this.dht) {
+                        // dht-rpc's addNode/id only supports IPv4 strings presently
+                        // Skip if it still looks like an IPv6 address
+                        if (ip.includes(':')) continue
+
+                        this.dht.addNode({ host: ip, port: p.port })
+                    }
+                } catch (e) {
+                    console.warn(`[P2PEngine] Failed to add persistent node ${p.ip}:${p.port} to DHT:`, e.message)
                 }
             }
         }

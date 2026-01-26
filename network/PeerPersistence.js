@@ -64,8 +64,13 @@ class PeerPersistence {
     _validateList(list, now, maxAge) {
         if (!Array.isArray(list)) return [];
         return list.filter(p => {
-            // Must have ip + port, and not be too old
-            return p.ip && p.port && (now - (p.lastSeen || 0) < maxAge);
+            // Must be an object, have ip/port, and not be too old
+            return p &&
+                typeof p === 'object' &&
+                typeof p.ip === 'string' &&
+                p.ip.length > 0 &&
+                p.port &&
+                (now - (p.lastSeen || 0) < maxAge);
         });
     }
 

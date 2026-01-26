@@ -131,7 +131,14 @@ class PeerHandler {
 
             // Persist Peer
             try {
-                const ip = this.socket.remoteAddress
+                let ip = this.socket.remoteAddress
+                if (!ip) return
+
+                // Unmap IPv4-mapped IPv6 addresses
+                if (ip.startsWith('::ffff:')) {
+                    ip = ip.substring(7)
+                }
+
                 const isLocal = this.engine.isLocalIP(ip)
                 const type = isLocal ? 'local' : 'global'
                 const publicKey = this.info && this.info.publicKey ? this.info.publicKey.toString('hex') : null
@@ -141,10 +148,7 @@ class PeerHandler {
                     port: this.socket.remotePort,
                     publicKey,
                     score: this.remoteWeight,
-                    avgSpeed: 0 // Will be updated if transfers occur? Currently PeerPersistence doesn't support partial updates easily without reading back, but updatePeer merges? No it overwrites entry.
-                    // Actually PeerPersistence.updatePeer creates new entry if not exists, or overwrites.
-                    // We should probably preserve avgSpeed if possible, or just set 0 for now.
-                    // The persistence logic is simple.
+                    avgSpeed: 0
                 })
             } catch (e) {
                 if (isDev) console.error('[PeerHandler] Persistence Error:', e)
