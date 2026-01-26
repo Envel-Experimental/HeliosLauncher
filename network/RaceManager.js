@@ -97,7 +97,7 @@ class RaceManager {
                 cleanup()
                 console.log('[RaceManager] Global P2P Task Timed Out (Soft)')
                 reject(new Error('Global P2P Timeout'))
-            }, 3000) // 3s Soft Timeout for First Byte
+            }, 10000) // 10s Soft Timeout for First Byte
 
             const onReadable = () => {
                 clearTimeout(timeout)

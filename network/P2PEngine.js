@@ -283,6 +283,7 @@ class P2PEngine extends EventEmitter {
                 setTimeout(() => this.flushBatches(), 20)
             }
         } else {
+            if (isDev) console.debug(`[P2P Debug] Sending Request ${reqId} for ${hash.substring(0, 8)} to ${peer.socket.remoteAddress}`)
             peer.sendRequest(reqId, hash)
         }
 

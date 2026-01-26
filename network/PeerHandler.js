@@ -212,7 +212,7 @@ class PeerHandler {
 
         // VULNERABILITY FIX 3: IP-based Slot Exhaustion
         const remoteIP = this.socket.remoteAddress || 'unknown'
-        if (this.engine.getUploadCountForIP(remoteIP) >= 2) { // Max 2 slots per IP
+        if (this.engine.getUploadCountForIP(remoteIP) >= 20) { // Max 20 slots per IP
             this.sendError(reqId, 'Busy (IP Limit)')
             return
         }
@@ -252,6 +252,10 @@ class PeerHandler {
         try {
             const commonDir = ConfigManager.getCommonDirectory()
             const filePath = path.join(commonDir, 'assets', 'objects', hash.substring(0, 2), hash)
+
+            if (isDev) {
+                console.debug(`[P2P Debug] Checking for file at: ${filePath}`)
+            }
 
             if (fs.existsSync(filePath)) {
                 this.engine.activeUploads++
