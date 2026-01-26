@@ -57,6 +57,7 @@ async function downloadFile(asset, onProgress) {
     const decodedPath = ensureDecodedPath(path);
     const CONFIG_EXTENSIONS = ['.txt', '.json', '.yml', '.yaml', '.dat'];
 
+    // Initial check (Optimistic)
     try {
         await fs.access(decodedPath);
         if (CONFIG_EXTENSIONS.includes(extname(decodedPath))) {
@@ -73,67 +74,86 @@ async function downloadFile(asset, onProgress) {
 
     await safeEnsureDir(dirname(decodedPath));
 
-    // RaceManager Strategy
-    try {
-        // Construct headers
-        const headers = new Headers();
-        if (asset.size) headers.append('X-Expected-Size', asset.size.toString());
-        if (asset.path) headers.append('X-File-Path', asset.path);
+    let lastError = null;
 
-        // Use RaceManager
-        const req = new Request(url, { headers });
+    // Retry Loop (Resilience)
+    for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+            if (attempt > 0) {
+                await sleep(attempt * 1000);
+                log.warn(`Retrying download for ${asset.id} (Attempt ${attempt + 1}/5)...`);
+            }
 
-        const response = await RaceManager.handle(req);
+            // RaceManager Strategy
+            // Construct headers
+            const headers = new Headers();
+            if (asset.size) headers.append('X-Expected-Size', asset.size.toString());
+            if (asset.path) headers.append('X-File-Path', asset.path);
 
-        if (!response.ok) throw new Error(`RaceManager failed: ${response.status}`);
+            // Force HTTP after 2 failed attempts (P2P might be delivering bad data)
+            if (attempt >= 2) {
+                headers.append('X-Skip-P2P', 'true');
+            }
 
-        const fileStream = fsSync.createWriteStream(decodedPath);
+            // Use RaceManager
+            const req = new Request(url, { headers });
 
-        // Progress tracking wrapper
-        let loaded = 0;
-        let lastProgressTime = 0;
-        const total = asset.size || 0;
+            const response = await RaceManager.handle(req);
 
-        if (response.body) {
-            const reader = response.body.getReader();
-            const nodeStream = new Readable({
-                async read() {
-                    try {
-                        const { done, value } = await reader.read();
-                        if (done) {
-                            this.push(null);
-                        } else {
-                            loaded += value.length;
-                            const now = Date.now();
-                            if (onProgress && (now - lastProgressTime >= 100 || loaded === total)) {
-                                onProgress(loaded);
-                                lastProgressTime = now;
+            if (!response.ok) throw new Error(`RaceManager failed: ${response.status}`);
+
+            const fileStream = fsSync.createWriteStream(decodedPath);
+
+            // Progress tracking wrapper
+            let loaded = 0;
+            let lastProgressTime = 0;
+            const total = asset.size || 0;
+
+            if (response.body) {
+                const reader = response.body.getReader();
+                const nodeStream = new Readable({
+                    async read() {
+                        try {
+                            const { done, value } = await reader.read();
+                            if (done) {
+                                this.push(null);
+                            } else {
+                                loaded += value.length;
+                                const now = Date.now();
+                                if (onProgress && (now - lastProgressTime >= 100 || loaded === total)) {
+                                    onProgress(loaded);
+                                    lastProgressTime = now;
+                                }
+                                this.push(Buffer.from(value));
                             }
-                            this.push(Buffer.from(value));
+                        } catch (e) {
+                            this.destroy(e);
                         }
-                    } catch (e) {
-                        this.destroy(e);
                     }
-                }
-            });
+                });
 
-            await pipeline(nodeStream, fileStream);
-        } else {
-            throw new Error('No body in response');
+                await pipeline(nodeStream, fileStream);
+            } else {
+                throw new Error('No body in response');
+            }
+
+            // Validate
+            if (await validateLocalFile(decodedPath, algo, hash)) {
+                return; // Success!
+            } else {
+                throw new Error('Validation failed');
+            }
+
+        } catch (err) {
+            lastError = err;
+            try { await fs.unlink(decodedPath) } catch (e) { }
+            // Continue to next attempt
         }
-
-        // Validate
-        if (await validateLocalFile(decodedPath, algo, hash)) {
-            return;
-        } else {
-            throw new Error('Validation failed');
-        }
-
-    } catch (err) {
-        log.error(`Failed to download ${asset.id}: ${err.message}`);
-        try { await fs.unlink(decodedPath) } catch (e) { }
-        throw err;
     }
+
+    // If we're here, all retries failed
+    log.error(`Failed to download ${asset.id} after 5 attempts: ${lastError ? lastError.message : 'Unknown error'}`);
+    throw lastError || new Error('Download failed after multiple attempts');
 }
 
 let activeHttpRequests = 0;

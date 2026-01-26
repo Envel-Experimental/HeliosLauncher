@@ -53,6 +53,15 @@ class RaceManager {
         const algo = hash.length === 32 ? 'md5' : 'sha1'
         const abortController = new AbortController()
 
+        // Check for Skip P2P Header (Resilience)
+        let skipP2P = false
+        try {
+            if (request.headers.get('X-Skip-P2P')) {
+                skipP2P = true
+                // console.log('[RaceManager] Skipping P2P for this request (Force HTTP)')
+            }
+        } catch (e) { }
+
         // 1. HTTP Task
         const httpTask = fetch(url, { signal: abortController.signal })
             .then(res => {
@@ -64,6 +73,14 @@ class RaceManager {
         // 2. Global P2P Task (Hyperswarm)
         let globalP2PStream = null
         const globalP2PTask = new Promise((resolve, reject) => {
+            if (skipP2P) {
+                // Return a never-resolving promise or just reject immediately with a special code?
+                // Rejecting is better so Promise.any doesn't wait for it if HTTP also fails?
+                // Actually Promise.any waits for first fulfillment. If we reject, it ignores it unless all reject.
+                reject(new Error('P2P Skipped'))
+                return
+            }
+
             const P2PEngine = require('./P2PEngine')
             globalP2PStream = P2PEngine.requestFile(hash, expectedSize)
 

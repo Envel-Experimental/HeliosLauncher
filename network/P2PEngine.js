@@ -26,6 +26,9 @@ class P2PEngine extends EventEmitter {
         this.activeUploads = 0
         this.uploadCounts = new Map() // IP -> Count
 
+        this.totalUploaded = 0
+        this.totalDownloaded = 0
+
         // Batching
         this.batchQueue = new Map() // Peer -> Array<{ reqId, hash }>
         this.batchFlushScheduled = false
@@ -117,9 +120,7 @@ class P2PEngine extends EventEmitter {
                     return
                 }
 
-                socket.on('close', () => {
-                    this.peers = this.peers.filter(p => p !== peer)
-                })
+                // PeerHandler handles 'close' and calls removePeer
             })
 
             // Join the topic
@@ -235,6 +236,7 @@ class P2PEngine extends EventEmitter {
             }
 
             req.bytesReceived = (req.bytesReceived || 0) + data.length
+            this.totalDownloaded += data.length
 
             // VULNERABILITY FIX ("Infinite File"): Size Check
             if (req.expectedSize > 0 && req.bytesReceived > req.expectedSize) {
@@ -252,6 +254,13 @@ class P2PEngine extends EventEmitter {
         const req = this.requests.get(reqId)
         if (req) {
             if (req.peer !== senderPeer) return;
+
+            // Strict Size Validation
+            if (req.expectedSize > 0 && req.bytesReceived !== req.expectedSize) {
+                req.stream.emit('error', new Error(`Incomplete transfer: Received ${req.bytesReceived} of ${req.expectedSize}`))
+                this.requests.delete(reqId)
+                return
+            }
 
             req.stream.push(null) // EOF
 
@@ -400,6 +409,7 @@ class P2PEngine extends EventEmitter {
             requests: this.requests.size,
             uploads: this.activeUploads,
             uploaded: this.totalUploaded,
+            downloaded: this.totalDownloaded || 0,
             dhtNodes: routingNodes > 0 ? routingNodes : (this.dht && this.dht.bootstrapped ? Config.BOOTSTRAP_NODES.length : 0),
             bootstrapNodes: Config.BOOTSTRAP_NODES.length,
             running: !!this.swarm,
