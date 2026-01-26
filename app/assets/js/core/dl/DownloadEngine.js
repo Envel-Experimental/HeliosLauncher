@@ -89,6 +89,7 @@ async function downloadFile(asset, onProgress) {
             const headers = new Headers();
             if (asset.size) headers.append('X-Expected-Size', asset.size.toString());
             if (asset.path) headers.append('X-File-Path', asset.path);
+            if (asset.id) headers.append('X-File-Id', asset.id);
 
             // Force HTTP after 2 failed attempts (P2P might be delivering bad data)
             if (attempt >= 2) {

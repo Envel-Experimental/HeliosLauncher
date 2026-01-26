@@ -218,6 +218,7 @@ class PeerHandler {
         if (relPath) {
             // Basic sanitization: No '..'
             if (relPath.includes('..')) relPath = null // Security Risk
+            if (path.isAbsolute(relPath)) relPath = null // Local path leakage
         }
 
         if (isDev) {
@@ -378,6 +379,7 @@ class PeerHandler {
                 this.sendError(reqId, 'Not Found')
             }
         } catch (err) {
+            console.error('[PeerHandler] Request Handling Error:', err)
             this.sendError(reqId, 'Server Error')
         }
     }

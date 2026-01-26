@@ -65,11 +65,13 @@ class RaceManager {
 
         // Retrieve X-File-Path header passed by DownloadEngine
         let relPath = null;
+        let fileId = null;
         try {
             const pathHeader = request.headers.get('X-File-Path');
-            if (pathHeader) {
-                relPath = pathHeader;
-            }
+            if (pathHeader) relPath = pathHeader;
+
+            const idHeader = request.headers.get('X-File-Id');
+            if (idHeader) fileId = idHeader;
         } catch (e) { }
 
         // Attempt to extract hash from URL (SHA1 or MD5)
@@ -173,9 +175,9 @@ class RaceManager {
             if (globalP2PStream) globalP2PStream.destroy()
             abortController.abort()
             if (ConfigManager.getP2POnlyMode()) {
-                this.logFailure(hash, relPath, 'P2P Only Mode Active')
+                this.logFailure(hash, fileId || relPath, 'P2P Only Mode Active')
             } else {
-                this.logFailure(hash, relPath, 'Retrying...')
+                this.logFailure(hash, fileId || relPath, 'Retrying...')
             }
 
             // Retry with Mirrors defined in Config
