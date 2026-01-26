@@ -131,14 +131,14 @@ class RaceManager {
             }
 
             const P2PEngine = require('./P2PEngine')
-            globalP2PStream = P2PEngine.requestFile(hash, expectedSize, relPath)
+            globalP2PStream = P2PEngine.requestFile(hash, expectedSize, relPath, fileId)
 
             // Timeout P2P strictly to avoid waiting too long if HTTP is also slow/failing
             const timeout = setTimeout(() => {
                 cleanup()
                 console.log('[RaceManager] Global P2P Task Timed Out (Soft)')
                 reject(new Error('Global P2P Timeout'))
-            }, 10000) // 10s Soft Timeout for First Byte
+            }, 20000) // 20s Soft Timeout for First Byte
 
             const onReadable = () => {
                 clearTimeout(timeout)

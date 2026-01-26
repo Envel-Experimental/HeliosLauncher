@@ -211,14 +211,12 @@ document.getElementById('settingsP2PInfoButton').onclick = async () => {
 
     const getStatsHtml = async () => {
 
-        const global = await ipcRenderer.invoke('p2p:getInfo')
-
-        const local = global
+        const info = await ipcRenderer.invoke('p2p:getInfo')
 
         let statusText = 'Отключен'
         let statusColor = '#ff4444'
 
-        if (local.listening && ConfigManager.getLocalOptimization()) {
+        if (info.listening && ConfigManager.getLocalOptimization()) {
             if (ConfigManager.getP2PUploadEnabled()) {
                 statusText = 'Активен'
                 statusColor = '#7dbb00'
@@ -230,13 +228,11 @@ document.getElementById('settingsP2PInfoButton').onclick = async () => {
 
         let globalStatusText = 'Отключен'
         let globalStatusColor = '#ff4444'
-        // ... (rest of logic using global)
 
-
-        if (global.running) {
+        if (info.running) {
             globalStatusText = 'Активен'
             globalStatusColor = '#7dbb00'
-            if (global.mode && global.mode.includes('Passive')) {
+            if (info.mode && info.mode.includes('Passive')) {
                 globalStatusText = 'Активен (Режим экономии)'
                 globalStatusColor = '#ffbb00'
             }
@@ -320,20 +316,20 @@ document.getElementById('settingsP2PInfoButton').onclick = async () => {
                     <div class="p2p-data-row">
                         <span class="p2p-data-label">Статус</span>
                         <span class="p2p-data-value" style="color: ${statusColor}">
-                            ${statusText} ${local.listening ? spinner : ''}
+                            ${statusText} ${info.listening ? spinner : ''}
                         </span>
                     </div>
                     <div class="p2p-data-row">
-                        <span class="p2p-data-label">Активные пиры</span>
-                        <span class="p2p-data-value">${local.peers}</span>
+                        <span class="p2p-data-label">Локальные пиры</span>
+                        <span class="p2p-data-value">${info.localPeers || 0}</span>
                     </div>
                     <div class="p2p-data-row">
                         <span class="p2p-data-label">Отдано</span>
-                        <span class="p2p-data-value">${(local.uploaded / 1024 / 1024).toFixed(2)} MB</span>
+                        <span class="p2p-data-value">${((info.uploadedLocal || 0) / 1024 / 1024).toFixed(2)} MB</span>
                     </div>
                     <div class="p2p-data-row">
                         <span class="p2p-data-label">Принято</span>
-                        <span class="p2p-data-value">${(local.downloaded / 1024 / 1024).toFixed(2)} MB</span>
+                        <span class="p2p-data-value">${((info.downloadedLocal || 0) / 1024 / 1024).toFixed(2)} MB</span>
                     </div>
                 </div>
 
@@ -345,41 +341,45 @@ document.getElementById('settingsP2PInfoButton').onclick = async () => {
                     <div class="p2p-data-row">
                         <span class="p2p-data-label">Статус</span>
                         <span class="p2p-data-value" style="color: ${globalStatusColor}">
-                            ${globalStatusText} ${global.running ? spinner : ''}
+                            ${globalStatusText} ${info.running ? spinner : ''}
                         </span>
                     </div>
                     
-                    ${global.running ? `
+                    ${info.running ? `
                         <div class="p2p-data-row">
                             <span class="p2p-data-label">Топик</span>
-                            <span class="p2p-data-value"><span class="p2p-topic-tag">${global.topic}</span></span>
+                            <span class="p2p-data-value"><span class="p2p-topic-tag">${info.topic}</span></span>
                         </div>
                         <div class="p2p-data-row">
                             <span class="p2p-data-label">DHT Узлы</span>
-                            <span class="p2p-data-value" style="color: ${global.dhtNodes > 0 ? '#7dbb00' : '#ff4444'}">
-                                ${global.dhtNodes || 0} <span style="color: ${global.bootstrapped ? '#7dbb00' : '#666'}; margin-left: 4px; font-weight: normal;">(${global.bootstrapNodes})</span>
+                            <span class="p2p-data-value" style="color: ${info.dhtNodes > 0 ? '#7dbb00' : '#ff4444'}">
+                                ${info.dhtNodes || 0} <span style="color: ${info.bootstrapped ? '#7dbb00' : '#666'}; margin-left: 4px; font-weight: normal;">(${info.bootstrapNodes})</span>
                             </span>
                         </div>
                         <div class="p2p-data-row">
                             <span class="p2p-data-label">Глобальные пиры</span>
-                            <span class="p2p-data-value">${global.peers}</span>
+                            <span class="p2p-data-value">${info.globalPeers || 0}</span>
                         </div>
                         <div class="p2p-data-row">
                             <span class="p2p-data-label">Активные сессии</span>
                             <span class="p2p-data-value">
-                                ${global.uploads} <span style="color: #666; font-size: 11px; margin-left: 4px;">(Upload)</span>
-                                ${global.uploads > 0 ? spinner : ''}
+                                ${info.uploads} <span style="color: #666; font-size: 11px; margin-left: 4px;">(Upload)</span>
+                                ${info.uploads > 0 ? spinner : ''}
                             </span>
                         </div>
                         <div class="p2p-data-row">
                             <span class="p2p-data-label">Сетевой статус</span>
-                            <span class="p2p-data-value" style="color: ${global.mode.includes('Active') ? '#7dbb00' : '#ffbb00'}">
-                                ${global.mode.includes('Active') ? 'Активный (Полный)' : 'Ограниченный (Загрузка)'}
+                            <span class="p2p-data-value" style="color: ${info.mode.includes('Active') ? '#7dbb00' : '#ffbb00'}">
+                                ${info.mode.includes('Active') ? 'Активный (Полный)' : 'Ограниченный (Загрузка)'}
                             </span>
                         </div>
                         <div class="p2p-data-row">
-                            <span class="p2p-data-label">Всего передано</span>
-                            <span class="p2p-data-value">${((global.uploaded || 0) / 1024 / 1024).toFixed(2)} MB</span>
+                            <span class="p2p-data-label">Отдано</span>
+                            <span class="p2p-data-value">${((info.uploadedGlobal || 0) / 1024 / 1024).toFixed(2)} MB</span>
+                        </div>
+                        <div class="p2p-data-row">
+                            <span class="p2p-data-label">Принято</span>
+                            <span class="p2p-data-value">${((info.downloadedGlobal || 0) / 1024 / 1024).toFixed(2)} MB</span>
                         </div>
                     ` : `
                         <div style="flex: 1; display: flex; align-items: center; justify-content: center; color: #555; font-style: italic; font-size: 13px; text-align: center;">

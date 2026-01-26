@@ -195,6 +195,7 @@ class PeerHandler {
         // Seeder Logic
         let hash = payload.toString('utf-8')
         let relPath = null
+        let fileId = null
 
         // Detect JSON Payload (Starts with '{')
         if (hash.startsWith('{')) {
@@ -202,6 +203,7 @@ class PeerHandler {
                 const data = JSON.parse(hash)
                 hash = data.h
                 relPath = data.p
+                fileId = data.id
             } catch (e) {
                 // Ignore JSON error, treat as raw hash? Or fail.
             }
@@ -222,6 +224,12 @@ class PeerHandler {
             if (path.isAbsolute(relPath)) relPath = null // Local path leakage
         }
 
+        if (fileId) {
+            fileId = fileId.trim()
+            if (fileId.includes('..')) fileId = null
+            if (path.isAbsolute(fileId)) fileId = null
+        }
+
         hash = hash.trim()
 
         let remoteIP = this.socket.remoteAddress || this.socket.remoteHost || (this.socket.rawStream && this.socket.rawStream.remoteAddress)
@@ -230,23 +238,25 @@ class PeerHandler {
 
         if (isDev) {
             console.log(`%c[P2PEngine] Connection Established with ${remoteIP}`, 'color: #00ff00; font-weight: bold')
-            console.debug(`[P2P Debug] Received Request ${reqId} for hash ${hash.substring(0, 8)}...`)
+            console.debug(`[P2P Debug] Received Request ${reqId} for hash ${hash.substring(0, 8)}... (ID: ${fileId || 'n/a'})`)
         }
 
-        if (this.engine.activeUploads >= MAX_CONCURRENT_UPLOADS) {
-            this.sendError(reqId, 'Busy')
-            return
-        }
-
-        // VULNERABILITY FIX 3: IP-based Slot Exhaustion
-        if (this.engine.getUploadCountForIP(remoteIP) >= 20) { // Max 20 slots per IP
-            this.sendError(reqId, 'Busy (IP Limit)')
-            return
-        }
-
-        // 1. Check if Upload is Enabled (Global OR Local Override)
         const isGlobalUpload = ConfigManager.getP2PUploadEnabled()
         const isLocalUpload = ConfigManager.getLocalOptimization() && this.engine.isLocalIP(remoteIP)
+
+        // Bypass limits for LAN peers
+        if (!isLocalUpload) {
+            if (this.engine.activeUploads >= MAX_CONCURRENT_UPLOADS) {
+                this.sendError(reqId, 'Busy')
+                return
+            }
+
+            // VULNERABILITY FIX 3: IP-based Slot Exhaustion
+            if (this.engine.getUploadCountForIP(remoteIP) >= 20) { // Max 20 slots per IP
+                this.sendError(reqId, 'Busy (IP Limit)')
+                return
+            }
+        }
 
         if (!isGlobalUpload && !isLocalUpload) {
             this.sendError(reqId, 'Disabled')
@@ -271,8 +281,8 @@ class PeerHandler {
         }
 
         // 3. Update Rate Limiter
-        const limitMbps = ConfigManager.getP2PUploadLimit()
-        // Convert Mbps to B/s: val * 1024 * 1024 / 8 === val * 131072
+        const limitMbps = isLocalUpload ? 10000 : ConfigManager.getP2PUploadLimit() // 10 Gbps for local
+        // Convert Mbps to B/s
         const limitBytes = limitMbps * 125000
         RateLimiter.update(limitBytes, true)
 
@@ -291,6 +301,11 @@ class PeerHandler {
             if (relPath) {
                 candidates.push(path.resolve(path.join(commonDir, relPath)))
                 candidates.push(path.resolve(path.join(dataDir, relPath)))
+            }
+
+            if (fileId) {
+                candidates.push(path.resolve(path.join(commonDir, fileId)))
+                candidates.push(path.resolve(path.join(dataDir, fileId)))
             }
 
             // Deduplicate and filter any invalid paths
@@ -390,6 +405,14 @@ class PeerHandler {
                 throttled.on('data', (chunk) => {
                     lastActivity = Date.now()
                     totalBytesSent += chunk.length
+
+                    const isLocal = this.engine.isLocalIP(remoteIP)
+                    if (isLocal) {
+                        this.engine.totalUploadedLocal = (this.engine.totalUploadedLocal || 0) + chunk.length
+                    } else {
+                        this.engine.totalUploadedGlobal = (this.engine.totalUploadedGlobal || 0) + chunk.length
+                    }
+
                     this.engine.totalUploaded = (this.engine.totalUploaded || 0) + chunk.length
                     this.sendData(reqId, chunk)
                 })
@@ -475,10 +498,10 @@ class PeerHandler {
         this.socket.write(header)
     }
 
-    sendRequest(reqId, hash, relPath = null) {
+    sendRequest(reqId, hash, relPath = null, fileId = null) {
         let payload
-        if (relPath) {
-            payload = b4a.from(JSON.stringify({ h: hash, p: relPath }), 'utf-8')
+        if (relPath || fileId) {
+            payload = b4a.from(JSON.stringify({ h: hash, p: relPath, id: fileId }), 'utf-8')
         } else {
             payload = b4a.from(hash, 'utf-8')
         }

@@ -24,12 +24,20 @@ class P2PEngine extends EventEmitter {
         this.peers = [] // Array of PeerHandler
         this.requests = new Map() // reqId -> { stream: Readable, timeout: Timer }
         this.reqIdCounter = 1
+        this.setMaxListeners(100)
+
+        this._discoveryPromise = null
         this.profile = NodeAdapter.getProfile()
         this.activeUploads = 0
         this.uploadCounts = new Map() // IP -> Count
 
         this.totalUploaded = 0
         this.totalDownloaded = 0
+
+        this.totalUploadedLocal = 0
+        this.totalUploadedGlobal = 0
+        this.totalDownloadedLocal = 0
+        this.totalDownloadedGlobal = 0
 
         // Batching
         this.batchQueue = new Map() // Peer -> Array<{ reqId, hash }>
@@ -99,11 +107,12 @@ class P2PEngine extends EventEmitter {
 
     isLocalIP(ip) {
         if (!ip) return false
-        // IPv4 Local Ranges: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
-        // IPv6 Link-Local: fe80::/10
-        if (ip.startsWith('::ffff:')) ip = ip.substring(7) // Unmap IPv4
+        if (ip.startsWith('::ffff:')) ip = ip.substring(7)
 
-        return /^(127\.|192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.|fe80::)/.test(ip) || ip === '::1'
+        // Comprehensive Local Check (Regex optimized for common ranges)
+        // Includes: 127.0.0.1, 192.168.x.x, 10.x.x.x, 172.16-31.x.x, 169.254.x.x (APIPA)
+        // Also: 100.64.0.0/10 (CGNAT/VPN), fe80:: (IPv6 LL), ::1 (IPv6 Loopback)
+        return /^(127\.|192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.|169\.254\.|100\.(6[4-9]|[7-9]\d|1[0-1]\d|12[0-7])\.|fe80::|::1$)/.test(ip) || ip === '::1'
     }
 
     async init() {
@@ -171,27 +180,40 @@ class P2PEngine extends EventEmitter {
                 }, 5000)
             })
 
-            this.swarm = new Hyperswarm({ dht: this.dht, local: true, mdns: true })
+            this.swarm = new Hyperswarm({
+                dht: this.dht,
+                local: true,
+                mdns: true,
+                maxPeers: this.profile.maxPeers * 2 // Give extra slots for local peers
+            })
 
             this.swarm.on('connection', (socket, info) => {
                 const peer = new PeerHandler(socket, this, info)
                 this.peers.push(peer)
                 this.emit('peer_added', peer)
 
-                let ip = socket.remoteAddress || (info.peer && info.peer.host) || (socket.rawStream && socket.rawStream.remoteAddress) || 'unknown'
+                let ip = (info.peer && info.peer.host) || socket.remoteAddress || (socket.rawStream && socket.rawStream.remoteAddress) || 'unknown'
                 if (ip.startsWith('::ffff:')) ip = ip.substring(7)
 
                 const isLocal = this.isLocalIP(ip)
                 const type = isLocal ? 'LOCAL (LAN)' : 'GLOBAL (WAN)'
                 const peerInfoStr = info.peer ? `${info.peer.host}:${info.peer.port}` : 'unknown'
 
-                console.log(`%c[P2PEngine] Connection Established: [${type}] ${ip} (Remote: ${peerInfoStr})`, 'color: #00ff00; font-weight: bold')
-                if (isDev) console.debug(`[P2P Debug] Connection Info:`, {
-                    publicKey: b4a.toString(info.publicKey, 'hex').substring(0, 8),
-                    reconnecting: info.reconnecting,
-                    client: info.client,
-                    proven: info.proven
-                })
+                if (ip === 'unknown' || isDev) {
+                    console.log(`%c[P2PEngine] Connection Established: [${type}] ${ip} (Remote: ${peerInfoStr})`, 'color: #00ff00; font-weight: bold')
+                }
+
+                if (isDev) {
+                    console.debug(`[P2P Debug] Peer added. CID: ${b4a.toString(info.publicKey, 'hex').substring(0, 8)}. Type: ${type}`)
+                    if (ip === 'unknown') {
+                        console.debug(`[P2P Debug] Full Connection Info for unknown:`, {
+                            peer: info.peer,
+                            client: info.client,
+                            proven: info.proven,
+                            local: info.local
+                        })
+                    }
+                }
 
                 if (this.peers.length > this.profile.maxPeers) {
                     if (isDev) console.debug(`[P2P Debug] Rejecting connection: Max peers reached (${this.profile.maxPeers})`)
@@ -225,36 +247,42 @@ class P2PEngine extends EventEmitter {
         }
     }
 
-    requestFile(hash, expectedSize = 0, relPath = null) {
+    requestFile(hash, expectedSize = 0, relPath = null, fileId = null) {
         const stream = new Readable({
             read() { }
         })
 
         // Use a persistent task to handle the request (allows waiting for peers)
-        this._handleRequestAsync(stream, hash, expectedSize, relPath)
+        this._handleRequestAsync(stream, hash, expectedSize, relPath, fileId)
 
         return stream
     }
 
-    async _handleRequestAsync(stream, hash, expectedSize, relPath) {
+    async _handleRequestAsync(stream, hash, expectedSize, relPath, fileId) {
         // If no peers, wait up to 5 seconds
         if (this.peers.length === 0) {
             if (isDev) console.debug(`[P2P Debug] No peers for ${hash.substring(0, 8)}. Waiting...`)
 
-            const hasPeer = await new Promise(resolve => {
-                const onConn = () => {
-                    this.off('peer_added', onConn)
-                    clearTimeout(t)
-                    resolve(true)
-                }
-                const t = setTimeout(() => {
-                    this.off('peer_added', onConn)
-                    resolve(false)
-                }, 5000)
-                this.once('peer_added', onConn)
-            })
+            if (!this._discoveryPromise) {
+                this._discoveryPromise = new Promise(resolve => {
+                    const onConn = () => {
+                        this.off('peer_added', onConn)
+                        clearTimeout(t)
+                        this._discoveryPromise = null
+                        resolve(true)
+                    }
+                    const t = setTimeout(() => {
+                        this.off('peer_added', onConn)
+                        this._discoveryPromise = null
+                        resolve(false)
+                    }, 5000)
+                    this.once('peer_added', onConn)
+                })
+            }
 
-            if (!hasPeer) {
+            const hasPeer = await this._discoveryPromise
+
+            if (!hasPeer && this.peers.length === 0) {
                 console.warn(`[P2PEngine] Request failed: No peers available for ${hash.substring(0, 8)} after 5s wait.`)
                 stream.emit('error', new Error('No peers available'))
                 return
@@ -271,12 +299,20 @@ class P2PEngine extends EventEmitter {
         for (const p of this.peers) {
             const weight = p.remoteWeight || 1
             const rtt = p.rtt || 200
+
             let speedFactor = 1.0
             if (p.lastTransferSpeed) {
                 speedFactor = Math.max(0.1, p.lastTransferSpeed / 102400)
                 speedFactor = Math.min(10.0, speedFactor)
             }
-            const score = (weight * weight) * (10000 / (rtt + 10)) * speedFactor
+
+            let lanFactor = 1.0
+            const ip = p.socket.remoteAddress || (p.info?.peer?.host)
+            if (this.isLocalIP(ip)) {
+                lanFactor = 100.0 // Massive priority for LAN
+            }
+
+            const score = (weight * weight) * (10000 / (rtt + 10)) * speedFactor * lanFactor
             if (score > maxScore) {
                 maxScore = score
                 bestPeer = p
@@ -314,7 +350,7 @@ class P2PEngine extends EventEmitter {
             }
         } else {
             if (isDev) console.debug(`[P2P Debug] Sending Request ${reqId} for ${hash.substring(0, 8)} to ${peer.socket.remoteAddress || 'unknown'}`)
-            peer.sendRequest(reqId, hash, relPath)
+            peer.sendRequest(reqId, hash, relPath, fileId)
         }
 
         stream.on('close', () => {
@@ -342,6 +378,14 @@ class P2PEngine extends EventEmitter {
             }
 
             req.bytesReceived = (req.bytesReceived || 0) + data.length
+
+            const isLocal = this.isLocalIP(senderPeer.socket.remoteAddress || senderPeer.info?.peer?.host)
+            if (isLocal) {
+                this.totalDownloadedLocal += data.length
+            } else {
+                this.totalDownloadedGlobal += data.length
+            }
+
             this.totalDownloaded += data.length
 
             // VULNERABILITY FIX ("Infinite File"): Size Check
@@ -510,13 +554,25 @@ class P2PEngine extends EventEmitter {
 
         const isEffectivelyPassive = this.profile.passive || !ConfigManager.getP2PUploadEnabled() || NodeAdapter.isCritical()
 
+        const localPeers = this.peers.filter(p => {
+            const ip = p.socket.remoteAddress || p.info?.peer?.host || (p.socket.rawStream && p.socket.rawStream.remoteAddress)
+            return this.isLocalIP(ip)
+        }).length
+        const globalPeers = Math.max(0, this.peers.length - localPeers)
+
         return {
             peers: this.peers.length,
+            localPeers,
+            globalPeers,
             topic: SWARM_TOPIC.toString('hex').substring(0, 8),
             requests: this.requests.size,
             uploads: this.activeUploads,
             uploaded: this.totalUploaded,
+            uploadedLocal: this.totalUploadedLocal || 0,
+            uploadedGlobal: this.totalUploadedGlobal || 0,
             downloaded: this.totalDownloaded || 0,
+            downloadedLocal: this.totalDownloadedLocal || 0,
+            downloadedGlobal: this.totalDownloadedGlobal || 0,
             dhtNodes: routingNodes,
             bootstrapNodes: Config.BOOTSTRAP_NODES.length,
             bootstrapped: this.dht && this.dht.bootstrapped,
