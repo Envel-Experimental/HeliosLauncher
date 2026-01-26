@@ -105,7 +105,7 @@ class P2PEngine extends EventEmitter {
                 }, 5000)
             })
 
-            this.swarm = new Hyperswarm({ dht: this.dht, local: false, mdns: false })
+            this.swarm = new Hyperswarm({ dht: this.dht, local: true, mdns: true })
 
             this.swarm.on('connection', (socket, info) => {
                 const peer = new PeerHandler(socket, this)

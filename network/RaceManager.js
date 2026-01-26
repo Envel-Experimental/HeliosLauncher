@@ -91,36 +91,30 @@ class RaceManager {
 
         // 3. Local P2P Task (UDP/LAN)
         // Wraps P2PManager.requestFile which returns a Promise<Stream>
-        // 3. Local P2P Task (UDP/LAN)
-        let localP2PStream = null
-        const localP2PController = new AbortController()
-        const localP2PTask = P2PManager.requestFile(hash, localP2PController.signal, relPath)
-            .then(stream => {
-                localP2PStream = stream
-                return { type: 'local_p2p', result: stream }
-            })
+        // 3. Local P2P Task (Legacy UDP/HTTP - DISABLED in favor of HyperDHT Local)
+        // const localP2PController = new AbortController()
+        // const localP2PTask = P2PManager.requestFile(hash, localP2PController.signal, relPath)
+        //     .then(stream => {
+        //         localP2PStream = stream
+        //         return { type: 'local_p2p', result: stream }
+        //     })
 
         try {
-            // Triple Race!
-            const winner = await Promise.any([httpTask, globalP2PTask, localP2PTask])
+            // Race: HTTP vs Global (now Universal) P2P
+            const winner = await Promise.any([httpTask, globalP2PTask])
 
             if (winner.type === 'global_p2p') {
                 abortController.abort() // Cancel HTTP
-                localP2PController.abort() // Cancel Local P2P
+                // localP2PController.abort() // Cancel Local P2P
 
                 this.p2pConsecutiveWins++
                 if (this.p2pConsecutiveWins >= 10) { NodeAdapter.boostWeight(); this.p2pConsecutiveWins = 0 }
-                return this._createVerifiedStream(winner.result, algo, hash, expectedSize)
-            } else if (winner.type === 'local_p2p') {
-                abortController.abort() // Cancel HTTP
-                if (globalP2PStream) globalP2PStream.destroy() // Cancel Global P2P
-                // console.log('[RaceManager] Local P2P Won')
                 return this._createVerifiedStream(winner.result, algo, hash, expectedSize)
             } else {
 
                 // HTTP Won
                 if (globalP2PStream) globalP2PStream.destroy() // Cancel Global P2P
-                localP2PController.abort() // Cancel Local P2P
+                // localP2PController.abort() // Cancel Local P2P
 
                 this.p2pConsecutiveWins = 0
                 // Standard HTTP: Return the native Response object directly.
@@ -132,7 +126,7 @@ class RaceManager {
             // All failed? Should not happen if HTTP is valid.
             if (globalP2PStream) globalP2PStream.destroy()
             abortController.abort()
-            localP2PController.abort() // Cancel Local P2P
+            // localP2PController.abort() // Cancel Local P2P
             console.error('[RaceManager] All primary transfer methods failed for ' + hash, err)
 
             // Retry with Mirrors defined in Config

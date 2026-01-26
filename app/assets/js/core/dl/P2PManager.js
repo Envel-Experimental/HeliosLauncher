@@ -348,7 +348,17 @@ class P2PManager extends EventEmitter {
                             // index.js overrides fetch? Or native? 
                             // Assuming Node environment (Electron Main).
                             // If `undici` or `node-fetch`, res.body is a stream.
-                            resolve(res.body);
+                            // Convert WebStream to NodeStream using Readable.fromWeb
+                            // This fixes the "sourceStream.pipe is not a function" error in RaceManager
+                            try {
+                                if (res.body.pipe) {
+                                    resolve(res.body);
+                                } else {
+                                    resolve(Readable.fromWeb(res.body));
+                                }
+                            } catch (streamErr) {
+                                reject(new Error('Stream conversion failed: ' + streamErr.message));
+                            }
                         } else {
                             reject(new Error('No body'));
                         }
