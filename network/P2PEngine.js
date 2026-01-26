@@ -12,6 +12,7 @@ const TrafficState = require('./TrafficState')
 
 // Fixed topic for the "Zombie" network
 const { SWARM_TOPIC_SEED } = require('./constants')
+const isDev = require('../app/assets/js/isdev')
 
 // Fixed topic for the "Zombie" network
 const SWARM_TOPIC = crypto.createHash('sha256').update(SWARM_TOPIC_SEED).digest()
@@ -105,12 +106,35 @@ class P2PEngine extends EventEmitter {
                 // console.error('[P2PEngine] HyperDHT Error:', err)
             })
 
+            if (isDev) {
+                this.dht.on('node', (node) => {
+                    console.debug(`[P2P Debug] DHT Node connected: ${node.host}:${node.port}`)
+                })
+                this.dht.on('warning', (err) => {
+                    console.debug(`[P2P Debug] DHT Warning:`, err.message)
+                })
+            }
+
             this.dht.on('ready', () => {
-                // const nodesCount = this.dht.nodes ? this.dht.nodes.count() : 0
-                // console.log('[P2PEngine] HyperDHT Ready. Nodes in Table:', nodesCount)
+                const nodesCount = this._getRoutingTableSize()
+                if (isDev) {
+                    console.debug(`[P2P Debug] DHT Ready. Bootstrapped: ${this.dht.bootstrapped}. Routing Nodes: ${nodesCount}`)
+                    // Deep inspect
+                    try {
+                        const internals = {
+                            bootstraps: this.dht.io?.clientSocket?.unref ? 'UDP Socket Active' : 'Unknown',
+                            concurrency: this.dht.concurrency,
+                            kbucket: this.dht.kbucket?.count()
+                        }
+                        console.debug('[P2P Debug] DHT Internals:', internals)
+                    } catch (e) {
+                        console.debug('[P2P Debug] Inspection error', e)
+                    }
+                }
 
                 setTimeout(() => {
                     const currentNodes = this._getRoutingTableSize()
+                    if (isDev) console.debug(`[P2P Debug] DHT Status after 5s. Bootstrapped: ${this.dht.bootstrapped}. Routing Nodes: ${currentNodes}`)
                     if (currentNodes === 0 && !this.dht.bootstrapped) {
                         console.warn(`[P2PEngine] [WARNING] No DHT connections established after 5s.`)
                     }
@@ -146,7 +170,14 @@ class P2PEngine extends EventEmitter {
             })
 
             await discovery.flushed()
-            // console.log(`[P2PEngine] Initialized. Announcing: ${shouldAnnounce}`)
+            console.log(`[P2PEngine] P2P Service Started. Debug Mode: ${isDev}`)
+            if (shouldAnnounce) {
+                if (ConfigManager.getLocalOptimization()) console.log(`[P2PEngine] Local Network: Active (Announcing via MDNS)`)
+                if (ConfigManager.getP2PUploadEnabled()) console.log(`[P2PEngine] Global Network: Active (Announcing via DHT)`)
+                else console.log(`[P2PEngine] Global Network: Downloads Only (Upload Disabled)`)
+            } else {
+                console.log(`[P2PEngine] Passive Mode (Client Only - Not Announcing)`)
+            }
 
         } catch (err) {
             console.error('[P2PEngine] Init failed:', err)
@@ -415,6 +446,7 @@ class P2PEngine extends EventEmitter {
     getNetworkInfo() {
         if (!this.totalUploaded) this.totalUploaded = 0
         const routingNodes = this._getRoutingTableSize()
+
         const isEffectivelyPassive = this.profile.passive || !ConfigManager.getP2PUploadEnabled() || NodeAdapter.isCritical()
 
         return {
@@ -424,8 +456,9 @@ class P2PEngine extends EventEmitter {
             uploads: this.activeUploads,
             uploaded: this.totalUploaded,
             downloaded: this.totalDownloaded || 0,
-            dhtNodes: routingNodes > 0 ? routingNodes : (this.dht && this.dht.bootstrapped ? Config.BOOTSTRAP_NODES.length : 0),
+            dhtNodes: routingNodes,
             bootstrapNodes: Config.BOOTSTRAP_NODES.length,
+            bootstrapped: this.dht && this.dht.bootstrapped,
             running: !!this.swarm,
             listening: !!this.swarm, // Added for UI compatibility
             mode: isEffectivelyPassive ? 'Passive (Leech)' : 'Active (Seed)',

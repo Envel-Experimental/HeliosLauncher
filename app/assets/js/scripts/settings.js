@@ -357,7 +357,7 @@ document.getElementById('settingsP2PInfoButton').onclick = async () => {
                         <div class="p2p-data-row">
                             <span class="p2p-data-label">DHT Узлы</span>
                             <span class="p2p-data-value" style="color: ${global.dhtNodes > 0 ? '#7dbb00' : '#ff4444'}">
-                                ${global.dhtNodes || 0} <span style="color: #666; margin-left: 4px; font-weight: normal;">(${global.bootstrapNodes})</span>
+                                ${global.dhtNodes || 0} <span style="color: ${global.bootstrapped ? '#7dbb00' : '#666'}; margin-left: 4px; font-weight: normal;">(${global.bootstrapNodes})</span>
                             </span>
                         </div>
                         <div class="p2p-data-row">
@@ -486,11 +486,7 @@ async function saveSettingsValues() {
     await ConfigManager.save()
 
     // Apply P2P Settings immediately
-    if (ConfigManager.getLocalOptimization()) {
-        SettingsP2PManager.start()
-    } else {
-        SettingsP2PManager.stop()
-    }
+
 
     // Notify Main Process to update P2P Engine
     ipcRenderer.invoke('p2p:configUpdate')

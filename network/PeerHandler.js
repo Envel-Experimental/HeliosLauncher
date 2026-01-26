@@ -10,6 +10,7 @@ const {
 } = require('./constants')
 
 const TrafficState = require('./TrafficState')
+const isDev = require('../app/assets/js/isdev')
 
 class PeerHandler {
     constructor(socket, engine) {
@@ -171,6 +172,10 @@ class PeerHandler {
         if (!/^([a-f0-9]{40}|[a-f0-9]{32})$/i.test(hash)) {
             this.sendError(reqId, 'Invalid hash')
             return
+        }
+
+        if (isDev) {
+            console.debug(`[P2P Debug] Received Request ${reqId} from ${this.socket.remoteAddress} for hash ${hash.substring(0, 8)}...`)
         }
 
         if (this.engine.activeUploads >= MAX_CONCURRENT_UPLOADS) {
