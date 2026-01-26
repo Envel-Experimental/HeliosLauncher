@@ -177,13 +177,21 @@ class P2PEngine extends EventEmitter {
                 const peer = new PeerHandler(socket, this, info)
                 this.peers.push(peer)
 
-                const ip = socket.remoteAddress
+                const ip = socket.remoteAddress || (info.peer && info.peer.host) || 'unknown'
                 const isLocal = this.isLocalIP(ip)
                 const type = isLocal ? 'LOCAL (LAN)' : 'GLOBAL (WAN)'
+                const peerInfoStr = info.peer ? `${info.peer.host}:${info.peer.port}` : 'unknown'
 
-                console.log(`[P2PEngine] Peer Connected: [${type}] ${ip}`)
+                console.log(`%c[P2PEngine] Connection Established: [${type}] ${ip} (Remote: ${peerInfoStr})`, 'color: #00ff00; font-weight: bold')
+                if (isDev) console.debug(`[P2P Debug] Connection Info:`, {
+                    publicKey: b4a.toString(info.publicKey, 'hex').substring(0, 8),
+                    reconnecting: info.reconnecting,
+                    client: info.client,
+                    proven: info.proven
+                })
 
                 if (this.peers.length > this.profile.maxPeers) {
+                    if (isDev) console.debug(`[P2P Debug] Rejecting connection: Max peers reached (${this.profile.maxPeers})`)
                     socket.destroy()
                     return
                 }
@@ -198,6 +206,12 @@ class P2PEngine extends EventEmitter {
                 server: shouldAnnounce,
                 client: true
             })
+
+            if (isDev) {
+                discovery.on('peer', (peer) => {
+                    console.debug(`[P2P Debug] Peer Found on Swarm: ${peer.host}:${peer.port} (Referrer: ${peer.referrer ? peer.referrer.host : 'none'})`)
+                })
+            }
 
             await discovery.flushed()
             console.log(`[P2PEngine] P2P Service Started. Debug Mode: ${isDev}`)
@@ -220,11 +234,14 @@ class P2PEngine extends EventEmitter {
         })
 
         if (this.peers.length === 0) {
+            console.warn(`[P2PEngine] Request failed: No peers available for ${hash.substring(0, 8)}`)
             process.nextTick(() => {
                 stream.emit('error', new Error('No peers available'))
             })
             return stream
         }
+
+        if (isDev) console.debug(`[P2P Debug] Requesting ${hash.substring(0, 8)}. Peers available: ${this.peers.length}`)
 
         const reqId = this.reqIdCounter++
         if (this.reqIdCounter > 4294967295) this.reqIdCounter = 1

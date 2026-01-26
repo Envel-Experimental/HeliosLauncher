@@ -216,13 +216,19 @@ class PeerHandler {
 
         // Sanitize relPath (Allow a-z, 0-9, /, ., _, -)
         if (relPath) {
+            relPath = relPath.trim()
             // Basic sanitization: No '..'
             if (relPath.includes('..')) relPath = null // Security Risk
             if (path.isAbsolute(relPath)) relPath = null // Local path leakage
         }
 
+        hash = hash.trim()
+
+        const remoteIP = this.socket.remoteAddress || this.socket.remoteHost || (this.socket.rawStream && this.socket.rawStream.remoteAddress) || 'unknown'
+
         if (isDev) {
-            console.debug(`[P2P Debug] Received Request ${reqId} from ${this.socket.remoteAddress} for hash ${hash.substring(0, 8)}...`)
+            console.log(`%c[P2PEngine] Connection Established with ${remoteIP}`, 'color: #00ff00; font-weight: bold')
+            console.debug(`[P2P Debug] Received Request ${reqId} for hash ${hash.substring(0, 8)}...`)
         }
 
         if (this.engine.activeUploads >= MAX_CONCURRENT_UPLOADS) {
@@ -231,7 +237,6 @@ class PeerHandler {
         }
 
         // VULNERABILITY FIX 3: IP-based Slot Exhaustion
-        const remoteIP = this.socket.remoteAddress || 'unknown'
         if (this.engine.getUploadCountForIP(remoteIP) >= 20) { // Max 20 slots per IP
             this.sendError(reqId, 'Busy (IP Limit)')
             return
@@ -270,32 +275,58 @@ class PeerHandler {
         RateLimiter.update(limitBytes, true)
 
         try {
-            const commonDir = ConfigManager.getCommonDirectory()
-            const dataDir = ConfigManager.getDataDirectory()
+            const commonDir = ConfigManager.getCommonDirectory().trim()
+            const dataDir = ConfigManager.getDataDirectory().trim()
 
-            // Candidate Paths
+            // Candidate Paths (Normalized)
             const candidates = [
-                path.join(commonDir, 'assets', 'objects', hash.substring(0, 2), hash), // Standard
-                path.join(dataDir, 'assets', 'objects', hash.substring(0, 2), hash),   // Legacy/Root
-                path.join(dataDir, 'common', 'assets', 'objects', hash.substring(0, 2), hash) // Explicit Common
+                path.resolve(path.join(commonDir, 'assets', 'objects', hash.substring(0, 2), hash)),
+                path.resolve(path.join(dataDir, 'assets', 'objects', hash.substring(0, 2), hash)),
+                path.resolve(path.join(dataDir, 'common', 'assets', 'objects', hash.substring(0, 2), hash)),
+                path.resolve(path.join(dataDir, 'common', 'common', 'assets', 'objects', hash.substring(0, 2), hash)) // Extra fallback for nested common
             ]
 
             if (relPath) {
-                // e.g. libraries/com/example/lib.jar
-                candidates.push(path.join(commonDir, relPath))
-                candidates.push(path.join(dataDir, relPath))
+                candidates.push(path.resolve(path.join(commonDir, relPath)))
+                candidates.push(path.resolve(path.join(dataDir, relPath)))
             }
 
+            // Deduplicate and filter any invalid paths
+            const uniqueCandidates = [...new Set(candidates)].filter(p => p && p.length > 5)
+
             let foundPath = null
-            for (const p of candidates) {
-                if (fs.existsSync(p)) {
-                    foundPath = p
-                    break
+            for (const p of uniqueCandidates) {
+                try {
+                    if (fs.existsSync(p)) {
+                        foundPath = p
+                        break
+                    }
+                } catch (e) {
+                    if (isDev) console.error(`[P2P Debug] Error checking path ${p}:`, e.message)
                 }
             }
 
             if (isDev && !foundPath) {
-                console.debug(`[P2P Debug] File ${hash.substring(0, 8)} not found in candidates:`, candidates)
+                console.debug(`[P2P Debug] File ${hash.substring(0, 8)} not found. Searched:`, uniqueCandidates)
+
+                // Diagnosis: Let's see what's actually in the folders we checked
+                const parent = path.dirname(uniqueCandidates[0])
+                try {
+                    if (fs.existsSync(parent)) {
+                        const files = fs.readdirSync(parent)
+                        console.debug(`[P2P Debug] Parent folder ${parent} contains ${files.length} files.`)
+                        if (files.includes(hash)) {
+                            console.error(`[P2P Debug] CRITICAL: fs.existsSync failed but file IS in readdir! Path: ${uniqueCandidates[0]}`)
+                        }
+                    } else {
+                        console.debug(`[P2P Debug] Parent folder MISSING: ${parent}`)
+                        // Check one level up (objects)
+                        const objDir = path.dirname(parent)
+                        if (fs.existsSync(objDir)) {
+                            console.debug(`[P2P Debug] But 'objects' dir exists: ${objDir}`)
+                        }
+                    }
+                } catch (e) { }
             }
 
             if (foundPath) {
