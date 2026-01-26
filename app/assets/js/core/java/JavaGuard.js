@@ -427,7 +427,8 @@ async function getLinuxDiscoverers(dataDir) {
 async function win32DriveMounts() {
     try {
         const { stdout } = await execAsync('gdr -psp FileSystem | select -eXp root | ConvertTo-Json', { shell: 'powershell.exe' });
-        return JSON.parse(stdout);
+        const res = JSON.parse(stdout);
+        return Array.isArray(res) ? res : [res];
     }
     catch (error) {
         return ['C:\\'];

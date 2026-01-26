@@ -47,6 +47,9 @@ function switchView(current, next, currentFadeTime = 500, nextFadeTime = 500, on
         await onCurrentFade()
         $(`${next}`).fadeIn(nextFadeTime, async () => {
             await onNextFade()
+            if (next === VIEWS.landing) {
+                checkAndShowP2PPrompt()
+            }
         })
     })
 }
@@ -132,7 +135,9 @@ async function showMainUI(data) {
         } else {
             if (isLoggedIn) {
                 currentView = VIEWS.landing
-                $(VIEWS.landing).fadeIn(1000)
+                $(VIEWS.landing).fadeIn(1000, () => {
+                    checkAndShowP2PPrompt()
+                })
             } else {
                 loginOptionsCancelEnabled(false)
                 loginOptionsViewOnLoginSuccess = VIEWS.landing
@@ -532,3 +537,40 @@ async function devModeToggle() {
 window.addEventListener('beforeunload', () => {
     P2PManager.stop()
 })
+
+/**
+ * Check if the P2P prompt should be showed.
+ */
+function checkAndShowP2PPrompt() {
+    if (!ConfigManager.getP2PPromptShown() && !isOverlayVisible()) {
+        const title = Lang.queryJS('uibinder.p2p.promptTitle')
+        const desc = Lang.queryJS('uibinder.p2p.promptDesc')
+        const enableBtn = Lang.queryJS('uibinder.p2p.enableButton')
+        const disableBtn = Lang.queryJS('uibinder.p2p.disableButton')
+        const settingsNotice = Lang.queryJS('uibinder.p2p.settingsNotice')
+
+        setOverlayContent(title, desc + '<br><br><span style="color: #aaa; font-size: 12px;">' + settingsNotice + '</span>', enableBtn, disableBtn)
+
+        setOverlayHandler(() => {
+            ConfigManager.setP2PPromptShown(true)
+            ConfigManager.setLocalOptimization(true)
+            ConfigManager.setGlobalOptimization(true)
+            ConfigManager.setP2PUploadEnabled(true)
+            ConfigManager.save()
+            toggleOverlay(false)
+            P2PManager.start()
+        })
+
+        setMiddleButtonHandler(() => {
+            ConfigManager.setP2PPromptShown(true)
+            ConfigManager.setLocalOptimization(false)
+            ConfigManager.setGlobalOptimization(false)
+            ConfigManager.setP2PUploadEnabled(false)
+            ConfigManager.save()
+            toggleOverlay(false)
+            P2PManager.stop()
+        })
+
+        toggleOverlay(true, false)
+    }
+}

@@ -3,19 +3,23 @@ const ConfigManager = require('../../../../../../../app/assets/js/configmanager'
 
 jest.mock('../../../../../../../app/assets/js/configmanager', () => ({
     getCommonDirectory: jest.fn(() => '/mock/common'),
-    getLocalOptimization: jest.fn(() => true)
+    getLauncherDirectory: jest.fn(() => '/mock/launcher'),
+    getLocalOptimization: jest.fn(() => true),
+    getP2PUploadEnabled: jest.fn(() => true),
+    getP2PUploadLimit: jest.fn(() => 5)
 }));
 
 jest.mock('dgram', () => ({
     createSocket: jest.fn(() => ({
         on: jest.fn(),
-        bind: jest.fn((port, address, cb) => {
-            if (typeof address === 'function') address();
-            if (typeof cb === 'function') cb();
+        bind: jest.fn((...args) => {
+            const cb = args.find(arg => typeof arg === 'function');
+            if (cb) cb();
         }),
         setBroadcast: jest.fn(),
         addMembership: jest.fn(),
         setMulticastTTL: jest.fn(),
+        setMulticastInterface: jest.fn(), // Added missing mock
         send: jest.fn(),
         close: jest.fn()
     }))
@@ -25,11 +29,12 @@ jest.mock('http', () => ({
     createServer: jest.fn(() => ({
         on: jest.fn(),
         listen: jest.fn((...args) => {
-            const cb = args[args.length - 1];
-            if (typeof cb === 'function') cb();
+        const cb = args.find(arg => typeof arg === 'function');
+        if (cb) cb();
         }),
         address: jest.fn(() => ({ port: 12345 })),
-        close: jest.fn()
+        close: jest.fn(),
+        maxConnections: 0 // Mock property assignment
     }))
 }));
 
@@ -39,15 +44,15 @@ describe('P2PManager', () => {
         jest.clearAllMocks();
     });
 
-    test('should start server and discovery', () => {
-        P2PManager.start();
+    test('should start server and discovery', async () => {
+        await P2PManager.start();
         expect(P2PManager.started).toBe(true);
         expect(require('http').createServer).toHaveBeenCalled();
         expect(require('dgram').createSocket).toHaveBeenCalled();
     });
 
-    test('should handle discovery message', () => {
-        P2PManager.start();
+    test('should handle discovery message', async () => {
+        await P2PManager.start();
         // Get the socket instance created by P2PManager
         const createSocketMock = require('dgram').createSocket;
         // The most recent call created the socket used by P2PManager

@@ -78,6 +78,7 @@ async function downloadFile(asset, onProgress) {
         // Construct headers
         const headers = new Headers();
         if (asset.size) headers.append('X-Expected-Size', asset.size.toString());
+        if (asset.path) headers.append('X-File-Path', asset.path);
 
         // Use RaceManager
         const req = new Request(url, { headers });

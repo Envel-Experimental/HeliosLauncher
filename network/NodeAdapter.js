@@ -79,7 +79,8 @@ class NodeAdapter {
     downgradeToLow() {
         if (this.profile.name !== 'LOW') {
             console.log('[NodeAdapter] Downgrading to LOW profile (Passive Mode) due to poor upload speed.')
-            this.profile = { ...PROFILES.LOW }
+            // Object.assign to preserve reference held by consumers
+            Object.assign(this.profile, PROFILES.LOW)
             // Ensure we don't announce if we were penalized heavily before?
             // LOW profile has default weight 1.
             return true

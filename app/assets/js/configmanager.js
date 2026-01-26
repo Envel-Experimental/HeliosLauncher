@@ -104,11 +104,12 @@ const DEFAULT_CONFIG = {
             totalRAMWarningShown: false
         },
         deliveryOptimization: {
-            localOptimization: true,
-            globalOptimization: true,
-            p2pUploadEnabled: true,
+            localOptimization: false,
+            globalOptimization: false,
+            p2pUploadEnabled: false,
             p2pUploadLimit: 5 // Mbps
-        }
+        },
+        p2pPromptShown: false
     },
     newsCache: {
         date: null,
@@ -131,11 +132,17 @@ let config = null
  * Save the current configuration to a file.
  */
 exports.save = async function () {
+    // Generate a unique temporary path to avoid race conditions (ENOENT on rename)
+    // when multiple processes (Main/Renderer) save simultaneously.
+    const tempPath = configPath + '.' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2) + '.tmp'
     return await retry(
-        () => fs.writeFile(configPath, JSON.stringify(config, null, 4), 'UTF-8'),
+        async () => {
+            await fs.writeFile(tempPath, JSON.stringify(config, null, 4), 'UTF-8')
+            await fs.move(tempPath, configPath, { overwrite: true })
+        },
         3,
         1000,
-        err => err.code === 'EPERM' || err.code === 'EBUSY'
+        err => err.code === 'EPERM' || err.code === 'EBUSY' || err.code === 'ENOENT'
     )
 }
 
@@ -917,4 +924,22 @@ exports.getP2PUploadLimit = function (def = false) {
  */
 exports.setP2PUploadLimit = function (limit) {
     config.settings.deliveryOptimization.p2pUploadLimit = Number.parseInt(limit)
+}
+
+/**
+ * Check if the P2P prompt has been shown.
+ *
+ * @returns {boolean} Whether or not the P2P prompt has been shown.
+ */
+exports.getP2PPromptShown = function () {
+    return config.p2pPromptShown
+}
+
+/**
+ * Set the status of whether or not the P2P prompt has been shown.
+ *
+ * @param {boolean} shown Whether or not the P2P prompt has been shown.
+ */
+exports.setP2PPromptShown = function (shown) {
+    config.p2pPromptShown = shown
 }

@@ -5,7 +5,7 @@ const semver = require('semver')
 const DropinModUtil = require('./assets/js/dropinmodutil')
 const SettingsP2PManager = require('./assets/js/core/dl/P2PManager')
 const { MSFT_OPCODE, MSFT_REPLY_TYPE, MSFT_ERROR } = require('./assets/js/ipcconstants')
-const { validateSelectedJvm, ensureJavaDirIsRoot } = require('./assets/js/core/java/JavaGuard')
+var { validateSelectedJvm, ensureJavaDirIsRoot } = require('./assets/js/core/java/JavaGuard')
 
 const settingsState = {
     invalid: new Set()

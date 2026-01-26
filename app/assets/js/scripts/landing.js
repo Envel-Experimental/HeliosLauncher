@@ -14,9 +14,12 @@ const { FullRepair } = require('./assets/js/core/dl/FullRepair')
 const { DistributionIndexProcessor } = require('./assets/js/core/dl/DistributionIndexProcessor')
 const { MojangIndexProcessor } = require('./assets/js/core/dl/MojangIndexProcessor')
 const { downloadFile } = require('./assets/js/core/dl/DownloadEngine')
-const {
+var {
     latestOpenJDK,
-    extractJdk
+    extractJdk,
+    discoverBestJvmInstallation,
+    ensureJavaDirIsRoot,
+    javaExecFromRoot
 } = require('./assets/js/core/java/JavaGuard')
 const P2PModule = require('./assets/js/core/dl/P2PManager')
 
