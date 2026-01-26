@@ -107,6 +107,7 @@ class PeerPersistence {
         const entry = {
             ip: peer.ip,
             port: peer.port,
+            publicKey: peer.publicKey, // Added for direct connection
             lastSeen: Date.now(),
             score: peer.score || 0,
             avgSpeed: peer.avgSpeed || 0

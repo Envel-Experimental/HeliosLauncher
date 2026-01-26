@@ -4,7 +4,9 @@ module.exports = {
     // Array of host:port strings for private RF-based VPS fleet
     BOOTSTRAP_NODES: [
         { host: '195.201.148.171', port: 49737, publicKey: '535c2283731986026127f7a9f220e2606779fbaf99bc2ceb869bcdc1b00245e8' },
-        { host: '89.23.113.35', port: 49737, publicKey: 'd29747a47fd8a67bcebdd2b0c6668700f41eb4ff809676346551e17512642439' }
+        { host: '89.23.113.35', port: 49737, publicKey: 'd29747a47fd8a67bcebdd2b0c6668700f41eb4ff809676346551e17512642439' },
+        // Public Fallback (if private swarm fails) - HyperDHT Default
+        { host: 'node1.hyperdht.org', port: 49737 }
     ],
     BOOTSTRAP_URL: 'https://helios-launcher.com/bootstrap.json',
 

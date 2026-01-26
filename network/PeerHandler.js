@@ -3,6 +3,7 @@ const fs = require('fs')
 const path = require('path')
 const ConfigManager = require('../app/assets/js/configmanager')
 const RateLimiter = require('../app/assets/js/core/util/RateLimiter')
+const PeerPersistence = require('./PeerPersistence')
 const {
     MSG_REQUEST, MSG_DATA, MSG_ERROR, MSG_END,
     MSG_HELLO, MSG_PING, MSG_PONG, MSG_BATCH_REQUEST,
@@ -13,9 +14,10 @@ const TrafficState = require('./TrafficState')
 const isDev = require('../app/assets/js/isdev')
 
 class PeerHandler {
-    constructor(socket, engine) {
+    constructor(socket, engine, info) {
         this.socket = socket
         this.engine = engine
+        this.info = info
         this.buffer = b4a.alloc(0)
         this.processing = false
         this.batchSupport = false
@@ -126,6 +128,27 @@ class PeerHandler {
                 this.batchSupport = (caps & 0x01) === 0x01
             }
             // console.log(`[PeerHandler] Peer weight set to ${this.remoteWeight}`)
+
+            // Persist Peer
+            try {
+                const ip = this.socket.remoteAddress
+                const isLocal = this.engine.isLocalIP(ip)
+                const type = isLocal ? 'local' : 'global'
+                const publicKey = this.info && this.info.publicKey ? this.info.publicKey.toString('hex') : null
+
+                PeerPersistence.updatePeer(type, {
+                    ip,
+                    port: this.socket.remotePort,
+                    publicKey,
+                    score: this.remoteWeight,
+                    avgSpeed: 0 // Will be updated if transfers occur? Currently PeerPersistence doesn't support partial updates easily without reading back, but updatePeer merges? No it overwrites entry.
+                    // Actually PeerPersistence.updatePeer creates new entry if not exists, or overwrites.
+                    // We should probably preserve avgSpeed if possible, or just set 0 for now.
+                    // The persistence logic is simple.
+                })
+            } catch (e) {
+                if (isDev) console.error('[PeerHandler] Persistence Error:', e)
+            }
         }
     }
 

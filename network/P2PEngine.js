@@ -9,6 +9,7 @@ const NodeAdapter = require('./NodeAdapter')
 const ConfigManager = require('../app/assets/js/configmanager')
 const PeerHandler = require('./PeerHandler')
 const TrafficState = require('./TrafficState')
+const PeerPersistence = require('./PeerPersistence')
 
 // Fixed topic for the "Zombie" network
 const { SWARM_TOPIC_SEED } = require('./constants')
@@ -51,11 +52,24 @@ class P2PEngine extends EventEmitter {
             this.stop()
             return
         }
-        if (this.swarm) {
-            this.reconfigureSwarm()
-            return
-        }
+
+        if (this.swarm) return // Already running
+
+        await PeerPersistence.load()
         await this.init()
+
+        // Pre-warming: Add known peers to DHT routing table immediately
+        const knownPeers = PeerPersistence.getPeers('global')
+        if (knownPeers.length > 0) {
+            console.log(`[P2PEngine] Pre-warming: Adding ${knownPeers.length} persistent peers to DHT...`)
+            for (const p of knownPeers) {
+                if (this.dht) {
+                    this.dht.addNode({ host: p.ip, port: p.port })
+                }
+            }
+        }
+
+        this.reconfigureSwarm()
     }
 
     async stop() {
@@ -144,7 +158,7 @@ class P2PEngine extends EventEmitter {
             this.swarm = new Hyperswarm({ dht: this.dht, local: true, mdns: true })
 
             this.swarm.on('connection', (socket, info) => {
-                const peer = new PeerHandler(socket, this)
+                const peer = new PeerHandler(socket, this, info)
                 this.peers.push(peer)
 
                 const ip = socket.remoteAddress
