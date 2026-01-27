@@ -438,9 +438,11 @@
                     style="background: rgba(255,255,255,0.1); border: none; color: white; padding: 8px 16px; border-radius: 4px; cursor: pointer; transition: 0.2s;"><%-
                         lang('settings.p2pNetworkInfoButton') %></button>
             </div>
-            <div class="settingsFieldContainer" style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
+            <div class="settingsFieldContainer"
+                style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
                 <div class="settingsFieldLeft">
-                    <span class="settingsFieldTitle" style="color: #ffcc00;"><%- lang('settings.p2pOnlyModeTitle') %></span>
+                    <span class="settingsFieldTitle" style="color: #ffcc00;"><%- lang('settings.p2pOnlyModeTitle')
+                            %></span>
                     <span class="settingsFieldDesc" style="color: #aaa;"><%- lang('settings.p2pOnlyModeDesc') %></span>
                 </div>
                 <div class="settingsFieldRight">
@@ -523,6 +525,23 @@
                     </div>
                     <div id="settingsUpdateActionContainer">
                         <button id="settingsUpdateActionButton"><%- lang('settings.checkForUpdates') %></button>
+                    </div>
+                </div>
+            </div>
+            <div id="settingsFactoryResetContainer" style="margin-top: 20px;">
+                <div class="settingsFieldContainer"
+                    style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
+                    <div class="settingsFieldLeft">
+                        <span class="settingsFieldTitle" style="color: #ff4444;"><%- lang('settings.factoryReset.title')
+                                %></span>
+                        <span class="settingsFieldDesc" style="color: #aaa;"><%- lang('settings.factoryReset.desc')
+                                %></span>
+                    </div>
+                    <div class="settingsFieldRight">
+                        <button id="settingsFactoryResetButton"
+                            style="background: rgba(255, 68, 68, 0.2); border: 1px solid rgba(255, 68, 68, 0.4); color: #ffcccc; padding: 8px 16px; border-radius: 4px; cursor: pointer; transition: 0.2s;">
+                            <%- lang('settings.factoryReset.button') %>
+                        </button>
                     </div>
                 </div>
             </div>

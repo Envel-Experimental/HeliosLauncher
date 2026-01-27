@@ -1,6 +1,7 @@
-// Requirements
 const os = require('os')
 const semver = require('semver')
+const fs = require('fs-extra')
+const sysPath = require('path')
 
 const DropinModUtil = require('./assets/js/dropinmodutil')
 
@@ -1911,6 +1912,103 @@ async function prepareSettings(first = false) {
     prepareAccountsTab()
     await prepareJavaTab()
     prepareAboutTab()
+}
+
+/**
+ * Bind Factory Reset Buttons
+ */
+function bindFactoryReset() {
+    const btn = document.getElementById('settingsFactoryResetButton')
+    if (btn) {
+        btn.onclick = () => {
+            setOverlayContent(
+                Lang.query('ejs.settings.factoryReset.confirmTitle'),
+                Lang.query('ejs.settings.factoryReset.confirmDesc'),
+                Lang.query('ejs.settings.factoryReset.confirmButton'),
+                Lang.query('ejs.settings.factoryReset.cancelButton')
+            )
+            setOverlayHandler(() => {
+                toggleOverlay(false)
+                factoryReset()
+            })
+            setMiddleButtonHandler(() => {
+                toggleOverlay(false)
+            })
+            toggleOverlay(true)
+        }
+    }
+}
+
+bindFactoryReset()
+
+async function factoryReset() {
+    const dataDir = ConfigManager.getDataDirectory()
+
+    // Whitelist of files/folders to KEEP.
+    // Everything else will be deleted.
+    const whitelist = [
+        'options.txt',
+        'optionsof.txt',
+        'servers.dat',
+        'servers.dat_old',
+        'usercache.json',
+        'launcher_profiles.json',
+        'saves',
+        'screenshots',
+        'resourcepacks',
+        'shaderpacks',
+        'logs',
+        'schematics'
+    ]
+
+    try {
+        const files = await fs.readdir(dataDir)
+
+        // Show loading
+        setOverlayContent(
+            Lang.query('ejs.settings.factoryReset.title'),
+            'Processing...',
+            ''
+        )
+        toggleOverlay(true)
+
+        for (const file of files) {
+            if (whitelist.includes(file)) {
+                continue
+            }
+
+            const fullPath = sysPath.join(dataDir, file)
+            try {
+                await fs.remove(fullPath)
+                console.log('Factory Reset: Deleted', fullPath)
+            } catch (err) {
+                console.warn('Factory Reset: Failed to delete', fullPath, err)
+            }
+        }
+
+        // Success & Restart
+        setOverlayContent(
+            Lang.query('ejs.settings.factoryReset.title'),
+            Lang.query('ejs.settings.factoryReset.success'),
+            Lang.queryJS('uicore.update.updateButton') // Reuse 'Update' button style/text or simple OK
+        )
+        // Force restart
+        setTimeout(() => {
+            remote.app.relaunch()
+            remote.app.exit(0)
+        }, 1500)
+
+    } catch (err) {
+        console.error('Factory Reset Error', err)
+        setOverlayContent(
+            Lang.query('ejs.settings.factoryReset.title'),
+            Lang.query('ejs.settings.factoryReset.failed', { error: err.message }),
+            Lang.queryJS('settings.msftLogin.okButton')
+        )
+        setOverlayHandler(() => {
+            toggleOverlay(false)
+        })
+    }
 }
 
 // Prepare the settings UI on startup.
