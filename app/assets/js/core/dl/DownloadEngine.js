@@ -69,8 +69,8 @@ async function downloadFile(asset, onProgress) {
     if (!asset || !asset.path) {
         throw new Error('Asset or asset path is null or undefined.');
     }
-    const { url, path, algo, hash } = asset;
-    const decodedPath = ensureDecodedPath(path);
+    const { url, path: assetPath, algo, hash } = asset;
+    const decodedPath = ensureDecodedPath(assetPath);
     const CONFIG_EXTENSIONS = ['.txt', '.json', '.yml', '.yaml', '.dat'];
 
     // Initial check (Optimistic)
@@ -110,9 +110,9 @@ async function downloadFile(asset, onProgress) {
             // Construct headers
             const headers = new Headers();
             if (asset.size) headers.append('X-Expected-Size', asset.size.toString());
-            if (asset.path) {
+            if (assetPath) {
                 const dataDir = ConfigManager.getDataDirectory().trim();
-                const relPath = path.relative(dataDir, asset.path).replace(/\\/g, '/');
+                const relPath = path.relative(dataDir, assetPath).replace(/\\/g, '/');
                 headers.append('X-File-Path', relPath);
             }
             if (asset.id) headers.append('X-File-Id', asset.id);
