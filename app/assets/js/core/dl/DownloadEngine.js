@@ -158,6 +158,7 @@ async function downloadFile(asset, onProgress) {
             if (await validateLocalFile(decodedPath, algo, hash)) {
                 return; // Success!
             } else {
+                if (ConfigManager.isDev()) console.error(`[DownloadEngine] Validation failed for ${asset.id}. File size: ${loaded} / ${total}`)
                 throw new Error('Validation failed');
             }
 

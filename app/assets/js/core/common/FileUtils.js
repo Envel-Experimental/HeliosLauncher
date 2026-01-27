@@ -11,7 +11,7 @@ async function validateLocalFile(filePath, algo, hash) {
     if (!hash) return true; // No hash to check
     try {
         await fs.access(filePath);
-    } catch(e) {
+    } catch (e) {
         return false;
     }
 
@@ -28,12 +28,16 @@ async function validateLocalFile(filePath, algo, hash) {
 
         hashStream.on('error', err => {
             // Algorithm error
-             resolve(false);
+            resolve(false);
         });
 
         stream.pipe(hashStream).on('finish', () => {
             const computedHash = hashStream.read().toString('hex');
-            resolve(computedHash === hash.toLowerCase());
+            const isValid = computedHash === hash.toLowerCase();
+            if (!isValid) {
+                console.warn(`[FileUtils] Validation Failed for ${filePath}\n  Expected: ${hash}\n  Actual:   ${computedHash}`);
+            }
+            resolve(isValid);
         });
     });
 }
@@ -69,7 +73,7 @@ async function extractZip(archivePath, onEntry) {
 
     zip.extractAllTo(path.dirname(archivePath), true);
 
-    if(onEntry) {
+    if (onEntry) {
         const entriesObj = {};
         entries.forEach(e => entriesObj[e.entryName] = e);
         await onEntry({ entries: () => entriesObj });
@@ -80,7 +84,7 @@ async function extractTarGz(archivePath, onEntry) {
     const destDir = path.dirname(archivePath);
     await execAsync(`tar -xzf "${archivePath}" -C "${destDir}"`);
 
-    if(onEntry) {
+    if (onEntry) {
         const { stdout } = await execAsync(`tar -tf "${archivePath}"`);
         const lines = stdout.split('\n');
         await onEntry({ name: lines[0] });

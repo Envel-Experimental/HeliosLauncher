@@ -239,9 +239,10 @@ class P2PEngine extends EventEmitter {
 
             await discovery.flushed()
             console.log(`[P2PEngine] P2P Service Started. Debug Mode: ${isDev}`)
+            console.log(`[P2PEngine] Active Data Directory: ${ConfigManager.getDataDirectory()}`)
+            console.log(`[P2PEngine] Active Common Directory: ${ConfigManager.getCommonDirectory()}`)
             if (isDev) {
-                console.debug(`[P2P Debug] Active Data Directory: ${ConfigManager.getDataDirectory()}`)
-                console.debug(`[P2P Debug] Active Common Directory: ${ConfigManager.getCommonDirectory()}`)
+                // console.debug(`[P2P Debug] Extended Debug Info...`)
             }
             if (shouldAnnounce) {
                 if (ConfigManager.getLocalOptimization()) console.log(`[P2PEngine] Local Network: Active (Announcing via MDNS)`)

@@ -1,5 +1,6 @@
 const b4a = require('b4a')
 const fs = require('fs')
+const os = require('os')
 const path = require('path')
 const ConfigManager = require('../app/assets/js/configmanager')
 const RateLimiter = require('../app/assets/js/core/util/RateLimiter')
@@ -295,7 +296,7 @@ class PeerHandler {
                 path.resolve(path.join(commonDir, 'assets', 'objects', hash.substring(0, 2), hash)),
                 path.resolve(path.join(dataDir, 'assets', 'objects', hash.substring(0, 2), hash)),
                 path.resolve(path.join(dataDir, 'common', 'assets', 'objects', hash.substring(0, 2), hash)),
-                path.resolve(path.join(dataDir, 'common', 'common', 'assets', 'objects', hash.substring(0, 2), hash)) // Extra fallback for nested common
+                path.resolve(path.join(dataDir, 'common', 'common', 'assets', 'objects', hash.substring(0, 2), hash))
             ]
 
             if (relPath) {
@@ -315,16 +316,16 @@ class PeerHandler {
                 try {
                     if (fs.existsSync(instancesDir)) {
                         const instances = fs.readdirSync(instancesDir)
-                        if (isDev) console.debug(`[P2P Debug] Scanning instances in ${instancesDir}. Found ${instances.length} entries.`)
+                        if (isDev) console.debug(`[P2P Debug] Scanning ${instances.length} instances for ${relPath}`)
                         for (const inst of instances) {
                             const instPath = path.join(instancesDir, inst)
                             if (fs.statSync(instPath).isDirectory()) {
-                                const fullInstPath = path.resolve(instPath, relPath)
-                                candidates.push(fullInstPath)
+                                candidates.push(path.resolve(instPath, relPath))
+                                // Common nested structures in instances
+                                candidates.push(path.resolve(instPath, 'bin', relPath))
+                                candidates.push(path.resolve(instPath, 'assets', relPath))
                             }
                         }
-                    } else {
-                        if (isDev) console.debug(`[P2P Debug] instances directory MISSING at ${instancesDir}`)
                     }
                 } catch (e) {
                     if (isDev) console.debug(`[P2P Debug] Error scanning instances:`, e.message)
@@ -615,10 +616,23 @@ class PeerHandler {
             if (rel.startsWith('..') || path.isAbsolute(rel)) return false
 
             const normalizedRel = rel.replace(/\\/g, '/')
-            const firstPart = normalizedRel.split('/')[0]
+            const parts = normalizedRel.split('/')
+            const firstPart = parts[0]
+            const fileName = parts[parts.length - 1]
+
+            // STRICT BLACKLIST (Sensitive files)
+            const blacklist = ['config.json', 'distribution.json', 'peers.json', 'version_manifest_v2.json']
+            if (blacklist.includes(fileName)) {
+                if (isDev) console.warn(`[P2P Security] Blocked blacklisted file: ${fileName}`)
+                return false
+            }
+            if (fileName.endsWith('.enc')) {
+                if (isDev) console.warn(`[P2P Security] Blocked encrypted file: ${fileName}`)
+                return false
+            }
 
             // STRICT WHITELIST
-            const whitelist = ['assets', 'libraries', 'versions', 'common', 'minecraft', 'icons', 'instances']
+            const whitelist = ['assets', 'libraries', 'versions', 'common', 'icons', 'instances']
 
             return whitelist.includes(firstPart)
         } catch (e) {
