@@ -22,7 +22,7 @@ module.exports = {
     // P2P Protocol Constants
     PROTOCOL: {
         VERSION: 1,
-        TIMEOUT: 20000,   // 20s timeout (was 5s) - Increased for slow/global connections
+        TIMEOUT: 30000,   // 30s timeout (was 20s) - Increased for slow/global connections
         MAX_RETRIES: 3
     }
 }

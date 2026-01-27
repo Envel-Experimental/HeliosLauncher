@@ -5,6 +5,7 @@ const NodeAdapter = require('./NodeAdapter')
 const ConfigManager = require('../app/assets/js/configmanager')
 const TrafficState = require('./TrafficState')
 const path = require('path')
+const isDev = require('../app/assets/js/isdev')
 
 class RaceManager {
 
@@ -59,7 +60,9 @@ class RaceManager {
      * @param {Request} request
      */
     async handle(request) {
-        let url = request.url
+        const url_orig = request.url
+        if (isDev) console.debug(`[RaceManager] handle() called: ${url_orig.substring(0, 100)}`)
+        let url = url_orig
 
         let expectedSize = 0
         try {
@@ -146,7 +149,7 @@ class RaceManager {
                 cleanup()
                 console.log('[RaceManager] Global P2P Task Timed Out (Soft)')
                 reject(new Error('Global P2P Timeout'))
-            }, 30000) // 30s Soft Timeout for First Byte
+            }, 45000) // 45s Soft Timeout for First Byte
 
             const onReadable = () => {
                 clearTimeout(timeout)
@@ -172,15 +175,14 @@ class RaceManager {
 
             if (winner.type === 'global_p2p') {
                 abortController.abort() // Cancel HTTP
-
+                if (isDev) console.debug(`[RaceManager] P2P WON for ${hash.substring(0, 8)} (${fileId || relPath || 'n/a'})`)
                 this.p2pConsecutiveWins++
                 if (this.p2pConsecutiveWins >= 10) { NodeAdapter.boostWeight(); this.p2pConsecutiveWins = 0 }
                 return this._createVerifiedStream(winner.result, algo, hash, expectedSize)
             } else {
-
                 // HTTP Won
                 if (globalP2PStream) globalP2PStream.destroy() // Cancel Global P2P
-
+                if (isDev) console.debug(`[RaceManager] HTTP WON for ${hash.substring(0, 8)} (${fileId || relPath || 'n/a'})`)
                 this.p2pConsecutiveWins = 0
                 // Standard HTTP: Return the native Response object directly.
                 // This avoids double-stream conversion overhead and compatibility issues.

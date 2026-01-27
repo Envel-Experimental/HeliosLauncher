@@ -308,6 +308,24 @@ class PeerHandler {
                 candidates.push(path.resolve(path.join(dataDir, fileId)))
             }
 
+            // INSTANCE SEARCH: If we have a relPath, it might be inside an instance
+            if (relPath) {
+                const instancesDir = path.join(dataDir, 'instances')
+                try {
+                    if (fs.existsSync(instancesDir)) {
+                        const instances = fs.readdirSync(instancesDir)
+                        for (const inst of instances) {
+                            const instPath = path.join(instancesDir, inst)
+                            if (fs.statSync(instPath).isDirectory()) {
+                                candidates.push(path.resolve(path.join(instPath, relPath)))
+                            }
+                        }
+                    }
+                } catch (e) {
+                    if (isDev) console.debug(`[P2P Debug] Error scanning instances:`, e.message)
+                }
+            }
+
             // Deduplicate and filter any invalid paths
             const uniqueCandidates = [...new Set(candidates)].filter(p => p && p.length > 5)
 
@@ -315,7 +333,11 @@ class PeerHandler {
             for (const p of uniqueCandidates) {
                 // SECURITY CHECK: Whitelist Validation
                 if (!this._isPathSecure(p)) {
-                    if (isDev) console.warn(`[P2P Security] Blocked access to unsafe path: ${p}`)
+                    if (isDev) {
+                        const dataDir = ConfigManager.getDataDirectory().trim()
+                        const rel = path.relative(dataDir, p)
+                        console.warn(`[P2P Security] Blocked access to unsafe path: ${p} (Rel: ${rel}, DataDir: ${dataDir})`)
+                    }
                     continue
                 }
 
@@ -330,16 +352,22 @@ class PeerHandler {
             }
 
             if (isDev && !foundPath) {
-                console.debug(`[P2P Debug] File ${hash.substring(0, 8)} not found. Searched:`, uniqueCandidates)
+                console.debug(`[P2P Debug] File ${hash.substring(0, 8)} (ID: ${fileId || 'n/a'}) not found. Checked ${uniqueCandidates.length} paths:`)
+                for (const p of uniqueCandidates) {
+                    const exists = fs.existsSync(p)
+                    console.debug(`  - [${exists ? 'EXIST' : 'MISS'}] ${p}`)
+                }
 
                 // Diagnosis: Let's see what's actually in the folders we checked
                 const parent = path.dirname(uniqueCandidates[0])
                 try {
                     if (fs.existsSync(parent)) {
                         const files = fs.readdirSync(parent)
-                        console.debug(`[P2P Debug] Parent folder ${parent} contains ${files.length} files.`)
+                        console.debug(`[P2P Debug] Parent folder ${parent} exists and contains ${files.length} files.`)
                         if (files.includes(hash)) {
                             console.error(`[P2P Debug] CRITICAL: fs.existsSync failed but file IS in readdir! Path: ${uniqueCandidates[0]}`)
+                        } else if (fileId && files.includes(path.basename(fileId))) {
+                            console.debug(`[P2P Debug] Found file by ID in readdir: ${fileId}`)
                         }
                     } else {
                         console.debug(`[P2P Debug] Parent folder MISSING: ${parent}`)
@@ -575,14 +603,11 @@ class PeerHandler {
             // Block paths outside dataDir
             if (rel.startsWith('..') || path.isAbsolute(rel)) return false
 
-            const firstPart = rel.split(path.sep)[0]
+            const normalizedRel = rel.replace(/\\/g, '/')
+            const firstPart = normalizedRel.split('/')[0]
 
             // STRICT WHITELIST
-            // assets: Game assets
-            // libraries: Game libraries
-            // versions: Game versions (jars/json)
-            // common: Shared assets
-            const whitelist = ['assets', 'libraries', 'versions', 'common', 'minecraft']
+            const whitelist = ['assets', 'libraries', 'versions', 'common', 'minecraft', 'icons', 'instances']
 
             return whitelist.includes(firstPart)
         } catch (e) {

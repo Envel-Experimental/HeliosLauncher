@@ -208,7 +208,7 @@ javaInstalled = "Java установлена!"
 [js.landing.dlAsync]
 loadingServerInfo = "Загрузка информации о сервере.."
 fatalError = "Фатальная ошибка"
-unableToLoadDistributionIndex = "Не удалось загрузить файлы с наших серверов. Попробуйте еще раз или проверьте подключение к Интернету."
+unableToLoadDistributionIndex = "Не удалось загрузить файлы. <br>Попробуй еще раз или проверь подключение к Интернету. <br>Возможно, антивирус блокирует загрузку файлов."
 pleaseWait = "Пожалуйста, подождите.."
 errorDuringLaunchTitle = "Ошибка при запуске"
 seeConsoleForDetails = "Попробуйте еще раз. Смотрите консоль (CTRL + Shift + i) для получения деталей."

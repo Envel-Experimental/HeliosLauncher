@@ -234,6 +234,10 @@ class P2PEngine extends EventEmitter {
 
             await discovery.flushed()
             console.log(`[P2PEngine] P2P Service Started. Debug Mode: ${isDev}`)
+            if (isDev) {
+                console.debug(`[P2P Debug] Active Data Directory: ${ConfigManager.getDataDirectory()}`)
+                console.debug(`[P2P Debug] Active Common Directory: ${ConfigManager.getCommonDirectory()}`)
+            }
             if (shouldAnnounce) {
                 if (ConfigManager.getLocalOptimization()) console.log(`[P2PEngine] Local Network: Active (Announcing via MDNS)`)
                 if (ConfigManager.getP2PUploadEnabled()) console.log(`[P2PEngine] Global Network: Active (Announcing via DHT)`)
@@ -267,6 +271,7 @@ class P2PEngine extends EventEmitter {
     }
 
     requestFile(hash, expectedSize = 0, relPath = null, fileId = null) {
+        if (isDev) console.debug(`[P2P Debug] requestFile called for ${hash.substring(0, 8)} (${fileId || 'n/a'})`)
         const stream = new Readable({
             read() { }
         })
@@ -278,18 +283,18 @@ class P2PEngine extends EventEmitter {
     }
 
     async _handleRequestAsync(stream, hash, expectedSize, relPath, fileId) {
-        const attempts = Config.PROTOCOL.MAX_RETRIES || 3
+        const attempts = 5
         const attemptedPeers = new Set()
 
         for (let i = 0; i < attempts; i++) {
             // Check for peers & Wait if needed
             if (this.peers.length === 0) {
-                if (isDev) console.debug(`[P2P] No peers. Waiting... (Attempt ${i + 1}/${attempts})`)
+                if (isDev) console.debug(`[P2P] No peers. Waiting 10s... (Attempt ${i + 1}/${attempts})`)
                 // Use existing discovery wait logic
                 if (!this._discoveryPromise) {
                     this._discoveryPromise = new Promise(resolve => {
                         const onConn = () => { this.off('peer_added', onConn); clearTimeout(t); this._discoveryPromise = null; resolve(true) }
-                        const t = setTimeout(() => { this.off('peer_added', onConn); this._discoveryPromise = null; resolve(false) }, 5000)
+                        const t = setTimeout(() => { this.off('peer_added', onConn); this._discoveryPromise = null; resolve(false) }, 10000)
                         this.once('peer_added', onConn)
                     })
                 }
@@ -362,7 +367,7 @@ class P2PEngine extends EventEmitter {
             const reqId = this.reqIdCounter++
             if (this.reqIdCounter > 4294967295) this.reqIdCounter = 1
 
-            if (isDev) console.debug(`[P2P Debug] Requesting ${hash.substring(0, 8)} from ${peer.getIP()}`)
+            if (isDev) console.debug(`[P2P Debug] Requesting ${hash.substring(0, 8)} (${fileId || 'n/a'}) from ${peer.getIP()} [${peer.isLocal() ? 'LAN' : 'WAN'}]`)
 
             // Register Request
             this.requests.set(reqId, {
