@@ -246,8 +246,8 @@ class PeerHandler {
         if (!remoteIP) remoteIP = 'unknown'
 
         if (isDev) {
-            console.log(`%c[P2PEngine] Connection Established with ${remoteIP}`, 'color: #00ff00; font-weight: bold')
-            console.debug(`[P2P Debug] Received Request ${reqId} for hash ${hash.substring(0, 8)}... (ID: ${fileId || 'n/a'})`)
+            // console.log(`%c[P2PEngine] Connection Established with ${remoteIP}`, 'color: #00ff00; font-weight: bold')
+            // console.debug(`[P2P Debug] Received Request ${reqId} for hash ${hash.substring(0, 8)}... (ID: ${fileId || 'n/a'})`)
         }
 
         const isGlobalUpload = ConfigManager.getP2PUploadEnabled()
@@ -450,10 +450,12 @@ class PeerHandler {
                     this.sendData(reqId, chunk)
                 })
 
-                if (isDev) console.log(`[P2P Debug] Seeding file: ${foundPath} to ${remoteIP}`)
+                if (isDev) {
+                    // console.log(`[P2P Debug] Seeding file: ${foundPath} to ${remoteIP}`)
+                }
                 stream.on('end', () => {
                     this.sendEnd(reqId)
-                    if (isDev) console.log(`[P2P Debug] Upload Finished: ${foundPath} (${totalBytesSent} bytes)`)
+                    // if (isDev) console.log(`[P2P Debug] Upload Finished: ${foundPath} (${totalBytesSent} bytes)`)
                     cleanup()
                 })
 

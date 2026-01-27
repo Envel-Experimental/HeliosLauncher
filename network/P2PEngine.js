@@ -279,8 +279,9 @@ class P2PEngine extends EventEmitter {
                 const type = isLocal ? 'LOCAL (LAN)' : 'GLOBAL (WAN)'
                 const peerInfoStr = info.peer ? `${info.peer.host}:${info.peer.port}` : 'unknown'
 
-                if (ip === 'unknown' || isDev) {
-                    console.log(`%c[P2PEngine] Connection Established: [${type}] ${ip} (Remote: ${peerInfoStr})`, 'color: #00ff00; font-weight: bold')
+                if (isDev && ip === 'unknown') {
+                    // Only log WAN peers or unknown in debug, LAN is too noisy
+                    // console.log(`%c[P2PEngine] Connection Established: [${type}] ${ip} (Remote: ${peerInfoStr})`, 'color: #00ff00; font-weight: bold')
                 }
 
                 if (isDev) {
@@ -348,7 +349,7 @@ class P2PEngine extends EventEmitter {
     }
 
     requestFile(hash, expectedSize = 0, relPath = null, fileId = null) {
-        if (isDev) console.debug(`[P2P Debug] requestFile called for ${hash.substring(0, 8)} (${fileId || 'n/a'})`)
+        // if (isDev) console.debug(`[P2P Debug] requestFile called for ${hash.substring(0, 8)} (${fileId || 'n/a'})`)
         const stream = new Readable({
             read() { }
         })
@@ -371,7 +372,7 @@ class P2PEngine extends EventEmitter {
             // Check for peers & Wait if needed
             if (this.peers.length === 0) {
                 if (isDev && !this.discoveryLogThrottled) {
-                    console.debug(`[P2P] No peers available. Starting discovery wait...`)
+                    // console.debug(`[P2P] No peers available. Starting discovery wait...`)
                     this.discoveryLogThrottled = true
                 }
 
@@ -402,7 +403,7 @@ class P2PEngine extends EventEmitter {
             if (availablePeers.length === 0) {
                 // If we've tried everyone and failed, but still have attempts left,
                 // we might want to wait a bit for new peers or just fail.
-                if (isDev) console.debug(`[P2P] All ${attemptedPeers.size} available peers already tried.`)
+                // if (isDev) console.debug(`[P2P] All ${attemptedPeers.size} available peers already tried.`)
                 stream.emit('error', new Error('All available peers failed'))
                 return
             }
@@ -446,7 +447,9 @@ class P2PEngine extends EventEmitter {
                     return
                 }
 
-                if (isDev) console.warn(`[P2PEngine] Peer ${bestPeer.getIP()} failed for ${hash.substring(0, 8)}. Trying next... (${err.message})`)
+                if (isDev && !err.message.includes('Timeout') && !err.message.includes('Not Found')) {
+                    console.warn(`[P2PEngine] Peer ${bestPeer.getIP()} failed for ${hash.substring(0, 8)}. Trying next... (${err.message})`)
+                }
 
                 // If it was a "Not Found" or "Busy", we just continue the loop to the next peer.
                 // Small sleep to avoid instant hammering
@@ -462,7 +465,7 @@ class P2PEngine extends EventEmitter {
             const reqId = this.reqIdCounter++
             if (this.reqIdCounter > 4294967295) this.reqIdCounter = 1
 
-            if (isDev) console.debug(`[P2P Debug] Requesting ${hash.substring(0, 8)} (${fileId || 'n/a'}) from ${peer.getIP()} [${peer.isLocal() ? 'LAN' : 'WAN'}]`)
+            // if (isDev) console.debug(`[P2P Debug] Requesting ${hash.substring(0, 8)} (${fileId || 'n/a'}) from ${peer.getIP()} [${peer.isLocal() ? 'LAN' : 'WAN'}]`)
 
             // Register Request
             this.requests.set(reqId, {

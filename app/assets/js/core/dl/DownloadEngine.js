@@ -103,7 +103,7 @@ async function downloadFile(asset, onProgress) {
         try {
             if (attempt > 0) {
                 await sleep(attempt * 1000);
-                log.debug(`Retrying download for ${asset.id} (Attempt ${attempt + 1}/5)...`);
+                // log.debug(`Retrying download for ${asset.id} (Attempt ${attempt + 1}/5)...`);
             }
 
             // RaceManager Strategy
@@ -139,7 +139,6 @@ async function downloadFile(asset, onProgress) {
 
             // Direct Node Stream (P2P / RaceManager optimized)
             if (response.p2pStream) {
-                if (isDev) console.log(`[DownloadEngine] Using Direct Node Stream for ${asset.id}. (Type: ${response.p2pStream.constructor.name})`);
                 const progressStream = new Transform({
                     transform(chunk, encoding, callback) {
                         loaded += chunk.length;
