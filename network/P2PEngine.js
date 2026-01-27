@@ -48,6 +48,7 @@ class P2PEngine extends EventEmitter {
         this.attackCounter = 0
 
         this.raceManager = null
+        this.discoveryLogThrottled = false
     }
 
     setRaceManager(rm) {
@@ -205,6 +206,10 @@ class P2PEngine extends EventEmitter {
 
                 if (isDev) {
                     console.debug(`[P2P Debug] Peer added. CID: ${b4a.toString(info.publicKey, 'hex').substring(0, 8)}. Type: ${type}`)
+                    if (this.discoveryLogThrottled) {
+                        console.log(`%c[P2P Debug] PEER ARRIVED! Resuming pending requests...`, 'color: #00ffff; font-weight: bold')
+                        this.discoveryLogThrottled = false
+                    }
                     if (ip === 'unknown') {
                         console.debug(`[P2P Debug] Full Connection Info for unknown:`, {
                             peer: info.peer,
@@ -277,7 +282,9 @@ class P2PEngine extends EventEmitter {
         })
 
         // Use a persistent task to handle the request (allows waiting for peers)
-        this._handleRequestAsync(stream, hash, expectedSize, relPath, fileId)
+        this._handleRequestAsync(stream, hash, expectedSize, relPath, fileId).catch(err => {
+            if (!stream.destroyed) stream.emit('error', err)
+        })
 
         return stream
     }
@@ -289,7 +296,10 @@ class P2PEngine extends EventEmitter {
         for (let i = 0; i < attempts; i++) {
             // Check for peers & Wait if needed
             if (this.peers.length === 0) {
-                if (isDev) console.debug(`[P2P] No peers. Waiting 10s... (Attempt ${i + 1}/${attempts})`)
+                if (isDev && !this.discoveryLogThrottled) {
+                    console.debug(`[P2P] No peers available. Starting discovery wait (Max ${attempts * 10}s)...`)
+                    this.discoveryLogThrottled = true
+                }
                 // Use existing discovery wait logic
                 if (!this._discoveryPromise) {
                     this._discoveryPromise = new Promise(resolve => {

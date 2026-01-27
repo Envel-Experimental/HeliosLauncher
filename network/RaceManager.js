@@ -147,7 +147,9 @@ class RaceManager {
             // Timeout P2P strictly to avoid waiting too long if HTTP is also slow/failing
             const timeout = setTimeout(() => {
                 cleanup()
-                console.log('[RaceManager] Global P2P Task Timed Out (Soft)')
+                if (isDev && P2PEngine.peers.length > 0) {
+                    console.log(`[RaceManager] Global P2P Task Timed Out (Soft) for ${hash.substring(0, 8)}`)
+                }
                 reject(new Error('Global P2P Timeout'))
             }, 45000) // 45s Soft Timeout for First Byte
 
@@ -161,7 +163,13 @@ class RaceManager {
                 cleanup()
                 reject(err)
             }
-            const cleanup = () => { globalP2PStream.off('readable', onReadable); globalP2PStream.off('error', onError) }
+            const cleanup = () => {
+                globalP2PStream.off('readable', onReadable);
+                globalP2PStream.off('error', onError)
+                // CRITICAL: Add no-op error listener to prevent crash if 
+                // the stream fails later (after we stop caring)
+                globalP2PStream.on('error', () => { })
+            }
             globalP2PStream.on('readable', onReadable)
             globalP2PStream.on('error', onError)
         })
