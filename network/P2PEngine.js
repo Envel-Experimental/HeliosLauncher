@@ -62,6 +62,7 @@ class P2PEngine extends EventEmitter {
         this.setMaxListeners(100)
         this.usageTracker = new UsageTracker()
 
+        this.starting = false
         this._discoveryPromise = null
         this.profile = NodeAdapter.getProfile()
         this.activeUploads = 0
@@ -98,10 +99,15 @@ class P2PEngine extends EventEmitter {
             return
         }
 
-        if (this.swarm) return // Already running
+        if (this.swarm || this.starting) return // Already running or starting
 
-        await PeerPersistence.load()
-        await this.init()
+        this.starting = true
+        try {
+            await PeerPersistence.load()
+            await this.init()
+        } finally {
+            this.starting = false
+        }
 
         // Pre-warming: Add known peers to DHT routing table immediately
         const knownPeers = PeerPersistence.getPeers('global')
@@ -134,6 +140,7 @@ class P2PEngine extends EventEmitter {
     }
 
     async stop() {
+        this.starting = false
         if (this.swarm) {
             // console.log('[P2PEngine] Stopping...')
             await this.swarm.destroy()
@@ -226,8 +233,6 @@ class P2PEngine extends EventEmitter {
 
             this.swarm.on('connection', (socket, info) => {
                 const peer = new PeerHandler(socket, this, info)
-                this.peers.push(peer)
-                this.emit('peer_added', peer)
 
                 let ip = (info.peer && info.peer.host) || socket.remoteAddress || (socket.rawStream && socket.rawStream.remoteAddress) || 'unknown'
                 if (ip.startsWith('::ffff:')) ip = ip.substring(7)
@@ -255,6 +260,9 @@ class P2PEngine extends EventEmitter {
                     socket.destroy()
                     return
                 }
+
+                // Increase listeners for high-concurrency requests (e.g. music streaming)
+                socket.setMaxListeners(100)
 
                 this.peers.push(peer)
                 this.emit('peer_added', peer)
