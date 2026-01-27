@@ -28,6 +28,11 @@ class UsageTracker {
         let entry = this.data.get(ip)
 
         if (!entry) {
+            // Memory Guard: Cap tracker size
+            if (this.data.size > 5000) {
+                const firstKey = this.data.keys().next().value
+                this.data.delete(firstKey)
+            }
             entry = { credits: MAX_CREDITS_PER_IP * 0.5, lastUpdate: Date.now() } // Start with 2.5GB for new IPs
             this.data.set(ip, entry)
             return entry.credits
@@ -47,7 +52,19 @@ class UsageTracker {
     consume(ip, amountMB) {
         const current = this.getCredits(ip)
         const entry = this.data.get(ip)
-        entry.credits = Math.max(0, current - amountMB)
+        if (entry) {
+            entry.credits = Math.max(0, current - (typeof amountMB === 'number' ? amountMB : 0))
+        }
+    }
+
+    cleanup() {
+        const now = Date.now()
+        // Remove entries older than 2 hours
+        for (const [ip, entry] of this.data.entries()) {
+            if (now - entry.lastUpdate > 7200000) {
+                this.data.delete(ip)
+            }
+        }
     }
 }
 
@@ -86,6 +103,21 @@ class P2PEngine extends EventEmitter {
 
         this.raceManager = null
         this.discoveryLogThrottled = false
+
+        // Periodic Memory Cleanup
+        setInterval(() => {
+            this.usageTracker.cleanup()
+            // Cleanup strikes older than 30 mins
+            const now = Date.now()
+            if (this._lastCleanup && now - this._lastCleanup < 1800000) return
+            this._lastCleanup = now
+
+            for (const [ip, strikes] of this.peerStrikes.entries()) {
+                // If strikes are high, they are likely in blacklist (which has its own timer)
+                // We just clear the strike counter periodically to save memory
+                this.peerStrikes.delete(ip)
+            }
+        }, 300000) // Every 5 minutes
     }
 
     setRaceManager(rm) {
@@ -479,6 +511,9 @@ class P2PEngine extends EventEmitter {
     }
 
     handleIncomingData(reqId, data, senderPeer) {
+        // Strict Validation
+        if (typeof reqId !== 'number' || !b4a.isBuffer(data)) return
+
         const req = this.requests.get(reqId)
         if (req) {
             // VULNERABILITY FIX 1: ReqID Spoofing Protection
@@ -611,6 +646,13 @@ class P2PEngine extends EventEmitter {
     penalizePeer(peer) {
         const ip = peer.getIP()
         const strikes = (this.peerStrikes.get(ip) || 0) + 1
+
+        // Memory Guard: Cap strike tracker
+        if (this.peerStrikes.size > 2000) {
+            const firstKey = this.peerStrikes.keys().next().value
+            this.peerStrikes.delete(firstKey)
+        }
+
         this.peerStrikes.set(ip, strikes)
 
         if (isDev) console.warn(`[P2P Security] Penalizing peer ${ip}. Strikes: ${strikes}/3`)

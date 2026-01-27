@@ -173,7 +173,8 @@ class PeerHandler {
     handleBatchRequest(payload) {
         let offset = 0
         if (payload.length < 2) return
-        const count = payload.readUInt16BE(offset)
+        const rawCount = payload.readUInt16BE(offset)
+        const count = Math.min(rawCount, BATCH_SIZE_LIMIT)
         offset += 2
 
         for (let i = 0; i < count; i++) {
@@ -199,14 +200,21 @@ class PeerHandler {
         let fileId = null
 
         // Detect JSON Payload (Starts with '{')
-        if (hash.startsWith('{')) {
+        // VULNERABILITY FIX: Cap JSON length and validate type
+        if (payload.length > 0 && payload[0] === 123) { // 123 is '{'
+            if (payload.length > 1024) { // 1KB Max for JSON payload
+                this.sendError(reqId, 'JSON Payload Too Large')
+                return
+            }
             try {
                 const data = JSON.parse(hash)
-                hash = data.h
-                relPath = data.p
-                fileId = data.id
+                if (data && typeof data === 'object') {
+                    hash = String(data.h || '').trim()
+                    relPath = (data.p && typeof data.p === 'string') ? data.p.trim() : null
+                    fileId = (data.id && typeof data.id === 'string') ? data.id.trim() : null
+                }
             } catch (e) {
-                // Ignore JSON error, treat as raw hash? Or fail.
+                if (isDev) console.warn('[P2P Security] Malformed JSON from peer')
             }
         }
 
