@@ -56,6 +56,8 @@ class P2PEngine extends EventEmitter {
         super()
         this.peers = [] // Array of PeerHandler
         this.requests = new Map() // reqId -> { stream: Readable, timeout: Timer }
+        this.blacklist = new Set() // IP/PubKey strings
+        this.peerStrikes = new Map() // Peer IP -> strikes count
         this.reqIdCounter = 1
         this.setMaxListeners(100)
         this.usageTracker = new UsageTracker()
@@ -230,6 +232,12 @@ class P2PEngine extends EventEmitter {
                 let ip = (info.peer && info.peer.host) || socket.remoteAddress || (socket.rawStream && socket.rawStream.remoteAddress) || 'unknown'
                 if (ip.startsWith('::ffff:')) ip = ip.substring(7)
 
+                if (this.blacklist.has(ip)) {
+                    if (isDev) console.warn(`[P2P Security] Rejecting blacklisted IP: ${ip}`)
+                    socket.destroy()
+                    return
+                }
+
                 const isLocal = this.isLocalIP(ip)
                 const type = isLocal ? 'LOCAL (LAN)' : 'GLOBAL (WAN)'
                 const peerInfoStr = info.peer ? `${info.peer.host}:${info.peer.port}` : 'unknown'
@@ -240,18 +248,6 @@ class P2PEngine extends EventEmitter {
 
                 if (isDev) {
                     console.debug(`[P2P Debug] Peer added. CID: ${b4a.toString(info.publicKey, 'hex').substring(0, 8)}. Type: ${type}`)
-                    if (this.discoveryLogThrottled) {
-                        console.log(`%c[P2P Debug] PEER ARRIVED! Resuming pending requests...`, 'color: #00ffff; font-weight: bold')
-                        this.discoveryLogThrottled = false
-                    }
-                    if (ip === 'unknown') {
-                        console.debug(`[P2P Debug] Full Connection Info for unknown:`, {
-                            peer: info.peer,
-                            client: info.client,
-                            proven: info.proven,
-                            local: info.local
-                        })
-                    }
                 }
 
                 if (this.peers.length > this.profile.maxPeers) {
@@ -260,7 +256,8 @@ class P2PEngine extends EventEmitter {
                     return
                 }
 
-                // PeerHandler handles 'close' and calls removePeer
+                this.peers.push(peer)
+                this.emit('peer_added', peer)
             })
 
             // Join the topic
@@ -480,13 +477,16 @@ class P2PEngine extends EventEmitter {
 
             this.totalDownloaded += data.length
 
-            // VULNERABILITY FIX ("Infinite File"): Size Check
-            if (req.expectedSize > 0 && req.bytesReceived > req.expectedSize) {
-                const err = new Error('File size exceeded expected limit')
+            // VULNERABILITY FIX ("Infinite File"): Size Check with Tolerance
+            // We allow 1MB extra to account for minor file updates, metadata overhead, or network jitter.
+            const tolerance = 1048576 // 1MB
+            if (req.expectedSize > 0 && req.bytesReceived > (req.expectedSize + tolerance)) {
+                if (isDev) console.error(`[P2P Security] Peer ${req.peer.getIP()} sent too many bytes! Received: ${req.bytesReceived}, Expected: ${req.expectedSize}`)
+                const err = new Error('File size exceeded security limit')
                 err.bytesReceived = req.bytesReceived
                 req.reject(err)
                 this.requests.delete(reqId)
-                this.triggerCircuitBreaker()
+                this.penalizePeer(req.peer)
                 return
             }
 
@@ -589,22 +589,38 @@ class P2PEngine extends EventEmitter {
         this.swarm.join(topic, { client: true, server: shouldAnnounce })
     }
 
+    penalizePeer(peer) {
+        const ip = peer.getIP()
+        const strikes = (this.peerStrikes.get(ip) || 0) + 1
+        this.peerStrikes.set(ip, strikes)
+
+        if (isDev) console.warn(`[P2P Security] Penalizing peer ${ip}. Strikes: ${strikes}/3`)
+
+        if (strikes >= 3) {
+            console.error(`[P2P Security] BLACKLISTING IP: ${ip} for suspicious behavior.`)
+            this.blacklist.add(ip)
+            // Remove blacklist after 10 minutes
+            setTimeout(() => this.blacklist.delete(ip), 600000)
+        }
+
+        // Always disconnect the peer on a strike
+        peer.socket.destroy()
+    }
+
     triggerCircuitBreaker() {
         if (this.panicMode) return
         this.attackCounter++
 
-        if (this.attackCounter >= 3) {
-            console.error('[P2PEngine] CIRCUIT BREAKER TRIGGERED!')
+        if (this.attackCounter >= 5) { // Increased threshold for global panic
+            console.error('[P2PEngine] GLOBAL CIRCUIT BREAKER TRIGGERED! Stopping P2P temporarily.')
 
             this.panicMode = true
             this.stop()
-
             setTimeout(() => {
-                // console.log('[P2PEngine] Cooling down...')
                 this.panicMode = false
                 this.attackCounter = 0
                 this.start()
-            }, 5 * 60 * 1000)
+            }, 300000)
         }
     }
 
