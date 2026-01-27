@@ -322,17 +322,19 @@ class P2PEngine extends EventEmitter {
     }
 
     async _handleRequestAsync(stream, hash, expectedSize, relPath, fileId) {
-        const attempts = 5
         const attemptedPeers = new Set()
 
-        for (let i = 0; i < attempts; i++) {
+        // Dynamic retry limit: Try at least 10 times or all available peers
+        const getMaxAttempts = () => Math.max(10, this.peers.length + 2)
+
+        for (let i = 0; i < getMaxAttempts(); i++) {
             // Check for peers & Wait if needed
             if (this.peers.length === 0) {
                 if (isDev && !this.discoveryLogThrottled) {
-                    console.debug(`[P2P] No peers available. Starting discovery wait (Max ${attempts * 10}s)...`)
+                    console.debug(`[P2P] No peers available. Starting discovery wait...`)
                     this.discoveryLogThrottled = true
                 }
-                // Use existing discovery wait logic
+
                 if (!this._discoveryPromise) {
                     this._discoveryPromise = new Promise(resolve => {
                         const onConn = () => { this.off('peer_added', onConn); clearTimeout(t); this._discoveryPromise = null; resolve(true) }
@@ -344,21 +346,28 @@ class P2PEngine extends EventEmitter {
             }
 
             if (this.peers.length === 0) {
-                // If this is the last attempt, fail.
-                if (i === attempts - 1) {
-                    stream.emit('error', new Error('No peers available'))
+                if (i >= 2) { // Give a few chances for discovery
+                    stream.emit('error', new Error('No peers available after discovery wait'))
                     return
                 }
                 continue
             }
 
-            // Select Best Peer
+            // Select Best Peer among those not yet tried
             let bestPeer = null
             let maxScore = -1
 
-            for (const p of this.peers) {
-                if (attemptedPeers.has(p)) continue
+            const availablePeers = this.peers.filter(p => !attemptedPeers.has(p))
 
+            if (availablePeers.length === 0) {
+                // If we've tried everyone and failed, but still have attempts left,
+                // we might want to wait a bit for new peers or just fail.
+                if (isDev) console.debug(`[P2P] All ${attemptedPeers.size} available peers already tried.`)
+                stream.emit('error', new Error('All available peers failed'))
+                return
+            }
+
+            for (const p of availablePeers) {
                 const weight = p.remoteWeight || 1
                 const rtt = p.rtt || 200
                 let speedFactor = 1.0
@@ -376,11 +385,8 @@ class P2PEngine extends EventEmitter {
             }
 
             if (!bestPeer) {
-                if (i === attempts - 1) {
-                    stream.emit('error', new Error('Peer selection failed'))
-                    return
-                }
-                continue
+                stream.emit('error', new Error('Peer selection failed'))
+                return
             }
 
             attemptedPeers.add(bestPeer)
@@ -389,21 +395,26 @@ class P2PEngine extends EventEmitter {
                 await this._executeSingleRequest(bestPeer, stream, hash, expectedSize, relPath, fileId)
                 return // Success
             } catch (err) {
-                // Check if fatal (data already sent)
+                // If some data was sent, we HAVE to fail the stream because DownloadEngine needs to reset the file.
                 if (err.bytesReceived > 0) {
-                    if (isDev) console.error(`[P2PEngine] Fatal error from ${bestPeer.getIP()} after receiving ${err.bytesReceived} bytes: ${err.message}`)
+                    if (isDev) console.error(`[P2PEngine] Mid-transfer failure from ${bestPeer.getIP()} (${err.bytesReceived} bytes): ${err.message}`)
+                    // Still penalize if it was a protocol/size error
+                    if (err.message.includes('security limit') || err.message.includes('Incomplete')) {
+                        this.penalizePeer(bestPeer)
+                    }
                     stream.emit('error', err)
                     return
                 }
 
-                if (isDev) console.warn(`[P2PEngine] Retryable error from ${bestPeer.getIP()} for ${hash.substring(0, 8)}: ${err.message}`)
+                if (isDev) console.warn(`[P2PEngine] Peer ${bestPeer.getIP()} failed for ${hash.substring(0, 8)}. Trying next... (${err.message})`)
 
-                // Backoff to prevent tight loops
-                await new Promise(r => setTimeout(r, (i + 1) * 500 + Math.random() * 500))
+                // If it was a "Not Found" or "Busy", we just continue the loop to the next peer.
+                // Small sleep to avoid instant hammering
+                await new Promise(r => setTimeout(r, 200))
             }
         }
 
-        stream.emit('error', new Error('Download failed after retries'))
+        stream.emit('error', new Error('Download failed after exhausted peer list'))
     }
 
     _executeSingleRequest(peer, stream, hash, expectedSize, relPath, fileId) {

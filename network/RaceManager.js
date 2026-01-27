@@ -151,7 +151,7 @@ class RaceManager {
                     console.log(`[RaceManager] Global P2P Task Timed Out (Soft) for ${hash.substring(0, 8)}`)
                 }
                 reject(new Error('Global P2P Timeout'))
-            }, 45000) // 45s Soft Timeout for First Byte
+            }, 60000) // 60s Soft Timeout for First Byte
 
             const onReadable = () => {
                 clearTimeout(timeout)
