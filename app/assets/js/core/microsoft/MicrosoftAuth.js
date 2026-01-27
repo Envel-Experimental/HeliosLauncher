@@ -20,18 +20,19 @@ class MicrosoftAuth {
                 grant_type: refresh ? 'refresh_token' : 'authorization_code'
             });
 
+            console.log('DEBUG: REAL SEND ->', body.toString());
+
             const res = await fetch(this.TOKEN_ENDPOINT, {
                 method: 'POST',
-                body: body,
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+                body: body.toString(),
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                }
             });
             const data = await res.json();
-             if (!res.ok) throw new Error(`HTTP ${res.status}: ${JSON.stringify(data)}`);
-
-            return {
-                data: data,
-                responseStatus: RestResponseStatus.SUCCESS
-            };
+            if (!res.ok) throw new Error(`HTTP ${res.status}: ${JSON.stringify(data)}`);
+            return { data: data, responseStatus: RestResponseStatus.SUCCESS };
         } catch (error) {
             return handleFetchError(`Get ${refresh ? 'Refresh' : 'Auth'} Token`, error, this.logger);
         }
@@ -92,7 +93,7 @@ class MicrosoftAuth {
             };
         } catch (error) {
             const response = await handleFetchError('Get XSTS Token', error, this.logger);
-            if(error.response && error.response.body) {
+            if (error.response && error.response.body) {
                 response.microsoftErrorCode = decipherErrorCode(error.response.body);
             } else {
                 response.microsoftErrorCode = MicrosoftErrorCode.UNKNOWN;
@@ -131,12 +132,12 @@ class MicrosoftAuth {
             });
             const data = await res.json();
             if (!res.ok) {
-                 if(res.status === 404) {
-                     const r = { responseStatus: RestResponseStatus.ERROR, error: new Error('No Profile') };
-                     r.microsoftErrorCode = MicrosoftErrorCode.NO_PROFILE;
-                     return r;
-                 }
-                 throw new Error(`HTTP ${res.status}: ${JSON.stringify(data)}`);
+                if (res.status === 404) {
+                    const r = { responseStatus: RestResponseStatus.ERROR, error: new Error('No Profile') };
+                    r.microsoftErrorCode = MicrosoftErrorCode.NO_PROFILE;
+                    return r;
+                }
+                throw new Error(`HTTP ${res.status}: ${JSON.stringify(data)}`);
             }
 
             return {
