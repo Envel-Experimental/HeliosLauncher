@@ -15,7 +15,7 @@ const execFileAsync = util.promisify(execFile);
 // Winreg removed in favor of native reg.exe calls to avoid DEP0190
 
 async function getHotSpotSettings(execPath) {
-    const javaExecutable = execPath.includes('javaw.exe') ? execPath.replace('javaw.exe', 'java.exe') : execPath;
+    const javaExecutable = path.resolve(execPath.includes('javaw.exe') ? execPath.replace('javaw.exe', 'java.exe') : execPath);
     try {
         await fs.access(javaExecutable);
     } catch (e) {
