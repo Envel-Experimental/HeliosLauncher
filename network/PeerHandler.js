@@ -313,6 +313,12 @@ class PeerHandler {
 
             let foundPath = null
             for (const p of uniqueCandidates) {
+                // SECURITY CHECK: Whitelist Validation
+                if (!this._isPathSecure(p)) {
+                    if (isDev) console.warn(`[P2P Security] Blocked access to unsafe path: ${p}`)
+                    continue
+                }
+
                 try {
                     if (fs.existsSync(p)) {
                         foundPath = p
@@ -559,6 +565,30 @@ class PeerHandler {
         header.writeUInt32BE(0, 1) // ReqID 0 for container messages usually
         header.writeUInt32BE(payload.length, 5)
         this.socket.write(b4a.concat([header, payload]))
+    }
+
+    _isPathSecure(filePath) {
+        try {
+            const dataDir = ConfigManager.getDataDirectory().trim()
+            const rel = path.relative(dataDir, filePath)
+
+            // Block paths outside dataDir
+            if (rel.startsWith('..') || path.isAbsolute(rel)) return false
+
+            const firstPart = rel.split(path.sep)[0]
+
+            // STRICT WHITELIST
+            // assets: Game assets
+            // libraries: Game libraries
+            // versions: Game versions (jars/json)
+            // common: Shared assets
+            const whitelist = ['assets', 'libraries', 'versions', 'common']
+
+            return whitelist.includes(firstPart)
+        } catch (e) {
+            console.error('[P2P Security] Path check failed:', e)
+            return false // Fail closed
+        }
     }
 }
 
