@@ -230,8 +230,10 @@ class RaceManager {
         // Return Response
         // Electron expects a Response object.
         // We convert the Node stream back to a Web Stream
+        // Return Response-like object with Node Stream
+        // We pass the Node stream directly to avoid inconsistent Readable.toWeb / Response behavior
+        // which was causing "[object ReadableStream]" to be written to disk.
         TrafficState.incrementDownloads()
-        const outputStream = Readable.toWeb(verifier)
 
         const cleanupDownload = () => {
             TrafficState.decrementDownloads()
@@ -252,7 +254,11 @@ class RaceManager {
         verifier.on('error', cleanupDownload)
         verifier.on('finish', cleanupDownload)
 
-        return new Response(outputStream)
+        return {
+            ok: true,
+            status: 200,
+            stream: verifier // Node Readable Stream
+        }
     }
 }
 

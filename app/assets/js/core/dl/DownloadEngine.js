@@ -5,10 +5,11 @@ const { dirname, extname } = require('path');
 const fs = require('fs/promises');
 const fsSync = require('fs');
 const { pipeline } = require('stream/promises');
-const { Readable } = require('stream');
+const { Readable, Transform } = require('stream');
 const P2PEngine = require('../../../../../network/P2PEngine');
 const RaceManager = require('../../../../../network/RaceManager');
 const ConfigManager = require('../../configmanager');
+const isDev = require('../../isdev');
 
 const log = LoggerUtil.getLogger('DownloadEngine');
 
@@ -126,7 +127,24 @@ async function downloadFile(asset, onProgress) {
             let lastProgressTime = 0;
             const total = asset.size || 0;
 
-            if (response.body) {
+            // Direct Node Stream (P2P / RaceManager optimized)
+            if (response.stream) {
+                const progressStream = new Transform({
+                    transform(chunk, encoding, callback) {
+                        loaded += chunk.length;
+                        const now = Date.now();
+                        if (onProgress && (now - lastProgressTime >= 100 || loaded === total)) {
+                            onProgress(loaded);
+                            lastProgressTime = now;
+                        }
+                        this.push(chunk);
+                        callback();
+                    }
+                });
+                await pipeline(response.stream, progressStream, fileStream);
+            }
+            // Web Response Body (Standard HTTP)
+            else if (response.body) {
                 const reader = response.body.getReader();
                 const nodeStream = new Readable({
                     async read() {
@@ -158,7 +176,15 @@ async function downloadFile(asset, onProgress) {
             if (await validateLocalFile(decodedPath, algo, hash)) {
                 return; // Success!
             } else {
-                if (ConfigManager.isDev()) console.error(`[DownloadEngine] Validation failed for ${asset.id}. File size: ${loaded} / ${total}`)
+                if (isDev) console.error(`[DownloadEngine] Validation failed for ${asset.id}. File size: ${loaded} / ${total}`)
+
+                // DEBUG: Inspect the content of the failed file
+                try {
+                    const content = await fs.readFile(decodedPath);
+                    const preview = content.slice(0, 100).toString('utf-8');
+                    console.error(`[DownloadEngine] Failed File Content Preview (First 100 bytes): ${preview}`);
+                } catch (e) { }
+
                 throw new Error('Validation failed');
             }
 

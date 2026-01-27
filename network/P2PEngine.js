@@ -360,12 +360,12 @@ class P2PEngine extends EventEmitter {
             } catch (err) {
                 // Check if fatal (data already sent)
                 if (err.bytesReceived > 0) {
-                    // console.error(`[P2PEngine] Fatal error from ${bestPeer.getIP()} after receiving ${err.bytesReceived} bytes: ${err.message}`)
+                    if (isDev) console.error(`[P2PEngine] Fatal error from ${bestPeer.getIP()} after receiving ${err.bytesReceived} bytes: ${err.message}`)
                     stream.emit('error', err)
                     return
                 }
 
-                // console.warn(`[P2PEngine] Retryable error from ${bestPeer.getIP()}: ${err.message}`)
+                if (isDev) console.warn(`[P2PEngine] Retryable error from ${bestPeer.getIP()} for ${hash.substring(0, 8)}: ${err.message}`)
                 // Loop continues
             }
         }
