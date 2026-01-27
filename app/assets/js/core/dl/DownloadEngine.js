@@ -1,7 +1,7 @@
 const { LoggerUtil } = require('../util/LoggerUtil');
 const { validateLocalFile, safeEnsureDir } = require('../common/FileUtils');
 const { ensureDecodedPath, sleep } = require('../util/NodeUtil');
-const { dirname, extname } = require('path');
+const path = require('path');
 const fs = require('fs/promises');
 const fsSync = require('fs');
 const { pipeline } = require('stream/promises');
@@ -79,7 +79,7 @@ async function downloadFile(asset, onProgress) {
 
         // Mutable File Handling: Skip validation for configs and ANYTHING in instances
         const isInstanceFile = decodedPath.replace(/\\/g, '/').includes('/instances/');
-        const isConfig = CONFIG_EXTENSIONS.includes(extname(decodedPath));
+        const isConfig = CONFIG_EXTENSIONS.includes(path.extname(decodedPath));
 
         if (isConfig || isInstanceFile) {
             log.debug(`Skipping validation/download of mutable file: ${decodedPath}`);
@@ -94,7 +94,7 @@ async function downloadFile(asset, onProgress) {
         }
     } catch (e) { }
 
-    await safeEnsureDir(dirname(decodedPath));
+    await safeEnsureDir(path.dirname(decodedPath));
 
     let lastError = null;
 
@@ -110,7 +110,11 @@ async function downloadFile(asset, onProgress) {
             // Construct headers
             const headers = new Headers();
             if (asset.size) headers.append('X-Expected-Size', asset.size.toString());
-            if (asset.path) headers.append('X-File-Path', asset.path);
+            if (asset.path) {
+                const dataDir = ConfigManager.getDataDirectory().trim();
+                const relPath = path.relative(dataDir, asset.path).replace(/\\/g, '/');
+                headers.append('X-File-Path', relPath);
+            }
             if (asset.id) headers.append('X-File-Id', asset.id);
 
             // Force HTTP after 2 failed attempts (P2P might be delivering bad data)
