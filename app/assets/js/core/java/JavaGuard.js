@@ -84,7 +84,7 @@ function filterApplicableJavaPaths(resolvedSettings, semverRange) {
         .map(([path, settings]) => {
             const parsedVersion = parseJavaRuntimeVersion(settings['java.version']);
             if (parsedVersion == null) {
-                log.error(`Failed to parse JDK version at location '${path}' (Vendor: ${settings['java.vendor']})`);
+                log.error(`Failed to parse JDK version at location '${path}' (Vendor: ${settings['java.vendor']}). Ensure this is a valid HotSpot or GraalVM build.`);
                 return null;
             }
             return {
@@ -141,13 +141,25 @@ async function validateSelectedJvm(path, semverRange) {
     } catch (e) { return null; }
 
     const resolvedSettings = await resolveJvmSettings([path]);
-    const jvmDetails = filterApplicableJavaPaths(resolvedSettings, semverRange);
+
+    // For manual selection, we skip the strict semver range check.
+    // We just want to ensure it's a valid Java installation that we can parse.
+    // Passing '*' as range effectively allows any version.
+    const jvmDetails = filterApplicableJavaPaths(resolvedSettings, '*');
+
     rankApplicableJvms(jvmDetails);
     return jvmDetails.length > 0 ? jvmDetails[0] : null;
 }
 
 async function latestOpenJDK(major, dataDir, distribution) {
+    // If no distribution specified, prefer GraalVM for newer Java (17+), Adoptium for 8
     if (distribution == null) {
+        if (major >= 17) {
+            const graal = await latestGraalVM(major, dataDir);
+            if (graal) return graal;
+            log.warn(`GraalVM not found for Java ${major}, falling back to Adoptium.`);
+        }
+
         if (process.platform === Platform.DARWIN) {
             return latestCorretto(major, dataDir);
         }
@@ -157,6 +169,8 @@ async function latestOpenJDK(major, dataDir, distribution) {
     }
     else {
         switch (distribution) {
+            case 'graalvm':
+                return latestGraalVM(major, dataDir);
             case JdkDistribution.TEMURIN:
                 return latestAdoptium(major, dataDir);
             case JdkDistribution.CORRETTO:
@@ -167,6 +181,124 @@ async function latestOpenJDK(major, dataDir, distribution) {
                 throw new Error(eMsg);
             }
         }
+    }
+}
+
+async function latestGraalVM(major, dataDir) {
+    // 1. Try Liberica NIK (Mirror - BellSoft servers, usually faster/more reliable than GitHub raw)
+    try {
+        const nik = await latestLibericaNIK(major, dataDir);
+        if (nik) return nik;
+    } catch (e) {
+        log.warn(`Liberica NIK mirror failed for Java ${major}, falling back to GitHub.`, e);
+    }
+
+    // 2. Fallback to GitHub (Official GraalVM CE)
+    return await latestGraalVM_GitHub(major, dataDir);
+}
+
+async function latestLibericaNIK(major, dataDir) {
+    const arch = process.arch === 'arm64' ? 'aarch64' : 'x64'; // Liberica uses specific arch names
+    const os = process.platform === 'win32' ? 'windows' : (process.platform === 'darwin' ? 'macos' : 'linux');
+    const bitness = '64';
+    const packageType = process.platform === 'win32' ? 'zip' : 'tar.gz';
+
+    // BellSoft API v1 for NIK
+    // https://api.bell-sw.com/v1/nik/releases?version-feature={major}&os={os}&arch={arch}&bitness=64&package-type={type}
+    const url = `https://api.bell-sw.com/v1/nik/releases?version-feature=${major}&os=${os}&arch=${arch}&bitness=${bitness}&package-type=${packageType}&bundle-type=standard`;
+
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`BellSoft API Error ${res.status}`);
+
+    const releases = await res.json();
+    if (!releases || releases.length === 0) return null;
+
+    // Get latest version
+    const latest = releases[0]; // API usually sorts by version? Verification needed, but typically yes.
+
+    // Construct download info
+    return {
+        url: latest.downloadUrl,
+        size: latest.size,
+        id: latest.filename, // e.g. bellsoft-nik23.0.1-linux-amd64.tar.gz
+        hash: latest.sha1, // BellSoft provides sha1 usually
+        algo: HashAlgo.SHA1,
+        path: path.join(getLauncherRuntimeDir(dataDir), latest.filename)
+    };
+}
+
+async function latestGraalVM_GitHub(major, dataDir) {
+    const arch = process.arch === 'arm64' ? 'aarch64' : 'x64';
+    let sanitizedOS;
+    let ext;
+
+    switch (process.platform) {
+        case Platform.WIN32:
+            sanitizedOS = 'windows';
+            ext = 'zip';
+            break;
+        case Platform.DARWIN:
+            sanitizedOS = 'macos';
+            ext = 'tar.gz';
+            break;
+        case Platform.LINUX:
+            sanitizedOS = 'linux';
+            ext = 'tar.gz';
+            break;
+        default:
+            sanitizedOS = process.platform;
+            ext = 'tar.gz';
+            break;
+    }
+
+    // GraalVM Community Edition (GitHub Releases)
+    // Matches formats like: graalvm-community-jdk-21.0.2_windows-x64_bin.zip
+    const repo = 'graalvm/graalvm-ce-builds';
+
+    // We want the absolute latest release that matches our Major version
+    // GitHub API 'latest' might be 22 while we want 21. 
+    // So we list releases and find the first one matching 'jdk-{major}.'
+
+    const url = `https://api.github.com/repos/${repo}/releases`;
+
+    try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`GitHub API Error ${res.status}`);
+        const releases = await res.json();
+
+        // Find release for this major version
+        const targetRelease = releases.find(r => r.tag_name && r.tag_name.startsWith(`jdk-${major}.`));
+
+        if (!targetRelease) {
+            log.warn(`No GraalVM release found for Java ${major}`);
+            return null;
+        }
+
+        // Find asset
+        const assetPrefix = `graalvm-community-jdk-${major}`;
+        const assetSuffix = `${sanitizedOS}-${arch}_bin.${ext}`;
+
+        const asset = targetRelease.assets.find(a =>
+            a.name.toLowerCase().includes(sanitizedOS) &&
+            a.name.toLowerCase().includes(arch) &&
+            a.name.endsWith(ext)
+        );
+
+        if (asset) {
+            return {
+                url: asset.browser_download_url,
+                size: asset.size,
+                id: asset.name,
+                hash: null, // GitHub doesn't provide easy hash in asset list, verify logic might need to skip or fetch .sha256 file
+                algo: null,
+                path: path.join(getLauncherRuntimeDir(dataDir), asset.name)
+            };
+        }
+
+        return null;
+    } catch (err) {
+        log.error(`Error fetching GraalVM for Java ${major}`, err);
+        return null;
     }
 }
 

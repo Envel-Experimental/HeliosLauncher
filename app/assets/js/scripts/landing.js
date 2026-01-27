@@ -476,6 +476,7 @@ async function dlAsync(login = true) {
     if (login) {
         if (ConfigManager.getSelectedAccount() == null) {
             loggerLanding.error('You must be logged into an account.')
+            toggleLaunchArea(false) // FIX: Reset UI
             return
         }
     }
@@ -616,6 +617,19 @@ async function dlAsync(login = true) {
             proc.stderr.on('data', gameErrorListener)
 
             setLaunchDetails(Lang.queryJS('landing.dlAsync.doneEnjoyServer'))
+
+            // FIX: Watch for early exit (Crash on Startup)
+            // If the process exits before we detect "Game Started", reset the UI.
+            proc.on('exit', (code, signal) => {
+                // If onLoadComplete hasn't fired (UI is still showing launch details), close it.
+                if (launch_details.style.display !== 'none') {
+                    loggerLaunchSuite.warn(`Game exited early with code ${code}. Resetting UI.`)
+                    toggleLaunchArea(false)
+                    // Optional: Show error if code != 0? 
+                    // Usually stderr listener catches the specific error, but this ensures UI doesn't hang.
+                    // If clean exit (0), maybe they just closed it fast, but still reset UI.
+                }
+            })
 
 
         } catch (err) {
