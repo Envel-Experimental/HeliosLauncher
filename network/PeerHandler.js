@@ -311,15 +311,20 @@ class PeerHandler {
             // INSTANCE SEARCH: If we have a relPath, it might be inside an instance
             if (relPath) {
                 const instancesDir = path.join(dataDir, 'instances')
+                if (isDev) console.debug(`[P2P Debug] Checking for instances in: ${instancesDir}`)
                 try {
                     if (fs.existsSync(instancesDir)) {
                         const instances = fs.readdirSync(instancesDir)
+                        if (isDev) console.debug(`[P2P Debug] Scanning instances in ${instancesDir}. Found ${instances.length} entries.`)
                         for (const inst of instances) {
                             const instPath = path.join(instancesDir, inst)
                             if (fs.statSync(instPath).isDirectory()) {
-                                candidates.push(path.resolve(path.join(instPath, relPath)))
+                                const fullInstPath = path.resolve(instPath, relPath)
+                                candidates.push(fullInstPath)
                             }
                         }
+                    } else {
+                        if (isDev) console.debug(`[P2P Debug] instances directory MISSING at ${instancesDir}`)
                     }
                 } catch (e) {
                     if (isDev) console.debug(`[P2P Debug] Error scanning instances:`, e.message)
@@ -364,6 +369,9 @@ class PeerHandler {
                     if (fs.existsSync(parent)) {
                         const files = fs.readdirSync(parent)
                         console.debug(`[P2P Debug] Parent folder ${parent} exists and contains ${files.length} files.`)
+                        if (files.length > 0) {
+                            console.debug(`[P2P Debug] Sample files in parent: ${files.slice(0, 5).join(', ')}`)
+                        }
                         if (files.includes(hash)) {
                             console.error(`[P2P Debug] CRITICAL: fs.existsSync failed but file IS in readdir! Path: ${uniqueCandidates[0]}`)
                         } else if (fileId && files.includes(path.basename(fileId))) {

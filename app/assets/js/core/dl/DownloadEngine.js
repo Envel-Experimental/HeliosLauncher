@@ -8,6 +8,7 @@ const { pipeline } = require('stream/promises');
 const { Readable } = require('stream');
 const P2PEngine = require('../../../../../network/P2PEngine');
 const RaceManager = require('../../../../../network/RaceManager');
+const ConfigManager = require('../../configmanager');
 
 const log = LoggerUtil.getLogger('DownloadEngine');
 
@@ -106,7 +107,8 @@ async function downloadFile(asset, onProgress) {
             if (asset.id) headers.append('X-File-Id', asset.id);
 
             // Force HTTP after 2 failed attempts (P2P might be delivering bad data)
-            if (attempt >= 2) {
+            // But NOT if we are in P2P Only Mode (where HTTP is blocked anyway)
+            if (attempt >= 2 && !ConfigManager.getP2POnlyMode()) {
                 headers.append('X-Skip-P2P', 'true');
             }
 
