@@ -451,13 +451,16 @@ class PeerHandler {
                     this.sendData(reqId, chunk)
                 })
 
+                if (isDev) console.log(`[P2P Debug] Seeding file: ${foundPath} to ${remoteIP}`)
                 stream.on('end', () => {
                     this.sendEnd(reqId)
+                    if (isDev) console.log(`[P2P Debug] Upload Finished: ${foundPath} (${totalBytesSent} bytes)`)
                     cleanup()
                 })
 
                 stream.on('error', (err) => {
                     errorOccurred = true
+                    if (isDev) console.error(`[P2P Debug] Read Error on ${foundPath}:`, err.message)
                     this.sendError(reqId, 'Read Error')
                     cleanup()
                 })

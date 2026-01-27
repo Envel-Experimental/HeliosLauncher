@@ -161,6 +161,7 @@ class RaceManager {
             const onError = (err) => {
                 clearTimeout(timeout)
                 cleanup()
+                if (isDev) console.warn(`[RaceManager] P2P Leg Failed for ${hash.substring(0, 8)}: ${err.message}`)
                 reject(err)
             }
             const cleanup = () => {

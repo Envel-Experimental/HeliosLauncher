@@ -22,6 +22,7 @@ class HashVerifierStream extends Transform {
     _flush(callback) {
         const calculatedHash = this.hasher.digest('hex')
         if (calculatedHash !== this.expectedHash) {
+            console.error(`[P2P Debug] Hash mismatch! Expected: ${this.expectedHash}, Actual: ${calculatedHash}`)
             const err = new Error(`Hash mismatch`)
             err.code = 'HASH_MISMATCH'
             err.expected = this.expectedHash
