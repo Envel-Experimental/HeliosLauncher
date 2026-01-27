@@ -33,7 +33,7 @@ class DistributionIndexProcessor extends IndexProcessor {
         }
 
         const notValid = await this.validateModules(server.modules);
-        if(onStageComplete) await onStageComplete();
+        if (onStageComplete) await onStageComplete();
         return {
             distribution: notValid
         };
@@ -51,9 +51,9 @@ class DistributionIndexProcessor extends IndexProcessor {
         // Flatten module tree for validation
         const flatModules = [];
         const traverse = (modList) => {
-            for(const mod of modList) {
+            for (const mod of modList) {
                 flatModules.push(mod);
-                if(mod.hasSubModules()) {
+                if (mod.hasSubModules()) {
                     traverse(mod.subModules);
                 }
             }
@@ -62,15 +62,22 @@ class DistributionIndexProcessor extends IndexProcessor {
 
         const tasks = flatModules.map(module => {
             return limit(async () => {
+                const modulePath = module.getPath();
                 const hash = module.rawModule.artifact.MD5;
-                if (!await validateLocalFile(module.getPath(), HashAlgo.MD5, hash)) {
+
+                // Skip validation for anything in 'instances' - these are user-mutable
+                if (modulePath.replace(/\\/g, '/').includes('/instances/')) {
+                    return null;
+                }
+
+                if (!await validateLocalFile(modulePath, HashAlgo.MD5, hash)) {
                     return {
                         id: module.rawModule.id,
                         hash: hash,
                         algo: HashAlgo.MD5,
                         size: module.rawModule.artifact.size,
                         url: module.rawModule.artifact.url,
-                        path: module.getPath()
+                        path: modulePath
                     };
                 }
                 return null;
@@ -98,15 +105,15 @@ class DistributionIndexProcessor extends IndexProcessor {
             try {
                 const zip = new AdmZip(modLoaderModule.getPath());
                 const entry = zip.getEntry('version.json');
-                if(!entry) throw new Error('version.json not found in modloader jar');
+                if (!entry) throw new Error('version.json not found in modloader jar');
 
                 const data = JSON.parse(zip.readAsText(entry));
                 const writePath = getVersionJsonPath(this.commonDir, data.id);
                 await safeEnsureDir(path.dirname(writePath));
                 await fs.writeFile(writePath, JSON.stringify(data));
                 return data;
-            } catch(e) {
-                 throw new AssetGuardError('Failed to extract version.json from modloader', e);
+            } catch (e) {
+                throw new AssetGuardError('Failed to extract version.json from modloader', e);
             }
         }
     }

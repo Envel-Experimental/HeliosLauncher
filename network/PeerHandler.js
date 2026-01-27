@@ -247,6 +247,16 @@ class PeerHandler {
 
         // Bypass limits for LAN peers
         if (!isLocalUpload) {
+            // 2. Fair Usage Check (Soft Ban)
+            const { MIN_CREDITS_TO_START } = require('./constants')
+            const credits = this.engine.usageTracker.getCredits(remoteIP)
+
+            if (credits < MIN_CREDITS_TO_START) {
+                if (isDev) console.warn(`[P2P FairUsage] Soft-banning ${remoteIP} (Credits: ${credits.toFixed(1)} MB)`)
+                this.sendError(reqId, 'Busy (Fair Usage Cooling)')
+                return
+            }
+
             // Queue request via Engine
             this.engine.queueRequest(this, reqId, hash, relPath, fileId)
             return // Stop execution here, wait for queue processing
@@ -283,35 +293,19 @@ class PeerHandler {
             if (relPath) {
                 candidates.push(path.resolve(path.join(commonDir, relPath)))
                 candidates.push(path.resolve(path.join(dataDir, relPath)))
+                // Try recursive-ish fallbacks for common assets
+                candidates.push(path.resolve(path.join(dataDir, 'common', relPath)))
+                candidates.push(path.resolve(path.join(dataDir, 'minecraft', relPath)))
             }
 
             if (fileId) {
                 candidates.push(path.resolve(path.join(commonDir, fileId)))
                 candidates.push(path.resolve(path.join(dataDir, fileId)))
+                candidates.push(path.resolve(path.join(dataDir, 'common', fileId)))
             }
 
-            // INSTANCE SEARCH: If we have a relPath, it might be inside an instance
-            if (relPath) {
-                const instancesDir = path.join(dataDir, 'instances')
-                if (isDev) console.debug(`[P2P Debug] Checking for instances in: ${instancesDir}`)
-                try {
-                    if (fs.existsSync(instancesDir)) {
-                        const instances = fs.readdirSync(instancesDir)
-                        if (isDev) console.debug(`[P2P Debug] Scanning ${instances.length} instances for ${relPath}`)
-                        for (const inst of instances) {
-                            const instPath = path.join(instancesDir, inst)
-                            if (fs.statSync(instPath).isDirectory()) {
-                                candidates.push(path.resolve(instPath, relPath))
-                                // Common nested structures in instances
-                                candidates.push(path.resolve(instPath, 'bin', relPath))
-                                candidates.push(path.resolve(instPath, 'assets', relPath))
-                            }
-                        }
-                    }
-                } catch (e) {
-                    if (isDev) console.debug(`[P2P Debug] Error scanning instances:`, e.message)
-                }
-            }
+            // INSTANCE SEARCH: Removed as instances are user-mutable and not intended for P2P distribution
+
 
             // Deduplicate and filter any invalid paths
             const uniqueCandidates = [...new Set(candidates)].filter(p => p && p.length > 5)
@@ -425,6 +419,12 @@ class PeerHandler {
                     this.engine.activeUploads = Math.max(0, this.engine.activeUploads - 1)
                     this.engine.decrementUploadCountForIP(remoteIP)
                     this.engine.onUploadFinished()
+
+                    // Consume credits based on amount transferred (MB)
+                    if (!isLocalUpload) {
+                        const transferredMB = totalBytesSent / (1024 * 1024)
+                        this.engine.usageTracker.consume(remoteIP, transferredMB)
+                    }
                 }
 
                 throttled.on('data', (chunk) => {
@@ -614,7 +614,7 @@ class PeerHandler {
             }
 
             // STRICT WHITELIST
-            const whitelist = ['assets', 'libraries', 'versions', 'common', 'icons', 'instances']
+            const whitelist = ['assets', 'libraries', 'versions', 'common', 'icons', 'minecraft']
 
             return whitelist.includes(firstPart)
         } catch (e) {

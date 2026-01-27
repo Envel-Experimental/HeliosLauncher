@@ -18,6 +18,39 @@ const isDev = require('../app/assets/js/isdev')
 // Fixed topic for the "Zombie" network
 const SWARM_TOPIC = crypto.createHash('sha256').update(SWARM_TOPIC_SEED).digest()
 
+class UsageTracker {
+    constructor() {
+        this.data = new Map() // IP -> { credits: number, lastUpdate: number }
+    }
+
+    getCredits(ip) {
+        const { MAX_CREDITS_PER_IP, CREDIT_REGEN_RATE } = require('./constants')
+        let entry = this.data.get(ip)
+
+        if (!entry) {
+            entry = { credits: MAX_CREDITS_PER_IP * 0.5, lastUpdate: Date.now() } // Start with 2.5GB for new IPs
+            this.data.set(ip, entry)
+            return entry.credits
+        }
+
+        // Apply Regeneration
+        const now = Date.now()
+        const elapsedSec = (now - entry.lastUpdate) / 1000
+        const regen = elapsedSec * CREDIT_REGEN_RATE
+
+        entry.credits = Math.min(MAX_CREDITS_PER_IP, entry.credits + regen)
+        entry.lastUpdate = now
+
+        return entry.credits
+    }
+
+    consume(ip, amountMB) {
+        const current = this.getCredits(ip)
+        const entry = this.data.get(ip)
+        entry.credits = Math.max(0, current - amountMB)
+    }
+}
+
 class P2PEngine extends EventEmitter {
     constructor() {
         super()
@@ -25,6 +58,7 @@ class P2PEngine extends EventEmitter {
         this.requests = new Map() // reqId -> { stream: Readable, timeout: Timer }
         this.reqIdCounter = 1
         this.setMaxListeners(100)
+        this.usageTracker = new UsageTracker()
 
         this._discoveryPromise = null
         this.profile = NodeAdapter.getProfile()
@@ -647,6 +681,32 @@ class P2PEngine extends EventEmitter {
 
     onUploadFinished() {
         this.processServerQueue()
+    }
+
+    getOptimalConcurrency(baseLimit) {
+        const { MIN_PARALLEL_DOWNLOADS, MAX_PARALLEL_DOWNLOADS, PEER_CONCURRENCY_FACTOR } = require('./constants')
+        const peerCount = this.peers.length
+
+        // Dynamic scaling: baseLimit (HTTP) + (peers * factor)
+        // This spreads the load across the entire swarm
+        let dynamic = baseLimit
+        if (peerCount > 0) {
+            dynamic = Math.max(MIN_PARALLEL_DOWNLOADS, peerCount * PEER_CONCURRENCY_FACTOR)
+        }
+
+        return Math.min(MAX_PARALLEL_DOWNLOADS, dynamic)
+    }
+
+    getLoadStatus() {
+        // Simple heuristic: if we have many active requests relative to peer count
+        if (this.peers.length === 0) return 'idle'
+
+        // If we-re already downloading many files, consider it "busy" but not overloaded
+        // unless we hit a very high threshold.
+        const ratio = this.requests.size / Math.max(1, this.peers.length)
+        if (ratio > 10) return 'overloaded'
+        if (ratio > 5) return 'busy'
+        return 'normal'
     }
 
     getNetworkInfo() {

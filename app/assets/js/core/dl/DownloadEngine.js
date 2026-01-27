@@ -76,11 +76,17 @@ async function downloadFile(asset, onProgress) {
     // Initial check (Optimistic)
     try {
         await fs.access(decodedPath);
-        if (CONFIG_EXTENSIONS.includes(extname(decodedPath))) {
-            log.debug(`Skipping download of ${decodedPath} as it already exists.`);
-            if (onProgress) onProgress(asset.size); // Account for skipping
+
+        // Mutable File Handling: Skip validation for configs and ANYTHING in instances
+        const isInstanceFile = decodedPath.replace(/\\/g, '/').includes('/instances/');
+        const isConfig = CONFIG_EXTENSIONS.includes(extname(decodedPath));
+
+        if (isConfig || isInstanceFile) {
+            log.debug(`Skipping validation/download of mutable file: ${decodedPath}`);
+            if (onProgress) onProgress(asset.size);
             return;
         }
+
         if (await validateLocalFile(decodedPath, algo, hash)) {
             log.debug(`File already exists and is valid: ${decodedPath}`);
             if (onProgress) onProgress(asset.size); // Account for skipping
@@ -128,7 +134,8 @@ async function downloadFile(asset, onProgress) {
             const total = asset.size || 0;
 
             // Direct Node Stream (P2P / RaceManager optimized)
-            if (response.stream) {
+            if (response.p2pStream) {
+                if (isDev) console.log(`[DownloadEngine] Using Direct Node Stream for ${asset.id}. (Type: ${response.p2pStream.constructor.name})`);
                 const progressStream = new Transform({
                     transform(chunk, encoding, callback) {
                         loaded += chunk.length;
@@ -141,7 +148,7 @@ async function downloadFile(asset, onProgress) {
                         callback();
                     }
                 });
-                await pipeline(response.stream, progressStream, fileStream);
+                await pipeline(response.p2pStream, progressStream, fileStream);
             }
             // Web Response Body (Standard HTTP)
             else if (response.body) {

@@ -257,7 +257,7 @@ class RaceManager {
         return {
             ok: true,
             status: 200,
-            stream: verifier // Node Readable Stream
+            p2pStream: verifier // Node Readable Stream
         }
     }
 }

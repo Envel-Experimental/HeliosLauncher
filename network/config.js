@@ -8,7 +8,7 @@ module.exports = {
         // Public Fallback (if private swarm fails) - HyperDHT Default
         { host: 'node1.hyperdht.org', port: 49737 }
     ],
-    BOOTSTRAP_URL: 'https://helios-launcher.com/bootstrap.json',
+    BOOTSTRAP_URL: 'https://f-launcher.ru/fox/new/bootstrap.json',
 
 
 
