@@ -366,7 +366,9 @@ class P2PEngine extends EventEmitter {
                 }
 
                 if (isDev) console.warn(`[P2PEngine] Retryable error from ${bestPeer.getIP()} for ${hash.substring(0, 8)}: ${err.message}`)
-                // Loop continues
+
+                // Backoff to prevent tight loops
+                await new Promise(r => setTimeout(r, (i + 1) * 500 + Math.random() * 500))
             }
         }
 
@@ -611,6 +613,42 @@ class P2PEngine extends EventEmitter {
         return 0
     }
 
+    queueRequest(peer, reqId, hash, relPath, fileId) {
+        if (!this.serverQueue) this.serverQueue = []
+
+        // Max Queue Size Protection (DoS)
+        if (this.serverQueue.length > 500) {
+            peer.sendError(reqId, 'Server Busy (Queue Full)')
+            return
+        }
+
+        this.serverQueue.push({ peer, reqId, hash, relPath, fileId, timestamp: Date.now() })
+        this.processServerQueue()
+    }
+
+    processServerQueue() {
+        if (!this.serverQueue || this.serverQueue.length === 0) return
+
+        const { MAX_CONCURRENT_UPLOADS } = require('./constants')
+        const max = MAX_CONCURRENT_UPLOADS || 5
+
+        while (this.activeUploads < max && this.serverQueue.length > 0) {
+            const req = this.serverQueue.shift()
+            // Check if peer is still alive
+            if (req.peer.socket.destroyed) continue
+
+            // Check if request is stale (> 30s)
+            if (Date.now() - req.timestamp > 30000) continue
+
+            // Execute
+            req.peer.executeRequest(req.reqId, req.hash, req.relPath, req.fileId)
+        }
+    }
+
+    onUploadFinished() {
+        this.processServerQueue()
+    }
+
     getNetworkInfo() {
         if (!this.totalUploaded) this.totalUploaded = 0
         const routingNodes = this._getRoutingTableSize()
@@ -629,6 +667,7 @@ class P2PEngine extends EventEmitter {
             globalPeers,
             topic: SWARM_TOPIC.toString('hex').substring(0, 8),
             requests: this.requests.size,
+            // queue: this.serverQueue ? this.serverQueue.length : 0, // Helpful metric
             uploads: this.activeUploads,
             uploaded: this.totalUploaded,
             uploadedLocal: this.totalUploadedLocal || 0,

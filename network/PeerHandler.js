@@ -247,41 +247,22 @@ class PeerHandler {
 
         // Bypass limits for LAN peers
         if (!isLocalUpload) {
-            if (this.engine.activeUploads >= MAX_CONCURRENT_UPLOADS) {
-                this.sendError(reqId, 'Busy')
-                return
-            }
-
-            // VULNERABILITY FIX 3: IP-based Slot Exhaustion
-            if (this.engine.getUploadCountForIP(remoteIP) >= 20) { // Max 20 slots per IP
-                this.sendError(reqId, 'Busy (IP Limit)')
-                return
-            }
+            // Queue request via Engine
+            this.engine.queueRequest(this, reqId, hash, relPath, fileId)
+            return // Stop execution here, wait for queue processing
         }
 
-        if (!isGlobalUpload && !isLocalUpload) {
-            this.sendError(reqId, 'Disabled')
-            return
-        }
+        // LAN peers bypass queue/limits largely, but we could still queue them?
+        // For now, let LAN bypass queue for max speed.
+        this.executeRequest(reqId, hash, relPath, fileId)
+    }
 
-        // Use TrafficState to check global busy status
-        const isBusy = TrafficState.isBusy()
+    async executeRequest(reqId, hash, relPath, fileId) {
+        let remoteIP = this.socket.remoteAddress || this.socket.remoteHost || (this.socket.rawStream && this.socket.rawStream.remoteAddress)
+        if (!remoteIP && this.info && this.info.peer) remoteIP = this.info.peer.host
+        if (!remoteIP) remoteIP = 'unknown'
 
-        if (isBusy) {
-            if (!this.wasBusy) {
-                console.log('[P2PEngine] Smart Mode: Pausing uploads due to active download.')
-                this.wasBusy = true
-            }
-            this.sendError(reqId, 'Owner Busy')
-            return
-        } else {
-            if (this.wasBusy) {
-                console.log('[P2PEngine] Smart Mode: Resuming uploads.')
-                this.wasBusy = false
-            }
-        }
-
-        // 3. Update Rate Limiter
+        const isLocalUpload = ConfigManager.getLocalOptimization() && this.engine.isLocalIP(remoteIP)
         const limitMbps = isLocalUpload ? 10000 : ConfigManager.getP2PUploadLimit() // 10 Gbps for local
         // Convert Mbps to B/s
         const limitBytes = limitMbps * 125000
@@ -443,6 +424,7 @@ class PeerHandler {
 
                     this.engine.activeUploads = Math.max(0, this.engine.activeUploads - 1)
                     this.engine.decrementUploadCountForIP(remoteIP)
+                    this.engine.onUploadFinished()
                 }
 
                 throttled.on('data', (chunk) => {
