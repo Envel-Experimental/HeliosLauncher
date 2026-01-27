@@ -582,7 +582,7 @@ class PeerHandler {
             // libraries: Game libraries
             // versions: Game versions (jars/json)
             // common: Shared assets
-            const whitelist = ['assets', 'libraries', 'versions', 'common']
+            const whitelist = ['assets', 'libraries', 'versions', 'common', 'minecraft']
 
             return whitelist.includes(firstPart)
         } catch (e) {
