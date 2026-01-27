@@ -269,8 +269,9 @@ class P2PEngine extends EventEmitter {
                 let ip = (info.peer && info.peer.host) || socket.remoteAddress || (socket.rawStream && socket.rawStream.remoteAddress) || 'unknown'
                 if (ip.startsWith('::ffff:')) ip = ip.substring(7)
 
-                if (this.blacklist.has(ip)) {
-                    if (isDev) console.warn(`[P2P Security] Rejecting blacklisted IP: ${ip}`)
+                const peerId = peer.getID()
+                if (this.blacklist.has(peerId)) {
+                    if (isDev) console.warn(`[P2P Security] Rejecting blacklisted peer: ${peerId}`)
                     socket.destroy()
                     return
                 }
@@ -438,11 +439,10 @@ class P2PEngine extends EventEmitter {
             } catch (err) {
                 // If some data was sent, we HAVE to fail the stream because DownloadEngine needs to reset the file.
                 if (err.bytesReceived > 0) {
-                    if (isDev) console.error(`[P2PEngine] Mid-transfer failure from ${bestPeer.getIP()} (${err.bytesReceived} bytes): ${err.message}`)
-                    // Still penalize if it was a protocol/size error
-                    if (err.message.includes('security limit') || err.message.includes('Incomplete')) {
-                        this.penalizePeer(bestPeer)
-                    }
+                    if (isDev) console.error(`[P2PEngine] Mid-transfer failure from ${bestPeer.getID()} (${err.bytesReceived} bytes): ${err.message}`)
+                    // Only penalize if it was a security limit violation (malicious)
+                    const isMalicious = err.message.includes('security limit')
+                    this.penalizePeer(bestPeer, isMalicious)
                     stream.emit('error', err)
                     return
                 }
@@ -646,9 +646,20 @@ class P2PEngine extends EventEmitter {
         this.swarm.join(topic, { client: true, server: shouldAnnounce })
     }
 
-    penalizePeer(peer) {
-        const ip = peer.getIP()
-        const strikes = (this.peerStrikes.get(ip) || 0) + 1
+    penalizePeer(peer, isMalicious = true) {
+        const id = peer.getID()
+        if (id === 'unknown') {
+            peer.socket.destroy()
+            return
+        }
+
+        if (!isMalicious) {
+            if (isDev) console.log(`[P2P] Disconnecting peer ${id} due to network issue (No penalty)`)
+            peer.socket.destroy()
+            return
+        }
+
+        const strikes = (this.peerStrikes.get(id) || 0) + 1
 
         // Memory Guard: Cap strike tracker
         if (this.peerStrikes.size > 2000) {
@@ -656,15 +667,15 @@ class P2PEngine extends EventEmitter {
             this.peerStrikes.delete(firstKey)
         }
 
-        this.peerStrikes.set(ip, strikes)
+        this.peerStrikes.set(id, strikes)
 
-        if (isDev) console.warn(`[P2P Security] Penalizing peer ${ip}. Strikes: ${strikes}/3`)
+        if (isDev) console.warn(`[P2P Security] Penalizing peer ${id}. Strikes: ${strikes}/3`)
 
         if (strikes >= 3) {
-            console.error(`[P2P Security] BLACKLISTING IP: ${ip} for suspicious behavior.`)
-            this.blacklist.add(ip)
+            console.error(`[P2P Security] BLACKLISTING ID: ${id} for suspicious behavior.`)
+            this.blacklist.add(id)
             // Remove blacklist after 10 minutes
-            setTimeout(() => this.blacklist.delete(ip), 600000)
+            setTimeout(() => this.blacklist.delete(id), 600000)
         }
 
         // Always disconnect the peer on a strike

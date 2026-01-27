@@ -61,6 +61,21 @@ class PeerHandler {
         this.sendPing()
     }
 
+    getIP() {
+        let ip = (this.info && this.info.peer && this.info.peer.host) || this.socket.remoteAddress || (this.socket.rawStream && this.socket.rawStream.remoteAddress) || 'unknown'
+        if (typeof ip === 'string' && ip.startsWith('::ffff:')) ip = ip.substring(7)
+        return ip
+    }
+
+    getID() {
+        const ip = this.getIP()
+        // If IP is unknown, use the Public Key as a stable, unique ID
+        if (ip === 'unknown' && this.info && this.info.publicKey) {
+            return b4a.toString(this.info.publicKey, 'hex')
+        }
+        return ip
+    }
+
     processBuffer() {
         if (this.processing) return
         this.processing = true
@@ -398,10 +413,10 @@ class PeerHandler {
                 this.socket.on('close', onSocketClose)
                 this.socket.on('error', onSocketClose)
 
-                // Watchdog
+                // Watchdog: Disconnect if no data for 30s
                 let lastActivity = Date.now()
                 const watchdog = setInterval(() => {
-                    if (Date.now() - lastActivity > 15000) {
+                    if (Date.now() - lastActivity > 30000) {
                         errorOccurred = true // Timeout
                         stream.destroy()
                         clearInterval(watchdog)
