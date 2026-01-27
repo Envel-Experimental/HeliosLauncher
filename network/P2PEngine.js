@@ -247,6 +247,25 @@ class P2PEngine extends EventEmitter {
         }
     }
 
+    getLoadStatus() {
+        if (!this.swarm || this.peers.length === 0) return 'offline'
+        const reqs = this.requests.size
+        const peers = this.peers.length
+
+        // "Ambition Control"
+        // If we have very few peers (e.g. 1), we shouldn't pile on too many requests.
+        // Ratio: 3 requests per peer is "Busy", 6 is "Overloaded" (Allow more deep queue for single peer)
+        if (reqs > peers * 6) return 'overloaded'
+        if (reqs > peers * 3) return 'busy'
+        return 'ok'
+    }
+
+    getOptimalConcurrency(defaultLimit = 32) {
+        if (!this.swarm || this.peers.length === 0) return defaultLimit
+        // "Calculate strength": 6 threads per peer, clamped between 6 and defaultLimit
+        return Math.max(6, Math.min(defaultLimit, this.peers.length * 6))
+    }
+
     requestFile(hash, expectedSize = 0, relPath = null, fileId = null) {
         const stream = new Readable({
             read() { }
@@ -259,114 +278,136 @@ class P2PEngine extends EventEmitter {
     }
 
     async _handleRequestAsync(stream, hash, expectedSize, relPath, fileId) {
-        // If no peers, wait up to 5 seconds
-        if (this.peers.length === 0) {
-            if (isDev) console.debug(`[P2P Debug] No peers for ${hash.substring(0, 8)}. Waiting...`)
+        const attempts = Config.PROTOCOL.MAX_RETRIES || 3
+        const attemptedPeers = new Set()
 
-            if (!this._discoveryPromise) {
-                this._discoveryPromise = new Promise(resolve => {
-                    const onConn = () => {
-                        this.off('peer_added', onConn)
-                        clearTimeout(t)
-                        this._discoveryPromise = null
-                        resolve(true)
-                    }
-                    const t = setTimeout(() => {
-                        this.off('peer_added', onConn)
-                        this._discoveryPromise = null
-                        resolve(false)
-                    }, 5000)
-                    this.once('peer_added', onConn)
-                })
+        for (let i = 0; i < attempts; i++) {
+            // Check for peers & Wait if needed
+            if (this.peers.length === 0) {
+                if (isDev) console.debug(`[P2P] No peers. Waiting... (Attempt ${i + 1}/${attempts})`)
+                // Use existing discovery wait logic
+                if (!this._discoveryPromise) {
+                    this._discoveryPromise = new Promise(resolve => {
+                        const onConn = () => { this.off('peer_added', onConn); clearTimeout(t); this._discoveryPromise = null; resolve(true) }
+                        const t = setTimeout(() => { this.off('peer_added', onConn); this._discoveryPromise = null; resolve(false) }, 5000)
+                        this.once('peer_added', onConn)
+                    })
+                }
+                await this._discoveryPromise
             }
 
-            const hasPeer = await this._discoveryPromise
+            if (this.peers.length === 0) {
+                // If this is the last attempt, fail.
+                if (i === attempts - 1) {
+                    stream.emit('error', new Error('No peers available'))
+                    return
+                }
+                continue
+            }
 
-            if (!hasPeer && this.peers.length === 0) {
-                console.warn(`[P2PEngine] Request failed: No peers available for ${hash.substring(0, 8)} after 5s wait.`)
-                stream.emit('error', new Error('No peers available'))
-                return
+            // Select Best Peer
+            let bestPeer = null
+            let maxScore = -1
+
+            for (const p of this.peers) {
+                if (attemptedPeers.has(p)) continue
+
+                const weight = p.remoteWeight || 1
+                const rtt = p.rtt || 200
+                let speedFactor = 1.0
+                if (p.lastTransferSpeed) {
+                    speedFactor = Math.max(0.1, p.lastTransferSpeed / 102400)
+                    speedFactor = Math.min(10.0, speedFactor)
+                }
+                let lanFactor = p.isLocal() ? 100.0 : 1.0
+
+                const score = (weight * weight) * (10000 / (rtt + 10)) * speedFactor * lanFactor
+                if (score > maxScore) {
+                    maxScore = score
+                    bestPeer = p
+                }
+            }
+
+            if (!bestPeer) {
+                if (i === attempts - 1) {
+                    stream.emit('error', new Error('Peer selection failed'))
+                    return
+                }
+                continue
+            }
+
+            attemptedPeers.add(bestPeer)
+
+            try {
+                await this._executeSingleRequest(bestPeer, stream, hash, expectedSize, relPath, fileId)
+                return // Success
+            } catch (err) {
+                // Check if fatal (data already sent)
+                if (err.bytesReceived > 0) {
+                    // console.error(`[P2PEngine] Fatal error from ${bestPeer.getIP()} after receiving ${err.bytesReceived} bytes: ${err.message}`)
+                    stream.emit('error', err)
+                    return
+                }
+
+                // console.warn(`[P2PEngine] Retryable error from ${bestPeer.getIP()}: ${err.message}`)
+                // Loop continues
             }
         }
 
-        const reqId = this.reqIdCounter++
-        if (this.reqIdCounter > 4294967295) this.reqIdCounter = 1
+        stream.emit('error', new Error('Download failed after retries'))
+    }
 
-        let bestPeer = null
-        let maxScore = -1
+    _executeSingleRequest(peer, stream, hash, expectedSize, relPath, fileId) {
+        return new Promise((resolve, reject) => {
+            const reqId = this.reqIdCounter++
+            if (this.reqIdCounter > 4294967295) this.reqIdCounter = 1
 
-        // Select best peer
-        for (const p of this.peers) {
-            const weight = p.remoteWeight || 1
-            const rtt = p.rtt || 200
+            if (isDev) console.debug(`[P2P Debug] Requesting ${hash.substring(0, 8)} from ${peer.getIP()}`)
 
-            let speedFactor = 1.0
-            if (p.lastTransferSpeed) {
-                speedFactor = Math.max(0.1, p.lastTransferSpeed / 102400)
-                speedFactor = Math.min(10.0, speedFactor)
+            // Register Request
+            this.requests.set(reqId, {
+                stream,
+                peer,
+                expectedSize,
+                timestamp: Date.now(),
+                bytesReceived: 0,
+                resolve,
+                reject
+            })
+
+            // Sending request
+            const useBatching = peer.batchSupport && (expectedSize > 0 && expectedSize < 1024 * 1024) && !relPath
+
+            if (useBatching) {
+                if (!this.batchQueue.has(peer)) {
+                    this.batchQueue.set(peer, [])
+                }
+                this.batchQueue.get(peer).push({ reqId, hash })
+
+                if (!this.batchFlushScheduled) {
+                    this.batchFlushScheduled = true
+                    setTimeout(() => this.flushBatches(), 20)
+                }
+            } else {
+                try {
+                    peer.sendRequest(reqId, hash, relPath, fileId)
+                } catch (e) {
+                    this.requests.delete(reqId)
+                    reject(e)
+                    return
+                }
             }
 
-            let lanFactor = 1.0
-            const ip = p.socket.remoteAddress || (p.info?.peer?.host)
-            if (this.isLocalIP(ip)) {
-                lanFactor = 100.0 // Massive priority for LAN
-            }
-
-            const score = (weight * weight) * (10000 / (rtt + 10)) * speedFactor * lanFactor
-            if (score > maxScore) {
-                maxScore = score
-                bestPeer = p
-            }
-        }
-
-        const peer = bestPeer
-        if (!peer) {
-            stream.emit('error', new Error('Peer selection failed'))
-            return
-        }
-
-        if (isDev) console.debug(`[P2P Debug] Requesting ${hash.substring(0, 8)} from ${peer.socket.remoteAddress || 'unknown'}. Peers available: ${this.peers.length}`)
-
-        // Setup request tracking
-        this.requests.set(reqId, {
-            stream,
-            peer,
-            expectedSize,
-            timestamp: Date.now(),
-            bytesReceived: 0
+            setTimeout(() => {
+                if (this.requests.has(reqId)) {
+                    const req = this.requests.get(reqId)
+                    this.requests.delete(reqId)
+                    const err = new Error('P2P Timeout')
+                    err.bytesReceived = req.bytesReceived
+                    req.reject(err)
+                }
+            }, Config.PROTOCOL.TIMEOUT)
         })
-
-        const useBatching = peer.batchSupport && (expectedSize > 0 && expectedSize < 1024 * 1024) && !relPath
-
-        if (useBatching) {
-            if (!this.batchQueue.has(peer)) {
-                this.batchQueue.set(peer, [])
-            }
-            this.batchQueue.get(peer).push({ reqId, hash })
-
-            if (!this.batchFlushScheduled) {
-                this.batchFlushScheduled = true
-                setTimeout(() => this.flushBatches(), 20)
-            }
-        } else {
-            if (isDev) console.debug(`[P2P Debug] Sending Request ${reqId} for ${hash.substring(0, 8)} to ${peer.socket.remoteAddress || 'unknown'}`)
-            peer.sendRequest(reqId, hash, relPath, fileId)
-        }
-
-        stream.on('close', () => {
-            if (this.requests.has(reqId)) {
-                this.requests.delete(reqId)
-            }
-        })
-
-        setTimeout(() => {
-            if (this.requests.has(reqId)) {
-                this.requests.delete(reqId)
-                stream.emit('error', new Error('P2P Timeout'))
-            }
-        }, Config.PROTOCOL.TIMEOUT)
-
-        return stream
     }
 
     handleIncomingData(reqId, data, senderPeer) {
@@ -379,8 +420,7 @@ class P2PEngine extends EventEmitter {
 
             req.bytesReceived = (req.bytesReceived || 0) + data.length
 
-            const isLocal = this.isLocalIP(senderPeer.socket.remoteAddress || senderPeer.info?.peer?.host)
-            if (isLocal) {
+            if (req.peer.isLocal()) {
                 this.totalDownloadedLocal += data.length
             } else {
                 this.totalDownloadedGlobal += data.length
@@ -390,7 +430,9 @@ class P2PEngine extends EventEmitter {
 
             // VULNERABILITY FIX ("Infinite File"): Size Check
             if (req.expectedSize > 0 && req.bytesReceived > req.expectedSize) {
-                req.stream.emit('error', new Error('File size exceeded expected limit'))
+                const err = new Error('File size exceeded expected limit')
+                err.bytesReceived = req.bytesReceived
+                req.reject(err)
                 this.requests.delete(reqId)
                 this.triggerCircuitBreaker()
                 return
@@ -407,12 +449,15 @@ class P2PEngine extends EventEmitter {
 
             // Strict Size Validation
             if (req.expectedSize > 0 && req.bytesReceived !== req.expectedSize) {
-                req.stream.emit('error', new Error(`Incomplete transfer: Received ${req.bytesReceived} of ${req.expectedSize}`))
+                const err = new Error(`Incomplete transfer: Received ${req.bytesReceived} of ${req.expectedSize}`)
+                err.bytesReceived = req.bytesReceived
+                req.reject(err)
                 this.requests.delete(reqId)
                 return
             }
 
             req.stream.push(null) // EOF
+            req.resolve()
 
             const duration = (Date.now() - req.timestamp) / 1000
             if (duration > 0 && req.bytesReceived > 102400) {
@@ -430,7 +475,9 @@ class P2PEngine extends EventEmitter {
             if (req.peer !== senderPeer) return;
 
             const msg = messageBuffer.toString('utf-8')
-            req.stream.emit('error', new Error(`Peer error: ${msg}`))
+            const err = new Error(`Peer error: ${msg}`)
+            err.bytesReceived = req.bytesReceived
+            req.reject(err)
             this.requests.delete(reqId)
         }
     }

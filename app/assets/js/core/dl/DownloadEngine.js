@@ -13,9 +13,11 @@ const log = LoggerUtil.getLogger('DownloadEngine');
 
 async function downloadQueue(assets, onProgress) {
     P2PEngine.start();
-    const limit = 32; // Concurrency
+    const limit = 32;
     const receivedTotals = assets.reduce((acc, a) => ({ ...acc, [a.id]: 0 }), {});
     let receivedGlobal = 0;
+
+    let activeDownloads = 0;
 
     const runDownload = async (asset) => {
         const onEachProgress = (transferred) => {
@@ -31,12 +33,24 @@ async function downloadQueue(assets, onProgress) {
 
     const worker = async () => {
         while (queue.length > 0) {
+            // Dynamic Throttling: Check if we have permission to start another download
+            const currentMax = P2PEngine.getOptimalConcurrency(limit);
+            if (activeDownloads >= currentMax) {
+                await sleep(100);
+                continue;
+            }
+
             const asset = queue.shift();
+            if (!asset) break;
+
+            activeDownloads++;
             try {
                 await runDownload(asset);
             } catch (err) {
                 // If downloadFile throws, it means it failed after retries.
                 throw err;
+            } finally {
+                activeDownloads--;
             }
         }
     };

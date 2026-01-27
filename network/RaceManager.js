@@ -131,6 +131,14 @@ class RaceManager {
             }
 
             const P2PEngine = require('./P2PEngine')
+
+            // Ambition Control: If P2P is overloaded, don't even try, let HTTP handle it.
+            const loadStatus = P2PEngine.getLoadStatus()
+            if (loadStatus === 'overloaded') {
+                reject(new Error('P2P Overloaded'))
+                return
+            }
+
             globalP2PStream = P2PEngine.requestFile(hash, expectedSize, relPath, fileId)
 
             // Timeout P2P strictly to avoid waiting too long if HTTP is also slow/failing
@@ -138,7 +146,7 @@ class RaceManager {
                 cleanup()
                 console.log('[RaceManager] Global P2P Task Timed Out (Soft)')
                 reject(new Error('Global P2P Timeout'))
-            }, 20000) // 20s Soft Timeout for First Byte
+            }, 30000) // 30s Soft Timeout for First Byte
 
             const onReadable = () => {
                 clearTimeout(timeout)

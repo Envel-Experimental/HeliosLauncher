@@ -440,6 +440,17 @@ class PeerHandler {
         }
     }
 
+    getIP() {
+        let ip = this.socket.remoteAddress || this.socket.remoteHost || (this.socket.rawStream && this.socket.rawStream.remoteAddress)
+        if (!ip && this.info && this.info.peer) ip = this.info.peer.host
+        if (ip && ip.startsWith('::ffff:')) ip = ip.substring(7)
+        return ip || 'unknown'
+    }
+
+    isLocal() {
+        if (this.info && this.info.local) return true
+        return this.engine.isLocalIP(this.getIP())
+    }
 
     sendData(reqId, data) {
         if (this.socket.destroyed) return; // Guard against dead socket
