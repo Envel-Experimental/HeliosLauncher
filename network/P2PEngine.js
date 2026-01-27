@@ -617,9 +617,11 @@ class P2PEngine extends EventEmitter {
         if (!this.uploadHistory) this.uploadHistory = []
 
         if (isError) {
-            NodeAdapter.penaltyWeight()
+            const weight = NodeAdapter.penaltyWeight()
+            if (isDev) console.warn(`[P2PEngine] Upload performance penalty applied. Current Weight: ${weight}`)
+
             if (NodeAdapter.isCritical()) {
-                console.log('[P2PEngine] Critical performance drop. Stopping announcement.')
+                console.error('[P2PEngine] CRITICAL performance drop! Stopping announcement to preserve system resources.')
                 this.reconfigureSwarm()
             }
             return

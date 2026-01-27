@@ -20,22 +20,22 @@ async function downloadQueue(assets, onProgress) {
     let receivedGlobal = 0;
 
     let activeDownloads = 0;
+    const deferredQueue = [];
 
-    const runDownload = async (asset) => {
+    const runDownload = async (asset, forceHTTP = false, instantDefer = false) => {
         const onEachProgress = (transferred) => {
             receivedGlobal += (transferred - receivedTotals[asset.id]);
             receivedTotals[asset.id] = transferred;
             if (onProgress) onProgress(receivedGlobal);
         };
-        await downloadFile(asset, onEachProgress);
+        await downloadFile(asset, onEachProgress, forceHTTP, instantDefer);
     };
 
-    const queue = [...assets];
-    const workers = [];
+    let queue = [...assets];
 
-    const worker = async () => {
+    const worker = async (forceHTTP = false, instantDefer = false) => {
         while (queue.length > 0) {
-            // Dynamic Throttling: Check if we have permission to start another download
+            // Dynamic Throttling
             const currentMax = P2PEngine.getOptimalConcurrency(limit);
             if (activeDownloads >= currentMax) {
                 await sleep(100);
@@ -47,25 +47,48 @@ async function downloadQueue(assets, onProgress) {
 
             activeDownloads++;
             try {
-                await runDownload(asset);
+                await runDownload(asset, forceHTTP, instantDefer);
             } catch (err) {
-                // If downloadFile throws, it means it failed after retries.
-                throw err;
+                if (!forceHTTP) {
+                    log.warn(`[DownloadEngine] Deferring failed file: ${asset.id} (${err.message}). Will retry at the end.`);
+                    deferredQueue.push(asset);
+                } else {
+                    // In final stand, if it fails again, we must collect it to throw later
+                    deferredQueue.push(asset);
+                }
             } finally {
                 activeDownloads--;
             }
         }
     };
 
-    for (let i = 0; i < limit; i++) {
-        workers.push(worker());
+    // 1. Main Pass (Fast pass: try only once and defer failures)
+    const workers = [];
+    for (let i = 0; i < limit; i++) workers.push(worker(false, true));
+    await Promise.all(workers);
+
+    // 2. Final Stand Pass (Retry deferred files with Force HTTP)
+    if (deferredQueue.length > 0) {
+        log.warn(`[DownloadEngine] Attempting "Final Stand" for ${deferredQueue.length} deferred files (P2P Disabled)...`);
+        queue = [...deferredQueue];
+        deferredQueue.length = 0; // Clear it to reuse for last check
+
+        // Use fewer workers for final pass to avoid congestion
+        const finalWorkers = [];
+        for (let i = 0; i < 4; i++) finalWorkers.push(worker(true));
+        await Promise.all(finalWorkers);
     }
 
-    await Promise.all(workers);
+    // 3. Last Check
+    if (deferredQueue.length > 0) {
+        const names = deferredQueue.map(a => a.id).join(', ');
+        throw new Error(`Critical failure: Failed to download ${deferredQueue.length} files even after deferral: ${names}`);
+    }
+
     return receivedTotals;
 }
 
-async function downloadFile(asset, onProgress) {
+async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer = false) {
     if (!asset || !asset.path) {
         throw new Error('Asset or asset path is null or undefined.');
     }
@@ -117,10 +140,19 @@ async function downloadFile(asset, onProgress) {
             }
             if (asset.id) headers.append('X-File-Id', asset.id);
 
-            // Force HTTP after 2 failed attempts (P2P might be delivering bad data)
+            // Force HTTP after 2 failed attempts or if explicitly requested (deferral)
             // But NOT if we are in P2P Only Mode (where HTTP is blocked anyway)
-            if (attempt >= 2 && !ConfigManager.getP2POnlyMode()) {
+            if ((attempt >= 2 || forceHTTP) && !ConfigManager.getP2POnlyMode()) {
                 headers.append('X-Skip-P2P', 'true');
+            }
+
+            // SMART DEFERRAL: If we are in "Only P2P" mode and have no peers yet, 
+            // don't waste time waiting for timeouts - defer to the end of the queue.
+            if (instantDefer && P2PEngine.peers.length === 0 && !forceHTTP) {
+                // Let the first few files try (to trigger discovery), but defer the rest
+                if (Math.random() > 0.1) {
+                    throw new Error('DEFER: No peers available (Waiting for discovery)');
+                }
             }
 
             // Use RaceManager
@@ -201,6 +233,11 @@ async function downloadFile(asset, onProgress) {
         } catch (err) {
             lastError = err;
             try { await fs.unlink(decodedPath) } catch (e) { }
+
+            if (instantDefer) {
+                // Return immediate failure to defer the file
+                throw err;
+            }
             // Continue to next attempt
         }
     }

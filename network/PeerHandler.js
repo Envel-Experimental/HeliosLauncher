@@ -436,7 +436,11 @@ class PeerHandler {
                     const duration = (Date.now() - startTime) / 1000
                     if (duration > 2) { // Ignore micro-transactions
                         const speed = totalBytesSent / duration // Bytes/sec
-                        this.engine.reportUploadStats(speed, errorOccurred)
+
+                        // Only report as "Error" if it was a real performance failure (timed out or socket died with low speed)
+                        // This prevents "Not Found" or "Busy" from penalizing the seeder's reputation.
+                        const isRealFailure = errorOccurred && speed < 102400 // Less than 100KB/s on failure
+                        this.engine.reportUploadStats(speed, isRealFailure)
                     }
 
                     this.engine.activeUploads = Math.max(0, this.engine.activeUploads - 1)
