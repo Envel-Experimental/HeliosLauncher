@@ -172,6 +172,16 @@ class MojangIndexProcessor extends IndexProcessor {
 
         const tasks = Object.entries(assetIndex.objects).map(([id, meta]) => {
             return limit(async () => {
+                // Skip unnecessary language files (Only keep EN and RU)
+                if (id.startsWith('minecraft/lang/')) {
+                    const isEssential = id.endsWith('en_us.json') ||
+                        id.endsWith('en_gb.json') ||
+                        id.endsWith('ru_ru.json') ||
+                        id.endsWith('en_us.lang') ||
+                        id.endsWith('ru_ru.lang');
+                    if (!isEssential) return null;
+                }
+
                 const hash = meta.hash;
                 const filePath = path.join(objectDir, hash.substring(0, 2), hash);
                 const url = `${MojangIndexProcessor.ASSET_RESOURCE_ENDPOINT}/${hash.substring(0, 2)}/${hash}`;
