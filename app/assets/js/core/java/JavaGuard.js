@@ -160,12 +160,7 @@ async function latestOpenJDK(major, dataDir, distribution) {
             log.warn(`GraalVM not found for Java ${major}, falling back to Adoptium.`);
         }
 
-        if (process.platform === Platform.DARWIN) {
-            return latestCorretto(major, dataDir);
-        }
-        else {
-            return latestAdoptium(major, dataDir);
-        }
+        return latestAdoptium(major, dataDir);
     }
     else {
         switch (distribution) {
@@ -360,20 +355,18 @@ async function latestCorretto(major, dataDir) {
             break;
     }
     const url = `https://corretto.aws/downloads/latest/amazon-corretto-${major}-${arch}-${sanitizedOS}-jdk.${ext}`;
-    const md5url = `https://corretto.aws/downloads/latest_checksum/amazon-corretto-${major}-${arch}-${sanitizedOS}-jdk.${ext}`;
+
     try {
         const res = await fetch(url, { method: 'HEAD' });
         if (res.ok) {
-            const checksumRes = await fetch(md5url);
-            const checksum = await checksumRes.text();
             const finalUrl = res.url;
             const name = finalUrl.substring(finalUrl.lastIndexOf('/') + 1);
             return {
                 url: finalUrl,
                 size: parseInt(res.headers.get('content-length')),
                 id: name,
-                hash: checksum.trim(),
-                algo: HashAlgo.MD5,
+                hash: null,
+                algo: null,
                 path: path.join(getLauncherRuntimeDir(dataDir), name)
             };
         }

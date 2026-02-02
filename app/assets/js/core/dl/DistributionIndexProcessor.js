@@ -63,18 +63,29 @@ class DistributionIndexProcessor extends IndexProcessor {
         const tasks = flatModules.map(module => {
             return limit(async () => {
                 const modulePath = module.getPath();
-                const hash = module.rawModule.artifact.MD5;
+                let hash = module.rawModule.artifact.SHA256;
+                let algo = HashAlgo.SHA256;
+
+                if (!hash) {
+                    hash = module.rawModule.artifact.SHA1;
+                    algo = HashAlgo.SHA1;
+                }
+
+                if (!hash) {
+                    // No supported hash found (MD5 dropped). Skip validation.
+                    return null;
+                }
 
                 // Skip validation for anything in 'instances' - these are user-mutable
                 if (modulePath.replace(/\\/g, '/').includes('/instances/')) {
                     return null;
                 }
 
-                if (!await validateLocalFile(modulePath, HashAlgo.MD5, hash)) {
+                if (!await validateLocalFile(modulePath, algo, hash)) {
                     return {
                         id: module.rawModule.id,
                         hash: hash,
-                        algo: HashAlgo.MD5,
+                        algo: algo,
                         size: module.rawModule.artifact.size,
                         url: module.rawModule.artifact.url,
                         path: modulePath

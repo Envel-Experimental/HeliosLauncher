@@ -238,8 +238,8 @@ class PeerHandler {
 
         // Sanitize hash to prevent directory traversal
         // Support SHA1 (40 chars) and MD5 (32 chars)
-        if (!/^([a-f0-9]{40}|[a-f0-9]{32})$/i.test(hash)) {
-            this.sendError(reqId, 'Invalid hash')
+        if (!/^([a-f0-9]{64}|[a-f0-9]{40})$/i.test(hash)) {
+            this.sendError(reqId, 'Invalid hash (Only SHA-1 and SHA-256 allowed)')
             return
         }
 
