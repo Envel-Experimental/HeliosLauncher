@@ -740,7 +740,7 @@ class PeerHandler {
             // STRICT BLACKLIST (Files)
             const blacklist = [
                 'config.json', 'distribution.json', 'peers.json', 'version_manifest_v2.json',
-                'launcher_accounts.json', 'launcher_profiles.json', 'usercache.json'
+                'launcher_accounts.json', 'launcher_profiles.json', 'usercache.json', 'options.txt'
             ]
             if (blacklist.includes(fileName)) return false
 
@@ -752,7 +752,13 @@ class PeerHandler {
             }
 
             // STRICT WHITELIST
-            const whitelist = ['assets', 'libraries', 'versions', 'common', 'icons']
+            // assets - textures/sounds (heavy)
+            // libraries - game libs (code)
+            // versions - game core (code)
+            // mods - mods (code, heavy)
+            // common - shared files
+            // objects - hashed assets
+            const whitelist = ['assets', 'libraries', 'versions', 'common', 'icons', 'objects', 'mods']
 
             return whitelist.includes(firstPart)
         } catch (e) {
