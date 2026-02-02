@@ -504,13 +504,35 @@ class PeerHandler {
                 this.socket.on('close', onSocketClose)
                 this.socket.on('error', onSocketClose)
 
-                // Watchdog: Disconnect if no data for 30s
+                // Watchdog: Anti-Slowloris & Inactivity Protection
                 let lastActivity = Date.now()
+                const watchdogStart = Date.now()
+
                 const watchdog = setInterval(() => {
-                    if (Date.now() - lastActivity > 30000) {
-                        errorOccurred = true // Timeout
+                    const now = Date.now()
+
+                    // 1. Strict Inactivity Check (15s)
+                    // If the client stops reading completely, cut them off faster than 30s.
+                    if (now - lastActivity > 15000) {
+                        errorOccurred = true
+                        if (isDev) console.warn(`[P2P Security] Disconnecting ${remoteIP} due to inactivity (15s).`)
                         stream.destroy()
                         clearInterval(watchdog)
+                        return
+                    }
+
+                    // 2. Minimum Speed Enforcement (Anti-Slowloris)
+                    // After 10s grace period, ensure client is downloading at least 1KB/s.
+                    // A Slowloris bot reading 1 byte/sec will fail this immediately.
+                    const duration = (now - watchdogStart) / 1000
+                    if (duration > 10) {
+                        const avgSpeed = totalBytesSent / duration
+                        if (avgSpeed < 1024) { // < 1KB/s
+                            errorOccurred = true
+                            if (isDev) console.warn(`[P2P Security] Disconnecting ${remoteIP} due to Slowloris behavior (Speed: ${avgSpeed.toFixed(0)} B/s)`)
+                            stream.destroy()
+                            clearInterval(watchdog)
+                        }
                     }
                 }, 5000)
 
