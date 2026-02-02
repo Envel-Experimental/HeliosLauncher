@@ -461,6 +461,13 @@ class P2PEngine extends EventEmitter {
 
     _executeSingleRequest(peer, stream, hash, expectedSize, relPath, fileId) {
         return new Promise((resolve, reject) => {
+            // VULNERABILITY FIX: Hard Cap mechanisms for Requests Map
+            // Prevent Memory Leak / Explosion via API abuse
+            if (this.requests.size >= 500) {
+                reject(new Error('P2P Engine Overloaded (Request Cap Reached)'))
+                return
+            }
+
             // Generate Random Request ID (collision avoidance)
             let reqId
             do {

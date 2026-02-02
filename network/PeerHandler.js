@@ -19,7 +19,8 @@ class PeerHandler {
         this.socket = socket
         this.engine = engine
         this.info = info
-        this.buffer = b4a.alloc(0)
+        this.chunks = []
+        this.chunksLen = 0
         this.processing = false
         this.batchSupport = false
         this.remoteWeight = 0
@@ -35,13 +36,14 @@ class PeerHandler {
 
         socket.on('data', (data) => {
             // VULNERABILITY FIX 2: Memory Leak DoS Protection
-            if (this.buffer.length + data.length > 2 * 1024 * 1024) { // 2MB Hard Limit
+            if (this.chunksLen + data.length > 2 * 1024 * 1024) { // 2MB Hard Limit
                 // console.error('[PeerHandler] Buffer overflow. Closing connection.')
                 this.socket.destroy()
                 return
             }
-            this.buffer = b4a.concat([this.buffer, data])
-            this.processBuffer()
+            this.chunks.push(data)
+            this.chunksLen += data.length
+            this.processChunks()
         })
 
         socket.on('error', (err) => {
@@ -76,34 +78,94 @@ class PeerHandler {
         return ip
     }
 
-    processBuffer() {
+    processChunks() {
         if (this.processing) return
         this.processing = true
 
-        while (this.buffer.length >= 9) {
-            // Header: Type(1) + ReqID(4) + Len(4)
-            const type = this.buffer[0]
-            const reqId = this.buffer.readUInt32BE(1)
-            const len = this.buffer.readUInt32BE(5)
+        try {
+            while (true) {
+                // We need at least 9 bytes for the header
+                if (this.chunksLen < 9) break
 
-            // VULNERABILITY FIX 1: OOM Protection
-            if (len > 1024 * 1024) { // 1MB Max Message Size
-                // console.error('[PeerHandler] Message too large. Closing connection.')
-                this.socket.destroy()
-                return // Stop processing
+                // Peek at the header without consuming info if we don't have the full body yet
+                // We can't easily "peek" across chunks without stitching some if the header is split.
+                // However, header is small (9 bytes).
+
+                // Optimized peek for header size
+                const header = this._peekBytes(9)
+
+                const type = header[0]
+                const reqId = header.readUInt32BE(1)
+                const len = header.readUInt32BE(5)
+
+                // VULNERABILITY FIX 1: OOM Protection
+                if (len > 1024 * 1024) { // 1MB Max Message Size
+                    this.socket.destroy()
+                    return
+                }
+
+                if (this.chunksLen < 9 + len) {
+                    break // Wait for more data
+                }
+
+                // Consume Header
+                this._readBytes(9)
+
+                // Consume Body
+                const payload = this._readBytes(len)
+
+                this.handleMessage(type, reqId, payload)
             }
+        } finally {
+            this.processing = false
+        }
+    }
 
-            if (this.buffer.length < 9 + len) {
-                break // Wait for more data
-            }
+    _peekBytes(n) {
+        if (this.chunksLen < n) throw new Error('Not enough data')
 
-            const payload = this.buffer.subarray(9, 9 + len)
-            this.handleMessage(type, reqId, payload)
-
-            this.buffer = this.buffer.subarray(9 + len)
+        if (this.chunks[0].length >= n) {
+            return this.chunks[0].subarray(0, n)
         }
 
-        this.processing = false
+        // Header spans multiple chunks - rare but possible
+        // Ideally we shouldn't copy much here, but for header (9 bytes) it's cheap.
+        return b4a.concat(this.chunks).subarray(0, n)
+    }
+
+    _readBytes(n) {
+        if (n === 0) return b4a.alloc(0)
+        if (this.chunksLen < n) throw new Error('Not enough data')
+
+        this.chunksLen -= n
+
+        // Fast path: fully contained in first chunk
+        if (this.chunks[0].length === n) {
+            return this.chunks.shift()
+        }
+        if (this.chunks[0].length > n) {
+            const buf = this.chunks[0].subarray(0, n)
+            this.chunks[0] = this.chunks[0].subarray(n)
+            return buf
+        }
+
+        // Slow path: spans multiple chunks
+        const res = b4a.alloc(n)
+        let offset = 0
+        while (offset < n) {
+            const chunk = this.chunks[0]
+            const remaining = n - offset
+            if (chunk.length <= remaining) {
+                chunk.copy(res, offset)
+                offset += chunk.length
+                this.chunks.shift()
+            } else {
+                chunk.copy(res, offset, 0, remaining)
+                this.chunks[0] = chunk.subarray(remaining)
+                offset += remaining
+            }
+        }
+        return res
     }
 
     handleMessage(type, reqId, payload) {
@@ -221,8 +283,32 @@ class PeerHandler {
                 this.sendError(reqId, 'JSON Payload Too Large')
                 return
             }
+
+            let data
             try {
-                const data = JSON.parse(hash)
+                const str = payload.toString('utf-8')
+                data = JSON.parse(str)
+            } catch (e) {
+                return // Invalid JSON, ignore
+            }
+
+            // STRUCTURAL VALIDATION: Ensure flat object (Schema Validation)
+            // We expect { h: string, p: string, id: string }
+            if (!data || typeof data !== 'object' || Array.isArray(data)) {
+                this.sendError(reqId, 'Invalid JSON Structure')
+                return
+            }
+
+            // Prevent Nested Objects (Depth > 1 prohibited)
+            for (const key in data) {
+                if (typeof data[key] === 'object' && data[key] !== null) {
+                    this.sendError(reqId, 'Nested Objects Not Allowed')
+                    return
+                }
+            }
+
+            try {
+                const data = JSON.parse(str)
                 // STRUCTURAL VALIDATION: Ensure flat object to prevent processing overhead logic
                 if (data && typeof data === 'object' && !Array.isArray(data)) {
                     hash = String(data.h || '').trim()
@@ -631,18 +717,27 @@ class PeerHandler {
     _isPathSecure(filePath) {
         try {
             const dataDir = ConfigManager.getDataDirectory().trim()
-            const rel = path.relative(dataDir, filePath)
+            const commonDir = ConfigManager.getCommonDirectory().trim()
 
-            // Block paths outside dataDir
-            if (rel.startsWith('..') || path.isAbsolute(rel)) return false
+            // Check Data Dir
+            const relData = path.relative(dataDir, filePath)
+            const isInData = !relData.startsWith('..') && !path.isAbsolute(relData)
 
-            const normalizedRel = rel.replace(/\\/g, '/')
+            // Check Common Dir
+            const relCommon = path.relative(commonDir, filePath)
+            const isInCommon = !relCommon.startsWith('..') && !path.isAbsolute(relCommon)
+
+            // Must be in at least one valid root
+            if (!isInData && !isInCommon) return false
+
+            // Use the valid relative path for whitelist checks
+            const activeRel = isInData ? relData : relCommon
+            const normalizedRel = activeRel.replace(/\\/g, '/')
             const parts = normalizedRel.split('/')
             const firstPart = parts[0]
             const fileName = parts[parts.length - 1]
 
             // STRICT BLACKLIST (Files)
-            // Добавил сюда sensitive JSONs, на случай если ты вернешь minecraft в whitelist
             const blacklist = [
                 'config.json', 'distribution.json', 'peers.json', 'version_manifest_v2.json',
                 'launcher_accounts.json', 'launcher_profiles.json', 'usercache.json'
@@ -657,8 +752,6 @@ class PeerHandler {
             }
 
             // STRICT WHITELIST
-            // УБРАЛ 'minecraft' из списка. 
-            // 'common' обычно используется для шареных ассетов - это ок.
             const whitelist = ['assets', 'libraries', 'versions', 'common', 'icons']
 
             return whitelist.includes(firstPart)

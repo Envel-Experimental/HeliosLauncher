@@ -162,7 +162,8 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
 
             if (!response.ok) throw new Error(`RaceManager failed: ${response.status}`);
 
-            const fileStream = fsSync.createWriteStream(decodedPath);
+            const tempPath = decodedPath + '.tmp';
+            const fileStream = fsSync.createWriteStream(tempPath);
 
             // Progress tracking wrapper
             let loaded = 0;
@@ -214,17 +215,20 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
                 throw new Error('No body in response');
             }
 
-            // Validate
-            if (await validateLocalFile(decodedPath, algo, hash)) {
-                return; // Success!
+            // Validate Atomic Write (RCE Guard)
+            if (await validateLocalFile(tempPath, algo, hash)) {
+                // Success! Atomic rename to final path
+                await fs.rename(tempPath, decodedPath);
+                return;
             } else {
                 if (isDev) console.error(`[DownloadEngine] Validation failed for ${asset.id}. File size: ${loaded} / ${total}`)
 
-                // DEBUG: Inspect the content of the failed file
+                // DEBUG: Inspect contents and delete temp
                 try {
-                    const content = await fs.readFile(decodedPath);
+                    const content = await fs.readFile(tempPath);
                     const preview = content.slice(0, 100).toString('utf-8');
                     console.error(`[DownloadEngine] Failed File Content Preview (First 100 bytes): ${preview}`);
+                    await fs.unlink(tempPath);
                 } catch (e) { }
 
                 throw new Error('Validation failed');
@@ -232,7 +236,7 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
 
         } catch (err) {
             lastError = err;
-            try { await fs.unlink(decodedPath) } catch (e) { }
+            try { await fs.unlink(decodedPath + '.tmp') } catch (e) { }
 
             if (instantDefer) {
                 // Return immediate failure to defer the file
