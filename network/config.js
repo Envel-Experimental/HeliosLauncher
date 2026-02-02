@@ -11,6 +11,12 @@ module.exports = {
     BOOTSTRAP_URL: 'https://f-launcher.ru/fox/new/bootstrap.json',
     P2P_KILL_SWITCH_URL: 'https://f-launcher.ru/fox/new/p2poff.json',
 
+    // Ed25519 Distribution Signatures
+    // Tuple of trusted public keys (hex strings)
+    DISTRO_PUB_KEYS: [
+        '47719aff1f56160e4d07d6e35add3f31e1e96c918cc24e37fc569a9a99cc190f'
+    ],
+
 
 
     // Discovery settings

@@ -7,12 +7,14 @@ const { HeliosDistribution } = require('./DistributionClasses');
 class DistributionAPI {
     static log = LoggerUtil.getLogger('DistributionAPI');
 
-    constructor(launcherDirectory, commonDir, instanceDir, remoteUrl, devMode) {
+    constructor(launcherDirectory, commonDir, instanceDir, remoteUrl, devMode, trustedKeys) {
         this.launcherDirectory = launcherDirectory;
         this.commonDir = commonDir;
         this.instanceDir = instanceDir;
         this.remoteUrl = remoteUrl;
         this.devMode = devMode;
+        this.trustedKeys = trustedKeys;
+        console.log('[DistributionAPI] Initialized with trusted keys:', this.trustedKeys);
         this.DISTRO_FILE = 'distribution.json';
         this.DISTRO_FILE_DEV = 'distribution_dev.json';
         this.distroPath = resolve(launcherDirectory, this.DISTRO_FILE);
@@ -89,16 +91,70 @@ class DistributionAPI {
 
     async pullRemote() {
         try {
+            console.log('[DistributionAPI] Pulling remote distribution...');
             const res = await fetch(this.remoteUrl);
-            const data = await res.json();
-             if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+            // Get text first to preserve exact bytes for verification
+            const rawText = await res.text();
+            const data = JSON.parse(rawText);
+
+            let signatureValid = true; // Default to true if no keys configured (or logic disabled)
+
+            if (this.trustedKeys && this.trustedKeys.length > 0) {
+                console.log('[DistributionAPI] Verifying signature...')
+                signatureValid = false
+                try {
+                    const sigRes = await fetch(this.remoteUrl + '.sig')
+                    if (sigRes.ok) {
+                        const signatureHex = (await sigRes.text()).trim()
+                        const signature = Buffer.from(signatureHex, 'hex')
+                        // Normalize the JSON data to ensure consistency across different OS/formatting
+                        const normalizedText = JSON.stringify(data)
+                        const contentBuffer = Buffer.from(normalizedText, 'utf-8')
+
+                        const crypto = require('crypto')
+                        // ASN.1 Header for Ed25519 Public Key (SPKI)
+                        const ED25519_SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex')
+
+                        for (const keyHex of this.trustedKeys) {
+                            try {
+                                const rawKey = Buffer.from(keyHex, 'hex')
+                                // Wrap raw key in SPKI format for Node's crypto
+                                const spkiKey = Buffer.concat([ED25519_SPKI_PREFIX, rawKey])
+                                const publicKey = crypto.createPublicKey({
+                                    key: spkiKey,
+                                    format: 'der',
+                                    type: 'spki'
+                                })
+
+                                if (crypto.verify(null, contentBuffer, publicKey, signature)) {
+                                    signatureValid = true
+                                    console.log('[DistributionAPI] Signature VALID.')
+                                    break
+                                }
+                            } catch (e) {
+                                console.warn('[DistributionAPI] Key check failed:', e.message)
+                            }
+                        }
+                    } else {
+                        console.warn(`[DistributionAPI] Signature file missing (${sigRes.status})`)
+                    }
+                } catch (e) {
+                    DistributionAPI.log.warn('Signature verification error:', e)
+                }
+            }
+
+            console.log('[DistributionAPI] Final signatureValid state:', signatureValid);
 
             return {
                 data: data,
-                responseStatus: RestResponseStatus.SUCCESS
+                responseStatus: RestResponseStatus.SUCCESS,
+                signatureValid: signatureValid
             };
         }
         catch (error) {
+            console.error('[DistributionAPI] Pull Failed:', error);
             return handleFetchError('Pull Remote', error, DistributionAPI.log);
         }
     }

@@ -124,4 +124,7 @@ async function checkP2PKillSwitch() {
 
 module.exports = { sendToSentry }
 
+// Initialize Language Loader immediately to prevent race conditions
+LangLoader.setupLanguage()
+
 preloader()
