@@ -4,6 +4,7 @@ const { app } = require('@electron/remote')
 const os = require('os')
 const path = require('path')
 
+const NetworkConfig = require('../../../network/config')
 const ConfigManager = require('./configmanager')
 const { DistroAPI } = require('./distromanager')
 const LangLoader = require('./langloader')
@@ -50,6 +51,9 @@ async function preloader() {
         ipcRenderer.send('distributionIndexDone', false)
         return
     }
+
+    // P2P Kill Switch Check (Async/Parallel)
+    checkP2PKillSwitch()
 
     DistroAPI['commonDir'] = ConfigManager.getCommonDirectory()
     DistroAPI['instanceDir'] = ConfigManager.getInstanceDirectory()
@@ -99,6 +103,22 @@ function sendToSentry(message, type = 'info') {
         } else {
             Sentry.captureMessage(message)
         }
+    }
+}
+
+async function checkP2PKillSwitch() {
+    try {
+        const response = await fetch(NetworkConfig.P2P_KILL_SWITCH_URL, { cache: 'no-store' })
+        if (response.ok) {
+            logger.info('P2P Kill Switch activated by remote configuration.')
+            ConfigManager.setLocalOptimization(false)
+            ConfigManager.setGlobalOptimization(false)
+            ConfigManager.setP2PUploadEnabled(false)
+            ConfigManager.setP2POnlyMode(false)
+            await ConfigManager.save()
+        }
+    } catch (err) {
+        logger.warn('Failed to check P2P Kill Switch:', err)
     }
 }
 

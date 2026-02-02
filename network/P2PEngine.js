@@ -23,9 +23,9 @@ class UsageTracker {
         this.data = new Map() // IP -> { credits: number, lastUpdate: number }
     }
 
-    getCredits(ip) {
+    getCredits(key) {
         const { MAX_CREDITS_PER_IP, CREDIT_REGEN_RATE } = require('./constants')
-        let entry = this.data.get(ip)
+        let entry = this.data.get(key)
 
         if (!entry) {
             // Memory Guard: Cap tracker size
@@ -34,7 +34,7 @@ class UsageTracker {
                 this.data.delete(firstKey)
             }
             entry = { credits: MAX_CREDITS_PER_IP * 0.5, lastUpdate: Date.now() } // Start with 2.5GB for new IPs
-            this.data.set(ip, entry)
+            this.data.set(key, entry)
             return entry.credits
         }
 
@@ -49,9 +49,9 @@ class UsageTracker {
         return entry.credits
     }
 
-    consume(ip, amountMB) {
-        const current = this.getCredits(ip)
-        const entry = this.data.get(ip)
+    consume(key, amountMB) {
+        const current = this.getCredits(key)
+        const entry = this.data.get(key)
         if (entry) {
             entry.credits = Math.max(0, current - (typeof amountMB === 'number' ? amountMB : 0))
         }
@@ -60,9 +60,9 @@ class UsageTracker {
     cleanup() {
         const now = Date.now()
         // Remove entries older than 2 hours
-        for (const [ip, entry] of this.data.entries()) {
+        for (const [key, entry] of this.data.entries()) {
             if (now - entry.lastUpdate > 7200000) {
-                this.data.delete(ip)
+                this.data.delete(key)
             }
         }
     }
@@ -75,7 +75,6 @@ class P2PEngine extends EventEmitter {
         this.requests = new Map() // reqId -> { stream: Readable, timeout: Timer }
         this.blacklist = new Set() // IP/PubKey strings
         this.peerStrikes = new Map() // Peer IP -> strikes count
-        this.reqIdCounter = 1
         this.setMaxListeners(100)
         this.usageTracker = new UsageTracker()
 
@@ -462,8 +461,11 @@ class P2PEngine extends EventEmitter {
 
     _executeSingleRequest(peer, stream, hash, expectedSize, relPath, fileId) {
         return new Promise((resolve, reject) => {
-            const reqId = this.reqIdCounter++
-            if (this.reqIdCounter > 4294967295) this.reqIdCounter = 1
+            // Generate Random Request ID (collision avoidance)
+            let reqId
+            do {
+                reqId = crypto.randomBytes(4).readUInt32BE(0)
+            } while (this.requests.has(reqId) || reqId === 0)
 
             // if (isDev) console.debug(`[P2P Debug] Requesting ${hash.substring(0, 8)} (${fileId || 'n/a'}) from ${peer.getIP()} [${peer.isLocal() ? 'LAN' : 'WAN'}]`)
 
@@ -776,6 +778,17 @@ class P2PEngine extends EventEmitter {
         this.processServerQueue()
     }
 
+    pruneQueue(peer) {
+        if (!this.serverQueue || this.serverQueue.length === 0) return
+
+        const initialSize = this.serverQueue.length
+        this.serverQueue = this.serverQueue.filter(req => req.peer !== peer)
+
+        // if (isDev && this.serverQueue.length < initialSize) {
+        //    console.debug(`[P2PEngine] Pruned ${initialSize - this.serverQueue.length} zombie requests from queue for ${peer.getIP()}`)
+        // }
+    }
+
     getOptimalConcurrency(baseLimit) {
         const { MIN_PARALLEL_DOWNLOADS, MAX_PARALLEL_DOWNLOADS, PEER_CONCURRENCY_FACTOR } = require('./constants')
         const peerCount = this.peers.length
@@ -839,8 +852,18 @@ class P2PEngine extends EventEmitter {
     }
 
     removePeer(peer) {
+        // Prune any pending server requests from this peer (DoS protection)
+        this.pruneQueue(peer)
+
+        // Clear batch queue
+        if (this.batchQueue.has(peer)) {
+            this.batchQueue.delete(peer)
+        }
+
         const idx = this.peers.indexOf(peer)
         if (idx > -1) this.peers.splice(idx, 1)
+
+        this.emit('peer_removed', peer)
     }
 }
 

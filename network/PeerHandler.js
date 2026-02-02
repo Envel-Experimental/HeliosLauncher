@@ -223,10 +223,13 @@ class PeerHandler {
             }
             try {
                 const data = JSON.parse(hash)
-                if (data && typeof data === 'object') {
+                // STRUCTURAL VALIDATION: Ensure flat object to prevent processing overhead logic
+                if (data && typeof data === 'object' && !Array.isArray(data)) {
                     hash = String(data.h || '').trim()
                     relPath = (data.p && typeof data.p === 'string') ? data.p.trim() : null
                     fileId = (data.id && typeof data.id === 'string') ? data.id.trim() : null
+                } else {
+                    throw new Error('Invalid JSON structure')
                 }
             } catch (e) {
                 if (isDev) console.warn('[P2P Security] Malformed JSON from peer')
@@ -272,10 +275,12 @@ class PeerHandler {
         if (!isLocalUpload) {
             // 2. Fair Usage Check (Soft Ban)
             const { MIN_CREDITS_TO_START } = require('./constants')
-            const credits = this.engine.usageTracker.getCredits(remoteIP)
+            // USE PEER ID (Public Key) if available to solve NAT issues, fallback to IP
+            const usageKey = this.getID()
+            const credits = this.engine.usageTracker.getCredits(usageKey)
 
             if (credits < MIN_CREDITS_TO_START) {
-                if (isDev) console.warn(`[P2P FairUsage] Soft-banning ${remoteIP} (Credits: ${credits.toFixed(1)} MB)`)
+                if (isDev) console.warn(`[P2P FairUsage] Soft-banning ${usageKey} (Credits: ${credits.toFixed(1)} MB)`)
                 this.sendError(reqId, 'Busy (Fair Usage Cooling)')
                 return
             }
@@ -428,9 +433,13 @@ class PeerHandler {
                     if (cleanupDone) return
                     cleanupDone = true
 
-                    this.socket.off('close', onSocketClose)
-                    this.socket.off('error', onSocketClose)
+                    this.socket.removeListener('close', onSocketClose)
+                    this.socket.removeListener('error', onSocketClose)
                     clearInterval(watchdog)
+
+                    // Robust Stream Destruction
+                    if (!stream.destroyed) stream.destroy()
+                    if (throttled && throttled !== stream && !throttled.destroyed) throttled.destroy()
 
                     // Report Stats
                     const duration = (Date.now() - startTime) / 1000
@@ -450,7 +459,8 @@ class PeerHandler {
                     // Consume credits based on amount transferred (MB)
                     if (!isLocalUpload) {
                         const transferredMB = totalBytesSent / (1024 * 1024)
-                        this.engine.usageTracker.consume(remoteIP, transferredMB)
+                        const usageKey = this.getID()
+                        this.engine.usageTracker.consume(usageKey, transferredMB)
                     }
                 }
 
@@ -631,24 +641,30 @@ class PeerHandler {
             const firstPart = parts[0]
             const fileName = parts[parts.length - 1]
 
-            // STRICT BLACKLIST (Sensitive files)
-            const blacklist = ['config.json', 'distribution.json', 'peers.json', 'version_manifest_v2.json']
-            if (blacklist.includes(fileName)) {
-                if (isDev) console.warn(`[P2P Security] Blocked blacklisted file: ${fileName}`)
-                return false
-            }
-            if (fileName.endsWith('.enc')) {
-                if (isDev) console.warn(`[P2P Security] Blocked encrypted file: ${fileName}`)
+            // STRICT BLACKLIST (Files)
+            // Добавил сюда sensitive JSONs, на случай если ты вернешь minecraft в whitelist
+            const blacklist = [
+                'config.json', 'distribution.json', 'peers.json', 'version_manifest_v2.json',
+                'launcher_accounts.json', 'launcher_profiles.json', 'usercache.json'
+            ]
+            if (blacklist.includes(fileName)) return false
+
+            if (fileName.endsWith('.enc')) return false
+
+            // STRICT EXTENSION BLACKLIST
+            if (fileName.endsWith('.dat') || fileName.endsWith('.log') || fileName.endsWith('.txt')) {
                 return false
             }
 
             // STRICT WHITELIST
-            const whitelist = ['assets', 'libraries', 'versions', 'common', 'icons', 'minecraft']
+            // УБРАЛ 'minecraft' из списка. 
+            // 'common' обычно используется для шареных ассетов - это ок.
+            const whitelist = ['assets', 'libraries', 'versions', 'common', 'icons']
 
             return whitelist.includes(firstPart)
         } catch (e) {
             console.error('[P2P Security] Path check failed:', e)
-            return false // Fail closed
+            return false
         }
     }
 }

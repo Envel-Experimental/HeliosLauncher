@@ -9,6 +9,7 @@ module.exports = {
         { host: 'node1.hyperdht.org', port: 49737 }
     ],
     BOOTSTRAP_URL: 'https://f-launcher.ru/fox/new/bootstrap.json',
+    P2P_KILL_SWITCH_URL: 'https://f-launcher.ru/fox/new/p2poff.json',
 
 
 

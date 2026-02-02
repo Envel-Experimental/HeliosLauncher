@@ -55,46 +55,6 @@ class RaceManager {
                 setTimeout(() => this.failureHistory.delete(item.hash), 30000)
             }
 
-            // The original code had `if (count === 1)` here.
-            // The instruction implies a change to reduce log verbosity based on an 'attempt' variable.
-            // Since 'attempt' is not defined in this scope, we'll assume the intent is to replace
-            // the existing logging logic with the provided snippet, which effectively means
-            // the detailed logging only happens if 'attempt' is 0 (or if this is the first failure log).
-            // As 'attempt' is not available, we'll apply the 'else' branch of the provided snippet
-            // to the current `logFailure` context, effectively logging the grouped message.
-            // The `if (attempt > 0)` block from the snippet is not directly applicable here without
-            // further context on how 'attempt' would be passed to `logFailure`.
-            // Given the instruction "reduce retry log verbosity", the provided snippet's `else` branch
-            // is the most relevant part for the `logFailure` method itself.
-            // However, to faithfully apply the *provided code edit*, we must include the `if (attempt > 0)`
-            // block as well, even if `attempt` is undefined in this context. This might lead to a runtime error
-            // if `attempt` is not defined elsewhere or passed as a parameter.
-            // Assuming 'attempt' is meant to be a parameter or a variable accessible here for the snippet to be valid.
-            // For now, I will insert the snippet as provided, which will introduce `attempt` and `sleep` as undefined.
-            // This is a direct application of the user's provided code edit.
-
-            // Re-evaluating: The instruction is "Comment out mid-race handle calls and reduce retry log verbosity."
-            // The provided code snippet is a *replacement* for the existing logging block.
-            // The existing logging block is:
-            // if (count === 1) { ... } else { ... }
-            // The provided snippet is:
-            // if (attempt > 0) { ... } else { ... }
-            // This implies that the `logFailure` method is being called within a retry loop where `attempt` is known.
-            // Since `logFailure` itself doesn't have `attempt`, this change is likely intended for a caller of `logFailure`.
-            // However, the instruction is to *edit the code document* with the provided snippet *at this location*.
-            // I must insert the snippet as given.
-
-            // Original:
-            // if (count === 1) {
-            //     const item = this.failureBuffer[0]
-            //     console.warn(`[RaceManager] P2P Download failed for ${item.name}. (${item.context})`)
-            // } else {
-            //     console.warn(`[RaceManager] P2P Download failed for ${count} files. Last context: ${this.failureBuffer[count - 1].context}`)
-            //     // Readable List
-            //     const names = this.failureBuffer.map(i => i.name).join(', ')
-            //     console.warn('[RaceManager] Failed Files:', names)
-            // }
-
             // Applying the provided snippet directly:
             if (count === 1) {
                 // If it's a timeout or not found, keep it quiet unless it's a lot of files
