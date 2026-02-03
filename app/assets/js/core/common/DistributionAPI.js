@@ -92,7 +92,7 @@ class DistributionAPI {
     async pullRemote() {
         try {
             console.log('[DistributionAPI] Pulling remote distribution...');
-            const res = await fetch(this.remoteUrl);
+            const res = await fetch(this.remoteUrl, { cache: 'no-store' });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
             // Get text first to preserve exact bytes for verification
@@ -105,7 +105,7 @@ class DistributionAPI {
                 console.log('[DistributionAPI] Verifying signature...')
                 signatureValid = false
                 try {
-                    const sigRes = await fetch(this.remoteUrl + '.sig')
+                    const sigRes = await fetch(this.remoteUrl + '.sig', { cache: 'no-store' })
                     if (sigRes.ok) {
                         const signatureHex = (await sigRes.text()).trim()
                         const signature = Buffer.from(signatureHex, 'hex')

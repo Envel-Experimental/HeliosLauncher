@@ -1,257 +1,6 @@
 {
     "version": "1.0.0",
-    "rss": "<LINK TO RSS FEED>",
-    "discord": {
-        "clientId": "<FILL IN OR REMOVE DISCORD OBJECT>",
-        "smallImageText": "<FILL IN OR REMOVE DISCORD OBJECT>",
-        "smallImageKey": "<FILL IN OR REMOVE DISCORD OBJECT>"
-    },
     "servers": [
-        {
-            "id": "Tree-1.20.1",
-            "name": "Новогодний квест (Minecraft 1.20.1)",
-            "description": "Квест в Minecraft (любой возраст)",
-            "icon": "https://f-launcher.ru/fox/new/img/ny.png",
-            "version": "1.0.4",
-            "address": "localhost:25565",
-            "minecraftVersion": "1.20.1",
-            "discord": {
-                "shortId": "<FILL IN OR REMOVE DISCORD OBJECT>",
-                "largeImageText": "<FILL IN OR REMOVE DISCORD OBJECT>",
-                "largeImageKey": "<FILL IN OR REMOVE DISCORD OBJECT>"
-            },
-            "mainServer": false,
-            "autoconnect": false,
-            "modules": [
-                {
-                    "id": "net.fabricmc:fabric-loader:0.16.10",
-                    "name": "Fabric (fabric-loader)",
-                    "type": "Fabric",
-                    "artifact": {
-                        "size": 1387408,
-                        "MD5": "239d59118dec4324672b3d9e9d75efef",
-                        "url": "https://f-launcher.ru/fox/new/repo/lib/net/fabricmc/fabric-loader/0.16.10/fabric-loader-0.16.10.jar"
-                    },
-                    "subModules": [
-                        {
-                            "id": "1.20.1-fabric-0.16.10",
-                            "name": "Fabric (version.json)",
-                            "type": "VersionManifest",
-                            "artifact": {
-                                "size": 2859,
-                                "MD5": "14ed56e7cb4856a1e167b4e0ad9dda9b",
-                                "url": "https://f-launcher.ru/fox/new/repo/versions/1.20.1-fabric-0.16.10/1.20.1-fabric-0.16.10.json"
-                            }
-                        },
-                        {
-                            "id": "org.ow2.asm:asm:9.7.1",
-                            "name": "Fabric (asm)",
-                            "type": "Library",
-                            "artifact": {
-                                "size": 126093,
-                                "MD5": "e2cdd32d198ad31427d298eee9d39d8d",
-                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm/9.7.1/asm-9.7.1.jar"
-                            }
-                        },
-                        {
-                            "id": "org.ow2.asm:asm-analysis:9.7.1",
-                            "name": "Fabric (asm-analysis)",
-                            "type": "Library",
-                            "artifact": {
-                                "size": 35126,
-                                "MD5": "4cd9e7178dfb85371bba3077e40cd514",
-                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-analysis/9.7.1/asm-analysis-9.7.1.jar"
-                            }
-                        },
-                        {
-                            "id": "org.ow2.asm:asm-commons:9.7.1",
-                            "name": "Fabric (asm-commons)",
-                            "type": "Library",
-                            "artifact": {
-                                "size": 73459,
-                                "MD5": "8344aea3c8b7d707e9d35a62710e77c9",
-                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-commons/9.7.1/asm-commons-9.7.1.jar"
-                            }
-                        },
-                        {
-                            "id": "org.ow2.asm:asm-tree:9.7.1",
-                            "name": "Fabric (asm-tree)",
-                            "type": "Library",
-                            "artifact": {
-                                "size": 51939,
-                                "MD5": "e85029f613b6469989cc7cf53fe06b74",
-                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-tree/9.7.1/asm-tree-9.7.1.jar"
-                            }
-                        },
-                        {
-                            "id": "org.ow2.asm:asm-util:9.7.1",
-                            "name": "Fabric (asm-util)",
-                            "type": "Library",
-                            "artifact": {
-                                "size": 94519,
-                                "MD5": "36d373a9cd6cad9b35db9f984c6b4bbb",
-                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-util/9.7.1/asm-util-9.7.1.jar"
-                            }
-                        },
-                        {
-                            "id": "net.fabricmc:sponge-mixin:0.15.4+mixin.0.8.7",
-                            "name": "Fabric (sponge-mixin)",
-                            "type": "Library",
-                            "artifact": {
-                                "size": 1494834,
-                                "MD5": "991ca8be2c408fe19eb64014d8a18243",
-                                "url": "https://f-launcher.ru/fox/new/repo/lib/net/fabricmc/sponge-mixin/0.15.4+mixin.0.8.7/sponge-mixin-0.15.4+mixin.0.8.7.jar"
-                            }
-                        },
-                        {
-                            "id": "net.fabricmc:intermediary:1.20.1",
-                            "name": "Fabric (intermediary)",
-                            "type": "Library",
-                            "artifact": {
-                                "size": 573365,
-                                "MD5": "3f4768ac751cac3418266d1d7aa15f55",
-                                "url": "https://f-launcher.ru/fox/new/repo/lib/net/fabricmc/intermediary/1.20.1/intermediary-1.20.1.jar"
-                            }
-                        }
-                    ]
-                },
-                {
-                    "id": "link.infra:indium:1.0.34+mc1.20.1@jar",
-                    "name": "Indium",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 105359,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-vanilla-1.20.1/fabricmods/optionalon/indium-1.0.34+mc1.20.1.jar",
-                        "MD5": "91f3ce08edec42ee8f6b45fd6ae0c8b3"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "generated.fabricmod:iris:1.7.5+mc1.20.1@jar",
-                    "name": "Iris",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 2730664,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-vanilla-1.20.1/fabricmods/optionaloff/iris-1.7.5+mc1.20.1.jar",
-                        "MD5": "902528a82a843300ecf9027af9f8fb8c"
-                    },
-                    "required": {
-                        "value": false,
-                        "def": false
-                    }
-                },
-                {
-                    "id": "me.jellysquid.mods:lithium:0.11.2@jar",
-                    "name": "Lithium",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 645865,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-vanilla-1.20.1/fabricmods/optionalon/lithium-fabric-mc1.20.1-0.11.2.jar",
-                        "MD5": "026ca4110d57f16f701b400ad5d2ca26"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "generated.fabricmod:fabric-api:0.92.2+1.20.1@jar",
-                    "name": "Fabric API",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 2107289,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/required/fabric-api-0.92.2+1.20.1.jar",
-                        "MD5": "92c58961866741106aae126558c9d4a7"
-                    }
-                },
-                {
-                    "id": "generated.fabricmod:narrus_yeetus:1.1.0@jar",
-                    "name": "Narrus Yeetus",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 99924,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-vanilla-1.20.1/fabricmods/optionalon/NarrusYeetus-1.1.0.jar",
-                        "MD5": "25cd36a8068624e848c81e603df9bf9d"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "generated.fabricmod:reeses-sodium-options:1.7.2+mc1.20.1-build.101@jar",
-                    "name": "Reese's Sodium Options",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 77304,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-vanilla-1.20.1/fabricmods/optionalon/reeses_sodium_options-1.7.2+mc1.20.1-build.101.jar",
-                        "MD5": "0db2ef332dd00de8c64e34f192317118"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "me.flashyreese.mods.sodiumextra:sodium-extra:0.5.4+mc1.20.1-build.115@jar",
-                    "name": "Sodium Extra",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 385539,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-vanilla-1.20.1/fabricmods/optionalon/sodium-extra-0.5.4+mc1.20.1-build.115.jar",
-                        "MD5": "9eaed09a486eee9a1326de5dd80faa0a"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "me.jellysquid.mods:sodium:0.5.11+mc1.20.1@jar",
-                    "name": "Sodium",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 968419,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-vanilla-1.20.1/fabricmods/optionalon/sodium-fabric-0.5.11+mc1.20.1.jar",
-                        "MD5": "9880bae748957d1cb6c4de50c8e0452a"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "options.txt",
-                    "name": "options.txt",
-                    "type": "File",
-                    "artifact": {
-                        "size": 3652,
-                        "url": "https://f-launcher.ru/fox/new/servers/New_Year_120-1.20.1/files/options.txt",
-                        "MD5": "56c754a936e9f6dd61ca28f1d7a3a04f",
-                        "path": "options.txt"
-                    }
-                },
-                {
-                    "id": "pack.zip",
-                    "name": "pack.zip",
-                    "type": "File",
-                    "artifact": {
-                        "size": 3055,
-                        "url": "https://f-launcher.ru/fox/new/servers/New_Year_120-1.20.1/files/resourcepacks/pack.zip",
-                        "MD5": "c3e1d71f53328d1f504217b0c8b984ac",
-                        "path": "resourcepacks/pack.zip"
-                    }
-                },
-                {
-                    "id": "servers.dat",
-                    "name": "servers.dat",
-                    "type": "File",
-                    "artifact": {
-                        "size": 274,
-                        "url": "https://f-launcher.ru/fox/new/servers/New_Year_120-1.20.1/files/servers.dat",
-                        "MD5": "cb504313a170be45060e612abb9b7df8",
-                        "path": "servers.dat"
-                    }
-                }
-            ]
-        },
         {
             "id": "Programming-1.16.5",
             "name": "Введение в программирование (Minecraft 1.16.5)",
@@ -260,11 +9,6 @@
             "version": "1.0.2",
             "address": "95.216.96.241:10001",
             "minecraftVersion": "1.16.5",
-            "discord": {
-                "shortId": "<FILL IN OR REMOVE DISCORD OBJECT>",
-                "largeImageText": "<FILL IN OR REMOVE DISCORD OBJECT>",
-                "largeImageKey": "<FILL IN OR REMOVE DISCORD OBJECT>"
-            },
             "mainServer": false,
             "autoconnect": false,
             "modules": [
@@ -275,6 +19,7 @@
                     "artifact": {
                         "size": 1387357,
                         "MD5": "27a6ef87676ce6316c777d81c1cd2962",
+                        "SHA256": "b1b1d05e9ee52c6bb968fecf4f7e0e4ead8ec890ba9503c213df0daa8431f1fa",
                         "url": "https://f-launcher.ru/fox/new/repo/lib/net/fabricmc/fabric-loader/0.16.9/fabric-loader-0.16.9.jar"
                     },
                     "subModules": [
@@ -285,6 +30,7 @@
                             "artifact": {
                                 "size": 2857,
                                 "MD5": "de82c3ac486c83f6a55f18a3c6fa3fd9",
+                                "SHA256": "332696b4ba16647c6932140f509b09be1e16802e19501ede52992564117ac29d",
                                 "url": "https://f-launcher.ru/fox/new/repo/versions/1.16.5-fabric-0.16.9/1.16.5-fabric-0.16.9.json"
                             }
                         },
@@ -295,6 +41,7 @@
                             "artifact": {
                                 "size": 126093,
                                 "MD5": "e2cdd32d198ad31427d298eee9d39d8d",
+                                "SHA256": "8cadd43ac5eb6d09de05faecca38b917a040bb9139c7edeb4cc81c740b713281",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm/9.7.1/asm-9.7.1.jar"
                             }
                         },
@@ -305,6 +52,7 @@
                             "artifact": {
                                 "size": 35126,
                                 "MD5": "4cd9e7178dfb85371bba3077e40cd514",
+                                "SHA256": "85b29371884ba31bb76edf22323c2c24e172c3267a67152eba3d1ccc2e041ef2",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-analysis/9.7.1/asm-analysis-9.7.1.jar"
                             }
                         },
@@ -315,6 +63,7 @@
                             "artifact": {
                                 "size": 73459,
                                 "MD5": "8344aea3c8b7d707e9d35a62710e77c9",
+                                "SHA256": "9a579b54d292ad9be171d4313fd4739c635592c2b5ac3a459bbd1049cddec6a0",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-commons/9.7.1/asm-commons-9.7.1.jar"
                             }
                         },
@@ -325,6 +74,7 @@
                             "artifact": {
                                 "size": 51939,
                                 "MD5": "e85029f613b6469989cc7cf53fe06b74",
+                                "SHA256": "9929881f59eb6b840e86d54570c77b59ce721d104e6dfd7a40978991c2d3b41f",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-tree/9.7.1/asm-tree-9.7.1.jar"
                             }
                         },
@@ -335,6 +85,7 @@
                             "artifact": {
                                 "size": 94519,
                                 "MD5": "36d373a9cd6cad9b35db9f984c6b4bbb",
+                                "SHA256": "f885be71b5c90556f5f1ad1c4f9276b29b96057c497d46666fe4ddbec3cb43c6",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-util/9.7.1/asm-util-9.7.1.jar"
                             }
                         },
@@ -345,6 +96,7 @@
                             "artifact": {
                                 "size": 1494834,
                                 "MD5": "991ca8be2c408fe19eb64014d8a18243",
+                                "SHA256": "4631f67da980ae2ac9e6e285a7df4680645e2f37a6a14acc775f97982162c2a2",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/net/fabricmc/sponge-mixin/0.15.4+mixin.0.8.7/sponge-mixin-0.15.4+mixin.0.8.7.jar"
                             }
                         },
@@ -355,6 +107,7 @@
                             "artifact": {
                                 "size": 406376,
                                 "MD5": "abadf31a3b1b8b128cde5debcee93686",
+                                "SHA256": "81ce6ae1ac18393416227a0afb805b1923b88a3aed308966ccc3f1badf61d4e2",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/net/fabricmc/intermediary/1.16.5/intermediary-1.16.5.jar"
                             }
                         }
@@ -367,7 +120,8 @@
                     "artifact": {
                         "size": 44133,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/entityculling-fabric-mc1.16.5-1.5.2.jar",
-                        "MD5": "877dcbc4cdc0b9d9e5fb0cc4c39f4ab4"
+                        "MD5": "877dcbc4cdc0b9d9e5fb0cc4c39f4ab4",
+                        "SHA256": "be70a411cfa6ea6bd429741f5aab774803384449032b0d6d5cabc84932543a6f"
                     },
                     "required": {
                         "value": false
@@ -380,7 +134,8 @@
                     "artifact": {
                         "size": 1090414,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/fabric-api-0.42.0+1.16.jar",
-                        "MD5": "a0c502455195b498a8f5b4f5c15e6a04"
+                        "MD5": "a0c502455195b498a8f5b4f5c15e6a04",
+                        "SHA256": "3df8dd503f35aa0ac9fab8ad9f9a369fdfd0b1ab544af19a3d626d948fb4586c"
                     },
                     "required": {
                         "value": false
@@ -393,7 +148,8 @@
                     "artifact": {
                         "size": 114793,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/indium-1.0.0+mc1.16.5.jar",
-                        "MD5": "4247babd00fe95c49926f30e3b14bb8f"
+                        "MD5": "4247babd00fe95c49926f30e3b14bb8f",
+                        "SHA256": "e55396b61d693ecb7ee741ba6990b632328cf13e7b4831ecfe122bbd603842af"
                     },
                     "required": {
                         "value": false
@@ -406,7 +162,8 @@
                     "artifact": {
                         "size": 2557920,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionaloff/iris-mc1.16.5-1.4.5.jar",
-                        "MD5": "b614f8aa7ff5529eaa7df66d4fc990ab"
+                        "MD5": "b614f8aa7ff5529eaa7df66d4fc990ab",
+                        "SHA256": "d9301505a639bf95217a884d71d1f154f1aedcffce2e5ab6cae484edb3d184b3"
                     },
                     "required": {
                         "value": false,
@@ -420,7 +177,8 @@
                     "artifact": {
                         "size": 15520,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/lazydfu-0.1.1.jar",
-                        "MD5": "c138f2549f4fb8d3fd883aaabcab34b3"
+                        "MD5": "c138f2549f4fb8d3fd883aaabcab34b3",
+                        "SHA256": "31463d27ab7927ec99c45f23cd6b4da4482acd619c8bc9e60f6f1ffcaecca6fe"
                     },
                     "required": {
                         "value": false
@@ -433,7 +191,8 @@
                     "artifact": {
                         "size": 349400,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/lithium-fabric-mc1.16.5-0.6.6.jar",
-                        "MD5": "19f9a82b0753ae21430761a8916f0533"
+                        "MD5": "19f9a82b0753ae21430761a8916f0533",
+                        "SHA256": "9067b45509fc3023d76bff85ad030ef01d30e5a9fbfe7815ff666ad31bba4d28"
                     },
                     "required": {
                         "value": false
@@ -446,10 +205,11 @@
                     "artifact": {
                         "size": 4887,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/MultiplayerFix-1.0.0.jar",
-                        "MD5": "0ca96071ba79ff2ecb806733a2edbd07"
+                        "MD5": "0ca96071ba79ff2ecb806733a2edbd07",
+                        "SHA256": "5507d359e5346ba323a3089ca527927e3263c4b9cfd6bed898c7f209c0d584c2"
                     },
                     "required": {
-                        "value": true
+                        "value": false
                     }
                 },
                 {
@@ -459,7 +219,8 @@
                     "artifact": {
                         "size": 67254,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/reeses_sodium_options-1.6.3+mc1.16.5-build.86.jar",
-                        "MD5": "c1d9f1151da05011fe6e3d726d02c05e"
+                        "MD5": "c1d9f1151da05011fe6e3d726d02c05e",
+                        "SHA256": "47d8ec56e051d29750ab7ea48098a821839376429eab5bd089d58d931d0820b7"
                     },
                     "required": {
                         "value": false
@@ -472,7 +233,8 @@
                     "artifact": {
                         "size": 326716,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/sodium-extra-0.4.18+mc1.16.5-build.96.jar",
-                        "MD5": "569944e2c61f071d3a00f61261688f42"
+                        "MD5": "569944e2c61f071d3a00f61261688f42",
+                        "SHA256": "ffb98f6159c9dd74f0672c6bb781172bb36f27319c51e5419b9dd68ea5b493c8"
                     },
                     "required": {
                         "value": false
@@ -485,7 +247,8 @@
                     "artifact": {
                         "size": 507710,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/sodium-fabric-mc1.16.5-0.2.0+build.4.jar",
-                        "MD5": "98914f22cfe2d0ea5d8007ae8ff96062"
+                        "MD5": "98914f22cfe2d0ea5d8007ae8ff96062",
+                        "SHA256": "1e2060d4cf8e3d91db05af79b7f2939f1d5bd1b9cbacb27730aa9e23b346832d"
                     },
                     "required": {
                         "value": false
@@ -498,7 +261,8 @@
                     "artifact": {
                         "size": 127863,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/WorldEditCUI-1.16.5+02.jar",
-                        "MD5": "5e4f94a2a6e914bbadf95d4337355559"
+                        "MD5": "5e4f94a2a6e914bbadf95d4337355559",
+                        "SHA256": "9e8bd2177d24a4524fb7d8dd1ce1da9f0034c92b784f0292a2d4cd64feca8e32"
                     },
                     "required": {
                         "value": false
@@ -509,27 +273,23 @@
                     "name": "options.txt",
                     "type": "File",
                     "artifact": {
-                        "size": 2943,
+                        "size": 3062,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/files/options.txt",
-                        "MD5": "76bce5367aa8b67f41d92bceeef62673",
+                        "MD5": "40ec4f2b50988a5454eefdc1084a662f",
+                        "SHA256": "256744e426598f928535d269220c37cbab2960ac94675994d74c9394e099d376",
                         "path": "options.txt"
                     }
                 }
             ]
         },
         {
-            "id": "Programming-new-1.20.1",
+            "id": "Programming-1.20.1",
             "name": "Программирование (Minecraft 1.20.1)",
             "description": "Для ребят 3-7 класса",
             "icon": "https://f-launcher.ru/fox/new/img/Fabric-Demo-1.20.4.png",
             "version": "1.0.8",
             "address": "95.216.96.241:10100",
             "minecraftVersion": "1.20.1",
-            "discord": {
-                "shortId": "<FILL IN OR REMOVE DISCORD OBJECT>",
-                "largeImageText": "<FILL IN OR REMOVE DISCORD OBJECT>",
-                "largeImageKey": "<FILL IN OR REMOVE DISCORD OBJECT>"
-            },
             "mainServer": false,
             "autoconnect": false,
             "modules": [
@@ -540,6 +300,7 @@
                     "artifact": {
                         "size": 1387408,
                         "MD5": "239d59118dec4324672b3d9e9d75efef",
+                        "SHA256": "23557a7d6da3db971a6f9620cb62e7b6e6d1509f5138ebb87529877d2400e568",
                         "url": "https://f-launcher.ru/fox/new/repo/lib/net/fabricmc/fabric-loader/0.16.10/fabric-loader-0.16.10.jar"
                     },
                     "subModules": [
@@ -550,6 +311,7 @@
                             "artifact": {
                                 "size": 2859,
                                 "MD5": "14ed56e7cb4856a1e167b4e0ad9dda9b",
+                                "SHA256": "16aa0b1138a78b0652a4776cc7b9d47d10ce36b5a204903b0c1f6466e9218b72",
                                 "url": "https://f-launcher.ru/fox/new/repo/versions/1.20.1-fabric-0.16.10/1.20.1-fabric-0.16.10.json"
                             }
                         },
@@ -560,6 +322,7 @@
                             "artifact": {
                                 "size": 126093,
                                 "MD5": "e2cdd32d198ad31427d298eee9d39d8d",
+                                "SHA256": "8cadd43ac5eb6d09de05faecca38b917a040bb9139c7edeb4cc81c740b713281",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm/9.7.1/asm-9.7.1.jar"
                             }
                         },
@@ -570,6 +333,7 @@
                             "artifact": {
                                 "size": 35126,
                                 "MD5": "4cd9e7178dfb85371bba3077e40cd514",
+                                "SHA256": "85b29371884ba31bb76edf22323c2c24e172c3267a67152eba3d1ccc2e041ef2",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-analysis/9.7.1/asm-analysis-9.7.1.jar"
                             }
                         },
@@ -580,6 +344,7 @@
                             "artifact": {
                                 "size": 73459,
                                 "MD5": "8344aea3c8b7d707e9d35a62710e77c9",
+                                "SHA256": "9a579b54d292ad9be171d4313fd4739c635592c2b5ac3a459bbd1049cddec6a0",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-commons/9.7.1/asm-commons-9.7.1.jar"
                             }
                         },
@@ -590,6 +355,7 @@
                             "artifact": {
                                 "size": 51939,
                                 "MD5": "e85029f613b6469989cc7cf53fe06b74",
+                                "SHA256": "9929881f59eb6b840e86d54570c77b59ce721d104e6dfd7a40978991c2d3b41f",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-tree/9.7.1/asm-tree-9.7.1.jar"
                             }
                         },
@@ -600,6 +366,7 @@
                             "artifact": {
                                 "size": 94519,
                                 "MD5": "36d373a9cd6cad9b35db9f984c6b4bbb",
+                                "SHA256": "f885be71b5c90556f5f1ad1c4f9276b29b96057c497d46666fe4ddbec3cb43c6",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-util/9.7.1/asm-util-9.7.1.jar"
                             }
                         },
@@ -610,6 +377,7 @@
                             "artifact": {
                                 "size": 1494834,
                                 "MD5": "991ca8be2c408fe19eb64014d8a18243",
+                                "SHA256": "4631f67da980ae2ac9e6e285a7df4680645e2f37a6a14acc775f97982162c2a2",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/net/fabricmc/sponge-mixin/0.15.4+mixin.0.8.7/sponge-mixin-0.15.4+mixin.0.8.7.jar"
                             }
                         },
@@ -620,6 +388,7 @@
                             "artifact": {
                                 "size": 573365,
                                 "MD5": "3f4768ac751cac3418266d1d7aa15f55",
+                                "SHA256": "caa3fd87dd353fc826a109a2d16f886d6519b47422e3a77cfa0ba8be5829a21e",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/net/fabricmc/intermediary/1.20.1/intermediary-1.20.1.jar"
                             }
                         }
@@ -632,7 +401,8 @@
                     "artifact": {
                         "size": 585207,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/required/architectury-9.2.14-fabric.jar",
-                        "MD5": "2ae04e0dad60a390031ee341e0b2ab45"
+                        "MD5": "2ae04e0dad60a390031ee341e0b2ab45",
+                        "SHA256": "bd7a7032bedb2ff96c6991a846a44c857336a51442a105f5859017e8ba9d1321"
                     }
                 },
                 {
@@ -642,7 +412,8 @@
                     "artifact": {
                         "size": 3587313,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/required/cc-tweaked-1.20.1-fabric-1.116.0.jar",
-                        "MD5": "4abc1618f45c81adc6b42311ee029112"
+                        "MD5": "4abc1618f45c81adc6b42311ee029112",
+                        "SHA256": "7130116e68f4f8197426f5113a894eb252a02539f86daa21c067c4895b41974c"
                     }
                 },
                 {
@@ -651,8 +422,13 @@
                     "type": "FabricMod",
                     "artifact": {
                         "size": 236489,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/required/cccbridge-mc1.20.1-fabric-v1.6.2b.jar",
-                        "MD5": "d3981e1e0a41c51998dadfee71d1e93d"
+                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/optionaloff/cccbridge-mc1.20.1-fabric-v1.6.2b.jar",
+                        "MD5": "d3981e1e0a41c51998dadfee71d1e93d",
+                        "SHA256": "f8af9eefe9ad47272daf80430de0f6a112edc50d2657f0767856e51a66c7f8d0"
+                    },
+                    "required": {
+                        "value": false,
+                        "def": false
                     }
                 },
                 {
@@ -662,7 +438,8 @@
                     "artifact": {
                         "size": 1933455,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/required/copycats-2.2.2+mc.1.20.1-fabric.jar",
-                        "MD5": "71eeb7169c89f324c6ff55cce38969f4"
+                        "MD5": "71eeb7169c89f324c6ff55cce38969f4",
+                        "SHA256": "3e697c6f3d83bfba4ed288c597c0f26b251d9a5fa4fa7cc0d4faad6f6e039407"
                     }
                 },
                 {
@@ -672,7 +449,33 @@
                     "artifact": {
                         "size": 24841934,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/required/create-fabric-0.5.1-j-build.1631+mc1.20.1.jar",
-                        "MD5": "48de208df4154d2149101d351148569b"
+                        "MD5": "48de208df4154d2149101d351148569b",
+                        "SHA256": "33ec1d696c687e95cded0cffa6d581ac80bc9e416ec6040fcd595ce226d70bfb"
+                    }
+                },
+                {
+                    "id": "com.github.talrey:createdeco:2.0.2-1.20.1-fabric@jar",
+                    "name": "Create Deco",
+                    "type": "FabricMod",
+                    "artifact": {
+                        "size": 3971046,
+                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/required/createdeco-2.0.2-1.20.1-fabric.jar",
+                        "MD5": "5898cfdf230cf101a01128662a1d11b3",
+                        "SHA256": "59fb9ce554bfdb43fdd24b6bd08ca5b930ce16a5fadc78df254d18b6ce3901f3"
+                    }
+                },
+                {
+                    "id": "dev.isxander.culllessleaves:cull-less-leaves:1.4.2+1.21-fabric@jar",
+                    "name": "Cull Less Leaves",
+                    "type": "FabricMod",
+                    "artifact": {
+                        "size": 27086,
+                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/optionalon/Cull%20Less%20Leaves-1.4.2+1.21-fabric.jar",
+                        "MD5": "f19165dad0971e6bfcecca1bf9ac0af2",
+                        "SHA256": "e603214d2ef7b988958751bd9a359fb81f29c26ac4d00863f0f37190d08ff363"
+                    },
+                    "required": {
+                        "value": false
                     }
                 },
                 {
@@ -682,7 +485,8 @@
                     "artifact": {
                         "size": 1607326,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/required/easy_npc-fabric-1.20.1-5.9.2.jar",
-                        "MD5": "d74a3931d2d77f8563665437b9685b1a"
+                        "MD5": "d74a3931d2d77f8563665437b9685b1a",
+                        "SHA256": "aeb9daebd9c00b039177ae2156196ba08a06dc783fcd4c5c8abda6d1cb2cf3e5"
                     }
                 },
                 {
@@ -692,7 +496,8 @@
                     "artifact": {
                         "size": 2107873,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/required/fabric-api-0.92.6+1.20.1.jar",
-                        "MD5": "3483560775f416a4c759535b898165a5"
+                        "MD5": "3483560775f416a4c759535b898165a5",
+                        "SHA256": "0ece50476da3692111ab04b75945c5458e70d98cd069eefc044ab3e57977deeb"
                     }
                 },
                 {
@@ -702,7 +507,8 @@
                     "artifact": {
                         "size": 7387359,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/required/fabric-language-kotlin-1.13.4+kotlin.2.2.0.jar",
-                        "MD5": "5edf1cfa6574e3e1e38c2e4f1b5a557e"
+                        "MD5": "5edf1cfa6574e3e1e38c2e4f1b5a557e",
+                        "SHA256": "2a3c56fc1dd6e922a9bee35a4c0ba4bc0d967763f2e952ff49b74ec3c641f50b"
                     }
                 },
                 {
@@ -712,7 +518,8 @@
                     "artifact": {
                         "size": 8024496,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/required/FarmersDelight-1.20.1-2.4.0+refabricated.jar",
-                        "MD5": "61cff464c1a1393c4a70631b4de04a4e"
+                        "MD5": "61cff464c1a1393c4a70631b4de04a4e",
+                        "SHA256": "bbfd5fde5946a6a48fe82e92c1b50a90a345ef254df29ad4265b09e1e2c15450"
                     }
                 },
                 {
@@ -722,7 +529,8 @@
                     "artifact": {
                         "size": 125197,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/optionaloff/ferritecore-6.0.1-fabric.jar",
-                        "MD5": "a19272e427f75fea59127de6610ea26b"
+                        "MD5": "a19272e427f75fea59127de6610ea26b",
+                        "SHA256": "c7ba1118a05b2da900d1c369fbe1017a3e3ec3cafe5e51398b851279b9becf24"
                     },
                     "required": {
                         "value": false,
@@ -736,7 +544,8 @@
                     "artifact": {
                         "size": 105359,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/optionalon/indium-1.0.34+mc1.20.1.jar",
-                        "MD5": "91f3ce08edec42ee8f6b45fd6ae0c8b3"
+                        "MD5": "91f3ce08edec42ee8f6b45fd6ae0c8b3",
+                        "SHA256": "33bdc7f01bdca61fd1d526e9e6ae1acdf107412ed0f6483da528d7eadc919059"
                     },
                     "required": {
                         "value": false
@@ -749,7 +558,8 @@
                     "artifact": {
                         "size": 2730664,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/optionaloff/iris-1.7.5+mc1.20.1.jar",
-                        "MD5": "902528a82a843300ecf9027af9f8fb8c"
+                        "MD5": "902528a82a843300ecf9027af9f8fb8c",
+                        "SHA256": "95b870dfe225ff26d9d3997c0b0089063d3b6e0e017f018d7217f52a31076f08"
                     },
                     "required": {
                         "value": false,
@@ -763,7 +573,8 @@
                     "artifact": {
                         "size": 2801344,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/required/letsdo-furniture-fabric-1.0.4.jar",
-                        "MD5": "96641c12d0fcc82744e9d3bd3d727831"
+                        "MD5": "96641c12d0fcc82744e9d3bd3d727831",
+                        "SHA256": "b8df3c7c0b065290a6ab4e72692bc9fcb33f6980869d33e56b1538168c10ab61"
                     }
                 },
                 {
@@ -773,7 +584,8 @@
                     "artifact": {
                         "size": 645865,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/optionalon/lithium-fabric-mc1.20.1-0.11.2.jar",
-                        "MD5": "026ca4110d57f16f701b400ad5d2ca26"
+                        "MD5": "026ca4110d57f16f701b400ad5d2ca26",
+                        "SHA256": "a0c595355d680e0c87bf8eaebafedff6900d4e771a8d6894ee6d2d4374de8df9"
                     },
                     "required": {
                         "value": false
@@ -786,20 +598,11 @@
                     "artifact": {
                         "size": 99924,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/optionalon/NarrusYeetus-1.1.0.jar",
-                        "MD5": "25cd36a8068624e848c81e603df9bf9d"
+                        "MD5": "25cd36a8068624e848c81e603df9bf9d",
+                        "SHA256": "5b98c47f689d7410309a774201907c231e6db5e907139b71aac81e4d0be1ace7"
                     },
                     "required": {
                         "value": false
-                    }
-                },
-                {
-                    "id": "site.siredvin:peripheralworks:1.5.9@jar",
-                    "name": "Unlimited Peripheral Works",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 1530554,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/required/peripheralworks-fabric-1.20.1-1.5.9.jar",
-                        "MD5": "5da26562f900c885b80eecb5732457da"
                     }
                 },
                 {
@@ -809,7 +612,8 @@
                     "artifact": {
                         "size": 77304,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/optionalon/reeses_sodium_options-1.7.2+mc1.20.1-build.101.jar",
-                        "MD5": "0db2ef332dd00de8c64e34f192317118"
+                        "MD5": "0db2ef332dd00de8c64e34f192317118",
+                        "SHA256": "627b6b90e30d18de49dd8960afd5c8b530cf2c6f21b248d14a848d1023ff0bec"
                     },
                     "required": {
                         "value": false
@@ -822,7 +626,8 @@
                     "artifact": {
                         "size": 590745,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/required/scholar-1.20.1-1.1.4-fabric.jar",
-                        "MD5": "ac28fc3797086f9729a07abb9add6386"
+                        "MD5": "ac28fc3797086f9729a07abb9add6386",
+                        "SHA256": "8387420af715ec273ee84dac1e33d0f1a108315e73b750fa936210cc0725cb68"
                     }
                 },
                 {
@@ -832,7 +637,8 @@
                     "artifact": {
                         "size": 563207,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/required/sliceanddice-fabric-3.3.1.jar",
-                        "MD5": "c9038bc0c4ac424c5cb8cf193c1962eb"
+                        "MD5": "c9038bc0c4ac424c5cb8cf193c1962eb",
+                        "SHA256": "b928f698340dbce86d5796ff2e3a99f6d69019aa5de2e5890f5c98c6b71fc521"
                     }
                 },
                 {
@@ -842,7 +648,8 @@
                     "artifact": {
                         "size": 385539,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/optionalon/sodium-extra-0.5.4+mc1.20.1-build.115.jar",
-                        "MD5": "9eaed09a486eee9a1326de5dd80faa0a"
+                        "MD5": "9eaed09a486eee9a1326de5dd80faa0a",
+                        "SHA256": "e1cf1048d0ee55f9e4c381a165a1304300c8615e5071d78cc912262b362da81d"
                     },
                     "required": {
                         "value": false
@@ -855,7 +662,8 @@
                     "artifact": {
                         "size": 968419,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/optionalon/sodium-fabric-0.5.11+mc1.20.1.jar",
-                        "MD5": "9880bae748957d1cb6c4de50c8e0452a"
+                        "MD5": "9880bae748957d1cb6c4de50c8e0452a",
+                        "SHA256": "5413baaa260a2eadcee4221b8e7105a8e2a9b5b2c84b73f704f2740319aab7df"
                     },
                     "required": {
                         "value": false
@@ -868,7 +676,8 @@
                     "artifact": {
                         "size": 9892101,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/required/Steam_Rails-1.6.9+fabric-mc1.20.1.jar",
-                        "MD5": "404efdba168d9405e1ef1ab199a4c344"
+                        "MD5": "404efdba168d9405e1ef1ab199a4c344",
+                        "SHA256": "38f35fa36c1688f129f7c2b4ecc741abd0fed12ad996f23b58e15e8162985ce5"
                     }
                 },
                 {
@@ -878,11 +687,23 @@
                     "artifact": {
                         "size": 4747871,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/optionaloff/worldedit-fabric-mc1.20.1-7.3.0-SNAPSHOT-dist.jar",
-                        "MD5": "e18f0a0ecff5a767d120292a2e904a0d"
+                        "MD5": "e18f0a0ecff5a767d120292a2e904a0d",
+                        "SHA256": "ceee8e5883e17d841148519600fb850919ed3252d1b80a1e1e5d946543ac1e67"
                     },
                     "required": {
                         "value": false,
                         "def": false
+                    }
+                },
+                {
+                    "id": "dev.isxander.yacl3.platform:yet_another_config_lib_v3:3.6.6+1.20.1-fabric@jar",
+                    "name": "YetAnotherConfigLib",
+                    "type": "FabricMod",
+                    "artifact": {
+                        "size": 1294234,
+                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/required/yet_another_config_lib_v3-3.6.6+1.20.1-fabric.jar",
+                        "MD5": "b6960b2defbf8cb1b983cffd261089ba",
+                        "SHA256": "7a2389ca436ea8f7abee787d6373f9526deece5d06785f3623b7fe89bd9b31ac"
                     }
                 },
                 {
@@ -893,30 +714,8 @@
                         "size": 1580,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/files/config/forgeconfigapiport.toml",
                         "MD5": "d28499d3e93552414ce90f277b7bb682",
+                        "SHA256": "300b866a6251887cbd30b18438e123b2fa524315edbf8e2996a01acb4ecac91e",
                         "path": "config/forgeconfigapiport.toml"
-                    }
-                },
-                {
-                    "id": "dev.isxander.culllessleaves:cull-less-leaves:1.4.2+1.21-fabric@jar",
-                    "name": "Cull Less Leaves",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 27086,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/optionalon/Cull%20Less%20Leaves-1.4.2+1.21-fabric.jar",
-                        "MD5": "f19165dad0971e6bfcecca1bf9ac0af2"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "dev.isxander.yacl3.platform:yet_another_config_lib_v3:3.6.6+1.20.1-fabric@jar",
-                    "name": "YetAnotherConfigLib",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 1294234,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/required/yet_another_config_lib_v3-3.6.6+1.20.1-fabric.jar",
-                        "MD5": "b6960b2defbf8cb1b983cffd261089ba"
                     }
                 },
                 {
@@ -924,9 +723,10 @@
                     "name": "options.txt",
                     "type": "File",
                     "artifact": {
-                        "size": 3518,
+                        "size": 3657,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/files/options.txt",
-                        "MD5": "21925feafba847f3cf1f7100c01c471b",
+                        "MD5": "10f42aa287f5860fcd2506abd2063057",
+                        "SHA256": "bb3ab784e2feeee436c02301623503bcf4663e0ee24b52d66e3bd19597af5d58",
                         "path": "options.txt"
                     }
                 },
@@ -938,6 +738,7 @@
                         "size": 1435273,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/files/resourcepacks/BetterGame.zip",
                         "MD5": "eeae6656b8b4be14cafb2affa02da490",
+                        "SHA256": "daee2d781dc284eacd7eae5c9ea390aeee7263788eca753f2186acbe39ac5d87",
                         "path": "resourcepacks/BetterGame.zip"
                     }
                 },
@@ -949,6 +750,7 @@
                         "size": 1253202,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/files/resourcepacks/ComputerCreate.zip",
                         "MD5": "5fb9ce0beeb853bea89e14a38f00e947",
+                        "SHA256": "04c6dab383ef11f717336ace8a81d27e36681d09c5386197bca85f7f7e5498a7",
                         "path": "resourcepacks/ComputerCreate.zip"
                     }
                 },
@@ -960,6 +762,7 @@
                         "size": 286816,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/files/resourcepacks/CreateComputers.zip",
                         "MD5": "8f7472b5cd12f805d030484ed7221d47",
+                        "SHA256": "f5f36be8bd3f2fbabc8a1d10254bf870c480dd90bddfafd8aa6a8bd87e3fc613",
                         "path": "resourcepacks/CreateComputers.zip"
                     }
                 },
@@ -971,814 +774,7 @@
                         "size": 95,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/files/servers.dat",
                         "MD5": "42a753750c3c8fa50c799b37508ee953",
-                        "path": "servers.dat"
-                    }
-                }
-            ]
-        },
-        {
-            "id": "Programming-1.20.1",
-            "name": "Вокруг света (Minecraft 1.20.1)",
-            "description": "Подходит для всех квестов (любой возраст)",
-            "icon": "https://f-launcher.ru/fox/new/img/Fabric-Demo-1.20.4.png",
-            "version": "1.0.1",
-            "address": "localhost:25565",
-            "minecraftVersion": "1.20.1",
-            "discord": {
-                "shortId": "<FILL IN OR REMOVE DISCORD OBJECT>",
-                "largeImageText": "<FILL IN OR REMOVE DISCORD OBJECT>",
-                "largeImageKey": "<FILL IN OR REMOVE DISCORD OBJECT>"
-            },
-            "mainServer": false,
-            "autoconnect": false,
-            "modules": [
-                {
-                    "id": "net.fabricmc:fabric-loader:0.16.10",
-                    "name": "Fabric (fabric-loader)",
-                    "type": "Fabric",
-                    "artifact": {
-                        "size": 1387408,
-                        "MD5": "239d59118dec4324672b3d9e9d75efef",
-                        "url": "https://f-launcher.ru/fox/new/repo/lib/net/fabricmc/fabric-loader/0.16.10/fabric-loader-0.16.10.jar"
-                    },
-                    "subModules": [
-                        {
-                            "id": "1.20.1-fabric-0.16.10",
-                            "name": "Fabric (version.json)",
-                            "type": "VersionManifest",
-                            "artifact": {
-                                "size": 2859,
-                                "MD5": "14ed56e7cb4856a1e167b4e0ad9dda9b",
-                                "url": "https://f-launcher.ru/fox/new/repo/versions/1.20.1-fabric-0.16.10/1.20.1-fabric-0.16.10.json"
-                            }
-                        },
-                        {
-                            "id": "org.ow2.asm:asm:9.7.1",
-                            "name": "Fabric (asm)",
-                            "type": "Library",
-                            "artifact": {
-                                "size": 126093,
-                                "MD5": "e2cdd32d198ad31427d298eee9d39d8d",
-                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm/9.7.1/asm-9.7.1.jar"
-                            }
-                        },
-                        {
-                            "id": "org.ow2.asm:asm-analysis:9.7.1",
-                            "name": "Fabric (asm-analysis)",
-                            "type": "Library",
-                            "artifact": {
-                                "size": 35126,
-                                "MD5": "4cd9e7178dfb85371bba3077e40cd514",
-                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-analysis/9.7.1/asm-analysis-9.7.1.jar"
-                            }
-                        },
-                        {
-                            "id": "org.ow2.asm:asm-commons:9.7.1",
-                            "name": "Fabric (asm-commons)",
-                            "type": "Library",
-                            "artifact": {
-                                "size": 73459,
-                                "MD5": "8344aea3c8b7d707e9d35a62710e77c9",
-                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-commons/9.7.1/asm-commons-9.7.1.jar"
-                            }
-                        },
-                        {
-                            "id": "org.ow2.asm:asm-tree:9.7.1",
-                            "name": "Fabric (asm-tree)",
-                            "type": "Library",
-                            "artifact": {
-                                "size": 51939,
-                                "MD5": "e85029f613b6469989cc7cf53fe06b74",
-                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-tree/9.7.1/asm-tree-9.7.1.jar"
-                            }
-                        },
-                        {
-                            "id": "org.ow2.asm:asm-util:9.7.1",
-                            "name": "Fabric (asm-util)",
-                            "type": "Library",
-                            "artifact": {
-                                "size": 94519,
-                                "MD5": "36d373a9cd6cad9b35db9f984c6b4bbb",
-                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-util/9.7.1/asm-util-9.7.1.jar"
-                            }
-                        },
-                        {
-                            "id": "net.fabricmc:sponge-mixin:0.15.4+mixin.0.8.7",
-                            "name": "Fabric (sponge-mixin)",
-                            "type": "Library",
-                            "artifact": {
-                                "size": 1494834,
-                                "MD5": "991ca8be2c408fe19eb64014d8a18243",
-                                "url": "https://f-launcher.ru/fox/new/repo/lib/net/fabricmc/sponge-mixin/0.15.4+mixin.0.8.7/sponge-mixin-0.15.4+mixin.0.8.7.jar"
-                            }
-                        },
-                        {
-                            "id": "net.fabricmc:intermediary:1.20.1",
-                            "name": "Fabric (intermediary)",
-                            "type": "Library",
-                            "artifact": {
-                                "size": 573365,
-                                "MD5": "3f4768ac751cac3418266d1d7aa15f55",
-                                "url": "https://f-launcher.ru/fox/new/repo/lib/net/fabricmc/intermediary/1.20.1/intermediary-1.20.1.jar"
-                            }
-                        }
-                    ]
-                },
-                {
-                    "id": "link.infra:indium:1.0.34+mc1.20.1@jar",
-                    "name": "Indium",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 105359,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-vanilla-1.20.1/fabricmods/optionalon/indium-1.0.34+mc1.20.1.jar",
-                        "MD5": "91f3ce08edec42ee8f6b45fd6ae0c8b3"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "generated.fabricmod:iris:1.7.5+mc1.20.1@jar",
-                    "name": "Iris",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 2730664,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-vanilla-1.20.1/fabricmods/optionaloff/iris-1.7.5+mc1.20.1.jar",
-                        "MD5": "902528a82a843300ecf9027af9f8fb8c"
-                    },
-                    "required": {
-                        "value": false,
-                        "def": false
-                    }
-                },
-                {
-                    "id": "me.jellysquid.mods:lithium:0.11.2@jar",
-                    "name": "Lithium",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 645865,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-vanilla-1.20.1/fabricmods/optionalon/lithium-fabric-mc1.20.1-0.11.2.jar",
-                        "MD5": "026ca4110d57f16f701b400ad5d2ca26"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "generated.fabricmod:fabric-api:0.92.2+1.20.1@jar",
-                    "name": "Fabric API",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 2107289,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.20.1/fabricmods/required/fabric-api-0.92.2+1.20.1.jar",
-                        "MD5": "92c58961866741106aae126558c9d4a7"
-                    }
-                },
-                {
-                    "id": "generated.fabricmod:narrus_yeetus:1.1.0@jar",
-                    "name": "Narrus Yeetus",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 99924,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-vanilla-1.20.1/fabricmods/optionalon/NarrusYeetus-1.1.0.jar",
-                        "MD5": "25cd36a8068624e848c81e603df9bf9d"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "generated.fabricmod:reeses-sodium-options:1.7.2+mc1.20.1-build.101@jar",
-                    "name": "Reese's Sodium Options",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 77304,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-vanilla-1.20.1/fabricmods/optionalon/reeses_sodium_options-1.7.2+mc1.20.1-build.101.jar",
-                        "MD5": "0db2ef332dd00de8c64e34f192317118"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "me.flashyreese.mods.sodiumextra:sodium-extra:0.5.4+mc1.20.1-build.115@jar",
-                    "name": "Sodium Extra",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 385539,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-vanilla-1.20.1/fabricmods/optionalon/sodium-extra-0.5.4+mc1.20.1-build.115.jar",
-                        "MD5": "9eaed09a486eee9a1326de5dd80faa0a"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "me.jellysquid.mods:sodium:0.5.11+mc1.20.1@jar",
-                    "name": "Sodium",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 968419,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-vanilla-1.20.1/fabricmods/optionalon/sodium-fabric-0.5.11+mc1.20.1.jar",
-                        "MD5": "9880bae748957d1cb6c4de50c8e0452a"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "options.txt",
-                    "name": "options.txt",
-                    "type": "File",
-                    "artifact": {
-                        "size": 3626,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-vanilla-1.20.1/files/options.txt",
-                        "MD5": "1162fc0e29d4adafe503ad75452810e3",
-                        "path": "options.txt"
-                    }
-                },
-                {
-                    "id": "servers.dat",
-                    "name": "servers.dat",
-                    "type": "File",
-                    "artifact": {
-                        "size": 253,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-vanilla-1.20.1/files/servers.dat",
-                        "MD5": "ba35d28517f715445d5f06956b0bf389",
-                        "path": "servers.dat"
-                    }
-                }
-            ]
-        },
-        {
-            "id": "Event-1.16.5",
-            "name": "(УСТАРЕЛ) Вокруг света (1.16.5)",
-            "description": "Это устаревшая версия",
-            "icon": "https://f-launcher.ru/fox/new/img/Fabric-Demo-1.20.4.png",
-            "version": "1.0.2",
-            "address": "95.216.96.241:10001",
-            "minecraftVersion": "1.16.5",
-            "discord": {
-                "shortId": "<FILL IN OR REMOVE DISCORD OBJECT>",
-                "largeImageText": "<FILL IN OR REMOVE DISCORD OBJECT>",
-                "largeImageKey": "<FILL IN OR REMOVE DISCORD OBJECT>"
-            },
-            "mainServer": false,
-            "autoconnect": false,
-            "modules": [
-                {
-                    "id": "net.fabricmc:fabric-loader:0.16.9",
-                    "name": "Fabric (fabric-loader)",
-                    "type": "Fabric",
-                    "artifact": {
-                        "size": 1387357,
-                        "MD5": "27a6ef87676ce6316c777d81c1cd2962",
-                        "url": "https://f-launcher.ru/fox/new/repo/lib/net/fabricmc/fabric-loader/0.16.9/fabric-loader-0.16.9.jar"
-                    },
-                    "subModules": [
-                        {
-                            "id": "1.16.5-fabric-0.16.9",
-                            "name": "Fabric (version.json)",
-                            "type": "VersionManifest",
-                            "artifact": {
-                                "size": 2857,
-                                "MD5": "de82c3ac486c83f6a55f18a3c6fa3fd9",
-                                "url": "https://f-launcher.ru/fox/new/repo/versions/1.16.5-fabric-0.16.9/1.16.5-fabric-0.16.9.json"
-                            }
-                        },
-                        {
-                            "id": "org.ow2.asm:asm:9.7.1",
-                            "name": "Fabric (asm)",
-                            "type": "Library",
-                            "artifact": {
-                                "size": 126093,
-                                "MD5": "e2cdd32d198ad31427d298eee9d39d8d",
-                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm/9.7.1/asm-9.7.1.jar"
-                            }
-                        },
-                        {
-                            "id": "org.ow2.asm:asm-analysis:9.7.1",
-                            "name": "Fabric (asm-analysis)",
-                            "type": "Library",
-                            "artifact": {
-                                "size": 35126,
-                                "MD5": "4cd9e7178dfb85371bba3077e40cd514",
-                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-analysis/9.7.1/asm-analysis-9.7.1.jar"
-                            }
-                        },
-                        {
-                            "id": "org.ow2.asm:asm-commons:9.7.1",
-                            "name": "Fabric (asm-commons)",
-                            "type": "Library",
-                            "artifact": {
-                                "size": 73459,
-                                "MD5": "8344aea3c8b7d707e9d35a62710e77c9",
-                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-commons/9.7.1/asm-commons-9.7.1.jar"
-                            }
-                        },
-                        {
-                            "id": "org.ow2.asm:asm-tree:9.7.1",
-                            "name": "Fabric (asm-tree)",
-                            "type": "Library",
-                            "artifact": {
-                                "size": 51939,
-                                "MD5": "e85029f613b6469989cc7cf53fe06b74",
-                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-tree/9.7.1/asm-tree-9.7.1.jar"
-                            }
-                        },
-                        {
-                            "id": "org.ow2.asm:asm-util:9.7.1",
-                            "name": "Fabric (asm-util)",
-                            "type": "Library",
-                            "artifact": {
-                                "size": 94519,
-                                "MD5": "36d373a9cd6cad9b35db9f984c6b4bbb",
-                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-util/9.7.1/asm-util-9.7.1.jar"
-                            }
-                        },
-                        {
-                            "id": "net.fabricmc:sponge-mixin:0.15.4+mixin.0.8.7",
-                            "name": "Fabric (sponge-mixin)",
-                            "type": "Library",
-                            "artifact": {
-                                "size": 1494834,
-                                "MD5": "991ca8be2c408fe19eb64014d8a18243",
-                                "url": "https://f-launcher.ru/fox/new/repo/lib/net/fabricmc/sponge-mixin/0.15.4+mixin.0.8.7/sponge-mixin-0.15.4+mixin.0.8.7.jar"
-                            }
-                        },
-                        {
-                            "id": "net.fabricmc:intermediary:1.16.5",
-                            "name": "Fabric (intermediary)",
-                            "type": "Library",
-                            "artifact": {
-                                "size": 406376,
-                                "MD5": "abadf31a3b1b8b128cde5debcee93686",
-                                "url": "https://f-launcher.ru/fox/new/repo/lib/net/fabricmc/intermediary/1.16.5/intermediary-1.16.5.jar"
-                            }
-                        }
-                    ]
-                },
-                {
-                    "id": "dev.tr7zw:entityculling:1.5.2@jar",
-                    "name": "EntityCulling-Fabric",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 44133,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/entityculling-fabric-mc1.16.5-1.5.2.jar",
-                        "MD5": "877dcbc4cdc0b9d9e5fb0cc4c39f4ab4"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "generated.fabricmod:fabric:0.42.0+1.16@jar",
-                    "name": "Fabric API",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 1090414,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/fabric-api-0.42.0+1.16.jar",
-                        "MD5": "a0c502455195b498a8f5b4f5c15e6a04"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "link.infra:indium:1.0.0+mc1.16.5@jar",
-                    "name": "Indium",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 114793,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/indium-1.0.0+mc1.16.5.jar",
-                        "MD5": "4247babd00fe95c49926f30e3b14bb8f"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "generated.fabricmod:iris:1.4.5@jar",
-                    "name": "Iris",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 2557920,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionaloff/iris-mc1.16.5-1.4.5.jar",
-                        "MD5": "b614f8aa7ff5529eaa7df66d4fc990ab"
-                    },
-                    "required": {
-                        "value": false,
-                        "def": false
-                    }
-                },
-                {
-                    "id": "generated.fabricmod:lazydfu:0.1.1@jar",
-                    "name": "LazyDFU",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 15520,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/lazydfu-0.1.1.jar",
-                        "MD5": "c138f2549f4fb8d3fd883aaabcab34b3"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "me.jellysquid.mods:lithium:0.6.6@jar",
-                    "name": "Lithium",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 349400,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/lithium-fabric-mc1.16.5-0.6.6.jar",
-                        "MD5": "19f9a82b0753ae21430761a8916f0533"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "org.rgbmc:multiplayerfix:1.0.0@jar",
-                    "name": "MultiplayerFix",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 4887,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/MultiplayerFix-1.0.0.jar",
-                        "MD5": "0ca96071ba79ff2ecb806733a2edbd07"
-                    },
-                    "required": {
-                        "value": true
-                    }
-                },
-                {
-                    "id": "generated.fabricmod:reeses-sodium-options:1.6.3+mc1.16.5-build.86@jar",
-                    "name": "Reese's Sodium Options",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 67254,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/reeses_sodium_options-1.6.3+mc1.16.5-build.86.jar",
-                        "MD5": "c1d9f1151da05011fe6e3d726d02c05e"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "me.flashyreese.mods.sodiumextra:sodium-extra:0.4.18+mc1.16.5-build.96@jar",
-                    "name": "Sodium Extra",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 326716,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/sodium-extra-0.4.18+mc1.16.5-build.96.jar",
-                        "MD5": "569944e2c61f071d3a00f61261688f42"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "me.jellysquid.mods:sodium:0.2.0+build.4@jar",
-                    "name": "Sodium",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 507710,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/sodium-fabric-mc1.16.5-0.2.0+build.4.jar",
-                        "MD5": "98914f22cfe2d0ea5d8007ae8ff96062"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "eu.mikroskeem:worldeditcui:1.16.5+02@jar",
-                    "name": "WorldEditCUI",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 127863,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/WorldEditCUI-1.16.5+02.jar",
-                        "MD5": "5e4f94a2a6e914bbadf95d4337355559"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "options.txt",
-                    "name": "options.txt",
-                    "type": "File",
-                    "artifact": {
-                        "size": 2959,
-                        "url": "https://f-launcher.ru/fox/new/servers/New-Year-1.16.5/files/options.txt",
-                        "MD5": "d370429db2f6c4cae91a3fa7ebea7a35",
-                        "path": "options.txt"
-                    }
-                },
-                {
-                    "id": "pack.zip",
-                    "name": "pack.zip",
-                    "type": "File",
-                    "artifact": {
-                        "size": 3090,
-                        "url": "https://f-launcher.ru/fox/new/servers/New-Year-1.16.5/files/resourcepacks/pack.zip",
-                        "MD5": "9104ce22ed50a10c585dd07fed3a8e56",
-                        "path": "resourcepacks/pack.zip"
-                    }
-                },
-                {
-                    "id": "servers.dat",
-                    "name": "servers.dat",
-                    "type": "File",
-                    "artifact": {
-                        "size": 165,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/files/servers.dat",
-                        "MD5": "a8b0b040611dfffa0c4184c55510c939",
-                        "path": "servers.dat"
-                    }
-                }
-            ]
-        },
-        {
-            "id": "Event-1.16.5",
-            "name": "(УСТАРЕЛ) Новогодняя ёлка (Minecraft 1.16.5)",
-            "description": "Это устаревшая версия",
-            "icon": "https://f-launcher.ru/fox/new/img/Fabric-Demo-1.20.4.png",
-            "version": "1.0.2",
-            "address": "95.216.96.241:10001",
-            "minecraftVersion": "1.16.5",
-            "discord": {
-                "shortId": "<FILL IN OR REMOVE DISCORD OBJECT>",
-                "largeImageText": "<FILL IN OR REMOVE DISCORD OBJECT>",
-                "largeImageKey": "<FILL IN OR REMOVE DISCORD OBJECT>"
-            },
-            "mainServer": false,
-            "autoconnect": false,
-            "modules": [
-                {
-                    "id": "net.fabricmc:fabric-loader:0.16.9",
-                    "name": "Fabric (fabric-loader)",
-                    "type": "Fabric",
-                    "artifact": {
-                        "size": 1387357,
-                        "MD5": "27a6ef87676ce6316c777d81c1cd2962",
-                        "url": "https://f-launcher.ru/fox/new/repo/lib/net/fabricmc/fabric-loader/0.16.9/fabric-loader-0.16.9.jar"
-                    },
-                    "subModules": [
-                        {
-                            "id": "1.16.5-fabric-0.16.9",
-                            "name": "Fabric (version.json)",
-                            "type": "VersionManifest",
-                            "artifact": {
-                                "size": 2857,
-                                "MD5": "de82c3ac486c83f6a55f18a3c6fa3fd9",
-                                "url": "https://f-launcher.ru/fox/new/repo/versions/1.16.5-fabric-0.16.9/1.16.5-fabric-0.16.9.json"
-                            }
-                        },
-                        {
-                            "id": "org.ow2.asm:asm:9.7.1",
-                            "name": "Fabric (asm)",
-                            "type": "Library",
-                            "artifact": {
-                                "size": 126093,
-                                "MD5": "e2cdd32d198ad31427d298eee9d39d8d",
-                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm/9.7.1/asm-9.7.1.jar"
-                            }
-                        },
-                        {
-                            "id": "org.ow2.asm:asm-analysis:9.7.1",
-                            "name": "Fabric (asm-analysis)",
-                            "type": "Library",
-                            "artifact": {
-                                "size": 35126,
-                                "MD5": "4cd9e7178dfb85371bba3077e40cd514",
-                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-analysis/9.7.1/asm-analysis-9.7.1.jar"
-                            }
-                        },
-                        {
-                            "id": "org.ow2.asm:asm-commons:9.7.1",
-                            "name": "Fabric (asm-commons)",
-                            "type": "Library",
-                            "artifact": {
-                                "size": 73459,
-                                "MD5": "8344aea3c8b7d707e9d35a62710e77c9",
-                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-commons/9.7.1/asm-commons-9.7.1.jar"
-                            }
-                        },
-                        {
-                            "id": "org.ow2.asm:asm-tree:9.7.1",
-                            "name": "Fabric (asm-tree)",
-                            "type": "Library",
-                            "artifact": {
-                                "size": 51939,
-                                "MD5": "e85029f613b6469989cc7cf53fe06b74",
-                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-tree/9.7.1/asm-tree-9.7.1.jar"
-                            }
-                        },
-                        {
-                            "id": "org.ow2.asm:asm-util:9.7.1",
-                            "name": "Fabric (asm-util)",
-                            "type": "Library",
-                            "artifact": {
-                                "size": 94519,
-                                "MD5": "36d373a9cd6cad9b35db9f984c6b4bbb",
-                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-util/9.7.1/asm-util-9.7.1.jar"
-                            }
-                        },
-                        {
-                            "id": "net.fabricmc:sponge-mixin:0.15.4+mixin.0.8.7",
-                            "name": "Fabric (sponge-mixin)",
-                            "type": "Library",
-                            "artifact": {
-                                "size": 1494834,
-                                "MD5": "991ca8be2c408fe19eb64014d8a18243",
-                                "url": "https://f-launcher.ru/fox/new/repo/lib/net/fabricmc/sponge-mixin/0.15.4+mixin.0.8.7/sponge-mixin-0.15.4+mixin.0.8.7.jar"
-                            }
-                        },
-                        {
-                            "id": "net.fabricmc:intermediary:1.16.5",
-                            "name": "Fabric (intermediary)",
-                            "type": "Library",
-                            "artifact": {
-                                "size": 406376,
-                                "MD5": "abadf31a3b1b8b128cde5debcee93686",
-                                "url": "https://f-launcher.ru/fox/new/repo/lib/net/fabricmc/intermediary/1.16.5/intermediary-1.16.5.jar"
-                            }
-                        }
-                    ]
-                },
-                {
-                    "id": "dev.tr7zw:entityculling:1.5.2@jar",
-                    "name": "EntityCulling-Fabric",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 44133,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/entityculling-fabric-mc1.16.5-1.5.2.jar",
-                        "MD5": "877dcbc4cdc0b9d9e5fb0cc4c39f4ab4"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "generated.fabricmod:fabric:0.42.0+1.16@jar",
-                    "name": "Fabric API",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 1090414,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/fabric-api-0.42.0+1.16.jar",
-                        "MD5": "a0c502455195b498a8f5b4f5c15e6a04"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "link.infra:indium:1.0.0+mc1.16.5@jar",
-                    "name": "Indium",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 114793,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/indium-1.0.0+mc1.16.5.jar",
-                        "MD5": "4247babd00fe95c49926f30e3b14bb8f"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "generated.fabricmod:iris:1.4.5@jar",
-                    "name": "Iris",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 2557920,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionaloff/iris-mc1.16.5-1.4.5.jar",
-                        "MD5": "b614f8aa7ff5529eaa7df66d4fc990ab"
-                    },
-                    "required": {
-                        "value": false,
-                        "def": false
-                    }
-                },
-                {
-                    "id": "generated.fabricmod:lazydfu:0.1.1@jar",
-                    "name": "LazyDFU",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 15520,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/lazydfu-0.1.1.jar",
-                        "MD5": "c138f2549f4fb8d3fd883aaabcab34b3"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "me.jellysquid.mods:lithium:0.6.6@jar",
-                    "name": "Lithium",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 349400,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/lithium-fabric-mc1.16.5-0.6.6.jar",
-                        "MD5": "19f9a82b0753ae21430761a8916f0533"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "org.rgbmc:multiplayerfix:1.0.0@jar",
-                    "name": "MultiplayerFix",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 4887,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/MultiplayerFix-1.0.0.jar",
-                        "MD5": "0ca96071ba79ff2ecb806733a2edbd07"
-                    },
-                    "required": {
-                        "value": true
-                    }
-                },
-                {
-                    "id": "generated.fabricmod:reeses-sodium-options:1.6.3+mc1.16.5-build.86@jar",
-                    "name": "Reese's Sodium Options",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 67254,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/reeses_sodium_options-1.6.3+mc1.16.5-build.86.jar",
-                        "MD5": "c1d9f1151da05011fe6e3d726d02c05e"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "me.flashyreese.mods.sodiumextra:sodium-extra:0.4.18+mc1.16.5-build.96@jar",
-                    "name": "Sodium Extra",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 326716,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/sodium-extra-0.4.18+mc1.16.5-build.96.jar",
-                        "MD5": "569944e2c61f071d3a00f61261688f42"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "me.jellysquid.mods:sodium:0.2.0+build.4@jar",
-                    "name": "Sodium",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 507710,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/sodium-fabric-mc1.16.5-0.2.0+build.4.jar",
-                        "MD5": "98914f22cfe2d0ea5d8007ae8ff96062"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "eu.mikroskeem:worldeditcui:1.16.5+02@jar",
-                    "name": "WorldEditCUI",
-                    "type": "FabricMod",
-                    "artifact": {
-                        "size": 127863,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/fabricmods/optionalon/WorldEditCUI-1.16.5+02.jar",
-                        "MD5": "5e4f94a2a6e914bbadf95d4337355559"
-                    },
-                    "required": {
-                        "value": false
-                    }
-                },
-                {
-                    "id": "options.txt",
-                    "name": "options.txt",
-                    "type": "File",
-                    "artifact": {
-                        "size": 2959,
-                        "url": "https://f-launcher.ru/fox/new/servers/New-Year-1.16.5/files/options.txt",
-                        "MD5": "d370429db2f6c4cae91a3fa7ebea7a35",
-                        "path": "options.txt"
-                    }
-                },
-                {
-                    "id": "pack.zip",
-                    "name": "pack.zip",
-                    "type": "File",
-                    "artifact": {
-                        "size": 3090,
-                        "url": "https://f-launcher.ru/fox/new/servers/New-Year-1.16.5/files/resourcepacks/pack.zip",
-                        "MD5": "9104ce22ed50a10c585dd07fed3a8e56",
-                        "path": "resourcepacks/pack.zip"
-                    }
-                },
-                {
-                    "id": "servers.dat",
-                    "name": "servers.dat",
-                    "type": "File",
-                    "artifact": {
-                        "size": 165,
-                        "url": "https://f-launcher.ru/fox/new/servers/Programming-1.16.5/files/servers.dat",
-                        "MD5": "a8b0b040611dfffa0c4184c55510c939",
+                        "SHA256": "6cf498122ad7e4086c6dfea009c5f7c23d3d6fd8c33de200da231893ccbf158e",
                         "path": "servers.dat"
                     }
                 }
@@ -1792,11 +788,6 @@
             "version": "1.0.0",
             "address": "localhost:25565",
             "minecraftVersion": "1.8.9",
-            "discord": {
-                "shortId": "<FILL IN OR REMOVE DISCORD OBJECT>",
-                "largeImageText": "<FILL IN OR REMOVE DISCORD OBJECT>",
-                "largeImageKey": "<FILL IN OR REMOVE DISCORD OBJECT>"
-            },
             "mainServer": false,
             "autoconnect": false,
             "modules": [
@@ -1807,6 +798,7 @@
                     "artifact": {
                         "size": 3805686,
                         "MD5": "b97a4c5bc653c957663e7b0de17a3c09",
+                        "SHA256": "596512ad5f12f95d8a3170321543d4455d23b8fe649c68580c5f828fe74f6668",
                         "url": "https://f-launcher.ru/fox/new/repo/lib/net/minecraftforge/forge/1.8.9-11.15.1.2318-1.8.9/forge-1.8.9-11.15.1.2318-1.8.9-universal.jar"
                     },
                     "subModules": [
@@ -1817,6 +809,7 @@
                             "artifact": {
                                 "size": 32999,
                                 "MD5": "934b2d91c7c5be4a49577c9e6b40e8da",
+                                "SHA256": "57f402b626d16cc2705bf2a37add7adbb074f0ca3b3102fa6e23aa303dae682f",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/net/minecraft/launchwrapper/1.12/launchwrapper-1.12.jar"
                             }
                         },
@@ -1827,6 +820,7 @@
                             "artifact": {
                                 "size": 241639,
                                 "MD5": "c5cc4613bbdfba3ccf5f0ab85390d0b8",
+                                "SHA256": "09d44e6adddaab9fd89ea3164c439f71c755769fa8d3a940352ab3d2003b98ff",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-all/5.0.3/asm-all-5.0.3.jar"
                             }
                         },
@@ -1837,6 +831,7 @@
                             "artifact": {
                                 "size": 248566,
                                 "MD5": "f251ba666cccb260ff7215b2cbeee8d4",
+                                "SHA256": "a6d2c9c0ddff7702662073b69c6dc4ec83011d22e4eb2dada28aa2d66ee47f97",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/jline/jline/2.13/jline-2.13.jar"
                             }
                         },
@@ -1847,6 +842,7 @@
                             "artifact": {
                                 "size": 2514991,
                                 "MD5": "541440ca0819ebada47d6d1a8b3ee9e1",
+                                "SHA256": "4ccbc821a417f0174c9734fc721f078177cacef94ded09c3775ebf40c6a7bdfd",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/com/typesafe/akka/akka-actor_2.11/2.3.3/akka-actor_2.11-2.3.3.jar"
                             }
                         },
@@ -1857,6 +853,7 @@
                             "artifact": {
                                 "size": 219554,
                                 "MD5": "3aaf3c6e76a68e732c17d4a7e9877d81",
+                                "SHA256": "c160fbd78f51a0c2375a794e435ce2112524a6871f64d0331895e9e26ee8b9ee",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/com/typesafe/config/1.2.1/config-1.2.1.jar"
                             }
                         },
@@ -1867,6 +864,7 @@
                             "artifact": {
                                 "size": 58018,
                                 "MD5": "f5e79398daa1806f8b17311a3c782723",
+                                "SHA256": "b89d0beb76df20c7b2c2bee59ba53b802cc48566bc3e89ac96ce6361c5c2ee38",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/org/scala-lang/scala-actors-migration_2.11/1.1.0/scala-actors-migration_2.11-1.1.0.jar"
                             }
                         },
@@ -1877,6 +875,7 @@
                             "artifact": {
                                 "size": 13449765,
                                 "MD5": "06030143bf86ca896fb6ccfd679b5760",
+                                "SHA256": "3aa616f5c56d2052fc5e3231f3e8cf1736f876caff0142a66096fc5b4dc87ae5",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/org/scala-lang/scala-compiler/2.11.1/scala-compiler-2.11.1.jar"
                             }
                         },
@@ -1887,6 +886,7 @@
                             "artifact": {
                                 "size": 25365,
                                 "MD5": "004d7007abbcee858d3ca2c3ccbcbaab",
+                                "SHA256": "8dd0a4941f4564117cc991734ca36aa53dff6bb0be329f39eab46d8819f60d1a",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/org/scala-lang/plugins/scala-continuations-library_2.11/1.0.2/scala-continuations-library_2.11-1.0.2.jar"
                             }
                         },
@@ -1897,6 +897,7 @@
                             "artifact": {
                                 "size": 206575,
                                 "MD5": "359c4a6743a082c689039482eed78670",
+                                "SHA256": "79329971a31ede7b6823f21a6ab765506b4093d9276debdc9dbe17b996884f2b",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/org/scala-lang/plugins/scala-continuations-plugin_2.11.1/1.0.2/scala-continuations-plugin_2.11.1-1.0.2.jar"
                             }
                         },
@@ -1907,6 +908,7 @@
                             "artifact": {
                                 "size": 5538130,
                                 "MD5": "1d88f665219e6006c5dd82d71c525c0f",
+                                "SHA256": "088bcb80f71b6e6a2a31d2fe7288c1fd64f19663ce281b924cdfab3fb105f4f3",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/org/scala-lang/scala-library/2.11.1/scala-library-2.11.1.jar"
                             }
                         },
@@ -1917,6 +919,7 @@
                             "artifact": {
                                 "size": 419701,
                                 "MD5": "4e694499c965af4a02599c99d4f0b196",
+                                "SHA256": "19495ce701fd9ba3c499c137e3ad5364acee8f87a01ef99e912f995a23fd4cb1",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/org/scala-lang/scala-parser-combinators_2.11/1.0.1/scala-parser-combinators_2.11-1.0.1.jar"
                             }
                         },
@@ -1927,6 +930,7 @@
                             "artifact": {
                                 "size": 4372892,
                                 "MD5": "7878fac044e4e4b576bb35a77ccc34fc",
+                                "SHA256": "41938d1e89670979dd783102777a8b879999f4fb00a5b811b51c105b02a9d4f8",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/org/scala-lang/scala-reflect/2.11.1/scala-reflect-2.11.1.jar"
                             }
                         },
@@ -1937,6 +941,7 @@
                             "artifact": {
                                 "size": 726500,
                                 "MD5": "1009d69e4948045383f2a7a334348af5",
+                                "SHA256": "4a7c757d4d87dd37382bd777ad611b5875748aef148277cf25bb39eebb496d07",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/org/scala-lang/scala-swing_2.11/1.0.1/scala-swing_2.11-1.0.1.jar"
                             }
                         },
@@ -1947,6 +952,7 @@
                             "artifact": {
                                 "size": 648679,
                                 "MD5": "c2d7e66495afe14545c31b21e99879ef",
+                                "SHA256": "6c3338a4062c13dc2ce61630d9854d361a81656a4050e5080302f500dd4a8832",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/org/scala-lang/scala-xml_2.11/1.0.2/scala-xml_2.11-1.0.2.jar"
                             }
                         },
@@ -1957,6 +963,7 @@
                             "artifact": {
                                 "size": 5762,
                                 "MD5": "a3e3c3186e41c4a1a3027ba2bb23cdc6",
+                                "SHA256": "0c3085cb93c3ef95d731c274b6f2dd195aa0405fe9328d69cab7f5e899d5e124",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/lzma/lzma/0.0.1/lzma-0.0.1.jar"
                             }
                         },
@@ -1967,6 +974,7 @@
                             "artifact": {
                                 "size": 62477,
                                 "MD5": "13560a58a79b46b82057686543e8d727",
+                                "SHA256": "3fcfbe3203c2ea521bf7640484fd35d6303186ea2e08e72f032d640ca067ffda",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/net/sf/jopt-simple/jopt-simple/4.6/jopt-simple-4.6.jar"
                             }
                         },
@@ -1977,6 +985,7 @@
                             "artifact": {
                                 "size": 318956,
                                 "MD5": "e5d2b7f46c4800a32f62ce75676a5710",
+                                "SHA256": "09adf7955baa6bddf57a4bdbf9a91cf690261314969b59a18085ece1e05eccf9",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/java3d/vecmath/1.5.2/vecmath-1.5.2.jar"
                             }
                         },
@@ -1987,6 +996,7 @@
                             "artifact": {
                                 "size": 2523218,
                                 "MD5": "8fc4d4e0129244f9fd39650c5f30feb2",
+                                "SHA256": "3c8616203d61a12a7e3487e8b34f3c198c2b5ba9e90da0c7ea32d99cd4958012",
                                 "url": "https://f-launcher.ru/fox/new/repo/lib/net/sf/trove4j/trove4j/3.0.3/trove4j-3.0.3.jar"
                             }
                         }
@@ -1999,7 +1009,8 @@
                     "artifact": {
                         "size": 1533325,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.8.9/forgemods/required/ComputerCraft1.79.jar",
-                        "MD5": "a35dbca46cfb410673a75cc3dc541535"
+                        "MD5": "a35dbca46cfb410673a75cc3dc541535",
+                        "SHA256": "3fac520da327fe6f7697b9fe46ce6b427d247d7bb2f88eb9dda65f2e1b8de96d"
                     }
                 },
                 {
@@ -2009,7 +1020,8 @@
                     "artifact": {
                         "size": 1204461,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.8.9/forgemods/required/ComputerCraftEdu1.79.jar",
-                        "MD5": "b5c223b7aa61a5d62dbc92c0841e9f6d"
+                        "MD5": "b5c223b7aa61a5d62dbc92c0841e9f6d",
+                        "SHA256": "c9b2be8195a83b9982f6d5057397ea3b3a8280dfa05c52a1a8fa57228a2cdacd"
                     }
                 },
                 {
@@ -2019,11 +1031,11 @@
                     "artifact": {
                         "size": 2585014,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.8.9/forgemods/optionalon/OptiFine_1.8.9_HD_U_M5.jar",
-                        "MD5": "0765dc1bcbe5baa83f7c261ac2c133ed"
+                        "MD5": "0765dc1bcbe5baa83f7c261ac2c133ed",
+                        "SHA256": "2739760a70fca6ae5c7dc817bcc6283f18f55e38fa23778da7f387a6b724b2c4"
                     },
                     "required": {
-                        "value": false,
-                        "def": false
+                        "value": false
                     }
                 },
                 {
@@ -2031,9 +1043,10 @@
                     "name": "options.txt",
                     "type": "File",
                     "artifact": {
-                        "size": 2342,
+                        "size": 2453,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.8.9/files/options.txt",
-                        "MD5": "f89681f8f28eb5e68115dc94043874fd",
+                        "MD5": "e5a590d171815def645ff5245dbaaabe",
+                        "SHA256": "ae554c26e7e85d16cd38a95c57bb9c31690a4d30190ce4158bb2515a3c2433df",
                         "path": "options.txt"
                     }
                 },
@@ -2042,10 +1055,398 @@
                     "name": "optionsof.txt",
                     "type": "File",
                     "artifact": {
-                        "size": 1356,
+                        "size": 1428,
                         "url": "https://f-launcher.ru/fox/new/servers/Programming-1.8.9/files/optionsof.txt",
-                        "MD5": "e3d313cd1e2fb68c8474bee4985fbf45",
+                        "MD5": "4d2b4560ae0fe67138cbd96b12b45c96",
+                        "SHA256": "82e4402fa4d115b8aaab98188ed20a0dff1ac33c54f66bcbe79a291a64b0d8ca",
                         "path": "optionsof.txt"
+                    }
+                }
+            ]
+        },
+        {
+            "id": "New_Year_120-1.20.1",
+            "name": "Новогодний квест (Minecraft 1.20.1)",
+            "description": "Квест в Minecraft (любой возраст)",
+            "icon": "https://f-launcher.ru/fox/new/img/ny.png",
+            "version": "1.0.4",
+            "address": "localhost:25565",
+            "minecraftVersion": "1.20.1",
+            "mainServer": false,
+            "autoconnect": false,
+            "modules": [
+                {
+                    "id": "net.fabricmc:fabric-loader:0.16.10",
+                    "name": "Fabric (fabric-loader)",
+                    "type": "Fabric",
+                    "artifact": {
+                        "size": 1387408,
+                        "MD5": "239d59118dec4324672b3d9e9d75efef",
+                        "SHA256": "23557a7d6da3db971a6f9620cb62e7b6e6d1509f5138ebb87529877d2400e568",
+                        "url": "https://f-launcher.ru/fox/new/repo/lib/net/fabricmc/fabric-loader/0.16.10/fabric-loader-0.16.10.jar"
+                    },
+                    "subModules": [
+                        {
+                            "id": "1.20.1-fabric-0.16.10",
+                            "name": "Fabric (version.json)",
+                            "type": "VersionManifest",
+                            "artifact": {
+                                "size": 2859,
+                                "MD5": "14ed56e7cb4856a1e167b4e0ad9dda9b",
+                                "SHA256": "16aa0b1138a78b0652a4776cc7b9d47d10ce36b5a204903b0c1f6466e9218b72",
+                                "url": "https://f-launcher.ru/fox/new/repo/versions/1.20.1-fabric-0.16.10/1.20.1-fabric-0.16.10.json"
+                            }
+                        },
+                        {
+                            "id": "org.ow2.asm:asm:9.7.1",
+                            "name": "Fabric (asm)",
+                            "type": "Library",
+                            "artifact": {
+                                "size": 126093,
+                                "MD5": "e2cdd32d198ad31427d298eee9d39d8d",
+                                "SHA256": "8cadd43ac5eb6d09de05faecca38b917a040bb9139c7edeb4cc81c740b713281",
+                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm/9.7.1/asm-9.7.1.jar"
+                            }
+                        },
+                        {
+                            "id": "org.ow2.asm:asm-analysis:9.7.1",
+                            "name": "Fabric (asm-analysis)",
+                            "type": "Library",
+                            "artifact": {
+                                "size": 35126,
+                                "MD5": "4cd9e7178dfb85371bba3077e40cd514",
+                                "SHA256": "85b29371884ba31bb76edf22323c2c24e172c3267a67152eba3d1ccc2e041ef2",
+                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-analysis/9.7.1/asm-analysis-9.7.1.jar"
+                            }
+                        },
+                        {
+                            "id": "org.ow2.asm:asm-commons:9.7.1",
+                            "name": "Fabric (asm-commons)",
+                            "type": "Library",
+                            "artifact": {
+                                "size": 73459,
+                                "MD5": "8344aea3c8b7d707e9d35a62710e77c9",
+                                "SHA256": "9a579b54d292ad9be171d4313fd4739c635592c2b5ac3a459bbd1049cddec6a0",
+                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-commons/9.7.1/asm-commons-9.7.1.jar"
+                            }
+                        },
+                        {
+                            "id": "org.ow2.asm:asm-tree:9.7.1",
+                            "name": "Fabric (asm-tree)",
+                            "type": "Library",
+                            "artifact": {
+                                "size": 51939,
+                                "MD5": "e85029f613b6469989cc7cf53fe06b74",
+                                "SHA256": "9929881f59eb6b840e86d54570c77b59ce721d104e6dfd7a40978991c2d3b41f",
+                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-tree/9.7.1/asm-tree-9.7.1.jar"
+                            }
+                        },
+                        {
+                            "id": "org.ow2.asm:asm-util:9.7.1",
+                            "name": "Fabric (asm-util)",
+                            "type": "Library",
+                            "artifact": {
+                                "size": 94519,
+                                "MD5": "36d373a9cd6cad9b35db9f984c6b4bbb",
+                                "SHA256": "f885be71b5c90556f5f1ad1c4f9276b29b96057c497d46666fe4ddbec3cb43c6",
+                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-util/9.7.1/asm-util-9.7.1.jar"
+                            }
+                        },
+                        {
+                            "id": "net.fabricmc:sponge-mixin:0.15.4+mixin.0.8.7",
+                            "name": "Fabric (sponge-mixin)",
+                            "type": "Library",
+                            "artifact": {
+                                "size": 1494834,
+                                "MD5": "991ca8be2c408fe19eb64014d8a18243",
+                                "SHA256": "4631f67da980ae2ac9e6e285a7df4680645e2f37a6a14acc775f97982162c2a2",
+                                "url": "https://f-launcher.ru/fox/new/repo/lib/net/fabricmc/sponge-mixin/0.15.4+mixin.0.8.7/sponge-mixin-0.15.4+mixin.0.8.7.jar"
+                            }
+                        },
+                        {
+                            "id": "net.fabricmc:intermediary:1.20.1",
+                            "name": "Fabric (intermediary)",
+                            "type": "Library",
+                            "artifact": {
+                                "size": 573365,
+                                "MD5": "3f4768ac751cac3418266d1d7aa15f55",
+                                "SHA256": "caa3fd87dd353fc826a109a2d16f886d6519b47422e3a77cfa0ba8be5829a21e",
+                                "url": "https://f-launcher.ru/fox/new/repo/lib/net/fabricmc/intermediary/1.20.1/intermediary-1.20.1.jar"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "id": "options.txt",
+                    "name": "options.txt",
+                    "type": "File",
+                    "artifact": {
+                        "size": 3652,
+                        "url": "https://f-launcher.ru/fox/new/servers/New_Year_120-1.20.1/files/options.txt",
+                        "MD5": "56c754a936e9f6dd61ca28f1d7a3a04f",
+                        "SHA256": "faf97cc2397ef0197a519e01230ebcaaa477caf6638bc5bb326ee8f90273744f",
+                        "path": "options.txt"
+                    }
+                },
+                {
+                    "id": "pack.zip",
+                    "name": "pack.zip",
+                    "type": "File",
+                    "artifact": {
+                        "size": 3055,
+                        "url": "https://f-launcher.ru/fox/new/servers/New_Year_120-1.20.1/files/resourcepacks/pack.zip",
+                        "MD5": "c3e1d71f53328d1f504217b0c8b984ac",
+                        "SHA256": "e3e064723d30f05068b3b991ca2f4de0752014a0dcb570f2c61e690cfea3807e",
+                        "path": "resourcepacks/pack.zip"
+                    }
+                },
+                {
+                    "id": "servers.dat",
+                    "name": "servers.dat",
+                    "type": "File",
+                    "artifact": {
+                        "size": 274,
+                        "url": "https://f-launcher.ru/fox/new/servers/New_Year_120-1.20.1/files/servers.dat",
+                        "MD5": "cb504313a170be45060e612abb9b7df8",
+                        "SHA256": "953474f2781c0b0e28eb18ca99ed9e9a88db7435143e3260aaee135be2a5b3b8",
+                        "path": "servers.dat"
+                    }
+                }
+            ]
+        },
+        {
+            "id": "Programming-vanilla-1.20.1",
+            "name": "Вокруг света (Minecraft 1.20.1)",
+            "description": "Подходит для всех квестов (любой возраст)",
+            "icon": "https://f-launcher.ru/fox/new/img/Fabric-Demo-1.20.4.png",
+            "version": "1.0.1",
+            "address": "localhost:25565",
+            "minecraftVersion": "1.20.1",
+            "mainServer": false,
+            "autoconnect": false,
+            "modules": [
+                {
+                    "id": "net.fabricmc:fabric-loader:0.16.10",
+                    "name": "Fabric (fabric-loader)",
+                    "type": "Fabric",
+                    "artifact": {
+                        "size": 1387408,
+                        "MD5": "239d59118dec4324672b3d9e9d75efef",
+                        "SHA256": "23557a7d6da3db971a6f9620cb62e7b6e6d1509f5138ebb87529877d2400e568",
+                        "url": "https://f-launcher.ru/fox/new/repo/lib/net/fabricmc/fabric-loader/0.16.10/fabric-loader-0.16.10.jar"
+                    },
+                    "subModules": [
+                        {
+                            "id": "1.20.1-fabric-0.16.10",
+                            "name": "Fabric (version.json)",
+                            "type": "VersionManifest",
+                            "artifact": {
+                                "size": 2859,
+                                "MD5": "14ed56e7cb4856a1e167b4e0ad9dda9b",
+                                "SHA256": "16aa0b1138a78b0652a4776cc7b9d47d10ce36b5a204903b0c1f6466e9218b72",
+                                "url": "https://f-launcher.ru/fox/new/repo/versions/1.20.1-fabric-0.16.10/1.20.1-fabric-0.16.10.json"
+                            }
+                        },
+                        {
+                            "id": "org.ow2.asm:asm:9.7.1",
+                            "name": "Fabric (asm)",
+                            "type": "Library",
+                            "artifact": {
+                                "size": 126093,
+                                "MD5": "e2cdd32d198ad31427d298eee9d39d8d",
+                                "SHA256": "8cadd43ac5eb6d09de05faecca38b917a040bb9139c7edeb4cc81c740b713281",
+                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm/9.7.1/asm-9.7.1.jar"
+                            }
+                        },
+                        {
+                            "id": "org.ow2.asm:asm-analysis:9.7.1",
+                            "name": "Fabric (asm-analysis)",
+                            "type": "Library",
+                            "artifact": {
+                                "size": 35126,
+                                "MD5": "4cd9e7178dfb85371bba3077e40cd514",
+                                "SHA256": "85b29371884ba31bb76edf22323c2c24e172c3267a67152eba3d1ccc2e041ef2",
+                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-analysis/9.7.1/asm-analysis-9.7.1.jar"
+                            }
+                        },
+                        {
+                            "id": "org.ow2.asm:asm-commons:9.7.1",
+                            "name": "Fabric (asm-commons)",
+                            "type": "Library",
+                            "artifact": {
+                                "size": 73459,
+                                "MD5": "8344aea3c8b7d707e9d35a62710e77c9",
+                                "SHA256": "9a579b54d292ad9be171d4313fd4739c635592c2b5ac3a459bbd1049cddec6a0",
+                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-commons/9.7.1/asm-commons-9.7.1.jar"
+                            }
+                        },
+                        {
+                            "id": "org.ow2.asm:asm-tree:9.7.1",
+                            "name": "Fabric (asm-tree)",
+                            "type": "Library",
+                            "artifact": {
+                                "size": 51939,
+                                "MD5": "e85029f613b6469989cc7cf53fe06b74",
+                                "SHA256": "9929881f59eb6b840e86d54570c77b59ce721d104e6dfd7a40978991c2d3b41f",
+                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-tree/9.7.1/asm-tree-9.7.1.jar"
+                            }
+                        },
+                        {
+                            "id": "org.ow2.asm:asm-util:9.7.1",
+                            "name": "Fabric (asm-util)",
+                            "type": "Library",
+                            "artifact": {
+                                "size": 94519,
+                                "MD5": "36d373a9cd6cad9b35db9f984c6b4bbb",
+                                "SHA256": "f885be71b5c90556f5f1ad1c4f9276b29b96057c497d46666fe4ddbec3cb43c6",
+                                "url": "https://f-launcher.ru/fox/new/repo/lib/org/ow2/asm/asm-util/9.7.1/asm-util-9.7.1.jar"
+                            }
+                        },
+                        {
+                            "id": "net.fabricmc:sponge-mixin:0.15.4+mixin.0.8.7",
+                            "name": "Fabric (sponge-mixin)",
+                            "type": "Library",
+                            "artifact": {
+                                "size": 1494834,
+                                "MD5": "991ca8be2c408fe19eb64014d8a18243",
+                                "SHA256": "4631f67da980ae2ac9e6e285a7df4680645e2f37a6a14acc775f97982162c2a2",
+                                "url": "https://f-launcher.ru/fox/new/repo/lib/net/fabricmc/sponge-mixin/0.15.4+mixin.0.8.7/sponge-mixin-0.15.4+mixin.0.8.7.jar"
+                            }
+                        },
+                        {
+                            "id": "net.fabricmc:intermediary:1.20.1",
+                            "name": "Fabric (intermediary)",
+                            "type": "Library",
+                            "artifact": {
+                                "size": 573365,
+                                "MD5": "3f4768ac751cac3418266d1d7aa15f55",
+                                "SHA256": "caa3fd87dd353fc826a109a2d16f886d6519b47422e3a77cfa0ba8be5829a21e",
+                                "url": "https://f-launcher.ru/fox/new/repo/lib/net/fabricmc/intermediary/1.20.1/intermediary-1.20.1.jar"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "id": "link.infra:indium:1.0.34+mc1.20.1@jar",
+                    "name": "Indium",
+                    "type": "FabricMod",
+                    "artifact": {
+                        "size": 105359,
+                        "url": "https://f-launcher.ru/fox/new/servers/Programming-vanilla-1.20.1/fabricmods/optionalon/indium-1.0.34+mc1.20.1.jar",
+                        "MD5": "91f3ce08edec42ee8f6b45fd6ae0c8b3",
+                        "SHA256": "33bdc7f01bdca61fd1d526e9e6ae1acdf107412ed0f6483da528d7eadc919059"
+                    },
+                    "required": {
+                        "value": false
+                    }
+                },
+                {
+                    "id": "generated.fabricmod:iris:1.7.5+mc1.20.1@jar",
+                    "name": "Iris",
+                    "type": "FabricMod",
+                    "artifact": {
+                        "size": 2730664,
+                        "url": "https://f-launcher.ru/fox/new/servers/Programming-vanilla-1.20.1/fabricmods/optionaloff/iris-1.7.5+mc1.20.1.jar",
+                        "MD5": "902528a82a843300ecf9027af9f8fb8c",
+                        "SHA256": "95b870dfe225ff26d9d3997c0b0089063d3b6e0e017f018d7217f52a31076f08"
+                    },
+                    "required": {
+                        "value": false,
+                        "def": false
+                    }
+                },
+                {
+                    "id": "me.jellysquid.mods:lithium:0.11.2@jar",
+                    "name": "Lithium",
+                    "type": "FabricMod",
+                    "artifact": {
+                        "size": 645865,
+                        "url": "https://f-launcher.ru/fox/new/servers/Programming-vanilla-1.20.1/fabricmods/optionalon/lithium-fabric-mc1.20.1-0.11.2.jar",
+                        "MD5": "026ca4110d57f16f701b400ad5d2ca26",
+                        "SHA256": "a0c595355d680e0c87bf8eaebafedff6900d4e771a8d6894ee6d2d4374de8df9"
+                    },
+                    "required": {
+                        "value": false
+                    }
+                },
+                {
+                    "id": "generated.fabricmod:narrus_yeetus:1.1.0@jar",
+                    "name": "Narrus Yeetus",
+                    "type": "FabricMod",
+                    "artifact": {
+                        "size": 99924,
+                        "url": "https://f-launcher.ru/fox/new/servers/Programming-vanilla-1.20.1/fabricmods/optionalon/NarrusYeetus-1.1.0.jar",
+                        "MD5": "25cd36a8068624e848c81e603df9bf9d",
+                        "SHA256": "5b98c47f689d7410309a774201907c231e6db5e907139b71aac81e4d0be1ace7"
+                    },
+                    "required": {
+                        "value": false
+                    }
+                },
+                {
+                    "id": "generated.fabricmod:reeses-sodium-options:1.7.2+mc1.20.1-build.101@jar",
+                    "name": "Reese's Sodium Options",
+                    "type": "FabricMod",
+                    "artifact": {
+                        "size": 77304,
+                        "url": "https://f-launcher.ru/fox/new/servers/Programming-vanilla-1.20.1/fabricmods/optionalon/reeses_sodium_options-1.7.2+mc1.20.1-build.101.jar",
+                        "MD5": "0db2ef332dd00de8c64e34f192317118",
+                        "SHA256": "627b6b90e30d18de49dd8960afd5c8b530cf2c6f21b248d14a848d1023ff0bec"
+                    },
+                    "required": {
+                        "value": false
+                    }
+                },
+                {
+                    "id": "me.flashyreese.mods.sodiumextra:sodium-extra:0.5.4+mc1.20.1-build.115@jar",
+                    "name": "Sodium Extra",
+                    "type": "FabricMod",
+                    "artifact": {
+                        "size": 385539,
+                        "url": "https://f-launcher.ru/fox/new/servers/Programming-vanilla-1.20.1/fabricmods/optionalon/sodium-extra-0.5.4+mc1.20.1-build.115.jar",
+                        "MD5": "9eaed09a486eee9a1326de5dd80faa0a",
+                        "SHA256": "e1cf1048d0ee55f9e4c381a165a1304300c8615e5071d78cc912262b362da81d"
+                    },
+                    "required": {
+                        "value": false
+                    }
+                },
+                {
+                    "id": "me.jellysquid.mods:sodium:0.5.11+mc1.20.1@jar",
+                    "name": "Sodium",
+                    "type": "FabricMod",
+                    "artifact": {
+                        "size": 968419,
+                        "url": "https://f-launcher.ru/fox/new/servers/Programming-vanilla-1.20.1/fabricmods/optionalon/sodium-fabric-0.5.11+mc1.20.1.jar",
+                        "MD5": "9880bae748957d1cb6c4de50c8e0452a",
+                        "SHA256": "5413baaa260a2eadcee4221b8e7105a8e2a9b5b2c84b73f704f2740319aab7df"
+                    },
+                    "required": {
+                        "value": false
+                    }
+                },
+                {
+                    "id": "options.txt",
+                    "name": "options.txt",
+                    "type": "File",
+                    "artifact": {
+                        "size": 3626,
+                        "url": "https://f-launcher.ru/fox/new/servers/Programming-vanilla-1.20.1/files/options.txt",
+                        "MD5": "1162fc0e29d4adafe503ad75452810e3",
+                        "SHA256": "b9f79f5bf8ec85a929d5c80d15bd4cd6c029c9fc3e36d4a6b75960c24eabdf98",
+                        "path": "options.txt"
+                    }
+                },
+                {
+                    "id": "servers.dat",
+                    "name": "servers.dat",
+                    "type": "File",
+                    "artifact": {
+                        "size": 253,
+                        "url": "https://f-launcher.ru/fox/new/servers/Programming-vanilla-1.20.1/files/servers.dat",
+                        "MD5": "ba35d28517f715445d5f06956b0bf389",
+                        "SHA256": "3e432a613e5815a10939d80cf3e57fc4904133675878efc5e4fd35311aebd82f",
+                        "path": "servers.dat"
                     }
                 }
             ]

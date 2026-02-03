@@ -67,12 +67,7 @@ class DistributionIndexProcessor extends IndexProcessor {
                 let algo = HashAlgo.SHA256;
 
                 if (!hash) {
-                    hash = module.rawModule.artifact.SHA1;
-                    algo = HashAlgo.SHA1;
-                }
-
-                if (!hash) {
-                    // No supported hash found (MD5 dropped). Skip validation.
+                    // No supported hash found (SHA256 required). Skip validation.
                     return null;
                 }
 
