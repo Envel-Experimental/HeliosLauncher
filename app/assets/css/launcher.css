@@ -79,6 +79,10 @@ button {
     -webkit-user-select: none;
 }
 
+#frameBar[overlay] {
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
 /* Undraggable region on the top of the frame. */
 #frameResizableTop {
     height: 2px;
@@ -3981,7 +3985,7 @@ input:checked+.toggleSwitchSlider:before {
 
 #serverSelectListScrollable::-webkit-scrollbar,
 #accountSelectListScrollable::-webkit-scrollbar {
-    width: 2px;
+    width: 8px;
 }
 
 #serverSelectListScrollable::-webkit-scrollbar-track,
@@ -3993,6 +3997,7 @@ input:checked+.toggleSwitchSlider:before {
 #accountSelectListScrollable::-webkit-scrollbar-thumb {
     border-radius: 10px;
     box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.50);
+    background-color: rgba(255, 255, 255, 0.50);
 }
 
 /* Content container for a server listing. */
