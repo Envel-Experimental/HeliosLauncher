@@ -75,12 +75,12 @@ function setLaunchEnabled(val) {
 /**
  * Bind selected server
  */
-function updateSelectedServer(serv) {
+async function updateSelectedServer(serv) {
     if (getCurrentView() === VIEWS.settings) {
         fullSettingsSave()
     }
     ConfigManager.setSelectedServer(serv != null ? serv.rawServer.id : null)
-    ConfigManager.save()
+    await ConfigManager.save()
     const serverSelectionBtn = document.getElementById('server_selection_button')
     serverSelectionBtn.innerHTML = '&#8226; ' + (serv != null ? serv.rawServer.name : Lang.queryJS('landing.noSelection'))
     if (getCurrentView() === VIEWS.settings) {
@@ -115,7 +115,11 @@ async function showMainUI(data) {
 
 
     await prepareSettings(true)
-    updateSelectedServer(data.getServerById(ConfigManager.getSelectedServer()))
+    let selectedServ = data.getServerById(ConfigManager.getSelectedServer())
+    if (selectedServ == null) {
+        selectedServ = data.getMainServer()
+    }
+    await updateSelectedServer(selectedServ)
     setTimeout(() => {
         document.getElementById('frameBar').style.backgroundColor = 'rgba(0, 0, 0, 0.5)'
         document.body.style.backgroundImage = `url('assets/images/backgrounds/${document.body.getAttribute('bkid')}.jpg')`
@@ -179,11 +183,15 @@ function showFatalStartupError() {
  *
  * @param {Object} data The distro index object.
  */
-function onDistroRefresh(data) {
+async function onDistroRefresh(data) {
 
     if (!data) return
 
-    updateSelectedServer(data.getServerById(ConfigManager.getSelectedServer()))
+    let selectedServ = data.getServerById(ConfigManager.getSelectedServer())
+    if (selectedServ == null) {
+        selectedServ = data.getMainServer()
+    }
+    await updateSelectedServer(selectedServ)
     syncModConfigurations(data)
     ensureJavaSettings(data)
 }
@@ -193,7 +201,7 @@ function onDistroRefresh(data) {
  *
  * @param {Object} data The distro index object.
  */
-function syncModConfigurations(data) {
+async function syncModConfigurations(data) {
 
     const syncedCfgs = []
 
@@ -269,7 +277,7 @@ function syncModConfigurations(data) {
     }
 
     ConfigManager.setModConfigurations(syncedCfgs)
-    ConfigManager.save()
+    await ConfigManager.save()
 }
 
 /**
@@ -277,14 +285,14 @@ function syncModConfigurations(data) {
  *
  * @param {Object} data The distro index object.
  */
-function ensureJavaSettings(data) {
+async function ensureJavaSettings(data) {
 
     // Nothing too fancy for now.
     for (const serv of data.servers) {
         ConfigManager.ensureJavaConfig(serv.rawServer.id, serv.effectiveJavaOptions, serv.rawServer.javaOptions?.ram)
     }
 
-    ConfigManager.save()
+    await ConfigManager.save()
 }
 
 /**
@@ -459,9 +467,9 @@ async function validateSelectedAccount() {
  *
  * @param {string} uuid The UUID of the account.
  */
-function setSelectedAccount(uuid) {
+async function setSelectedAccount(uuid) {
     const authAcc = ConfigManager.setSelectedAccount(uuid)
-    ConfigManager.save()
+    await ConfigManager.save()
     updateSelectedAccount(authAcc)
     validateSelectedAccount()
 }
@@ -498,8 +506,8 @@ ipcRenderer.on('distributionIndexDone', async (event, res) => {
             return
         }
 
-        syncModConfigurations(data)
-        ensureJavaSettings(data)
+        await syncModConfigurations(data)
+        await ensureJavaSettings(data)
         if (document.readyState === 'interactive' || document.readyState === 'complete') {
             await showMainUI(data)
         } else {
@@ -519,7 +527,7 @@ ipcRenderer.on('power-resume', async () => {
     if (!fatalStartupError) {
         const data = await DistroAPI.getDistribution()
         if (data) {
-            onDistroRefresh(data)
+            await onDistroRefresh(data)
         }
     }
 })
@@ -528,9 +536,9 @@ ipcRenderer.on('power-resume', async () => {
 async function devModeToggle() {
     DistroAPI.toggleDevMode(true)
     const data = await DistroAPI.refreshDistributionOrFallback()
-    ensureJavaSettings(data)
-    updateSelectedServer(data.servers[0])
-    syncModConfigurations(data)
+    await ensureJavaSettings(data)
+    await updateSelectedServer(data.servers[0])
+    await syncModConfigurations(data)
 }
 
 

@@ -203,15 +203,15 @@ document.getElementById('serverSelectConfirm').addEventListener('click', async (
     for (let i = 0; i < listings.length; i++) {
         if (listings[i].hasAttribute('selected')) {
             const serv = (await DistroAPI.getDistribution()).getServerById(listings[i].getAttribute('servid'))
-            updateSelectedServer(serv)
+            await updateSelectedServer(serv)
             toggleOverlay(false)
             return
         }
     }
     // None are selected? Not possible right? Meh, handle it.
     if (listings.length > 0) {
-        const serv = (await DistroAPI.getDistribution()).getServerById(listings[i].getAttribute('servid'))
-        updateSelectedServer(serv)
+        const serv = (await DistroAPI.getDistribution()).getServerById(listings[0].getAttribute('servid'))
+        await updateSelectedServer(serv)
         toggleOverlay(false)
     }
 })
@@ -221,7 +221,7 @@ document.getElementById('accountSelectConfirm').addEventListener('click', async 
     for (let i = 0; i < listings.length; i++) {
         if (listings[i].hasAttribute('selected')) {
             const authAcc = ConfigManager.setSelectedAccount(listings[i].getAttribute('uuid'))
-            ConfigManager.save()
+            await ConfigManager.save()
             updateSelectedAccount(authAcc)
             if (getCurrentView() === VIEWS.settings) {
                 await prepareSettings()
@@ -234,7 +234,7 @@ document.getElementById('accountSelectConfirm').addEventListener('click', async 
     // None are selected? Not possible right? Meh, handle it.
     if (listings.length > 0) {
         const authAcc = ConfigManager.setSelectedAccount(listings[0].getAttribute('uuid'))
-        ConfigManager.save()
+        await ConfigManager.save()
         updateSelectedAccount(authAcc)
         if (getCurrentView() === VIEWS.settings) {
             await prepareSettings()
