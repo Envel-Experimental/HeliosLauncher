@@ -20,6 +20,7 @@ module.exports = {
             "libraries": "https://f-launcher.ru/fox/new/mirror/libraries",
             "client": "https://f-launcher.ru/fox/new/mirror/client",
             "version_manifest": "https://f-launcher.ru/fox/new/mirror/metadata/version_manifest_v2.json",
+            "piston_meta": "https://f-launcher.ru/fox/new/mirror/metadata", // Optional: explicit base for piston-meta.mojang.com
             "launcher_meta": "https://f-launcher.ru/fox/new/mirror/metadata"
         }
         // {
@@ -28,6 +29,7 @@ module.exports = {
         //     libraries: "https://mirror.example.com/libraries", // Replaces libraries.minecraft.net
         //     client: "https://mirror.example.com/client", // Replaces piston-data.mojang.com for client jar
         //     version_manifest: "https://mirror.example.com/mc/game/version_manifest_v2.json", // Replaces piston-meta.mojang.com
+        //     piston_meta: "https://mirror.example.com/metadata", // Optional: Replaces piston-meta.mojang.com (extracted from version_manifest if missing)
         //     launcher_meta: "https://mirror.example.com/launchermeta" // Replaces launchermeta.mojang.com
         // }
     ],

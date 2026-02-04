@@ -221,18 +221,21 @@ class P2PEngine extends EventEmitter {
             })
 
             if (isDev) {
+                /*
                 this.dht.on('node', (node) => {
                     console.debug(`[P2P Debug] DHT Node connected: ${node.host}:${node.port}`)
                 })
                 this.dht.on('warning', (err) => {
                     console.debug(`[P2P Debug] DHT Warning:`, err.message)
                 })
+                */
             }
 
             this.dht.on('ready', () => {
                 const nodesCount = this._getRoutingTableSize()
                 if (isDev) {
                     console.debug(`[P2P Debug] DHT Ready. Bootstrapped: ${this.dht.bootstrapped}. Routing Nodes: ${nodesCount}`)
+                    /*
                     // Deep inspect
                     try {
                         const internals = {
@@ -244,11 +247,12 @@ class P2PEngine extends EventEmitter {
                     } catch (e) {
                         console.debug('[P2P Debug] Inspection error', e)
                     }
+                    */
                 }
 
                 setTimeout(() => {
                     const currentNodes = this._getRoutingTableSize()
-                    if (isDev) console.debug(`[P2P Debug] DHT Status after 5s. Bootstrapped: ${this.dht.bootstrapped}. Routing Nodes: ${currentNodes}`)
+                    // if (isDev) console.debug(`[P2P Debug] DHT Status after 5s. Bootstrapped: ${this.dht.bootstrapped}. Routing Nodes: ${currentNodes}`)
                     if (currentNodes === 0 && !this.dht.bootstrapped) {
                         console.warn(`[P2PEngine] [WARNING] No DHT connections established after 5s.`)
                     }
@@ -284,9 +288,11 @@ class P2PEngine extends EventEmitter {
                     // console.log(`%c[P2PEngine] Connection Established: [${type}] ${ip} (Remote: ${peerInfoStr})`, 'color: #00ff00; font-weight: bold')
                 }
 
+                /*
                 if (isDev) {
                     console.debug(`[P2P Debug] Peer added. CID: ${b4a.toString(info.publicKey, 'hex').substring(0, 8)}. Type: ${type}`)
                 }
+                */
 
                 if (this.peers.length > this.profile.maxPeers) {
                     if (isDev) console.debug(`[P2P Debug] Rejecting connection: Max peers reached (${this.profile.maxPeers})`)
@@ -311,8 +317,8 @@ class P2PEngine extends EventEmitter {
 
             await discovery.flushed()
             console.log(`[P2PEngine] P2P Service Started. Debug Mode: ${isDev}`)
-            console.log(`[P2PEngine] Active Data Directory: ${ConfigManager.getDataDirectory()}`)
-            console.log(`[P2PEngine] Active Common Directory: ${ConfigManager.getCommonDirectory()}`)
+            // console.log(`[P2PEngine] Active Data Directory: ${ConfigManager.getDataDirectory()}`)
+            // console.log(`[P2PEngine] Active Common Directory: ${ConfigManager.getCommonDirectory()}`)
             if (isDev) {
                 // console.debug(`[P2P Debug] Extended Debug Info...`)
             }

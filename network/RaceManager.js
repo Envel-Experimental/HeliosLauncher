@@ -183,9 +183,9 @@ class RaceManager {
             const onError = (err) => {
                 clearTimeout(timeout)
                 cleanup()
-                if (isDev && P2PEngine.peers.length > 0 && !err.message.includes('Not Found')) {
+                /* if (isDev && P2PEngine.peers.length > 0 && !err.message.includes('Not Found')) {
                     console.warn(`[RaceManager] P2P Leg Failed for ${hash.substring(0, 8)}: ${err.message}`)
-                }
+                } */
                 reject(err)
             }
             const cleanup = () => {

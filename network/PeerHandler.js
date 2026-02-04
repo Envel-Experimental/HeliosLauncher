@@ -446,6 +446,7 @@ class PeerHandler {
                 }
             }
 
+            /*
             if (isDev && !foundPath) {
                 console.debug(`[P2P Debug] File ${hash.substring(0, 8)} (ID: ${fileId || 'n/a'}) not found. Checked ${uniqueCandidates.length} paths:`)
                 for (const p of uniqueCandidates) {
@@ -477,6 +478,7 @@ class PeerHandler {
                     }
                 } catch (e) { }
             }
+            */
 
             if (foundPath) {
                 this.engine.activeUploads++

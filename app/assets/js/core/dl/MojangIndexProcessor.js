@@ -81,8 +81,11 @@ class MojangIndexProcessor extends IndexProcessor {
                     candidates.push(url.replace(MojangIndexProcessor.ASSET_RESOURCE_ENDPOINT, mirror.assets));
                 } else if (url.includes(MojangIndexProcessor.VERSION_MANIFEST_ENDPOINT) && mirror.version_manifest) {
                     candidates.push(mirror.version_manifest);
-                } else if (mirror.version_manifest && url.includes('piston-meta.mojang.com')) {
-                    candidates.push(url.replace('https://piston-meta.mojang.com', mirror.version_manifest.replace('/mc/game/version_manifest_v2.json', '')));
+                } else if (url.includes('piston-meta.mojang.com')) {
+                    const pistonMetaBase = mirror.piston_meta || (mirror.version_manifest ? mirror.version_manifest.replace(/(\/mc\/game)?\/version_manifest_v2\.json$/, '') : null);
+                    if (pistonMetaBase) {
+                        candidates.push(url.replace('https://piston-meta.mojang.com', pistonMetaBase));
+                    }
                 } else if (url.includes(MojangIndexProcessor.LAUNCHER_JSON_ENDPOINT) && mirror.launcher_meta) {
                     candidates.push(mirror.launcher_meta);
                 }
