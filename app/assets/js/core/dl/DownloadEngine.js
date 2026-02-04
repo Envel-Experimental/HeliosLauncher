@@ -122,11 +122,29 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
     let lastError = null;
 
     // Retry Loop (Resilience)
+    const candidates = [asset.url, ...(asset.fallbackUrls || [])].filter(Boolean);
+
     for (let attempt = 0; attempt < 5; attempt++) {
+        const currentUrl = candidates[attempt % candidates.length];
+
+        // Strict Blocking: If P2P Only Mode is enabled, BLOCK all official Mojang/Minecraft domains
+        // But ALLOW mirrors (which are not mojang.com/minecraft.net)
+        if (ConfigManager.getP2POnlyMode()) {
+            try {
+                const urlObj = new URL(currentUrl);
+                if (urlObj.hostname.endsWith('mojang.com') || urlObj.hostname.endsWith('minecraft.net')) {
+                    // log.debug(`[DownloadEngine] Blocking official URL in P2P Only Mode: ${currentUrl}`);
+                    continue;
+                }
+            } catch (e) { }
+        }
+
         try {
             if (attempt > 0) {
                 await sleep(attempt * 1000);
-                // log.debug(`Retrying download for ${asset.id} (Attempt ${attempt + 1}/5)...`);
+                if (candidates.length > 1 && attempt % candidates.length !== 0) {
+                    log.warn(`[DownloadEngine] Primary failed, trying fallback: ${currentUrl}`);
+                }
             }
 
             // RaceManager Strategy
@@ -156,7 +174,7 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
             }
 
             // Use RaceManager
-            const req = new Request(url, { headers });
+            const req = new Request(currentUrl, { headers });
 
             const response = await RaceManager.handle(req);
 

@@ -11,6 +11,27 @@ module.exports = {
     BOOTSTRAP_URL: 'https://f-launcher.ru/fox/new/bootstrap.json',
     P2P_KILL_SWITCH_URL: 'https://f-launcher.ru/fox/new/p2poff.json',
 
+    // Optional: Array of mirror base URLs for Mojang assets
+    // If primary fails, these will be tried in order.
+    MOJANG_MIRRORS: [
+        {
+            "name": "Fox 1 Mirror",
+            "assets": "https://f-launcher.ru/fox/new/mirror/assets",
+            "libraries": "https://f-launcher.ru/fox/new/mirror/libraries",
+            "client": "https://f-launcher.ru/fox/new/mirror/client",
+            "version_manifest": "https://f-launcher.ru/fox/new/mirror/metadata/version_manifest_v2.json",
+            "launcher_meta": "https://f-launcher.ru/fox/new/mirror/metadata"
+        }
+        // {
+        //     name: "Example Mirror",
+        //     assets: "https://mirror.example.com/assets", // Replaces resources.download.minecraft.net
+        //     libraries: "https://mirror.example.com/libraries", // Replaces libraries.minecraft.net
+        //     client: "https://mirror.example.com/client", // Replaces piston-data.mojang.com for client jar
+        //     version_manifest: "https://mirror.example.com/mc/game/version_manifest_v2.json", // Replaces piston-meta.mojang.com
+        //     launcher_meta: "https://mirror.example.com/launchermeta" // Replaces launchermeta.mojang.com
+        // }
+    ],
+
     // Ed25519 Distribution Signatures
     // Tuple of trusted public keys (hex strings)
     DISTRO_PUB_KEYS: [

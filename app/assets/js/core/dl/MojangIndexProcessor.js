@@ -7,6 +7,8 @@ const { getVersionJsonPath, validateLocalFile, getLibraryDir, getVersionJarPath,
 const { mcVersionAtLeast, isLibraryCompatible, getMojangOS } = require('../common/MojangUtils');
 const { LoggerUtil } = require('../util/LoggerUtil');
 const { handleFetchError } = require('../common/RestResponse');
+const { MOJANG_MIRRORS } = require('../../../../../network/config');
+const ConfigManager = require('../../configmanager');
 
 class MojangIndexProcessor extends IndexProcessor {
     static LAUNCHER_JSON_ENDPOINT = 'https://launchermeta.mojang.com/mc/launcher.json';
@@ -93,43 +95,90 @@ class MojangIndexProcessor extends IndexProcessor {
             // File doesn't exist or invalid
         }
 
-        try {
-            const res = await fetch(url);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
-
-            await safeEnsureDir(path.dirname(filePath));
-            await fs.writeFile(filePath, JSON.stringify(data));
-            return data;
-        } catch (error) {
-            handleFetchError(url, error, MojangIndexProcessor.logger);
-            return null;
+        const candidates = [];
+        if (!ConfigManager.getP2POnlyMode()) {
+            candidates.push(url);
         }
+        // Only if it matches known endpoints, we can guess the mirror structure? 
+        // Or if the URL starts with one of the known endpoints.
+        // But for manifests, we usually pass the full URL.
+
+        // Simpler approach: If the URL contains one of the standard endpoints, replace it.
+        if (MOJANG_MIRRORS && MOJANG_MIRRORS.length > 0) {
+            for (const mirror of MOJANG_MIRRORS) {
+                if (url.includes(MojangIndexProcessor.ASSET_RESOURCE_ENDPOINT) && mirror.assets) {
+                    candidates.push(url.replace(MojangIndexProcessor.ASSET_RESOURCE_ENDPOINT, mirror.assets));
+                } else if (url.includes(MojangIndexProcessor.VERSION_MANIFEST_ENDPOINT) && mirror.version_manifest) { // This is full URL match
+                    candidates.push(mirror.version_manifest); // Manifest is a fixed endpoint usually
+                } else if (mirror.version_manifest && url.includes('piston-meta.mojang.com')) {
+                    // Heuristic replacement for other piston-meta links
+                    candidates.push(url.replace('https://piston-meta.mojang.com', mirror.version_manifest.replace('/mc/game/version_manifest_v2.json', '')));
+                } else if (url.includes(MojangIndexProcessor.LAUNCHER_JSON_ENDPOINT) && mirror.launcher_meta) {
+                    candidates.push(mirror.launcher_meta);
+                }
+            }
+        }
+
+        let lastError = null;
+        for (const candidateUrl of candidates) {
+            try {
+                const res = await fetch(candidateUrl);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+
+                await safeEnsureDir(path.dirname(filePath));
+                await fs.writeFile(filePath, JSON.stringify(data));
+                return data;
+            } catch (error) {
+                lastError = error;
+                // Try next
+            }
+        }
+
+        if (lastError) {
+            handleFetchError(url, lastError, MojangIndexProcessor.logger);
+        }
+        return null;
     }
 
     async loadVersionManifest() {
         const manifestPath = path.join(this.commonDir, 'version_manifest_v2.json');
 
-        try {
-            const res = await fetch(MojangIndexProcessor.VERSION_MANIFEST_ENDPOINT);
-            if (res.ok) {
-                const data = await res.json();
-                await safeEnsureDir(path.dirname(manifestPath));
-                await fs.writeFile(manifestPath, JSON.stringify(data));
-                return data;
-            } else {
-                throw new Error(`HTTP ${res.status}`);
+        const candidates = [];
+        if (!ConfigManager.getP2POnlyMode()) {
+            candidates.push(MojangIndexProcessor.VERSION_MANIFEST_ENDPOINT);
+        }
+        if (MOJANG_MIRRORS && MOJANG_MIRRORS.length > 0) {
+            for (const mirror of MOJANG_MIRRORS) {
+                if (mirror.version_manifest) {
+                    candidates.push(mirror.version_manifest);
+                }
             }
-        } catch (error) {
-            MojangIndexProcessor.logger.warn('Failed to fetch Mojang Version Manifest from network. Falling back to cache.', error);
+        }
+
+        for (const url of candidates) {
             try {
-                await fs.access(manifestPath);
-                const data = await fs.readFile(manifestPath, 'utf8');
-                return JSON.parse(data);
-            } catch (e) {
-                handleFetchError('Load Mojang Version Manifest', error, MojangIndexProcessor.logger);
-                return null;
+                const res = await fetch(url);
+                if (res.ok) {
+                    const data = await res.json();
+                    await safeEnsureDir(path.dirname(manifestPath));
+                    await fs.writeFile(manifestPath, JSON.stringify(data));
+                    return data;
+                }
+            } catch (error) {
+                // Continue
             }
+        }
+
+        // Fallback to cache if all network attempts fail
+        MojangIndexProcessor.logger.warn('Failed to fetch Mojang Version Manifest from network (mirrors included). Falling back to cache.');
+        try {
+            await fs.access(manifestPath);
+            const data = await fs.readFile(manifestPath, 'utf8');
+            return JSON.parse(data);
+        } catch (e) {
+            handleFetchError('Load Mojang Version Manifest', new Error('All mirrors failed'), MojangIndexProcessor.logger);
+            return null;
         }
     }
 
@@ -185,6 +234,16 @@ class MojangIndexProcessor extends IndexProcessor {
                 const hash = meta.hash;
                 const filePath = path.join(objectDir, hash.substring(0, 2), hash);
                 const url = `${MojangIndexProcessor.ASSET_RESOURCE_ENDPOINT}/${hash.substring(0, 2)}/${hash}`;
+
+                const fallbackUrls = [];
+                if (MOJANG_MIRRORS && MOJANG_MIRRORS.length > 0) {
+                    for (const mirror of MOJANG_MIRRORS) {
+                        if (mirror.assets) {
+                            fallbackUrls.push(`${mirror.assets}/${hash.substring(0, 2)}/${hash}`);
+                        }
+                    }
+                }
+
                 if (!await validateLocalFile(filePath, HashAlgo.SHA1, hash)) {
                     return {
                         id,
@@ -192,6 +251,7 @@ class MojangIndexProcessor extends IndexProcessor {
                         algo: HashAlgo.SHA1,
                         size: meta.size,
                         url,
+                        fallbackUrls,
                         path: filePath
                     };
                 }
@@ -231,6 +291,19 @@ class MojangIndexProcessor extends IndexProcessor {
                                 algo: HashAlgo.SHA1,
                                 size: artifact.size,
                                 url: artifact.url,
+                                fallbackUrls: MOJANG_MIRRORS.map(m => m.libraries ? artifact.url.replace('https://libraries.minecraft.net', m.libraries) : null).filter(Boolean), // Assuming libraries mirror logic if needed, or strict.
+                                // Actually, libraries usually come from libraries.minecraft.net. 
+                                // Ideally we should have a 'libraries' field in config? Or just use 'assets' generically?
+                                // User request was generic. Let's stick to known overrides.
+                                // If user provides a 'libraries' mirror key, we can use it.
+                                // NOTE: Config example didn't have libraries.
+                                // Leaving fallbackUrls empty for libraries unless we add it to config. 
+                                // Wait, the user said "all mojang links". Libraries IS Mojang.
+                                // I should probably treat 'libraries' same as 'assets' or add a specific key?
+                                // Let's check the config again. 
+                                // I added assets, version_manifest, launcher_meta.
+                                // Libraries are often on libraries.minecraft.net.
+                                // I will add 'libraries' to the logic if present.
                                 path: filePath
                             };
                         }
@@ -255,7 +328,8 @@ class MojangIndexProcessor extends IndexProcessor {
                 algo: HashAlgo.SHA1,
                 size: versionJson.downloads.client.size,
                 url: versionJson.downloads.client.url,
-                path: versionJarPath
+                path: versionJarPath,
+                fallbackUrls: MOJANG_MIRRORS.map(m => m.client ? versionJson.downloads.client.url.replace('https://piston-data.mojang.com', m.client) : null).filter(Boolean)
             }];
         }
         return [];

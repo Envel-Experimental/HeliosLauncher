@@ -118,7 +118,7 @@ async function checkP2PKillSwitch() {
             await ConfigManager.save()
         }
     } catch (err) {
-        logger.warn('Failed to check P2P Kill Switch:', err)
+        // Optional feature, failure is expected if kill switch is not active.
     }
 }
 
