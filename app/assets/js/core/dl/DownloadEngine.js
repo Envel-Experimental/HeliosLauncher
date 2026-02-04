@@ -139,7 +139,9 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
     const candidates = [asset.url, ...(asset.fallbackUrls || [])].filter(Boolean);
 
     for (let attempt = 0; attempt < 5; attempt++) {
-        const currentUrl = candidates[attempt % candidates.length];
+        const candidate = candidates[attempt % candidates.length];
+        const currentUrl = typeof candidate === 'string' ? candidate : candidate.url;
+        const currentHash = typeof candidate === 'object' && candidate.hash ? candidate.hash : hash;
 
         // Strict Blocking: If P2P Only Mode is enabled, BLOCK all official Mojang/Minecraft domains
         // But ALLOW mirrors (which are not mojang.com/minecraft.net)
@@ -248,7 +250,7 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
             }
 
             // Validate Atomic Write (RCE Guard)
-            if (await validateLocalFile(tempPath, algo, hash)) {
+            if (await validateLocalFile(tempPath, algo, currentHash)) {
                 // Success! Atomic rename to final path
                 await fs.rename(tempPath, decodedPath);
                 return;

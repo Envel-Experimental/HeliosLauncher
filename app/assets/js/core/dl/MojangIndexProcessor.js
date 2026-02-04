@@ -21,6 +21,40 @@ class MojangIndexProcessor extends IndexProcessor {
         super(commonDir);
         this.version = version;
         this.assetPath = path.join(commonDir, 'assets');
+        this.mirrorManifestCache = new Map();
+    }
+
+    async getMirrorManifest(mirror) {
+        if (!mirror.version_manifest) return null;
+        if (this.mirrorManifestCache.has(mirror.version_manifest)) {
+            return this.mirrorManifestCache.get(mirror.version_manifest);
+        }
+
+        try {
+            const response = await fetch(mirror.version_manifest);
+            if (!response.ok) return null;
+            const manifest = await response.json();
+            this.mirrorManifestCache.set(mirror.version_manifest, manifest);
+            return manifest;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    async resolveVersionFallbacks(versionId) {
+        const fallbacks = [];
+        if (!MOJANG_MIRRORS) return fallbacks;
+
+        for (const mirror of MOJANG_MIRRORS) {
+            const manifest = await this.getMirrorManifest(mirror);
+            if (manifest && manifest.versions) {
+                const versionInfo = manifest.versions.find(v => v.id === versionId);
+                if (versionInfo && versionInfo.url) {
+                    fallbacks.push({ url: versionInfo.url, hash: versionInfo.sha1 });
+                }
+            }
+        }
+        return fallbacks;
     }
 
     async init() {
@@ -46,7 +80,10 @@ class MojangIndexProcessor extends IndexProcessor {
             if (versionInfo == null) {
                 throw new AssetGuardError(`Invalid version: ${version}.`);
             }
-            const versionJson = await this.loadContentWithRemoteFallback(versionInfo.url, versionJsonPath, { algo: HashAlgo.SHA1, value: versionInfo.sha1 });
+
+            // Robust Fallback: Resolve URLs from Mirror Manifests
+            const explicitFallbacks = await this.resolveVersionFallbacks(version);
+            const versionJson = await this.loadContentWithRemoteFallback(versionInfo.url, versionJsonPath, { algo: HashAlgo.SHA1, value: versionInfo.sha1 }, explicitFallbacks);
 
             if (process.arch === 'arm64' && !mcVersionAtLeast('1.19', version)) {
                 const latestVersion = versionManifest.latest.release;
@@ -55,7 +92,8 @@ class MojangIndexProcessor extends IndexProcessor {
                 if (latestVersionInfo == null) {
                     throw new AssetGuardError('Cannot find the latest version.');
                 }
-                const latestVersionJson = await this.loadContentWithRemoteFallback(latestVersionInfo.url, latestVersionJsonPath, { algo: HashAlgo.SHA1, value: latestVersionInfo.sha1 });
+                const explicitLatestFallbacks = await this.resolveVersionFallbacks(latestVersion);
+                const latestVersionJson = await this.loadContentWithRemoteFallback(latestVersionInfo.url, latestVersionJsonPath, { algo: HashAlgo.SHA1, value: latestVersionInfo.sha1 }, explicitLatestFallbacks);
 
                 MojangIndexProcessor.logger.info(`Using LWJGL from ${latestVersion} for ARM64 compatibility.`);
                 versionJson.libraries = versionJson.libraries.filter(l => !l.name.startsWith('org.lwjgl:')).concat(latestVersionJson.libraries.filter(l => l.name.startsWith('org.lwjgl:')));
@@ -72,20 +110,16 @@ class MojangIndexProcessor extends IndexProcessor {
         }
     }
 
-    async loadContentWithRemoteFallback(url, filePath, hash) {
+    async loadContentWithRemoteFallback(url, filePath, hash, extraFallbacks = []) {
         // Prepare Mirror Candidates
-        const candidates = [];
+        const candidates = [...extraFallbacks];
+
         if (MOJANG_MIRRORS && MOJANG_MIRRORS.length > 0) {
             for (const mirror of MOJANG_MIRRORS) {
                 if (url.includes(MojangIndexProcessor.ASSET_RESOURCE_ENDPOINT) && mirror.assets) {
                     candidates.push(url.replace(MojangIndexProcessor.ASSET_RESOURCE_ENDPOINT, mirror.assets));
                 } else if (url.includes(MojangIndexProcessor.VERSION_MANIFEST_ENDPOINT) && mirror.version_manifest) {
                     candidates.push(mirror.version_manifest);
-                } else if (url.includes('piston-meta.mojang.com')) {
-                    const pistonMetaBase = mirror.piston_meta || (mirror.version_manifest ? mirror.version_manifest.replace(/(\/mc\/game)?\/version_manifest_v2\.json$/, '') : null);
-                    if (pistonMetaBase) {
-                        candidates.push(url.replace('https://piston-meta.mojang.com', pistonMetaBase));
-                    }
                 } else if (url.includes(MojangIndexProcessor.LAUNCHER_JSON_ENDPOINT) && mirror.launcher_meta) {
                     candidates.push(mirror.launcher_meta);
                 }
