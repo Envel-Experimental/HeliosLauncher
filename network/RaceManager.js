@@ -131,8 +131,16 @@ class RaceManager {
         // 1. HTTP Task
         const httpTask = new Promise((resolve, reject) => {
             if (ConfigManager.getP2POnlyMode()) {
-                reject(new Error('HTTP Blocked: P2P Only Mode is Enabled'))
-                return
+                try {
+                    const urlObj = new URL(url)
+                    if (urlObj.hostname.endsWith('mojang.com') || urlObj.hostname.endsWith('minecraft.net')) {
+                        reject(new Error('HTTP Blocked: P2P Only Mode is Enabled (Mojang Protected)'))
+                        return
+                    }
+                } catch (e) {
+                    reject(new Error('HTTP Blocked: P2P Only Mode is Enabled'))
+                    return
+                }
             }
 
             fetch(url, { signal: abortController.signal })
