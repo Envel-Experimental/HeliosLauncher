@@ -548,6 +548,17 @@ async function devModeToggle() {
  */
 function checkAndShowP2PPrompt() {
     if (!ConfigManager.getP2PPromptShown() && !isOverlayVisible()) {
+
+        // CHANGE: For new users (First Launch), do NOT annoy them.
+        // Silently default to whatever the config defaults are (which are usually safe/disabled by default if that's the policy,
+        // or enabled if that's the strategy). The requirement is "don't ask new users".
+        // We will mark it as shown so they are never asked.
+        if (ConfigManager.isFirstLaunch()) {
+            ConfigManager.setP2PPromptShown(true)
+            ConfigManager.save()
+            return
+        }
+
         const title = Lang.queryJS('uibinder.p2p.promptTitle')
         const desc = Lang.queryJS('uibinder.p2p.promptDesc')
         const enableBtn = Lang.queryJS('uibinder.p2p.enableButton')
