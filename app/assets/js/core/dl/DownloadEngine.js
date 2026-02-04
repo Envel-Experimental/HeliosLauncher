@@ -51,7 +51,7 @@ async function downloadQueue(assets, onProgress) {
                 await runDownload(asset, forceHTTP, instantDefer);
             } catch (err) {
                 if (!forceHTTP) {
-                    log.warn(`[DownloadEngine] Deferring failed file: ${asset.id} (${err.message}). Will retry at the end.`);
+                    if (isDev) log.debug(`[DownloadEngine] Deferring failed file: ${asset.id} (${err.message}). Will retry at the end.`);
                     deferredQueue.push(asset);
                 } else {
                     // In final stand, if it fails again, we must collect it to throw later
@@ -157,7 +157,7 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
             if (attempt > 0) {
                 await sleep(attempt * 1000);
                 if (candidates.length > 1 && attempt % candidates.length !== 0) {
-                    log.warn(`[DownloadEngine] Primary failed, trying fallback: ${currentUrl}`);
+                    if (isDev) log.debug(`[DownloadEngine] Primary failed, trying fallback: ${currentUrl}`);
                 }
             }
 

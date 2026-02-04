@@ -4,6 +4,7 @@ const { HashAlgo } = require('./Asset');
 const { AssetGuardError } = require('./AssetGuardError');
 const { IndexProcessor } = require('./IndexProcessor');
 const { getVersionJsonPath, validateLocalFile, getLibraryDir, getVersionJarPath, calculateHashByBuffer, safeEnsureDir } = require('../common/FileUtils');
+const { downloadFile } = require('./DownloadEngine');
 const { mcVersionAtLeast, isLibraryCompatible, getMojangOS } = require('../common/MojangUtils');
 const { LoggerUtil } = require('../util/LoggerUtil');
 const { handleFetchError } = require('../common/RestResponse');
@@ -35,11 +36,7 @@ class MojangIndexProcessor extends IndexProcessor {
 
     async loadAssetIndex(versionJson) {
         const assetIndexPath = this.getAssetIndexPath(versionJson.assetIndex.id);
-        const assetIndex = await this.loadContentWithRemoteFallback(versionJson.assetIndex.url, assetIndexPath, { algo: HashAlgo.SHA1, value: versionJson.assetIndex.sha1 });
-        if (assetIndex == null) {
-            throw new AssetGuardError(`Failed to download ${versionJson.assetIndex.id} asset index.`);
-        }
-        return assetIndex;
+        return await this.loadContentWithRemoteFallback(versionJson.assetIndex.url, assetIndexPath, { algo: HashAlgo.SHA1, value: versionJson.assetIndex.sha1 });
     }
 
     async loadVersionJson(version, versionManifest) {
@@ -50,9 +47,7 @@ class MojangIndexProcessor extends IndexProcessor {
                 throw new AssetGuardError(`Invalid version: ${version}.`);
             }
             const versionJson = await this.loadContentWithRemoteFallback(versionInfo.url, versionJsonPath, { algo: HashAlgo.SHA1, value: versionInfo.sha1 });
-            if (versionJson == null) {
-                throw new AssetGuardError(`Failed to download ${version} json index.`);
-            }
+
             if (process.arch === 'arm64' && !mcVersionAtLeast('1.19', version)) {
                 const latestVersion = versionManifest.latest.release;
                 const latestVersionJsonPath = getVersionJsonPath(this.commonDir, latestVersion);
@@ -61,9 +56,7 @@ class MojangIndexProcessor extends IndexProcessor {
                     throw new AssetGuardError('Cannot find the latest version.');
                 }
                 const latestVersionJson = await this.loadContentWithRemoteFallback(latestVersionInfo.url, latestVersionJsonPath, { algo: HashAlgo.SHA1, value: latestVersionInfo.sha1 });
-                if (latestVersionJson == null) {
-                    throw new AssetGuardError(`Failed to download ${latestVersion} json index.`);
-                }
+
                 MojangIndexProcessor.logger.info(`Using LWJGL from ${latestVersion} for ARM64 compatibility.`);
                 versionJson.libraries = versionJson.libraries.filter(l => !l.name.startsWith('org.lwjgl:')).concat(latestVersionJson.libraries.filter(l => l.name.startsWith('org.lwjgl:')));
             }
@@ -80,38 +73,15 @@ class MojangIndexProcessor extends IndexProcessor {
     }
 
     async loadContentWithRemoteFallback(url, filePath, hash) {
-        try {
-            await fs.access(filePath);
-            const buf = await fs.readFile(filePath);
-            if (hash) {
-                const bufHash = calculateHashByBuffer(buf, hash.algo);
-                if (bufHash === hash.value) {
-                    return JSON.parse(buf.toString());
-                }
-            } else {
-                return JSON.parse(buf.toString());
-            }
-        } catch (error) {
-            // File doesn't exist or invalid
-        }
-
+        // Prepare Mirror Candidates
         const candidates = [];
-        if (!ConfigManager.getP2POnlyMode()) {
-            candidates.push(url);
-        }
-        // Only if it matches known endpoints, we can guess the mirror structure? 
-        // Or if the URL starts with one of the known endpoints.
-        // But for manifests, we usually pass the full URL.
-
-        // Simpler approach: If the URL contains one of the standard endpoints, replace it.
         if (MOJANG_MIRRORS && MOJANG_MIRRORS.length > 0) {
             for (const mirror of MOJANG_MIRRORS) {
                 if (url.includes(MojangIndexProcessor.ASSET_RESOURCE_ENDPOINT) && mirror.assets) {
                     candidates.push(url.replace(MojangIndexProcessor.ASSET_RESOURCE_ENDPOINT, mirror.assets));
-                } else if (url.includes(MojangIndexProcessor.VERSION_MANIFEST_ENDPOINT) && mirror.version_manifest) { // This is full URL match
-                    candidates.push(mirror.version_manifest); // Manifest is a fixed endpoint usually
+                } else if (url.includes(MojangIndexProcessor.VERSION_MANIFEST_ENDPOINT) && mirror.version_manifest) {
+                    candidates.push(mirror.version_manifest);
                 } else if (mirror.version_manifest && url.includes('piston-meta.mojang.com')) {
-                    // Heuristic replacement for other piston-meta links
                     candidates.push(url.replace('https://piston-meta.mojang.com', mirror.version_manifest.replace('/mc/game/version_manifest_v2.json', '')));
                 } else if (url.includes(MojangIndexProcessor.LAUNCHER_JSON_ENDPOINT) && mirror.launcher_meta) {
                     candidates.push(mirror.launcher_meta);
@@ -119,35 +89,24 @@ class MojangIndexProcessor extends IndexProcessor {
             }
         }
 
-        let lastError = null;
-        for (const candidateUrl of candidates) {
-            try {
-                const res = await fetch(candidateUrl);
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const data = await res.json();
+        const asset = {
+            id: path.basename(filePath),
+            url: url,
+            path: filePath,
+            algo: hash ? hash.algo : null,
+            hash: hash ? hash.value : null,
+            fallbackUrls: candidates
+        };
 
-                await safeEnsureDir(path.dirname(filePath));
-                await fs.writeFile(filePath, JSON.stringify(data));
-                return data;
-            } catch (error) {
-                lastError = error;
-                // Try next
-            }
-        }
-
-        if (lastError) {
-            handleFetchError(url, lastError, MojangIndexProcessor.logger);
-        }
-        return null;
+        await downloadFile(asset);
+        const content = await fs.readFile(filePath, 'utf8');
+        return JSON.parse(content);
     }
 
     async loadVersionManifest() {
         const manifestPath = path.join(this.commonDir, 'version_manifest_v2.json');
 
         const candidates = [];
-        if (!ConfigManager.getP2POnlyMode()) {
-            candidates.push(MojangIndexProcessor.VERSION_MANIFEST_ENDPOINT);
-        }
         if (MOJANG_MIRRORS && MOJANG_MIRRORS.length > 0) {
             for (const mirror of MOJANG_MIRRORS) {
                 if (mirror.version_manifest) {
@@ -156,29 +115,29 @@ class MojangIndexProcessor extends IndexProcessor {
             }
         }
 
-        for (const url of candidates) {
-            try {
-                const res = await fetch(url);
-                if (res.ok) {
-                    const data = await res.json();
-                    await safeEnsureDir(path.dirname(manifestPath));
-                    await fs.writeFile(manifestPath, JSON.stringify(data));
-                    return data;
-                }
-            } catch (error) {
-                // Continue
-            }
-        }
+        const asset = {
+            id: 'version_manifest_v2.json',
+            url: MojangIndexProcessor.VERSION_MANIFEST_ENDPOINT,
+            path: manifestPath,
+            algo: null, // No hash verification for root manifest
+            hash: null,
+            fallbackUrls: candidates
+        };
 
-        // Fallback to cache if all network attempts fail
-        MojangIndexProcessor.logger.warn('Failed to fetch Mojang Version Manifest from network (mirrors included). Falling back to cache.');
         try {
-            await fs.access(manifestPath);
+            await downloadFile(asset);
             const data = await fs.readFile(manifestPath, 'utf8');
             return JSON.parse(data);
-        } catch (e) {
-            handleFetchError('Load Mojang Version Manifest', new Error('All mirrors failed'), MojangIndexProcessor.logger);
-            return null;
+        } catch (err) {
+            MojangIndexProcessor.logger.warn('Failed to download Mojang Version Manifest via DownloadEngine. Falling back to cache.', err);
+            try {
+                await fs.access(manifestPath);
+                const data = await fs.readFile(manifestPath, 'utf8');
+                return JSON.parse(data);
+            } catch (e) {
+                // If both network and cache fail, re-throw the original DownloadEngine error so `landing.js` can report it.
+                throw err;
+            }
         }
     }
 

@@ -506,9 +506,24 @@ async function dlAsync(login = true) {
         })
         setLaunchPercentage(100)
     } catch (err) {
-        loggerLaunchSuite.warn('Error during file validation. Continuing with local files.', err)
-        isOfflineLaunch = true
-        invalidFileCount = 0
+        loggerLaunchSuite.warn('Error during file validation. Checking for offline capability...', err)
+
+        // Refined Offline Fallback: Only go offline if we actually have the critical metadata.
+        // If we don't have the Index JSON, we can't launch.
+        const fs = require('fs-extra')
+        const path = require('path')
+        const version = serv.rawServer.minecraftVersion
+        const versionJsonPath = path.join(ConfigManager.getCommonDirectory(), 'versions', version, `${version}.json`)
+
+        if (await fs.pathExists(versionJsonPath)) {
+            loggerLaunchSuite.info('Offline capability verified. Falling back to offline mode.')
+            isOfflineLaunch = true
+            invalidFileCount = 0
+        } else {
+            loggerLaunchSuite.error('Critical Defect: Version JSON missing. Cannot fall back to offline mode.')
+            showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringFileDownloadTitle'), '<b>Download Failed & No Local Cache</b><br>The required version metadata could not be downloaded and is not found locally.<br>Please check your internet connection.')
+            return
+        }
     }
 
 
@@ -621,7 +636,19 @@ async function dlAsync(login = true) {
         serv.rawServer.id
     )
 
-    const modLoaderData = await distributionIndexProcessor.loadModLoaderVersionJson(serv)
+    let modLoaderData
+    try {
+        modLoaderData = await distributionIndexProcessor.loadModLoaderVersionJson(serv)
+    } catch (err) {
+        loggerLaunchSuite.error('Error loading ModLoader data', err)
+        if (isOfflineLaunch || DistroAPI._remoteFailed) {
+            showLaunchFailure(Lang.queryJS('landing.dlAsync.launchingOffline'), 'Required ModLoader files are missing! Cannot launch offline.<br>Please connect to the internet and try again.')
+            return
+        } else {
+            showLaunchFailure(Lang.queryJS('landing.dlAsync.fatalError'), 'Failed to load ModLoader version data.<br>' + err.message)
+            return
+        }
+    }
     let versionData
     let mojangOffline = false
     try {
