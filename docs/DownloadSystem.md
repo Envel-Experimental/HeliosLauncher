@@ -1,254 +1,265 @@
-# Launcher Download System Architecture
+# Helios Download System (HDS) Technical Specification
 
-This document provides a comprehensive technical breakdown of the Helios Launcher's download subsystem. It covers the exact sequences of operations, error handling state machines, race conditions, and security enforcement mechanisms.
+This document provides a deep technical analysis of the Helios Launcher's download subsystem. Designed for high availability, security, and sovereignty, the system combines **P2P Swarming**, **HTTP Racing**, and **Cryptographic Verification** via Ed25519.
 
 ---
 
-## 1. System Architecture Diagram
+## 1. High-Level Architecture
 
-The download system operates in layers, from the high-level orchestrator (`DownloadEngine`) to the low-level network transport (`RaceManager` & `P2PEngine`).
+The HDS is a multi-layered system that prioritizes decentralized delivery while maintaining absolute data integrity.
+
+### Component Map
+*   **DownloadEngine**: The high-level orchestrator. Manages the queue, retries, and file system atomicity.
+*   **RaceManager**: The "Racing" logic. It simultaneously attempts to fetch data via P2P and HTTP, picking the fastest winner.
+*   **P2PEngine**: The P2P backbone. Powered by **Hyperswarm** and **HyperDHT**, it manages the sovereign peer network.
+*   **DistributionAPI**: Handles the root of trust, verifying the `distribution.json` index via **Ed25519 signatures**.
+
+### The Racing Philosophy
+Instead of "P2P or HTTP", HDS uses both. When a file request starts, two tasks are born:
+1.  **HTTP Task**: Fetches from Primary or Mirror.
+2.  **P2P Task**: Seeks the hash in the swarm.
+
+The first task to verify the first few kilobytes of data wins. The loser is immediately aborted to save bandwidth.
 
 ```mermaid
-classDiagram
-    class DownloadEngine {
-        +downloadQueue(assets)
-        +downloadFile(asset)
-        -validateLocalFile()
-    }
-    class RaceManager {
-        +handle(request)
-        -httpTask()
-        -globalP2PTask()
-    }
-    class P2PEngine {
-        +requestFile(hash)
-        +peers[]
-    }
-    class Mirrors {
-        +MOJANG_MIRRORS[]
-    }
+graph TD
+    subgraph "Application Layer"
+        DE[DownloadEngine] --> PQ[Priority Queue]
+    end
     
-    DownloadEngine --> Mirrors : 1. Resolve URLs
-    DownloadEngine --> RaceManager : 2. Request File
-    RaceManager --> P2PEngine : 3a. Race P2P
-    RaceManager --> HTTP_Internet : 3b. Race HTTP
+    subgraph "racing Layer"
+        PQ --> RM[RaceManager]
+        RM --> HTTP[HTTP Task]
+        RM --> P2P[P2P Task]
+    end
+    
+    subgraph "Infrastructure Layer"
+        HTTP --> MOJ[Mojang/Mirrors]
+        P2P --> HDHT[HyperDHT Discovery]
+        HDHT --> Peers[Sovereign Peers]
+    end
+    
+    subgraph "Integrity Layer"
+        Peers -.-> HV[Hash Verifier]
+        MOJ -.-> HV
+        HV --> AW[Atomic Write .tmp]
+        AW --> FS[Final File]
+    end
 ```
 
 ---
 
-## 2. The Orchestrator: `DownloadEngine.js`
+## 2. P2P Protocol Specification
 
-The engine does not simply download files one by one. It uses a **Two-Pass "Deferral" Strategy** to ensure maximum reliability and speed.
+The P2P network operates on a custom binary protocol over UTP (UDP) connections.
 
-### Phase 1: The Main Pass (Optimistic)
-*   **Concurrency**: Dynamic (8-32 parallel downloads). Real-time throttling based on System CPU usage and Network Health.
-*   **Behavior**: Tries to download every file in the queue.
-*   **Failure Handling**: If a file fails (after internal retries), it is **NOT** thrown effectively immediately. Instead, it is pushed to a `deferredQueue`.
-    *   *Why?* A single slow/failing file shouldn't block the other 500 files from finishing.
+### 2.1 Handshake & Identification
+Upon connection, peers exchange a `MSG_HELLO` (0x05) packet:
+*   **Remote Weight**: An integer (0-255) representing the peer's performance and trust level.
+*   **Capabilities**: A bitmask for feature support (e.g., Bit 0 for **Batching**).
 
-### Phase 2: The "Final Stand" (Pessimistic)
-*   **Trigger**: Runs only if `deferredQueue` is not empty after Phase 1.
-*   **Concurrency**: Reduced to **4** (to reduce network congestion).
-*   **Behavior**: Retries the failed files with **Force HTTP** enabled (`X-Skip-P2P: true`).
-*   **Logic**: "P2P failed us, mirrors failed us, let's try a direct, slow, reliable connection one last time."
+### 2.2 Packet Format
+Every packet starts with a **9-byte header**:
+*   `[0]` - **Type** (1 byte)
+*   `[1-4]` - **RequestID** (4 bytes, Big-Endian)
+*   `[5-8]` - **Length** (4 bytes, Big-Endian)
 
-### Phase 3: Critical Failure
-*   If `deferredQueue` is *still* not empty after Phase 2, the launcher throws a `Critical failure`, aborting the update.
+| Type | Hex | Name | Payload |
+| :--- | :--- | :--- | :--- |
+| 1 | 0x01 | `MSG_REQUEST` | Hash string or JSON `{h, p, id}` |
+| 2 | 0x02 | `MSG_DATA` | Binary file chunk |
+| 3 | 0x03 | `MSG_ERROR` | UTF-8 Error Message |
+| 4 | 0x04 | `MSG_END` | Null (Signals EOF) |
+| 5 | 0x05 | `MSG_HELLO` | Internal Handshake data |
+| 8 | 0x08 | `MSG_BATCH` | Array of RequestIDs and Hashes |
 
----
-
-## 3. The Retry Loop (Per-File State Machine)
-
-For *each* file attempt (inside `downloadFile`), the following state machine executes:
-
-**Inputs**: `Asset { url, hash, size, fallbackUrls[] }`
-
-1.  **Pre-Validation**:
-    *   Check for `.tmp` file (delete if exists).
-    *   Check destination file. If exists: `Hash(file) == asset.hash`?
-    *   **True**: Return immediately (Skip).
-
-2.  **Candidate Selection**:
-    *   Build list: `[Primary URL, Mirror 1, Mirror 2, ...]`
-    *   *Note*: Mirrors are populated by `MojangIndexProcessor` from `config.js`.
-
-3.  **The Loop (Max 5 Attempts)**:
-    *   **Attempt matches Candidate**: `url = candidates[attempt % length]` (Round Robin).
-    *   **P2P Only Mode Check**:
-        *   If `p2pOnlyMode == true`:
-        *   Check `url.hostname`. If ends with `mojang.com` or `minecraft.net` -> **SKIP** (continue loop).
-        *   *Result*: Only Mirrors and Custom Servers are allowed.
-
-    *   **Force HTTP Logic**:
-        *   If `attempt >= 2` (3rd try) OR `Final Stand` mode:
-        *   Set header `X-Skip-P2P: true`.
-        *   *Why?* If P2P hasn't found it by now, it likely won't. Fallback to direct HTTP.
-
-    *   **Execution**: Call `RaceManager.handle(request)`.
-
-    *   **Atomic Write & Verify**:
-        *   Stream data to `filename.tmp`.
-        *   **Verify**: `Hash(filename.tmp) == asset.hash`.
-        *   **Success**: `fs.rename(.tmp -> .ext)`. Return.
-        *   **Failure**: Delete `.tmp`. Throw Error.
+### 2.3 Discovery Hub (Hyperswarm)
+The system joins a **Sovereign Swarm** topic derived from a secret seed (`SWARM_TOPIC_SEED`).
+- **DHT (Distributed Hash Table)**: Used for global peer discovery across the internet.
+- **MDNS**: Used for zero-latency local discovery in LAN environments.
+- **Persistence**: Successful peers are stored in `peers.json` for "pre-warming" future sessions.
 
 ---
 
-## 4. The Race Manager (Under the Hood)
+## 3. Security & Integrity Root
 
-This is the "Black Box" that decides *how* to get the bytes. It uses `Promise.any()` to race two promises:
+Cryptographic trust is built from the top down.
 
-### A. The HTTP Task
-*   Standard `fetch(url)`.
-*   **Blocker**: If `p2pOnlyMode` is on AND the URL is official, this task rejects immediately.
+### 3.1 Ed25519 Distribution Signing
+The root `distribution.json` must be signed by the administrator.
+- **Signer**: Uses a private Ed25519 key to generate a signature of the JSON content.
+- **Verifier**: The launcher contains a whitelist of `DISTRO_PUB_KEYS`.
+- **Flow**:
+    1.  Downloads `distribution.json`.
+    2.  Downloads `distribution.json.sig`.
+    3.  Wraps its local Public Key in **SPKI DER** format.
+    4.  Verifies the signature. If it fails, an **Interactive Overlay** prevents launch unless overridden.
 
-### B. The Global P2P Task (Hyperswarm)
-*   **Lookup**: Queries the DHT (Distributed Hash Table) for the **SHA1** or **SHA256** of the file.
-*   **Connection**: Uses UTP (UDP-based) hole-punching to connect to peers.
-*   **Timeout**: 60 seconds (Soft). If no first byte within 60s, this task rejects.
-*   **Overload Protection**: If `P2PEngine` is "overloaded" (too many active streams), this task rejects immediately.
-
-### The Win Condition
-*   **Winner**: The first task to resolve with a `ReadableStream`.
-*   **Loser**: Is immediately `aborted` / `destroyed`.
-*   **Consistency**: The data is piped through a `HashVerifierStream` (Pass-through stream that calculates hash on the fly).
-
----
-
-## 5. Sequence Diagram: A Failed Download Handling
-
-How the system handles a file that Mojang is blocking, but a Mirror has.
+### 3.2 File Validation Chain
+Once the distribution index is trusted, every file is protected:
+1.  **Immutable Identity**: Files are identified by their SHA1/SHA256 hash.
+2.  **Streaming Verification**: The `DownloadEngine` pipes every download through a native crypto hasher.
+3.  **Atomic Rename**: Files are written as `.tmp`. If the final hash check fails, the `.tmp` is destroyed. The file system only sees valid completions.
 
 ```mermaid
 sequenceDiagram
-    participant DE as DownloadEngine
-    participant RM as RaceManager
-    participant HTTP as HTTP Network
-    participant P2P as P2P Swarm
-
-    DE->>DE: Start Loop (Attempt 0)
-    DE->>DE: Select Primary URL (mojang.com)
-    DE->>DE: Check P2P Only Mode = TRUE?
-    DE->>DE: BLOCK mojang.com. Continue.
-
-    DE->>DE: Start Loop (Attempt 1)
-    DE->>DE: Select Mirror URL (mirror.example.com)
-    DE->>RM: RaceManager.handle(mirror_url)
+    participant Admin
+    participant Server
+    participant Launcher
     
-    par HTTP Race
-        RM->>HTTP: GET mirror.example.com/file
-    and P2P Race
-        RM->>P2P: Find Hash(abc1234...)
-    end
-
-    Note over HTTP,P2P: Race in progress...
-    
-    alt P2P Wins
-        P2P-->>RM: Stream (Peer Found)
-        RM->>HTTP: Abort
-        RM-->>DE: Return P2P Stream
-    else HTTP Wins
-        HTTP-->>RM: 200 OK (Stream)
-        RM->>P2P: Destroy Search
-        RM-->>DE: Return HTTP Stream
-    else Both Fail
-        RM-->>DE: Throw Error
-    end
-
-    DE->>DE: Stream to .tmp file
-    DE->>DE: Validate Hash
-    alt Valid
-        DE->>DE: Rename .tmp -> .jar
-    else Invalid
-        DE->>DE: Delete .tmp
-        DE->>DE: Loop to Attempt 2...
+    Admin->>Admin: Sign distribution.json (Ed25519)
+    Admin->>Server: Upload json + .sig
+    Launcher->>Server: Fetch json + .sig
+    Launcher->>Launcher: Verify with Trusted PubKey
+    alt Signature Valid
+        Launcher->>Launcher: Proceed to Download Queue
+    else Signature Invalid
+        Launcher->>User: WARNING OVERLAY
     end
 ```
 
-## 6. Error Codes & Debugging
+---
 
-If you see these errors in `main.log`:
+## 4. Resilience & Error States
 
-*   **"HTTP Blocked: P2P Only Mode is Enabled"**:
-    *   RaceManager blocked a request because `settings.delivery.p2pOnly` is ON, effectively protecting you from connecting to Mojang.
-*   **"Validation failed"**:
-    *   The file downloaded, but the Hash did not match `distribution.json`.
-    *   *Cause*: Corrupted mirror file, MITM attack, or disk error.
-    *   *System Action*: File deleted. Retried.
-*   **"Critical failure: Failed to download X files"**:
-    *   All 5 attempts failed (Primary, Mirrors) AND the Final Stand failed.
-    *   *Check*: Internet connection, config mirrors.
-    *   *Observation*: Console will show a table of failed files. Sentry receives a structured report with retry history for the first 20 failed files.
+### 4.1 The Deferral State Machine
+To handle flaky mirrors or P2P bottlenecks, the engine uses a non-blocking queue:
+
+1.  **Round 1**: All tasks start. Failed tasks go to a **Deferred Queue**.
+2.  **Round 2**: Deferred tasks are retried with **Force HTTP** and higher priority.
+3.  **Round 3**: Critical Failure. If fallback URLs and P2P both fail, the launch halts.
+
+### 4.2 Circuit Breaker (Anti-DoS)
+The P2P Engine monitors its own health:
+*   **Panic Mode**: If the P2P failure rate exceeds a critical threshold, the engine disables the swarm for 5 minutes.
+*   **Strike System**: Malicious peers (sending bad hashes or infinite streams) are blacklisted by IP and Public Key.
 
 ---
 
-## 7. Error Analytics (Message & Sentry)
+## 5. Privacy & Sovereignty
 
-When a **Critical Failure** occurs, the engine aggregates the failure history of all failed files into a single error object.
+### 5.1 P2P Only Mode
+When enabled, the `RaceManager` acts as a privacy firewall:
+- **Rule**: If a URL belongs to `*.mojang.com` or `*.minecraft.net`, it is **REJECTED**.
+- **Result**: The launcher *only* talks to peers or configured mirrors, preventing Mojang from tracing the user's IP for game file metadata.
 
-### Console Output
-The console displays a clean summary to avoid flooding:
-*   Total failure count.
-*   `console.table` preview of the first 10 failures.
-*   "...and X more" if necessary.
-
-### Sentry Report
-Sentry receives a `captureException` event with `extra.downloadDebug` **ONLY** for unexpected software errors.
-
-**Strict Smart Filtering**:
-To avoid noise, the system **IGNORES** errors related to:
-*   **Network**: 404, 502, Timeouts, DNS resolution, Connection Refused.
-*   **Environment**: Disk Full (ENOSPC), Permission Denied (EPERM), File Locked (EBUSY).
-*   **Data Integrity**: Validation Failed / Hash Mismatch (Treated as potential network corruption).
-
-**Reported Errors**:
-*   Internal Logic Errors (e.g., `ReferenceError`, `TypeError`).
-*   Unknown/Unhandled system errors.
-
-**Payload Structure**:
-*   `failedCount`: Total number of failed files.
-*   `failures`: Array of up to 20 failed file objects, each containing:
-    *   `id`: Asset ID.
-    *   `url`: Last attempted URL.
-    *   `history`: Array of attempts (Method, URL, Error).
-*   `truncated`: Boolean, true if more than 20 files failed.
+### 5.2 Mirror Fallbacks
+Mirroring is robust. If a primary asset URL is blocked, the `MojangIndexProcessor` dynamically swaps the base URL with a mirror from `config.js` while maintaining the hash integrity.
 
 ---
 
-## 8. Security Measures
+## 6. Key Files for Reference
 
-The Helios Launcher implements a multilayered security model designed to operate safely in a trustless P2P environment.
+| File | Role |
+| :--- | :--- |
+| `DownloadEngine.js` | Main entry point, queue management, validation. |
+| `RaceManager.js` | HTTP vs P2P racing logic. |
+| `P2PEngine.js` | Hyperswarm/DHT lifecycle and peer management. |
+| `PeerHandler.js` | P2P Binary protocol implementation and packet parsing. |
+| `MojangIndexProcessor.js` | Mojang metadata resolution (Versions/Assets/Index). |
+| `DistributionAPI.js` | HTTP API for distribution index and Ed25519 verification. |
+| `config.js` | Infrastructure settings (Bootstrap nodes, PubKeys). |
 
-### A. Data Integrity & Validation
-1.  **Mandatory Hash Verification**:
-    *   Every file downloaded (via HTTP or P2P) is piped through a `HashVerifierStream`.
-    *   The SHA1/SHA256 hash is calculated on-the-fly.
-    *   If the calculated hash does not match the manifest (from `distribution.json`), the file is immediately discarded and the error `Validation failed` is thrown.
-2.  **Atomic Writes**:
-    *   Files are never written directly to their destination. They are streamed to a `.tmp` file first.
-    *   Only *after* the hash is verified is the file renamed to its final extension.
-    *   This prevents corrupted or malicious partial files from existing in the game directories.
+---
 
-### B. P2P Network Security (Hyperswarm)
-1.  **Request ID Randomization**:
-    *   Each P2P request generates a cryptographically random 4-byte ID.
-    *   This prevents ID collision attacks and spoofing.
-2.  **Peer Validation**:
-    *   **Strict Input Sanitization**: Malformed JSON or invalid buffer types from peers are silently dropped.
-    *   **Size Caps (Infinite Stream Protection)**: The engine enforces a strict size limit (`ExpectedSize + 1MB Tolerance`). If a peer sends more data than expected, the stream is cut, and the peer is penalized.
-3.  **DoS Protection**:
-    *   **Queue Limits**: The `serverQueue` is capped at 500 requests to prevent memory exhaustion attacks.
-    *   **Request Maps**: The internal active request map is hard-capped to prevent object injection or memory leaks.
-4.  **Reputation System**:
-    *   **Penalty/Strike System**: Peers sending bad data, timing out excessively, or violating protocol rules receive "Strikes".
-    *   **Blacklisting**: 3 Strikes result in a temporary ban (10 minutes) from the swarm.
-    *   **Circuit Breaker (Panic Mode)**: If the client detects a coordinated attack (global error rate spikes), it triggers a "Panic Mode," disabling P2P entirely for 5 minutes.
+## 7. Security Hardening & Defense in Depth
 
-### C. Privacy & Isolation
-1.  **P2P Only Mode**:
-    *   When enabled, the `RaceManager` explicitly blocks connections to `mojang.com` and `minecraft.net`.
-    *   This prevents the official Mojang API from receiving your IP (except for authentication, which is handled separately).
-2.  **Local Peer Discovery**:
-    *   Local (LAN) peers are prioritized but treated with the same validation rules as global peers.
-    *   IPs are sanitized (e.g., IPv6 mapping removed) before processing.
+The Helios Launcher implements a "Defense in Depth" strategy, where multiple independent layers of security protect the system even if one layer is compromised.
 
+### 7.1 Protocol & Network Hardening (P2P)
+
+The P2P transport layer (`PeerHandler.js` & `P2PEngine.js`) contains several low-level guards against malicious network behavior.
+
+#### A. Anti-Slowloris (Inactivity Guard)
+Malicious peers might open connections and keep them open by sending data extremely slowly (1 byte/sec), eventually exhausting server resources.
+*   **Socket Timeouts**: Every peer socket is hard-capped with a **30s timeout**.
+*   **Minimum Speed Enforcement**: During active transfers, the seeder monitors the download speed. If a client remains below **1KB/s** for more than 10s, the connection is forcibly severed.
+
+#### B. Memory Exhaustion Protection (DoS Guard)
+To prevent peers from crashing the launcher, strict resource limits are applied:
+*   **Buffer Caps**: Incoming data chunks are never buffered beyond **2MB**. If a message exceeds this, the connection is dropped.
+*   **JSON Sanitization**: JSON payloads (used for metadata requests) are capped at **1KB** and must pass a **Structural Depth Check** (no nested objects allowed) to prevent `JSON.parse` from consuming excessive CPU.
+
+#### C. Request Masking & Spoofing Prevention
+*   **ReqID Randomization**: Instead of sequential IDs, every request uses a cryptographically random **4-byte ID**.
+*   **Peer-Binding**: Responses are only accepted if the `RequestID` matches an active request **and** the sender matches the originally queried peer. This prevents "blind injection" attacks.
+
+### 7.2 File System & RCE Protection
+
+Protecting the client's file system is critical to prevent Remote Code Execution (RCE).
+
+#### A. The Whitelist/Blacklist Model
+The launcher enforces a strict path-based sandbox for P2P sharing:
+*   **Whitelisted Folders**: Only specified directories (e.g., `assets`, `libraries`, `versions`, `minecraft`) can be read from or written to via P2P.
+*   **Extension Blacklist**: Sensitive file types like `.enc`, `.dat`, `.log`, and `.txt` (which might contain session info or keys) are explicitly **denied** from the swarm.
+*   **Directory Traversal Guard**: All relative paths are normalized and checked. Any path containing `..` or leading to an absolute location outside the data directory is instantly rejected.
+
+#### B. Transactional Integrity (Atomic Writes)
+Files are never written directly to the game folders. They follow a transactional flow:
+1.  **Download to `.tmp`**: File is streamed to a temporary extension.
+2.  **On-the-Fly Hashing**: A `HashVerifierStream` calculates the checksum as the bytes arrive.
+3.  **Final Commitment**: Only if `FinalHash == ManifestHash` is the file renamed (`fs.rename`) to its proper location.
+*   *Security Benefit*: Malicious or partial files never "exist" as valid game components, preventing the launcher from ever loading corrupted code.
+
+### 7.3 Sybil Attack & Reputation Management
+
+A Sybil attack occurs when one person creates thousands of fake peers to control the swarm.
+
+*   **Ed25519 PeerIDs**: Every peer is identified by the public key of their Hyperswarm connection. This provides a stable, unforgeable ID that persists across sessions.
+*   **Credit System (Fair Usage)**: The `UsageTracker` manages virtual credits for every peer based on their transfer history.
+    *   **Consumption**: Downloading from the launcher consumes credits.
+    *   **Regeneration**: Credits regenerate slowly over time.
+    *   **Soft-Ban**: Peers who "leech" too much are soft-banned until they regenerate enough credits, ensuring the swarm remains balanced.
+*   **Strike & Blacklist System**:
+    *   Peers violating protocol rules receive a "Strike".
+    *   **3 Strikes = Blacklist**: The ID is banned for 10 minutes.
+*   **Global Circuit Breaker (Panic Mode)**: If the system detects a massive, coordinated attack (e.g., 5+ security violations in 1 minute), it triggers a global "Panic Mode," disabling P2P functionality entirely to protect the user's infrastructure.
+
+### The Security Chain Diagram
+
+```mermaid
+graph LR
+    subgraph "External Swarm"
+        Peer[Remote Peer]
+    end
+
+    subgraph "Network Guard"
+        Peer --> SL[Slowloris Check]
+        SL --> MB[Memory Buffer Limit]
+    end
+
+    subgraph "Protocol Guard"
+        MB --> JS[JSON Structural Check]
+        JS --> RA[Random ReqID Match]
+    end
+
+    subgraph "Sovereignty Guard"
+        RA --> CT[Credit Tracker]
+        CT --> WS[Path/Ext Whitelist]
+    end
+
+    subgraph "Integrity Guard"
+        WS --> HV[Live Hash verification]
+        HV --> AW[Atomic Write]
+        AW --> OK[Verified File]
+    end
+    
+    MB -- Fail --> Strike[Reputation Strike]
+    WS -- Fail --> Strike
+    Strike -- 3x --> BL[Blacklist 10m]
+    BL -- Critical --> PM[Panic Mode/Shutdown]
+```
+
+---
+
+## 8. Key Files for Reference
+
+| File | Role |
+| :--- | :--- |
+| `DownloadEngine.js` | Main entry point, queue management, validation. |
+| `RaceManager.js` | HTTP vs P2P racing logic and P2P Only Mode firewall. |
+| `P2PEngine.js` | Hyperswarm lifecycle, credits, and global circuit breaker. |
+| `PeerHandler.js` | P2P Binary protocol, packet parsing, and security guards. |
+| `MojangIndexProcessor.js` | Mojang metadata resolution and mirror fallback logic. |
+| `DistributionAPI.js` | Distribution index API and Ed25519 root verification. |
+| `config.js` | Infrastructure settings (Bootstrap nodes, Trusted PubKeys). |
