@@ -456,6 +456,10 @@ function createWindow() {
 
             // Protect against crashes when saving config
             try {
+                // RELOAD: Ensure we have the latest config state from Renderer (e.g. P2P prompt or Accounts)
+                // before writing back to disk to avoid overwriting changes with stale memory state.
+                await ConfigManager.load()
+
                 if (!ConfigManager.getTotalRAMWarningShown()) {
                     const totalRam = os.totalmem() / (1024 * 1024 * 1024)
                     if (totalRam < 6) {

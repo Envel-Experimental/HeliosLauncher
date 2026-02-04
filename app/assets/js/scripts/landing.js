@@ -25,6 +25,7 @@ var {
 
 // Internal Requirements
 const ProcessBuilder = require('./assets/js/processbuilder')
+const { SafeSentry } = require('./assets/js/core/util/SentryWrapper.js') // We will create this wrapper to ensure safe access
 
 // Launch Elements
 const launch_content = document.getElementById('launch_content')
@@ -522,6 +523,77 @@ async function dlAsync(login = true) {
             setDownloadPercentage(100)
         } catch (err) {
             loggerLaunchSuite.warn('Error during file download. Stopping launch.', err)
+
+            // Structured Error Handling for Sentry & Console
+            if (err.failedFiles && Array.isArray(err.failedFiles)) {
+                // 1. Console Clean Summary (Always show for user debugging)
+                console.groupCollapsed(`[Download System] Critical Failure: ${err.failedFiles.length} files failed.`);
+                console.table(err.failedFiles.slice(0, 10).map(f => ({
+                    id: f.id,
+                    lastError: f.history && f.history.length > 0 ? f.history[f.history.length - 1].error : 'Unknown'
+                })));
+                if (err.failedFiles.length > 10) console.log(`...and ${err.failedFiles.length - 10} more.`);
+                console.groupEnd();
+
+                // 2. Smart Sentry Filtering
+                // The user specifically requested to avoid "noise" like 404, 502, timeouts (Internet issues).
+                // We only report if there's a "Soft Error" (Logic bug, Integrity/Validation failure).
+
+                const isIgnorableError = (errMsg) => {
+                    if (!errMsg) return true;
+                    const lower = errMsg.toLowerCase();
+                    // Network / Server Side Errors
+                    if (lower.includes('http') && (lower.includes('404') || lower.includes('502') || lower.includes('503') || lower.includes('500'))) return true;
+                    if (lower.includes('timeout') || lower.includes('econn') || lower.includes('enotfound') || lower.match(/http \d{3}/)) return true;
+                    if (lower.includes('fetch failed') || lower.includes('network')) return true;
+
+                    // File System / User Environment Errors (User Problems)
+                    if (lower.includes('eperm') || lower.includes('eacces') || lower.includes('ebusy') || lower.includes('enospc') || lower.includes('unlink')) return true;
+
+                    // Integrity / Logic Flow that acts like environment (Validation Failed)
+                    // User requested to ignore this as it can be caused by bad internet/disk.
+                    if (lower.includes('validation failed') || lower.includes('hash mismatch')) return true;
+
+                    // P2P Specific Noise
+                    if (lower.includes('p2p overloaded') || lower.includes('p2p skipped')) return true;
+
+                    return false;
+                };
+
+                // Check if ANY of the failed files failed due to a NON-ignorable error.
+                // If even one file failed due to Logic/Validation, we report the batch context.
+                const shouldReport = err.failedFiles.some(f => {
+                    // Check the last error of the file (Final Stand reason)
+                    if (!f.history || f.history.length === 0) return true; // Alien error, report.
+                    const lastReason = f.history[f.history.length - 1].error;
+
+                    // Filter out network noise AND validation failures
+                    return !isIgnorableError(lastReason);
+                });
+
+                if (shouldReport) {
+                    const REPORT_LIMIT = 20;
+                    const sentryPayload = {
+                        failedCount: err.failedFiles.length,
+                        failures: err.failedFiles.slice(0, REPORT_LIMIT)
+                    };
+                    if (err.failedFiles.length > REPORT_LIMIT) {
+                        sentryPayload.truncated = true;
+                        sentryPayload.more = err.failedFiles.length - REPORT_LIMIT;
+                    }
+
+                    SafeSentry.captureException(err, {
+                        extra: { downloadDebug: sentryPayload }
+                    });
+                } else {
+                    loggerLaunchSuite.warn('Suppressed Sentry Report for Critical Download Failure (Network/Server noise detected).');
+                }
+
+            } else {
+                // Standard fallback for other errors
+                SafeSentry.captureException(err);
+            }
+
             showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringFileDownloadTitle'), Lang.queryJS('landing.dlAsync.unableToLoadDistributionIndex'))
             return
         }

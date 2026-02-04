@@ -178,10 +178,44 @@ If you see these errors in `main.log`:
 *   **"Critical failure: Failed to download X files"**:
     *   All 5 attempts failed (Primary, Mirrors) AND the Final Stand failed.
     *   *Check*: Internet connection, config mirrors.
+    *   *Observation*: Console will show a table of failed files. Sentry receives a structured report with retry history for the first 20 failed files.
 
 ---
 
-## 7. Security Measures
+## 7. Error Analytics (Message & Sentry)
+
+When a **Critical Failure** occurs, the engine aggregates the failure history of all failed files into a single error object.
+
+### Console Output
+The console displays a clean summary to avoid flooding:
+*   Total failure count.
+*   `console.table` preview of the first 10 failures.
+*   "...and X more" if necessary.
+
+### Sentry Report
+Sentry receives a `captureException` event with `extra.downloadDebug` **ONLY** for unexpected software errors.
+
+**Strict Smart Filtering**:
+To avoid noise, the system **IGNORES** errors related to:
+*   **Network**: 404, 502, Timeouts, DNS resolution, Connection Refused.
+*   **Environment**: Disk Full (ENOSPC), Permission Denied (EPERM), File Locked (EBUSY).
+*   **Data Integrity**: Validation Failed / Hash Mismatch (Treated as potential network corruption).
+
+**Reported Errors**:
+*   Internal Logic Errors (e.g., `ReferenceError`, `TypeError`).
+*   Unknown/Unhandled system errors.
+
+**Payload Structure**:
+*   `failedCount`: Total number of failed files.
+*   `failures`: Array of up to 20 failed file objects, each containing:
+    *   `id`: Asset ID.
+    *   `url`: Last attempted URL.
+    *   `history`: Array of attempts (Method, URL, Error).
+*   `truncated`: Boolean, true if more than 20 files failed.
+
+---
+
+## 8. Security Measures
 
 The Helios Launcher implements a multilayered security model designed to operate safely in a trustless P2P environment.
 

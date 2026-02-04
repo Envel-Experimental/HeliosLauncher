@@ -556,22 +556,22 @@ function checkAndShowP2PPrompt() {
 
         setOverlayContent(title, desc + '<br><br><span style="color: #aaa; font-size: 12px;">' + settingsNotice + '</span>', enableBtn, disableBtn)
 
-        setOverlayHandler(() => {
+        setOverlayHandler(async () => {
             ConfigManager.setP2PPromptShown(true)
             ConfigManager.setLocalOptimization(true)
             ConfigManager.setGlobalOptimization(true)
             ConfigManager.setP2PUploadEnabled(true)
-            ConfigManager.save()
+            await ConfigManager.save()
             toggleOverlay(false)
             ipcRenderer.invoke('p2p:configUpdate') // Notify Main Process
         })
 
-        setMiddleButtonHandler(() => {
+        setMiddleButtonHandler(async () => {
             ConfigManager.setP2PPromptShown(true)
             ConfigManager.setLocalOptimization(false)
             ConfigManager.setGlobalOptimization(false)
             ConfigManager.setP2PUploadEnabled(false)
-            ConfigManager.save()
+            await ConfigManager.save()
             toggleOverlay(false)
             ipcRenderer.invoke('p2p:configUpdate') // Notify Main Process
         })

@@ -55,6 +55,12 @@ async function downloadQueue(assets, onProgress) {
                     deferredQueue.push(asset);
                 } else {
                     // In final stand, if it fails again, we must collect it to throw later
+                    // Attach history to asset for reporting
+                    if (err.history) {
+                        asset.history = err.history;
+                    } else {
+                        asset.history = [{ error: err.message, attempt: 'Final' }];
+                    }
                     deferredQueue.push(asset);
                 }
             } finally {
@@ -83,7 +89,13 @@ async function downloadQueue(assets, onProgress) {
     // 3. Last Check
     if (deferredQueue.length > 0) {
         const names = deferredQueue.map(a => a.id).join(', ');
-        throw new Error(`Critical failure: Failed to download ${deferredQueue.length} files even after deferral: ${names}`);
+        const criticalError = new Error(`Critical failure: Failed to download ${deferredQueue.length} files even after deferral: ${names}`);
+        criticalError.failedFiles = deferredQueue.map(a => ({
+            id: a.id,
+            url: a.url,
+            history: a.history || []
+        }));
+        throw criticalError;
     }
 
     return receivedTotals;
@@ -121,6 +133,7 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
     await safeEnsureDir(path.dirname(decodedPath));
 
     let lastError = null;
+    const attemptHistory = [];
 
     // Retry Loop (Resilience)
     const candidates = [asset.url, ...(asset.fallbackUrls || [])].filter(Boolean);
@@ -250,24 +263,46 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
                     await fs.unlink(tempPath);
                 } catch (e) { }
 
-                throw new Error('Validation failed');
+                const validationError = new Error('Validation failed');
+                attemptHistory.push({
+                    attempt: attempt + 1,
+                    url: currentUrl,
+                    method: headers.has('X-Skip-P2P') ? 'HTTP' : 'Race(P2P+HTTP)',
+                    error: `Hash Mismatch (Got ${loaded} bytes)`
+                });
+                throw validationError;
             }
 
         } catch (err) {
             lastError = err;
             try { await fs.unlink(decodedPath + '.tmp') } catch (e) { }
 
+            // Record failure if not already recorded (Validation failed adds its own)
+            if (err.message !== 'Validation failed') {
+                attemptHistory.push({
+                    attempt: attempt + 1,
+                    url: currentUrl,
+                    method: 'Unknown', // Headers scope is limited, simplifying for safety or need to recalc
+                    error: err.message
+                });
+            }
+
             if (instantDefer) {
                 // Return immediate failure to defer the file
-                throw err;
+                const deferError = new Error(err.message);
+                deferError.history = attemptHistory;
+                throw deferError;
             }
             // Continue to next attempt
         }
     }
 
     // If we're here, all retries failed
+    // If we're here, all retries failed
     log.error(`Failed to download ${asset.id} after 5 attempts: ${lastError ? lastError.message : 'Unknown error'}`);
-    throw lastError || new Error('Download failed after multiple attempts');
+    const finalError = lastError || new Error('Download failed after multiple attempts');
+    finalError.history = attemptHistory;
+    throw finalError;
 }
 
 let activeHttpRequests = 0;
