@@ -41,7 +41,7 @@ classDiagram
 The engine does not simply download files one by one. It uses a **Two-Pass "Deferral" Strategy** to ensure maximum reliability and speed.
 
 ### Phase 1: The Main Pass (Optimistic)
-*   **Concurrency**: 32 parallel downloads (Dynamic throttling based on CPU/Network).
+*   **Concurrency**: Dynamic (8-32 parallel downloads). Real-time throttling based on System CPU usage and Network Health.
 *   **Behavior**: Tries to download every file in the queue.
 *   **Failure Handling**: If a file fails (after internal retries), it is **NOT** thrown effectively immediately. Instead, it is pushed to a `deferredQueue`.
     *   *Why?* A single slow/failing file shouldn't block the other 500 files from finishing.
@@ -178,4 +178,43 @@ If you see these errors in `main.log`:
 *   **"Critical failure: Failed to download X files"**:
     *   All 5 attempts failed (Primary, Mirrors) AND the Final Stand failed.
     *   *Check*: Internet connection, config mirrors.
+
+---
+
+## 7. Security Measures
+
+The Helios Launcher implements a multilayered security model designed to operate safely in a trustless P2P environment.
+
+### A. Data Integrity & Validation
+1.  **Mandatory Hash Verification**:
+    *   Every file downloaded (via HTTP or P2P) is piped through a `HashVerifierStream`.
+    *   The SHA1/SHA256 hash is calculated on-the-fly.
+    *   If the calculated hash does not match the manifest (from `distribution.json`), the file is immediately discarded and the error `Validation failed` is thrown.
+2.  **Atomic Writes**:
+    *   Files are never written directly to their destination. They are streamed to a `.tmp` file first.
+    *   Only *after* the hash is verified is the file renamed to its final extension.
+    *   This prevents corrupted or malicious partial files from existing in the game directories.
+
+### B. P2P Network Security (Hyperswarm)
+1.  **Request ID Randomization**:
+    *   Each P2P request generates a cryptographically random 4-byte ID.
+    *   This prevents ID collision attacks and spoofing.
+2.  **Peer Validation**:
+    *   **Strict Input Sanitization**: Malformed JSON or invalid buffer types from peers are silently dropped.
+    *   **Size Caps (Infinite Stream Protection)**: The engine enforces a strict size limit (`ExpectedSize + 1MB Tolerance`). If a peer sends more data than expected, the stream is cut, and the peer is penalized.
+3.  **DoS Protection**:
+    *   **Queue Limits**: The `serverQueue` is capped at 500 requests to prevent memory exhaustion attacks.
+    *   **Request Maps**: The internal active request map is hard-capped to prevent object injection or memory leaks.
+4.  **Reputation System**:
+    *   **Penalty/Strike System**: Peers sending bad data, timing out excessively, or violating protocol rules receive "Strikes".
+    *   **Blacklisting**: 3 Strikes result in a temporary ban (10 minutes) from the swarm.
+    *   **Circuit Breaker (Panic Mode)**: If the client detects a coordinated attack (global error rate spikes), it triggers a "Panic Mode," disabling P2P entirely for 5 minutes.
+
+### C. Privacy & Isolation
+1.  **P2P Only Mode**:
+    *   When enabled, the `RaceManager` explicitly blocks connections to `mojang.com` and `minecraft.net`.
+    *   This prevents the official Mojang API from receiving your IP (except for authentication, which is handled separately).
+2.  **Local Peer Discovery**:
+    *   Local (LAN) peers are prioritized but treated with the same validation rules as global peers.
+    *   IPs are sanitized (e.g., IPv6 mapping removed) before processing.
 

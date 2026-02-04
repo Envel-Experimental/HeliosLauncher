@@ -8,6 +8,7 @@ const { pipeline } = require('stream/promises');
 const { Readable, Transform } = require('stream');
 const P2PEngine = require('../../../../../network/P2PEngine');
 const RaceManager = require('../../../../../network/RaceManager');
+const { MAX_PARALLEL_DOWNLOADS } = require('../../../../../network/constants');
 const ConfigManager = require('../../configmanager');
 const isDev = require('../../isdev');
 
@@ -15,7 +16,7 @@ const log = LoggerUtil.getLogger('DownloadEngine');
 
 async function downloadQueue(assets, onProgress) {
     P2PEngine.start();
-    const limit = 32;
+    const limit = MAX_PARALLEL_DOWNLOADS;
     const receivedTotals = assets.reduce((acc, a) => ({ ...acc, [a.id]: 0 }), {});
     let receivedGlobal = 0;
 

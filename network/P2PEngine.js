@@ -798,16 +798,43 @@ class P2PEngine extends EventEmitter {
 
     getOptimalConcurrency(baseLimit) {
         const { MIN_PARALLEL_DOWNLOADS, MAX_PARALLEL_DOWNLOADS, PEER_CONCURRENCY_FACTOR } = require('./constants')
+        const ResourceMonitor = require('./ResourceMonitor')
+
+        // ensure initialized
+        ResourceMonitor.start()
+
         const peerCount = this.peers.length
 
-        // Dynamic scaling: baseLimit (HTTP) + (peers * factor)
-        // This spreads the load across the entire swarm
+        // 1. Peer-based Scaling
         let dynamic = baseLimit
         if (peerCount > 0) {
             dynamic = Math.max(MIN_PARALLEL_DOWNLOADS, peerCount * PEER_CONCURRENCY_FACTOR)
         }
 
-        return Math.min(MAX_PARALLEL_DOWNLOADS, dynamic)
+        // 2. CPU-based Throttling (Dynamic Concurrency)
+        const cpuUsage = ResourceMonitor.getCPUUsage() // 0-100
+        let stressLimit = MAX_PARALLEL_DOWNLOADS
+
+        if (cpuUsage > 90) {
+            stressLimit = 8 // CRITICAL STRESS -> Min
+        } else if (cpuUsage > 70) {
+            // Linear scaling from 70% (32) to 90% (8) approx
+            // But simpler: Drop to 16
+            stressLimit = 16
+        } else if (cpuUsage > 50) {
+            stressLimit = 24
+        }
+
+        // 3. Network Load Throttling (Ambition Control)
+        const loadStatus = this.getLoadStatus()
+        if (loadStatus === 'overloaded') {
+            stressLimit = Math.min(stressLimit, 12)
+        }
+
+        // Final Calculation: Min of PeerCap and StressCap, but never below Absolute Min
+        const final = Math.min(dynamic, stressLimit)
+
+        return Math.max(MIN_PARALLEL_DOWNLOADS, Math.min(MAX_PARALLEL_DOWNLOADS, final))
     }
 
     getLoadStatus() {

@@ -19,8 +19,8 @@ module.exports = {
     COST_PER_MB: 1.0,                 // Spending rate: 1MB of transfer costs 1 Credit
     MIN_CREDITS_TO_START: 100,        // Minimum 100MB buffer required to allow a new upload
 
-    // Dynamic Concurrency (Client-side) Constants
-    MIN_PARALLEL_DOWNLOADS: 10,       // Never drop below 10 parallel P2P requests
-    MAX_PARALLEL_DOWNLOADS: 150,      // Never exceed 150 parallel P2P requests across all peers
+    // Dynamic Concurrency (Global) Constants
+    MIN_PARALLEL_DOWNLOADS: 8,        // Never drop below 8 parallel downloads (Global)
+    MAX_PARALLEL_DOWNLOADS: 32,       // Never exceed 32 parallel downloads (Global)
     PEER_CONCURRENCY_FACTOR: 8        // Multiply peer count by 8 to determine parallel slots
 }
