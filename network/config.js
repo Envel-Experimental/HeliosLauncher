@@ -16,16 +16,16 @@ module.exports = {
     MOJANG_MIRRORS: [
         {
             "name": "Fox 1 Mirror",
-            "assets": "https://f-launcher.ru/fox/new/mirror/assets",
+            "assets": "https://f-launcher.ru/fox/new/mirror/assets/objects",
             "libraries": "https://f-launcher.ru/fox/new/mirror/libraries",
             "client": "https://f-launcher.ru/fox/new/mirror/client",
             "version_manifest": "https://f-launcher.ru/fox/new/mirror/metadata/version_manifest_v2.json",
-            "piston_meta": "https://f-launcher.ru/fox/new/mirror/metadata", // Optional: explicit base for piston-meta.mojang.com
+            "piston_meta": "https://f-launcher.ru/fox/new/mirror/metadata",
             "launcher_meta": "https://f-launcher.ru/fox/new/mirror/metadata"
         }
         // {
         //     name: "Example Mirror",
-        //     assets: "https://mirror.example.com/assets", // Replaces resources.download.minecraft.net
+        //     assets: "https://mirror.example.com/assets/objects", // Replaces resources.download.minecraft.net
         //     libraries: "https://mirror.example.com/libraries", // Replaces libraries.minecraft.net
         //     client: "https://mirror.example.com/client", // Replaces piston-data.mojang.com for client jar
         //     version_manifest: "https://mirror.example.com/mc/game/version_manifest_v2.json", // Replaces piston-meta.mojang.com

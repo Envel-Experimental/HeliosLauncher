@@ -277,48 +277,37 @@ class PeerHandler {
         let fileId = null
 
         // Detect JSON Payload (Starts with '{')
-        // VULNERABILITY FIX: Cap JSON length and validate type
         if (payload.length > 0 && payload[0] === 123) { // 123 is '{'
             if (payload.length > 1024) { // 1KB Max for JSON payload
                 this.sendError(reqId, 'JSON Payload Too Large')
                 return
             }
 
-            let data
             try {
                 const str = payload.toString('utf-8')
-                data = JSON.parse(str)
-            } catch (e) {
-                return // Invalid JSON, ignore
-            }
-
-            // STRUCTURAL VALIDATION: Ensure flat object (Schema Validation)
-            // We expect { h: string, p: string, id: string }
-            if (!data || typeof data !== 'object' || Array.isArray(data)) {
-                this.sendError(reqId, 'Invalid JSON Structure')
-                return
-            }
-
-            // Prevent Nested Objects (Depth > 1 prohibited)
-            for (const key in data) {
-                if (typeof data[key] === 'object' && data[key] !== null) {
-                    this.sendError(reqId, 'Nested Objects Not Allowed')
-                    return
-                }
-            }
-
-            try {
                 const data = JSON.parse(str)
-                // STRUCTURAL VALIDATION: Ensure flat object to prevent processing overhead logic
-                if (data && typeof data === 'object' && !Array.isArray(data)) {
-                    hash = String(data.h || '').trim()
-                    relPath = (data.p && typeof data.p === 'string') ? data.p.trim() : null
-                    fileId = (data.id && typeof data.id === 'string') ? data.id.trim() : null
-                } else {
-                    throw new Error('Invalid JSON structure')
+
+                // STRUCTURAL VALIDATION: Ensure flat object (Schema Validation)
+                // We expect { h: string, p: string, id: string }
+                if (data && typeof data === 'object' && !Array.isArray(data) && data.h) {
+                    // Prevent Nested Objects (Depth > 1 prohibited)
+                    let isNested = false
+                    for (const key in data) {
+                        if (typeof data[key] === 'object' && data[key] !== null) {
+                            isNested = true
+                            break
+                        }
+                    }
+
+                    if (!isNested) {
+                        hash = String(data.h || '').trim()
+                        relPath = (data.p && typeof data.p === 'string') ? data.p.trim() : null
+                        fileId = (data.id && typeof data.id === 'string') ? data.id.trim() : null
+                    }
                 }
             } catch (e) {
-                if (isDev) console.warn('[P2P Security] Malformed JSON from peer')
+                // If it's not valid JSON, treat as raw hash (the '7b' fix)
+                hash = payload.toString('utf-8').trim()
             }
         }
 
@@ -782,7 +771,7 @@ class PeerHandler {
             // mods - mods (code, heavy)
             // common - shared files
             // objects - hashed assets
-            const whitelist = ['assets', 'libraries', 'versions', 'common', 'icons', 'objects', 'mods']
+            const whitelist = ['assets', 'libraries', 'versions', 'common', 'icons', 'objects', 'mods', 'minecraft']
 
             return whitelist.includes(firstPart)
         } catch (e) {

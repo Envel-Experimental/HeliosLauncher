@@ -14,7 +14,9 @@ const ConfigManager = require('../../configmanager');
 class MojangIndexProcessor extends IndexProcessor {
     static LAUNCHER_JSON_ENDPOINT = 'https://launchermeta.mojang.com/mc/launcher.json';
     static VERSION_MANIFEST_ENDPOINT = 'https://piston-meta.mojang.com/mc/game/version_manifest_v2.json';
+    static PISTON_META_BASE = 'https://piston-meta.mojang.com';
     static ASSET_RESOURCE_ENDPOINT = 'https://resources.download.minecraft.net';
+    static LAUNCHER_META_BASE = 'https://launchermeta.mojang.com';
     static logger = LoggerUtil.getLogger('MojangIndexProcessor');
 
     constructor(commonDir, version) {
@@ -118,10 +120,12 @@ class MojangIndexProcessor extends IndexProcessor {
             for (const mirror of MOJANG_MIRRORS) {
                 if (url.includes(MojangIndexProcessor.ASSET_RESOURCE_ENDPOINT) && mirror.assets) {
                     candidates.push(url.replace(MojangIndexProcessor.ASSET_RESOURCE_ENDPOINT, mirror.assets));
+                } else if (url.includes(MojangIndexProcessor.PISTON_META_BASE) && mirror.piston_meta) {
+                    candidates.push(url.replace(MojangIndexProcessor.PISTON_META_BASE, mirror.piston_meta));
+                } else if (url.includes(MojangIndexProcessor.LAUNCHER_META_BASE) && mirror.launcher_meta) {
+                    candidates.push(url.replace(MojangIndexProcessor.LAUNCHER_META_BASE, mirror.launcher_meta));
                 } else if (url.includes(MojangIndexProcessor.VERSION_MANIFEST_ENDPOINT) && mirror.version_manifest) {
                     candidates.push(mirror.version_manifest);
-                } else if (url.includes(MojangIndexProcessor.LAUNCHER_JSON_ENDPOINT) && mirror.launcher_meta) {
-                    candidates.push(mirror.launcher_meta);
                 }
             }
         }
@@ -218,7 +222,8 @@ class MojangIndexProcessor extends IndexProcessor {
         const tasks = Object.entries(assetIndex.objects).map(([id, meta]) => {
             return limit(async () => {
                 // Skip unnecessary language files (Only keep EN and RU)
-                if (id.startsWith('minecraft/lang/')) {
+                const isLangFile = id.startsWith('minecraft/lang/') || id.startsWith('realms/lang/') || id.includes('/lang/');
+                if (isLangFile) {
                     const isEssential = id.endsWith('en_us.json') ||
                         id.endsWith('en_gb.json') ||
                         id.endsWith('ru_ru.json') ||
