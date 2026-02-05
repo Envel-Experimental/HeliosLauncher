@@ -170,7 +170,12 @@ exports.load = async function () {
     }
 
     try {
-        const fileContent = await fs.readFile(configPath, 'UTF-8')
+        const fileContent = await retry(
+            async () => await fs.readFile(configPath, 'UTF-8'),
+            3,
+            500,
+            err => err.code === 'EBUSY' || err.code === 'EPERM' || err.code === 'EACCES'
+        )
         config = JSON.parse(fileContent)
         config = validateKeySet(DEFAULT_CONFIG, config)
         if (!pathutil.isPathValid(config.settings.launcher.dataDirectory)) {
@@ -180,11 +185,16 @@ exports.load = async function () {
         await exports.save()
     } catch (err) {
         logger.error(err)
-        logger.info('Configuration file contains malformed JSON or is corrupt.')
-        logger.info('Generating a new configuration file.')
-        await fs.ensureDir(path.join(configPath, '..'))
-        config = DEFAULT_CONFIG
-        await exports.save()
+        if (err instanceof SyntaxError) {
+            logger.info('Configuration file contains malformed JSON or is corrupt.')
+            logger.info('Generating a new configuration file.')
+            await fs.ensureDir(path.join(configPath, '..'))
+            config = DEFAULT_CONFIG
+            await exports.save()
+        } else {
+            logger.fatal('Unable to read configuration file due to IO error. Aborting to prevent data loss.')
+            throw err
+        }
     }
 
     logger.info('Successfully Loaded')

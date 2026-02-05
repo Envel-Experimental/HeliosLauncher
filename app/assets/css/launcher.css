@@ -3127,6 +3127,8 @@ input:checked+.toggleSwitchSlider:before {
     width: auto;
     position: relative;
     box-sizing: border-box;
+    -webkit-user-drag: none;
+    user-select: none;
 }
 
 /* Logo container styles. */

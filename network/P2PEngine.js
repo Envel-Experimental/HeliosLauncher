@@ -1,6 +1,7 @@
 const Hyperswarm = require('hyperswarm')
 const HyperDHT = require('hyperdht')
 const b4a = require('b4a')
+const os = require('os')
 const crypto = require('crypto')
 const { EventEmitter } = require('events')
 const { Readable } = require('stream')
@@ -135,6 +136,39 @@ class P2PEngine extends EventEmitter {
                 this.peerStrikes.delete(ip)
             }
         }, 300000) // Every 5 minutes
+
+        // Dynamic Bandwidth Management
+        this.currentDownloadSpeed = 0
+        this.downloadBytesInWindow = 0
+        this.maxObservedDownloadSpeed = 0
+        this.highBandwidthMode = false
+        this.lastLimitUpdate = 0
+
+        // Speed & Resource Monitor (Every 2 seconds)
+        setInterval(() => {
+            this.currentDownloadSpeed = this.downloadBytesInWindow / 2 // B/s
+            this.downloadBytesInWindow = 0 // Reset window
+
+            if (this.currentDownloadSpeed > this.maxObservedDownloadSpeed) {
+                this.maxObservedDownloadSpeed = this.currentDownloadSpeed
+            }
+
+            // High Bandwidth Detection (> 10 MB/s)
+            if (this.currentDownloadSpeed > 10 * 1024 * 1024) {
+                if (!this.highBandwidthMode) {
+                    this.highBandwidthMode = true
+                    if (isDev) console.log('[P2PEngine] High Bandwidth Detected (>10MB/s). Unlocking higher upload limits.')
+                }
+            }
+
+            // Periodically Re-evaluate Upload Limits (Every 30s)
+            const now = Date.now()
+            if (now - this.lastLimitUpdate > 30000) {
+                this.updateDynamicLimits()
+                this.lastLimitUpdate = now
+            }
+
+        }, 2000)
     }
 
     setRaceManager(rm) {
@@ -582,11 +616,11 @@ class P2PEngine extends EventEmitter {
                 if (isDev) console.error(`[P2P Security] Peer ${req.peer.getIP()} sent too many bytes! Received: ${req.bytesReceived}, Expected: ${req.expectedSize}`)
                 const err = new Error('File size exceeded security limit')
                 err.bytesReceived = req.bytesReceived
-                req.reject(err)
-                this.requests.delete(reqId)
-                this.penalizePeer(req.peer)
                 return
             }
+
+            // Track for Speed Monitor
+            this.downloadBytesInWindow += data.length
 
             req.stream.push(data)
         }
@@ -930,6 +964,45 @@ class P2PEngine extends EventEmitter {
         if (idx > -1) this.peers.splice(idx, 1)
 
         this.emit('peer_removed', peer)
+    }
+
+
+    updateDynamicLimits() {
+        if (!ConfigManager.isLoaded()) return
+        if (!ConfigManager.getP2PUploadEnabled()) return
+
+        // 1. Resource Check
+        // Only MID and HIGH profiles (sufficient RAM/CPU) are eligible for boost
+        const profile = this.profile
+        const canBoost = (profile.name === 'MID' || profile.name === 'HIGH')
+
+        // 2. Bandwidth Check
+        // Must have proven high bandwidth capacity
+        const hasBandwidth = this.highBandwidthMode
+
+        // 3. System Load Check
+        // Ensure system isn't currently overwhelmed
+        const load = os.loadavg() // [1min, 5min, 15min]
+        const cpus = os.cpus().length
+        // If 1-min load avg > CPU count * 0.8, we are under stress
+        const isStressed = load[0] > (cpus * 0.8)
+
+        let newLimitMbps = 5 // Default Safe Limit
+
+        if (canBoost && hasBandwidth && !isStressed) {
+            newLimitMbps = 15 // Boost Mode
+        } else {
+            // If downgrading, log reason for debugging
+            if (canBoost && hasBandwidth && isStressed) {
+                if (isDev) console.warn(`[P2PEngine] System stressed (Load: ${load[0].toFixed(2)}). Downgrading upload limit.`)
+            }
+        }
+
+        // Apply Limit
+        const RateLimiter = require('../app/assets/js/core/util/RateLimiter')
+        RateLimiter.update(newLimitMbps * 125000, true)
+
+        // if (isDev) console.debug(`[P2PEngine] Dynamic Upload Limit set to ${newLimitMbps} Mbps`)
     }
 }
 
