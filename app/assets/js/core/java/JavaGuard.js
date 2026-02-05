@@ -12,6 +12,11 @@ const log = LoggerUtil.getLogger('JavaGuard');
 const execAsync = util.promisify(exec);
 const execFileAsync = util.promisify(execFile);
 
+const { MOJANG_MIRRORS } = require('../../../../../network/config');
+
+let javaMirrorManifest = null;
+let javaMirrorManifestMap = new Map(); // url -> manifest
+
 // Winreg removed in favor of native reg.exe calls to avoid DEP0190
 
 async function getHotSpotSettings(execPath) {
@@ -142,41 +147,98 @@ async function validateSelectedJvm(path, semverRange) {
 
     const resolvedSettings = await resolveJvmSettings([path]);
 
-    // For manual selection, we skip the strict semver range check.
-    // We just want to ensure it's a valid Java installation that we can parse.
-    // Passing '*' as range effectively allows any version.
-    const jvmDetails = filterApplicableJavaPaths(resolvedSettings, '*');
+    // We utilize the provided semver range to ensure the selected Java is valid.
+    // Use '*' if no range is provided (fallback).
+    const jvmDetails = filterApplicableJavaPaths(resolvedSettings, semverRange || '*');
 
     rankApplicableJvms(jvmDetails);
     return jvmDetails.length > 0 ? jvmDetails[0] : null;
 }
 
-async function latestOpenJDK(major, dataDir, distribution) {
-    // If no distribution specified, prefer GraalVM for newer Java (17+), Adoptium for 8
-    if (distribution == null) {
-        if (major >= 17) {
-            const graal = await latestGraalVM(major, dataDir);
-            if (graal) return graal;
-            log.warn(`GraalVM not found for Java ${major}, falling back to Adoptium.`);
-        }
-
-        return latestAdoptium(major, dataDir);
+async function loadJavaMirrorManifest(mirrorUrl) {
+    if (javaMirrorManifestMap.has(mirrorUrl)) {
+        return javaMirrorManifestMap.get(mirrorUrl);
     }
-    else {
-        switch (distribution) {
-            case 'graalvm':
-                return latestGraalVM(major, dataDir);
-            case JdkDistribution.TEMURIN:
-                return latestAdoptium(major, dataDir);
-            case JdkDistribution.CORRETTO:
-                return latestCorretto(major, dataDir);
-            default: {
-                const eMsg = `Unknown distribution '${distribution}'`;
-                log.error(eMsg);
-                throw new Error(eMsg);
+    try {
+        const res = await fetch(mirrorUrl);
+        if (res.ok) {
+            const manifest = await res.json();
+            javaMirrorManifestMap.set(mirrorUrl, manifest);
+            return manifest;
+        }
+    } catch (e) {
+        log.warn(`Failed to fetch Java mirror manifest from ${mirrorUrl}`, e);
+    }
+    return null;
+}
+
+async function latestOpenJDK(major, dataDir, distribution) {
+    let result = null;
+
+    // 1. Try Official Sources
+    try {
+        if (distribution == null) {
+            if (major >= 17) {
+                const graal = await latestGraalVM(major, dataDir);
+                if (graal) result = graal;
+                else {
+                    log.warn(`GraalVM not found for Java ${major}, falling back to Adoptium.`);
+                    result = await latestAdoptium(major, dataDir);
+                }
+            } else {
+                result = await latestAdoptium(major, dataDir);
+            }
+        } else {
+            switch (distribution) {
+                case 'graalvm':
+                    result = await latestGraalVM(major, dataDir);
+                    break;
+                case JdkDistribution.TEMURIN:
+                    result = await latestAdoptium(major, dataDir);
+                    break;
+                case JdkDistribution.CORRETTO:
+                    result = await latestCorretto(major, dataDir);
+                    break;
+                default:
+                    const eMsg = `Unknown distribution '${distribution}'`;
+                    log.error(eMsg);
+                    throw new Error(eMsg);
+            }
+        }
+    } catch (err) {
+        log.warn(`Failed to resolve Java ${major} from official sources.`, err);
+    }
+
+    if (result) return result;
+
+    // 2. Fallback to Mirror
+    log.info('Attempting to resolve Java from configured mirrors...');
+    if (MOJANG_MIRRORS && MOJANG_MIRRORS.length > 0) {
+        for (const mirror of MOJANG_MIRRORS) {
+            if (mirror.java_manifest) {
+                const manifest = await loadJavaMirrorManifest(mirror.java_manifest);
+                if (manifest) {
+                    const os = process.platform === 'win32' ? 'windows' : (process.platform === 'darwin' ? 'darwin' : 'linux');
+                    const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+
+                    if (manifest[os] && manifest[os][arch] && manifest[os][arch][major]) {
+                        const entry = manifest[os][arch][major];
+                        log.info(`Resolved Java ${major} from Mirror: ${entry.url}`);
+                        return {
+                            url: entry.url,
+                            size: 0,
+                            id: `java-runtime-${major}-${os}-${arch}.zip`,
+                            hash: entry.sha256,
+                            algo: HashAlgo.SHA256,
+                            path: path.join(getLauncherRuntimeDir(dataDir), `java-runtime-${major}-${os}-${arch}.zip`)
+                        };
+                    }
+                }
             }
         }
     }
+
+    return null;
 }
 
 async function latestGraalVM(major, dataDir) {

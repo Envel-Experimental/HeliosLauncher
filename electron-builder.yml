@@ -18,6 +18,13 @@ files:
 extraResources:
   - 'libraries'
 
+publish:
+  - provider: github
+    owner: Envel-Experimental
+    repo: HeliosLauncher
+  - provider: generic
+    url: 'https://f-launcher.ru/fox/new/updates'
+
 # Windows Configuration
 win: 
   target: 

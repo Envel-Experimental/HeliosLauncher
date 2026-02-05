@@ -131,9 +131,9 @@ class HeliosServer {
 
     defaultJavaVersion() {
         if (mcVersionAtLeast('1.16', this.rawServer.minecraftVersion)) {
-            // For 1.16 up to 1.21.9, force Java 21.
-            // Explicitly exclude Java 25 (future proofing as per user request).
-            return ['>=21.0.0 <25.0.0', 21];
+            // For 1.16+, we prefer Java 21.
+            // Strictly enforce 21.x to avoid unstable newer versions (22, 23, 24, 25).
+            return ['>=21.0.0 <22.0.0', 21];
         }
         else {
             return ['8.x', 8];
