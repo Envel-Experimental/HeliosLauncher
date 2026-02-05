@@ -57,6 +57,24 @@ class UsageTracker {
         }
     }
 
+    reserve(key, amountMB) {
+        const current = this.getCredits(key)
+        if (current >= amountMB) {
+            const entry = this.data.get(key)
+            entry.credits -= amountMB
+            return true
+        }
+        return false
+    }
+
+    refund(key, amountMB) {
+        const { MAX_CREDITS_PER_IP } = require('./constants')
+        const entry = this.data.get(key)
+        if (entry) {
+            entry.credits = Math.min(MAX_CREDITS_PER_IP, entry.credits + amountMB)
+        }
+    }
+
     cleanup() {
         const now = Date.now()
         // Remove entries older than 2 hours
@@ -314,6 +332,14 @@ class P2PEngine extends EventEmitter {
                 server: shouldAnnounce,
                 client: true
             })
+
+            // Initialize Global Rate Limiter
+            if (ConfigManager.getP2PUploadEnabled()) {
+                const limitMbps = ConfigManager.getP2PUploadLimit()
+                // RateLimiter is a singleton, so we set it once here
+                const RateLimiter = require('../app/assets/js/core/util/RateLimiter')
+                RateLimiter.update(limitMbps * 125000, true)
+            }
 
             await discovery.flushed()
             console.log(`[P2PEngine] P2P Service Started. Debug Mode: ${isDev}`)

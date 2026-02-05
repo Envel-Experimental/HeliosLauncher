@@ -55,6 +55,16 @@ class PeerHandler {
             this.engine.removePeer(this)
         })
 
+        // Initialize Real Paths for Security Checks
+        try {
+            this.dataDirReal = fs.realpathSync(ConfigManager.getDataDirectory().trim())
+            this.commonDirReal = fs.realpathSync(ConfigManager.getCommonDirectory().trim())
+        } catch (e) {
+            console.error('[PeerHandler] Failed to resolve real paths for security roots:', e)
+            this.dataDirReal = null
+            this.commonDirReal = null
+        }
+
         // Send Hello with local weight
         this.sendHello()
 
@@ -86,6 +96,13 @@ class PeerHandler {
             while (true) {
                 // We need at least 9 bytes for the header
                 if (this.chunksLen < 9) break
+
+                // FIX: DoS Vulnerability (Fragmentation)
+                // If the first chunk is too small for the header, consolidate chunks.
+                // This ensures we don't repeatedly traverse a list of small buffers (O(N^2))
+                if (this.chunks[0].length < 9) {
+                    this.chunks = [b4a.concat(this.chunks)]
+                }
 
                 // Peek at the header without consuming info if we don't have the full body yet
                 // We can't easily "peek" across chunks without stitching some if the header is split.
@@ -376,10 +393,6 @@ class PeerHandler {
         if (!remoteIP) remoteIP = 'unknown'
 
         const isLocalUpload = ConfigManager.getLocalOptimization() && this.engine.isLocalIP(remoteIP)
-        const limitMbps = isLocalUpload ? 10000 : ConfigManager.getP2PUploadLimit() // 10 Gbps for local
-        // Convert Mbps to B/s
-        const limitBytes = limitMbps * 125000
-        RateLimiter.update(limitBytes, true)
 
         try {
             const commonDir = ConfigManager.getCommonDirectory().trim()
@@ -427,8 +440,15 @@ class PeerHandler {
 
                 try {
                     if (fs.existsSync(p)) {
-                        foundPath = p
-                        break
+                        // VULNERABILITY FIX: Symlink Path Traversal
+                        // Resolve the *actual* path on disk to ensure it's not a symlink to outside
+                        const realP = fs.realpathSync(p)
+                        if (this._isRealPathSecure(realP)) {
+                            foundPath = realP
+                            break
+                        } else {
+                            if (isDev) console.warn(`[P2P Security] Symlink redirection detected! ${p} -> ${realP}`)
+                        }
                     }
                 } catch (e) {
                     if (isDev) console.error(`[P2P Debug] Error checking path ${p}:`, e.message)
@@ -470,15 +490,39 @@ class PeerHandler {
             */
 
             if (foundPath) {
+                // Get File Size for Credits
+                const stat = fs.statSync(foundPath)
+                const sizeMB = stat.size / 1024 / 1024
+                const usageKey = this.getID()
+
+                // VULNERABILITY FIX 2: Race to Drain (Credit Reservation)
+                // Reserve credits *before* starting.
+                if (!isLocalUpload) {
+                    if (!this.engine.usageTracker.reserve(usageKey, sizeMB)) {
+                        this.sendError(reqId, 'Quota Exceeded (Reservation Failed)')
+                        return
+                    }
+                }
+
                 this.engine.activeUploads++
                 this.engine.incrementUploadCountForIP(remoteIP)
 
                 const stream = fs.createReadStream(foundPath)
+                if (isDev) {
+                    // console.debug(`[P2P] Serving ${foundPath} to ${remoteIP}`)
+                }
 
-                // Only throttle Global traffic
-                let throttled = stream
-                if (!this.engine.isLocalIP(remoteIP)) {
-                    throttled = stream.pipe(RateLimiter.throttle())
+                // VULNERABILITY FIX 3: Global Rate Limiter Bug
+                // Do NOT call RateLimiter.update() here, as it sets it for EVERYONE.
+                // Instead, we use the singleton instance and pipe through it ONLY if needed.
+                const RateLimiter = require('../app/assets/js/core/util/RateLimiter')
+
+                let source = stream
+
+                if (!isLocalUpload) {
+                    // WAN: Pipe through Global Rate Limiter
+                    // Limiter is a Transform stream
+                    source = stream.pipe(RateLimiter.throttle())
                 }
 
                 // Performance Monitoring
@@ -538,7 +582,7 @@ class PeerHandler {
 
                     // Robust Stream Destruction
                     if (!stream.destroyed) stream.destroy()
-                    if (throttled && throttled !== stream && !throttled.destroyed) throttled.destroy()
+                    if (source && source !== stream && !source.destroyed) source.destroy()
 
                     // Report Stats
                     const duration = (Date.now() - startTime) / 1000
@@ -555,15 +599,18 @@ class PeerHandler {
                     this.engine.decrementUploadCountForIP(remoteIP)
                     this.engine.onUploadFinished()
 
-                    // Consume credits based on amount transferred (MB)
+                    // Refund Logic
                     if (!isLocalUpload) {
-                        const transferredMB = totalBytesSent / (1024 * 1024)
-                        const usageKey = this.getID()
-                        this.engine.usageTracker.consume(usageKey, transferredMB)
+                        const sentMB = totalBytesSent / (1024 * 1024)
+                        const unused = Math.max(0, sizeMB - sentMB)
+
+                        if (unused > 0) {
+                            this.engine.usageTracker.refund(usageKey, unused)
+                        }
                     }
                 }
 
-                throttled.on('data', (chunk) => {
+                source.on('data', (chunk) => {
                     lastActivity = Date.now()
                     totalBytesSent += chunk.length
 
@@ -776,6 +823,33 @@ class PeerHandler {
             return whitelist.includes(firstPart)
         } catch (e) {
             console.error('[P2P Security] Path check failed:', e)
+            return false
+        }
+    }
+
+    _isRealPathSecure(realPath) {
+        try {
+            if (!this.dataDirReal || !this.commonDirReal) {
+                // Re-attempt resolution if they failed in constructor (unlikely but safe)
+                try {
+                    this.dataDirReal = fs.realpathSync(ConfigManager.getDataDirectory().trim())
+                    this.commonDirReal = fs.realpathSync(ConfigManager.getCommonDirectory().trim())
+                } catch (e) {
+                    return false // Cannot verify security
+                }
+            }
+
+            // Check Data Dir (Real)
+            const relData = path.relative(this.dataDirReal, realPath)
+            const isInData = !relData.startsWith('..') && !path.isAbsolute(relData)
+
+            // Check Common Dir (Real)
+            const relCommon = path.relative(this.commonDirReal, realPath)
+            const isInCommon = !relCommon.startsWith('..') && !path.isAbsolute(relCommon)
+
+            return isInData || isInCommon
+        } catch (e) {
+            console.error('[P2P Security] RealPath check failed:', e)
             return false
         }
     }
