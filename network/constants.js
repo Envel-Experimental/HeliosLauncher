@@ -15,7 +15,7 @@ module.exports = {
 
     // Fair Usage (Soft Ban) Constants
     MAX_CREDITS_PER_IP: 5000,         // Token bucket size: Max 5GB burst (Units: MB)
-    CREDIT_REGEN_RATE: 2.0,           // Regeneration speed: 2MB per second recovery (~120MB/min)
+    CREDIT_REGEN_RATE: 0.5,           // Regeneration speed: 0.5MB per second recovery (~120MB/min)
     COST_PER_MB: 1.0,                 // Spending rate: 1MB of transfer costs 1 Credit
     MIN_CREDITS_TO_START: 100,        // Minimum 100MB buffer required to allow a new upload
 
