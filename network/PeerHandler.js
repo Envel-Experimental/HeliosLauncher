@@ -644,7 +644,10 @@ class PeerHandler {
 
                 stream.on('error', (err) => {
                     errorOccurred = true
-                    if (isDev) console.error(`[P2P Debug] Read Error on ${foundPath}:`, err.message)
+                    // Ignore common file access errors (EACCES/EPERM) to prevent log spam
+                    if (err.code !== 'EACCES' && err.code !== 'EPERM') {
+                        if (isDev) console.error(`[P2P Debug] Read Error on ${foundPath}:`, err.message)
+                    }
                     this.sendError(reqId, 'Read Error')
                     cleanup()
                 })

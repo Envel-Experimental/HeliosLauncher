@@ -25,6 +25,7 @@ async function preloader() {
             Sentry.init({
                 dsn: 'https://f02442d2a0733ac2c810b8d8d7f4a21e@o4508545424359424.ingest.de.sentry.io/4508545432027216',
                 release: 'FLauncher@' + app.getVersion(),
+                ignoreErrors: ['EACCES', 'EPERM']
             })
 
             const systemInfo = {
