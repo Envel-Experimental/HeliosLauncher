@@ -438,21 +438,21 @@ class P2PEngine extends EventEmitter {
         return Math.max(6, Math.min(defaultLimit, this.peers.length * 6))
     }
 
-    requestFile(hash, expectedSize = 0, relPath = null, fileId = null) {
-        // if (isDev) console.debug(`[P2P Debug] requestFile called for ${hash.substring(0, 8)} (${fileId || 'n/a'})`)
+    requestFile(hash, expectedSize = 0, relPath = null, fileId = null, startOffset = 0) {
+        // if (isDev) console.debug(`[P2P Debug] requestFile called for ${hash.substring(0, 8)} (${fileId || 'n/a'}) Offset: ${startOffset}`)
         const stream = new Readable({
             read() { }
         })
 
         // Use a persistent task to handle the request (allows waiting for peers)
-        this._handleRequestAsync(stream, hash, expectedSize, relPath, fileId).catch(err => {
+        this._handleRequestAsync(stream, hash, expectedSize, relPath, fileId, startOffset).catch(err => {
             if (!stream.destroyed) stream.emit('error', err)
         })
 
         return stream
     }
 
-    async _handleRequestAsync(stream, hash, expectedSize, relPath, fileId) {
+    async _handleRequestAsync(stream, hash, expectedSize, relPath, fileId, startOffset) {
         const attemptedPeers = new Set()
 
         // Dynamic retry limit: Try at least 10 times or all available peers
@@ -523,7 +523,7 @@ class P2PEngine extends EventEmitter {
             attemptedPeers.add(bestPeer)
 
             try {
-                await this._executeSingleRequest(bestPeer, stream, hash, expectedSize, relPath, fileId)
+                await this._executeSingleRequest(bestPeer, stream, hash, expectedSize, relPath, fileId, startOffset)
                 return // Success
             } catch (err) {
                 // If some data was sent, we HAVE to fail the stream because DownloadEngine needs to reset the file.
@@ -549,7 +549,7 @@ class P2PEngine extends EventEmitter {
         stream.emit('error', new Error('Download failed after exhausted peer list'))
     }
 
-    _executeSingleRequest(peer, stream, hash, expectedSize, relPath, fileId) {
+    _executeSingleRequest(peer, stream, hash, expectedSize, relPath, fileId, startOffset = 0) {
         return new Promise((resolve, reject) => {
             // VULNERABILITY FIX: Hard Cap mechanisms for Requests Map
             // Prevent Memory Leak / Explosion via API abuse
@@ -572,7 +572,7 @@ class P2PEngine extends EventEmitter {
                 peer,
                 expectedSize,
                 timestamp: Date.now(),
-                bytesReceived: 0,
+                bytesReceived: startOffset, // Initialize with offset so size checks are correct
                 resolve,
                 reject
             })
@@ -592,7 +592,7 @@ class P2PEngine extends EventEmitter {
                 }
             } else {
                 try {
-                    peer.sendRequest(reqId, hash, relPath, fileId)
+                    peer.sendRequest(reqId, hash, relPath, fileId, startOffset)
                 } catch (e) {
                     this.requests.delete(reqId)
                     reject(e)
@@ -846,7 +846,7 @@ class P2PEngine extends EventEmitter {
         return 0
     }
 
-    queueRequest(peer, reqId, hash, relPath, fileId) {
+    queueRequest(peer, reqId, hash, relPath, fileId, startOffset = 0) {
         if (!this.serverQueue) this.serverQueue = []
 
         // Max Queue Size Protection (DoS)
@@ -855,7 +855,7 @@ class P2PEngine extends EventEmitter {
             return
         }
 
-        this.serverQueue.push({ peer, reqId, hash, relPath, fileId, timestamp: Date.now() })
+        this.serverQueue.push({ peer, reqId, hash, relPath, fileId, startOffset, timestamp: Date.now() })
         this.processServerQueue()
     }
 
@@ -874,7 +874,7 @@ class P2PEngine extends EventEmitter {
             if (Date.now() - req.timestamp > 30000) continue
 
             // Execute
-            req.peer.executeRequest(req.reqId, req.hash, req.relPath, req.fileId)
+            req.peer.executeRequest(req.reqId, req.hash, req.relPath, req.fileId, req.startOffset)
         }
     }
 

@@ -23,6 +23,7 @@ class PeerHandler {
         this.chunksLen = 0
         this.processing = false
         this.batchSupport = false
+        this.resumptionSupport = true // Always supported in this version
         this.remoteWeight = 0
         this.rtt = 0
         this.wasBusy = false
@@ -221,6 +222,7 @@ class PeerHandler {
             if (payload.length >= 2) {
                 const caps = payload.readUInt8(1)
                 this.batchSupport = (caps & 0x01) === 0x01
+                // this.resumptionSupport = true (Default)
             }
             // console.log(`[PeerHandler] Peer weight set to ${this.remoteWeight}`)
 
@@ -292,6 +294,7 @@ class PeerHandler {
         let hash = payload.toString('utf-8')
         let relPath = null
         let fileId = null
+        let startOffset = 0
 
         // Detect JSON Payload (Starts with '{')
         if (payload.length > 0 && payload[0] === 123) { // 123 is '{'
@@ -320,6 +323,9 @@ class PeerHandler {
                         hash = String(data.h || '').trim()
                         relPath = (data.p && typeof data.p === 'string') ? data.p.trim() : null
                         fileId = (data.id && typeof data.id === 'string') ? data.id.trim() : null
+                        if (data.s && typeof data.s === 'number' && Number.isInteger(data.s) && data.s > 0) {
+                            startOffset = data.s
+                        }
                     }
                 }
             } catch (e) {
@@ -378,16 +384,16 @@ class PeerHandler {
             }
 
             // Queue request via Engine
-            this.engine.queueRequest(this, reqId, hash, relPath, fileId)
+            this.engine.queueRequest(this, reqId, hash, relPath, fileId, startOffset)
             return // Stop execution here, wait for queue processing
         }
 
         // LAN peers bypass queue/limits largely, but we could still queue them?
         // For now, let LAN bypass queue for max speed.
-        this.executeRequest(reqId, hash, relPath, fileId)
+        this.executeRequest(reqId, hash, relPath, fileId, startOffset)
     }
 
-    async executeRequest(reqId, hash, relPath, fileId) {
+    async executeRequest(reqId, hash, relPath, fileId, startOffset = 0) {
         let remoteIP = this.socket.remoteAddress || this.socket.remoteHost || (this.socket.rawStream && this.socket.rawStream.remoteAddress)
         if (!remoteIP && this.info && this.info.peer) remoteIP = this.info.peer.host
         if (!remoteIP) remoteIP = 'unknown'
@@ -475,7 +481,7 @@ class PeerHandler {
                 this.engine.activeUploads++
                 this.engine.incrementUploadCountForIP(remoteIP)
 
-                const stream = fs.createReadStream(foundPath)
+                const stream = fs.createReadStream(foundPath, { start: startOffset })
                 if (isDev) {
                     // console.debug(`[P2P] Serving ${foundPath} to ${remoteIP}`)
                 }
@@ -604,7 +610,10 @@ class PeerHandler {
                         const unused = Math.max(0, sizeMB - sentMB)
 
                         if (unused > 0) {
-                            this.engine.usageTracker.refund(usageKey, unused)
+                            // Only refund if we started from 0 (otherwise calculating 'unused' is complex and minor)
+                            if (startOffset === 0) {
+                                this.engine.usageTracker.refund(usageKey, unused)
+                            }
                         }
                     }
                 }

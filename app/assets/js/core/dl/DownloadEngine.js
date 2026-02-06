@@ -14,7 +14,57 @@ const isDev = require('../../isdev');
 
 const log = LoggerUtil.getLogger('DownloadEngine');
 
+// Cleaning Task State
+let lastCleanup = 0;
+const CLEANUP_INTERVAL = 1000 * 60 * 60; // Run at most once per hour
+
+async function cleanupStaleTempFiles() {
+    const now = Date.now();
+    if (now - lastCleanup < CLEANUP_INTERVAL) return;
+    lastCleanup = now;
+
+    log.info('[Cleanup] Starting stale .tmp file cleanup...');
+    const MAX_AGE = 24 * 60 * 60 * 1000; // 24 Hours
+
+    const scanAndClean = async (dir) => {
+        try {
+            const entries = await fs.readdir(dir, { withFileTypes: true });
+            for (const entry of entries) {
+                const fullPath = path.join(dir, entry.name);
+                if (entry.isDirectory()) {
+                    // Limit recursion to relevant folders to avoid scanning the entire disk
+                    // We only store downloads in 'assets', 'libraries', 'natives', 'objects' or sub-dirs like '00'-'ff'
+                    if (['assets', 'libraries', 'natives', 'objects', 'common', 'minecraft'].includes(entry.name) || /^[0-9a-f]{2}$/.test(entry.name)) {
+                        await scanAndClean(fullPath);
+                    }
+                } else if (entry.isFile() && entry.name.endsWith('.tmp')) {
+                    try {
+                        const stats = await fs.stat(fullPath);
+                        if (now - stats.mtimeMs > MAX_AGE) {
+                            await fs.unlink(fullPath);
+                            log.debug(`[Cleanup] Deleted stale file: ${fullPath}`);
+                        }
+                    } catch (e) { }
+                }
+            }
+        } catch (e) { }
+    };
+
+    try {
+        const dataDir = ConfigManager.getDataDirectory().trim();
+        const commonDir = ConfigManager.getCommonDirectory().trim();
+
+        await scanAndClean(dataDir);
+        if (commonDir !== dataDir) await scanAndClean(commonDir);
+    } catch (e) {
+        log.warn('[Cleanup] Cleanup failed:', e);
+    }
+}
+
 async function downloadQueue(assets, onProgress) {
+    // Run cleanup in background (don't await)
+    cleanupStaleTempFiles().catch(e => log.error('Cleanup Error:', e));
+
     P2PEngine.start();
     const limit = MAX_PARALLEL_DOWNLOADS;
     const receivedTotals = assets.reduce((acc, a) => ({ ...acc, [a.id]: 0 }), {});
@@ -139,6 +189,29 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
     const candidates = [asset.url, ...(asset.fallbackUrls || [])].filter(Boolean);
 
     for (let attempt = 0; attempt < 5; attempt++) {
+        // RESUMPTION LOGIC
+        let startOffset = 0
+        const tempPath = decodedPath + '.tmp';
+
+        try {
+            // Check if we have a partial file to resume
+            if (fsSync.existsSync(tempPath)) {
+                // Only resume if it's NOT the first attempt (fresh start) OR if we are explicitly retrying
+                // Actually, if temp exists, we should probably try to resume unless it's corrupt.
+                const stat = fsSync.statSync(tempPath)
+                if (stat.size > 0 && stat.size < asset.size) {
+                    startOffset = stat.size
+                    if (isDev) log.debug(`[DownloadEngine] Resuming ${asset.id} from offset ${startOffset} / ${asset.size}`)
+                } else if (stat.size >= asset.size) {
+                    // It's already full? Validation will catch it, or it's corrupt. Let's reset just in case if we are here.
+                    startOffset = 0
+                    await fs.unlink(tempPath)
+                }
+            }
+        } catch (e) {
+            startOffset = 0
+        }
+
         const candidate = candidates[attempt % candidates.length];
         const currentUrl = typeof candidate === 'string' ? candidate : candidate.url;
         const currentHash = typeof candidate === 'object' && candidate.hash ? candidate.hash : hash;
@@ -167,6 +240,7 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
             // Construct headers
             const headers = new Headers();
             if (asset.size) headers.append('X-Expected-Size', asset.size.toString());
+            if (startOffset > 0) headers.append('X-Start-Offset', startOffset.toString()); // Hint for P2P/RaceManager
             if (assetPath) {
                 const dataDir = ConfigManager.getDataDirectory().trim();
                 const relPath = path.relative(dataDir, assetPath).replace(/\\/g, '/');
@@ -197,10 +271,10 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
             if (!response.ok) throw new Error(`RaceManager failed: ${response.status}`);
 
             const tempPath = decodedPath + '.tmp';
-            const fileStream = fsSync.createWriteStream(tempPath);
+            const fileStream = fsSync.createWriteStream(tempPath, { flags: startOffset > 0 ? 'a' : 'w' });
 
             // Progress tracking wrapper
-            let loaded = 0;
+            let loaded = startOffset;
             let lastProgressTime = 0;
             const total = asset.size || 0;
 
@@ -277,7 +351,14 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
 
         } catch (err) {
             lastError = err;
-            try { await fs.unlink(decodedPath + '.tmp') } catch (e) { }
+
+            // On failure, do NOT delete .tmp if it's a P2P error (we might resume later)
+            // But if it's a validation error (hash mismatch on full file), we MUST delete it.
+            const isValidationError = err.message === 'Validation failed'
+
+            if (isValidationError) {
+                try { await fs.unlink(decodedPath + '.tmp') } catch (e) { }
+            }
 
             // Record failure if not already recorded (Validation failed adds its own)
             if (err.message !== 'Validation failed') {
