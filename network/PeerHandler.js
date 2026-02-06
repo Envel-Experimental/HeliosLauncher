@@ -543,34 +543,62 @@ class PeerHandler {
                 let lastActivity = Date.now()
                 const watchdogStart = Date.now()
 
+                // Track instantaneous speed
+                let lastIntervalBytes = 0
+                let lastIntervalTime = Date.now()
+
                 const watchdog = setInterval(() => {
+                    if (this.socket.destroyed) {
+                        clearInterval(watchdog)
+                        return
+                    }
+
                     const now = Date.now()
 
-                    // 1. Strict Inactivity Check (15s)
-                    // If the client stops reading completely, cut them off faster than 30s.
+                    // 1. Inactivity Check (15s)
                     if (now - lastActivity > 15000) {
                         errorOccurred = true
-                        if (isDev) console.warn(`[P2P Security] Disconnecting ${remoteIP} due to inactivity (15s).`)
+                        if (isDev) console.warn(`[P2P Security] Disconnecting ${remoteIP} due to inactivity (>15s).`)
                         stream.destroy()
                         clearInterval(watchdog)
                         return
                     }
 
-                    // 2. Minimum Speed Enforcement (Anti-Slowloris)
-                    // After 10s grace period, ensure client is downloading at least 1KB/s.
-                    // A Slowloris bot reading 1 byte/sec will fail this immediately.
-                    const duration = (now - watchdogStart) / 1000
-                    if (duration > 10) {
-                        const avgSpeed = totalBytesSent / duration
-                        if (avgSpeed < 1024) { // < 1KB/s
-                            errorOccurred = true
-                            if (isDev) console.warn(`[P2P Security] Disconnecting ${remoteIP} due to Slowloris behavior (Speed: ${avgSpeed.toFixed(0)} B/s)`)
-                            stream.destroy()
-                            clearInterval(watchdog)
+                    // 2. Minimum Speed Enforcement
+                    // Calculate Instantaneous Speed over the last interval (15s)
+                    // This reacts much faster to sudden drops than an average-over-time.
+                    const timeStep = (now - lastIntervalTime) / 1000
+                    const bytesStep = totalBytesSent - lastIntervalBytes
+
+                    // Update for next check
+                    lastIntervalBytes = totalBytesSent
+                    lastIntervalTime = now
+
+                    // Grace Period: Allow startup time
+                    const totalDuration = (now - watchdogStart) / 1000
+
+                    if (totalDuration >= 15 && timeStep > 0) {
+                        const currentSpeed = bytesStep / timeStep
+
+                        if (currentSpeed < 102400) { // < 100 KB/s
+                            this.watchdogStrikes = (this.watchdogStrikes || 0) + 1
+                            if (isDev) console.warn(`[P2P Security] Peer ${remoteIP} slow (${currentSpeed.toFixed(0)} B/s). Strike ${this.watchdogStrikes}/3`)
+
+                            if (this.watchdogStrikes >= 3) {
+                                // 3 strikes * 15s = 45s max patience for dead/slow peers
+                                errorOccurred = true
+                                if (isDev) console.error(`[P2P Security] Disconnecting ${remoteIP} due to sustained slow speed.`)
+                                stream.destroy()
+                                clearInterval(watchdog)
+                            }
+                        } else {
+                            // Reset strikes if speed recovers
+                            if (this.watchdogStrikes > 0) {
+                                this.watchdogStrikes = 0
+                            }
                         }
                     }
-                }, 5000)
-
+                }, 15000)
                 let cleanupDone = false
                 const cleanup = () => {
                     if (cleanupDone) return

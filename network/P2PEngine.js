@@ -168,6 +168,24 @@ class P2PEngine extends EventEmitter {
                 this.lastLimitUpdate = now
             }
 
+            // Network Change Monitor (Every ~10s)
+            // We check this less frequently to avoid overhead
+            if (now % 10000 < 2000) { // Check roughly every 10s
+                const currentFingerprint = this._getNetworkFingerprint()
+                if (this.lastNetworkFingerprint && currentFingerprint !== this.lastNetworkFingerprint) {
+                    console.log('[P2PEngine] Network interface change detected! Restarting Swarm...')
+                    this.lastNetworkFingerprint = currentFingerprint
+
+                    // Restart logic
+                    this.stop().then(() => {
+                        // Small delay to let OS settle
+                        setTimeout(() => this.start(), 2000)
+                    })
+                } else if (!this.lastNetworkFingerprint) {
+                    this.lastNetworkFingerprint = currentFingerprint
+                }
+            }
+
         }, 2000)
     }
 
@@ -1003,6 +1021,23 @@ class P2PEngine extends EventEmitter {
         RateLimiter.update(newLimitMbps * 125000, true)
 
         // if (isDev) console.debug(`[P2PEngine] Dynamic Upload Limit set to ${newLimitMbps} Mbps`)
+    }
+    _getNetworkFingerprint() {
+        const interfaces = os.networkInterfaces()
+        let fingerprint = ''
+        // Sort keys to ensure stability
+        const sortedKeys = Object.keys(interfaces).sort()
+        for (const key of sortedKeys) {
+            const iface = interfaces[key]
+            for (const details of iface) {
+                // We care about address and status (implied by existence)
+                // We ignore 'internal' loopback for fingerprinting usually, but for P2P restart it might matter if ONLY loopback exists.
+                if (!details.internal && (details.family === 'IPv4' || details.family === 4)) {
+                    fingerprint += `${key}:${details.address}|`
+                }
+            }
+        }
+        return fingerprint
     }
 }
 
