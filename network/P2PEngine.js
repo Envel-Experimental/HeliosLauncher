@@ -186,6 +186,12 @@ class P2PEngine extends EventEmitter {
                 }
             }
 
+            // Seeder Health Consensus (The Doctor) - Every 30s
+            if (now - (this.lastHealthCheck || 0) > 30000) {
+                this.checkSeederHealth()
+                this.lastHealthCheck = now
+            }
+
         }, 2000)
     }
 
@@ -736,7 +742,14 @@ class P2PEngine extends EventEmitter {
     reconfigureSwarm() {
         if (!this.swarm) return
         const topic = SWARM_TOPIC
-        const shouldAnnounce = !this.profile.passive && !NodeAdapter.isCritical() && (ConfigManager.getP2PUploadEnabled() || ConfigManager.getLocalOptimization())
+        // If critical (game running) OR health check failed (passive mode), disable server announcement
+        const isCritical = NodeAdapter.isCritical()
+        const isSelfIsolated = this.healthCheckPassive
+
+        const shouldAnnounce = !this.profile.passive && !isCritical && !isSelfIsolated && (ConfigManager.getP2PUploadEnabled() || ConfigManager.getLocalOptimization())
+
+        if (isDev && isSelfIsolated) console.warn('[P2PEngine] Swarm Reconfigure: Self-Isolated (Passive Mode enforced)')
+
         // console.log(`[P2PEngine] Reconfiguring Swarm. Announcing: ${shouldAnnounce}`)
         this.swarm.join(topic, { client: true, server: shouldAnnounce })
     }
@@ -1022,6 +1035,55 @@ class P2PEngine extends EventEmitter {
 
         // if (isDev) console.debug(`[P2PEngine] Dynamic Upload Limit set to ${newLimitMbps} Mbps`)
     }
+    checkSeederHealth() {
+        // If we are already self-isolated, check if it's time to recover
+        if (this.healthCheckPassive) {
+            if (Date.now() - this.healthCheckPassiveStart > 3600000) { // 1 Hour
+                console.log('[P2PEngine] Health Check: Probation period ended. Re-enabling active mode.')
+                this.healthCheckPassive = false
+                this.selfStrikes = 0
+                this.reconfigureSwarm()
+            }
+            return
+        }
+
+        // Logic: "Consensus of Failure"
+        // 1. "3 Witnesses" Rule: Must have significant load to judge (at least 3 active upload peers)
+        const activeUploadPeers = this.peers.filter(p => p.currentTransferSpeed > 0)
+
+        if (activeUploadPeers.length < 3) {
+            // Not enough witnesses to judge "Consensus"
+            // Decay strikes to be forgiving if load drops
+            if (this.selfStrikes > 0) this.selfStrikes--
+            return
+        }
+
+        const fastPeers = activeUploadPeers.filter(p => p.currentTransferSpeed > 512000) // > 500 KB/s
+        const slowPeers = activeUploadPeers.filter(p => p.currentTransferSpeed < 128000) // < 125 KB/s
+
+        // "I am fine" check: If at least one peer is fast, my upload is fine.
+        if (fastPeers.length > 0) {
+            this.selfStrikes = 0
+            return
+        }
+
+        // "It's me" check: If ALL peers are slow.
+        if (slowPeers.length === activeUploadPeers.length) {
+            this.selfStrikes = (this.selfStrikes || 0) + 1
+            console.warn(`[P2PEngine] Health Check: Warning! ${activeUploadPeers.length}/${activeUploadPeers.length} peers are slow. Self-Strike ${this.selfStrikes}/3.`)
+
+            if (this.selfStrikes >= 3) {
+                console.error(`[P2PEngine] Health Check: CONSENSUS OF FAILURE (3 Strikes). Self-isolating to protect Swarm.`)
+                this.healthCheckPassive = true
+                this.healthCheckPassiveStart = Date.now()
+                this.reconfigureSwarm()
+            }
+        } else {
+            // Mixed results (some medium speed, some slow) - Give benefit of doubt, decrement strike
+            if (this.selfStrikes > 0) this.selfStrikes--
+        }
+    }
+
     _getNetworkFingerprint() {
         const interfaces = os.networkInterfaces()
         let fingerprint = ''

@@ -455,39 +455,7 @@ class PeerHandler {
                 }
             }
 
-            /*
-            if (isDev && !foundPath) {
-                console.debug(`[P2P Debug] File ${hash.substring(0, 8)} (ID: ${fileId || 'n/a'}) not found. Checked ${uniqueCandidates.length} paths:`)
-                for (const p of uniqueCandidates) {
-                    const exists = fs.existsSync(p)
-                    console.debug(`  - [${exists ? 'EXIST' : 'MISS'}] ${p}`)
-                }
 
-                // Diagnosis: Let's see what's actually in the folders we checked
-                const parent = path.dirname(uniqueCandidates[0])
-                try {
-                    if (fs.existsSync(parent)) {
-                        const files = fs.readdirSync(parent)
-                        console.debug(`[P2P Debug] Parent folder ${parent} exists and contains ${files.length} files.`)
-                        if (files.length > 0) {
-                            console.debug(`[P2P Debug] Sample files in parent: ${files.slice(0, 5).join(', ')}`)
-                        }
-                        if (files.includes(hash)) {
-                            console.error(`[P2P Debug] CRITICAL: fs.existsSync failed but file IS in readdir! Path: ${uniqueCandidates[0]}`)
-                        } else if (fileId && files.includes(path.basename(fileId))) {
-                            console.debug(`[P2P Debug] Found file by ID in readdir: ${fileId}`)
-                        }
-                    } else {
-                        console.debug(`[P2P Debug] Parent folder MISSING: ${parent}`)
-                        // Check one level up (objects)
-                        const objDir = path.dirname(parent)
-                        if (fs.existsSync(objDir)) {
-                            console.debug(`[P2P Debug] But 'objects' dir exists: ${objDir}`)
-                        }
-                    }
-                } catch (e) { }
-            }
-            */
 
             if (foundPath) {
                 // Get File Size for Credits
@@ -555,46 +523,49 @@ class PeerHandler {
 
                     const now = Date.now()
 
-                    // 1. Inactivity Check (15s)
-                    if (now - lastActivity > 15000) {
+                    // 1. Inactivity Check (45s tolerance)
+                    // We allow 45s of silence to avoid race conditions with the 15s check interval.
+                    if (now - lastActivity > 45000) {
                         errorOccurred = true
-                        if (isDev) console.warn(`[P2P Security] Disconnecting ${remoteIP} due to inactivity (>15s).`)
+                        if (isDev) console.warn(`[P2P Security] Disconnecting ${remoteIP} due to inactivity (>45s).`)
                         stream.destroy()
                         clearInterval(watchdog)
                         return
                     }
 
                     // 2. Minimum Speed Enforcement
-                    // Calculate Instantaneous Speed over the last interval (15s)
-                    // This reacts much faster to sudden drops than an average-over-time.
-                    const timeStep = (now - lastIntervalTime) / 1000
-                    const bytesStep = totalBytesSent - lastIntervalBytes
-
-                    // Update for next check
-                    lastIntervalBytes = totalBytesSent
-                    lastIntervalTime = now
-
                     // Grace Period: Allow startup time
                     const totalDuration = (now - watchdogStart) / 1000
 
-                    if (totalDuration >= 15 && timeStep > 0) {
-                        const currentSpeed = bytesStep / timeStep
+                    if (totalDuration >= 15) {
+                        const timeStep = (now - lastIntervalTime) / 1000
+                        const bytesStep = totalBytesSent - lastIntervalBytes
 
-                        if (currentSpeed < 102400) { // < 100 KB/s
-                            this.watchdogStrikes = (this.watchdogStrikes || 0) + 1
-                            if (isDev) console.warn(`[P2P Security] Peer ${remoteIP} slow (${currentSpeed.toFixed(0)} B/s). Strike ${this.watchdogStrikes}/3`)
+                        // Jitter Protection: Avoid false positives on rapid timer fires
+                        if (timeStep >= 5) {
+                            // Update for next check (Only if we actually checked)
+                            lastIntervalBytes = totalBytesSent
+                            lastIntervalTime = now
 
-                            if (this.watchdogStrikes >= 3) {
-                                // 3 strikes * 15s = 45s max patience for dead/slow peers
-                                errorOccurred = true
-                                if (isDev) console.error(`[P2P Security] Disconnecting ${remoteIP} due to sustained slow speed.`)
-                                stream.destroy()
-                                clearInterval(watchdog)
-                            }
-                        } else {
-                            // Reset strikes if speed recovers
-                            if (this.watchdogStrikes > 0) {
-                                this.watchdogStrikes = 0
+                            const currentSpeed = bytesStep / timeStep
+                            this.currentTransferSpeed = currentSpeed // Expose for Seeder Health Consensus
+
+                            if (currentSpeed < 128000) { // < 125 KB/s
+                                this.watchdogStrikes = (this.watchdogStrikes || 0) + 1
+                                if (isDev) console.warn(`[P2P Security] Peer ${remoteIP} slow (${currentSpeed.toFixed(0)} B/s). Strike ${this.watchdogStrikes}/3`)
+
+                                if (this.watchdogStrikes >= 3) {
+                                    // 3 strikes * 15s = 45s max patience for dead/slow peers
+                                    errorOccurred = true
+                                    if (isDev) console.error(`[P2P Security] Disconnecting ${remoteIP} due to sustained slow speed.`)
+                                    stream.destroy()
+                                    clearInterval(watchdog)
+                                }
+                            } else {
+                                // Reset strikes if speed recovers
+                                if (this.watchdogStrikes > 0) {
+                                    this.watchdogStrikes = 0
+                                }
                             }
                         }
                     }
