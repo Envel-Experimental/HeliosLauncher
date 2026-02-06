@@ -252,7 +252,67 @@ graph LR
 
 ---
 
-## 8. Key Files for Reference
+## 8. Bandwidth & Fairness Mechanisms
+
+The Helios Launcher employs a sophisticated traffic shaping system to ensure the P2P network remains healthy and does not impact the user's primary internet activities.
+
+### 8.1 Dynamic Upload Limits
+The system automatically adjusts upload bandwidth based on the user's network capacity and system load.
+
+| Mode | Limit | Activation Criteria |
+| :--- | :--- | :--- |
+| **Safe Mode** | **5 Mbps** | Default state. Activated if system load is high (>80%) or network speed is unknown. |
+| **Boost Mode** | **15 Mbps** | Activated ONLY if: <br>1. Download speed > **10 MB/s** <br>2. CPU Load < 80% <br>3. Hardware Profile is `MID` or `HIGH` |
+| **LAN Mode** | **Unlimited** | No limits are applied to local network peers (detected via IP range). |
+
+### 8.2 Peer Quality Requirements (The "Strike" System)
+To maintain high swarm velocity, "dead weight" peers are aggressively pruned.
+
+*   **Minimum Speed Threshold**: **125 KB/s** (128,000 bytes/s).
+    *   *Mechanism*: A watchdog samples speed every 15s.
+    *   *Penalty*: Peers below this threshold receive a **Strike**.
+    *   *Consequence*: **3 Strikes** (45s of poor performance) results in disconnection.
+*   **Connection Timeout**: **30 seconds**.
+    *   *Defense*: Prevents *Slowloris* attacks where a peer connects but sends no data.
+*   **Inactivity Check**: **45 seconds**.
+    *   *Defense*: Cleans up "zombie" connections that are technically open but stalling.
+
+### 8.3 Seeder Health Consensus (Self-Healing)
+The system distinguishes between "Bad Peers" and "Bad Self". If the launcher detects it is the bottleneck, it self-isolates to protect the swarm's health score.
+
+*   **Consensus Check**: Every 30s, the engine evaluates all active upload peers (min 3 witnesses).
+*   **Failure Condition**: If **100%** of active peers are downloading slower than **125 KB/s**.
+*   **Action**:
+    1.  **Self-Strike**: Increments internal counter.
+    2.  **3 Self-Strikes**: Triggers **Passive Mode** (Self-Isolation).
+    3.  **Duration**: 1 Hour. During this time, the launcher stops announcing itself as a seeder.
+
+### 8.4 Global Concurrency Scaling
+The `DownloadEngine` scales the number of parallel download threads based on CPU pressure to prevent UI freezing.
+
+*   **Baseline**: 8 Threads.
+*   **Max Scaling**: Up to 32 Threads.
+*   **Logic**:
+    *   `CPU < 50%` -> **32 Threads**
+    *   `CPU > 50%` -> **24 Threads**
+    *   `CPU > 70%` -> **16 Threads**
+    *   `CPU > 90%` -> **8 Threads** (Critical fallback)
+
+### 8.5 Credit System (Token Bucket)
+A virtual economy ensures fairness and prevents "Leeching" (downloading without sharing).
+
+*   **Model**: Token Bucket Algorithm.
+*   **Bucket Size**: **5,000 Credits** (5 GB).
+*   **Cost**: **1 Credit = 1 MB** downloaded.
+*   **Regeneration**:
+    *   **Rate**: **0.5 Credits/sec** (~30 MB/min).
+    *   **Passive Input**: Just staying online regenerates credits.
+    *   **Active Input**: Uploading to others regenerates credits faster (1:1 ratio).
+*   **Bankruptcy**: If credits hit 0, the peer is deprioritized or "soft-banned" until they regenerate enough credits to prove they are good citizens.
+
+---
+
+## 9. Key Files for Reference
 
 | File | Role |
 | :--- | :--- |
