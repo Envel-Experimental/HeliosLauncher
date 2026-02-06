@@ -826,9 +826,27 @@ class PeerHandler {
             // mods - mods (code, heavy)
             // common - shared files
             // objects - hashed assets
-            const whitelist = ['assets', 'libraries', 'versions', 'common', 'icons', 'objects', 'mods', 'minecraft']
+            // config - mod configurations
+            // shaderpacks / resourcepacks - client aesthetics
+            // scripts / kubejs - custom scripting
+            // defaultconfigs - modpack defaults
+            // realms - mod-specific resources (e.g., this user)
+            const whitelist = [
+                'assets', 'libraries', 'versions', 'common', 'icons', 'objects',
+                'mods', 'minecraft', 'config', 'shaderpacks', 'resourcepacks',
+                'scripts', 'kubejs', 'defaultconfigs', 'fancymenu_data', 'realms'
+            ]
 
-            return whitelist.includes(firstPart)
+            const isWhitelisted = whitelist.includes(firstPart)
+
+            // Allow Root Files (if not blacklisted above)
+            // e.g. pack.mcmeta, instance.cfg
+            if (parts.length === 1 && !isWhitelisted) {
+                // We already checked blacklist above.
+                return true
+            }
+
+            return isWhitelisted
         } catch (e) {
             console.error('[P2P Security] Path check failed:', e)
             return false

@@ -731,11 +731,11 @@ class P2PEngine extends EventEmitter {
 
         const avg = this.uploadHistory.reduce((a, b) => a + b, 0) / this.uploadHistory.length
 
-        if (avg < 153600) {
-            const changed = NodeAdapter.downgradeToLow()
-            if (changed) {
-                this.reconfigureSwarm()
-            }
+        // Fix: Do not downgrade to LOW based on speed alone.
+        // A "Slow" upload often means the RECEIVER is slow, not us.
+        // We should rely on 'isRealFailure' penalties to handle broken nodes.
+        if (avg > 1048576) { // > 1MB/s
+            NodeAdapter.boostWeight()
         }
     }
 

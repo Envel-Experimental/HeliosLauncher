@@ -4,6 +4,7 @@ const os = require('os')
 const path = require('path')
 const { retry } = require('./util')
 const pathutil = require('./pathutil')
+const SecurityUtils = require('./core/util/SecurityUtils')
 
 const logger = LoggerUtil.getLogger('ConfigManager')
 
@@ -43,10 +44,7 @@ exports.setDataDirectory = function (dataDirectory) {
 
 const configPath = path.join(exports.getLauncherDirectory(), 'config.json')
 const configPathLEGACY = path.join(app.getPath('userData'), 'config.json')
-let firstLaunch = false;
-(async () => {
-    firstLaunch = !await fs.pathExists(configPath) && !await fs.pathExists(configPathLEGACY)
-})()
+let firstLaunch = false
 
 
 exports.getAbsoluteMinRAM = function (ram) {
@@ -136,9 +134,29 @@ exports.save = async function () {
     // Generate a unique temporary path to avoid race conditions (ENOENT on rename)
     // when multiple processes (Main/Renderer) save simultaneously.
     const tempPath = configPath + '.' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2) + '.tmp'
+
+    // Clone config to avoid modifying the in-memory object (which should stay decrypted)
+    const configToSave = JSON.parse(JSON.stringify(config))
+
+    // Encrypt Sensitive Data
+    if (configToSave.authenticationDatabase) {
+        for (const uuid in configToSave.authenticationDatabase) {
+            const acc = configToSave.authenticationDatabase[uuid]
+            if (acc.accessToken) acc.accessToken = SecurityUtils.encryptString(acc.accessToken)
+            if (acc.microsoft) {
+                if (acc.microsoft.access_token) acc.microsoft.access_token = SecurityUtils.encryptString(acc.microsoft.access_token)
+                if (acc.microsoft.refresh_token) acc.microsoft.refresh_token = SecurityUtils.encryptString(acc.microsoft.refresh_token)
+            }
+        }
+    }
+    // Encrypt client token
+    if (configToSave.clientToken) {
+        configToSave.clientToken = SecurityUtils.encryptString(configToSave.clientToken)
+    }
+
     return await retry(
         async () => {
-            await fs.writeFile(tempPath, JSON.stringify(config, null, 4), 'UTF-8')
+            await fs.writeFile(tempPath, JSON.stringify(configToSave, null, 4), 'UTF-8')
             await fs.move(tempPath, configPath, { overwrite: true })
         },
         3,
@@ -156,6 +174,9 @@ exports.save = async function () {
 exports.load = async function () {
     const configExists = await fs.pathExists(configPath)
     const legacyConfigExists = await fs.pathExists(configPathLEGACY)
+
+    // Fix: Deterministic First Launch Check
+    firstLaunch = !configExists && !legacyConfigExists
 
     if (!configExists) {
         await fs.ensureDir(path.join(configPath, '..'))
@@ -177,6 +198,26 @@ exports.load = async function () {
             err => err.code === 'EBUSY' || err.code === 'EPERM' || err.code === 'EACCES'
         )
         config = JSON.parse(fileContent)
+
+        // Decrypt Sensitive Data
+        if (config.authenticationDatabase) {
+            for (const uuid in config.authenticationDatabase) {
+                const acc = config.authenticationDatabase[uuid]
+                // Try decrypting. If it wasn't encrypted (legacy), decryptString usuall returns the input or fails gracefully.
+                // However, our util returns original on fail. Ideally we should detect.
+                // Since this is a transition, we assume values might be plain text.
+                // safeStorage throws if data is not encrypted by it. SecurityUtils handles catch.
+                if (acc.accessToken) acc.accessToken = SecurityUtils.decryptString(acc.accessToken)
+                if (acc.microsoft) {
+                    if (acc.microsoft.access_token) acc.microsoft.access_token = SecurityUtils.decryptString(acc.microsoft.access_token)
+                    if (acc.microsoft.refresh_token) acc.microsoft.refresh_token = SecurityUtils.decryptString(acc.microsoft.refresh_token)
+                }
+            }
+        }
+        if (config.clientToken) {
+            config.clientToken = SecurityUtils.decryptString(config.clientToken)
+        }
+
         config = validateKeySet(DEFAULT_CONFIG, config)
         if (!pathutil.isPathValid(config.settings.launcher.dataDirectory)) {
             logger.warn(`Bad dataDirectory (${config.settings.launcher.dataDirectory}) in config.json, migrating to ${dataPath}.`)
