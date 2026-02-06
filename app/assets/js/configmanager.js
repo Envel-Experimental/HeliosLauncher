@@ -233,7 +233,7 @@ exports.load = async function () {
             config = DEFAULT_CONFIG
             await exports.save()
         } else {
-            logger.fatal('Unable to read configuration file due to IO error. Aborting to prevent data loss.')
+            logger.error('Unable to read configuration file due to IO error. Aborting to prevent data loss.')
             throw err
         }
     }
