@@ -52,9 +52,22 @@ function fallbackDecrypt(encryptedText) {
 exports.encryptString = function (text) {
     if (!text) return text
 
+    // Prevent double encryption:
+    // Check for Fallback prefix
+    if (text.startsWith('FB:')) {
+        return text
+    }
+
+    // Optimization: Check for SafeStorage format (Hex string > 64 chars) to prevent re-encryption loop
+    if (text.length > 64 && /^[0-9a-fA-F]+$/.test(text)) {
+        return text
+    }
+
     // Check if safeStorage is available
     if (safeStorage && safeStorage.isEncryptionAvailable()) {
         try {
+            // Optimization: If it's already a huge string, it's likely already encrypted or broken.
+            // But standard encrypted strings are hex.
             return safeStorage.encryptString(text).toString('hex')
         } catch (error) {
             console.error('safeStorage encryption failed:', error)

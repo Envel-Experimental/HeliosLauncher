@@ -110,11 +110,6 @@ const DEFAULT_CONFIG = {
         },
         p2pPromptShown: false
     },
-    newsCache: {
-        date: null,
-        content: null,
-        dismissed: false
-    },
     clientToken: null,
     selectedServer: null, // Resolved
     selectedAccount: null,
@@ -156,7 +151,39 @@ exports.save = async function () {
 
     return await retry(
         async () => {
-            await fs.writeFile(tempPath, JSON.stringify(configToSave, null, 4), 'UTF-8')
+            let configStr
+            let success = false
+
+            // Attempt 1: Try to stringify normalized config
+            try {
+                // Remove indentation to minimize string length and memory usage
+                configStr = JSON.stringify(configToSave)
+
+                // Enforce strict 1MB size limit to prevent RangeErrors and performance degradation
+                if (configStr.length > 1024 * 1024) {
+                    throw new Error('Config exceeds 1MB limit')
+                }
+                success = true
+            } catch (err) {
+                logger.warn('Config save failed or exceeded 1MB limit. Initiating fallback cleanup.', err)
+            }
+
+            // Attempt 2: Aggressive cleanup if initial save fails
+            // This clears potentially bloated fields (e.g. modConfigurations) to ensure the file can be written
+            if (!success) {
+                logger.warn('Clearing modConfigurations to reduce size.')
+                configToSave.modConfigurations = []
+
+                // Update in-memory config to reflect the cleared state
+                if (Array.isArray(config.modConfigurations)) {
+                    config.modConfigurations = []
+                }
+
+                // Retry stringification with cleared data
+                configStr = JSON.stringify(configToSave)
+            }
+
+            await fs.writeFile(tempPath, configStr, 'UTF-8')
             await fs.move(tempPath, configPath, { overwrite: true })
         },
         3,
@@ -203,11 +230,13 @@ exports.load = async function () {
         if (config.authenticationDatabase) {
             for (const uuid in config.authenticationDatabase) {
                 const acc = config.authenticationDatabase[uuid]
-                // Try decrypting. If it wasn't encrypted (legacy), decryptString usuall returns the input or fails gracefully.
-                // However, our util returns original on fail. Ideally we should detect.
-                // Since this is a transition, we assume values might be plain text.
-                // safeStorage throws if data is not encrypted by it. SecurityUtils handles catch.
-                if (acc.accessToken) acc.accessToken = SecurityUtils.decryptString(acc.accessToken)
+                if (acc.accessToken) {
+                    const decrypted = SecurityUtils.decryptString(acc.accessToken)
+                    // If decryption returns the exact same string, it implies failure (in our current util logic).
+                    // To be safe and prevent double-encryption loop, if it looks encrypted but decrypt failed, we should probably reset it.
+                    // But simpler: just assign. The fix in SecurityUtils.encryptString will prevent re-encryption.
+                    acc.accessToken = decrypted
+                }
                 if (acc.microsoft) {
                     if (acc.microsoft.access_token) acc.microsoft.access_token = SecurityUtils.decryptString(acc.microsoft.access_token)
                     if (acc.microsoft.refresh_token) acc.microsoft.refresh_token = SecurityUtils.decryptString(acc.microsoft.refresh_token)
@@ -219,11 +248,19 @@ exports.load = async function () {
         }
 
         config = validateKeySet(DEFAULT_CONFIG, config)
+
+        // Migration: Move p2pPromptShown from root to settings
+        if (typeof config.p2pPromptShown !== 'undefined') {
+            config.settings.p2pPromptShown = config.p2pPromptShown
+            delete config.p2pPromptShown
+        }
+
         if (!pathutil.isPathValid(config.settings.launcher.dataDirectory)) {
             logger.warn(`Bad dataDirectory (${config.settings.launcher.dataDirectory}) in config.json, migrating to ${dataPath}.`)
             config.settings.launcher.dataDirectory = dataPath
         }
         await exports.save()
+
     } catch (err) {
         logger.error(err)
         if (err instanceof SyntaxError) {
@@ -306,21 +343,6 @@ exports.getNewsCache = function () {
 
 /**
  * Set the new news cache object.
- *
- * @param {Object} newsCache The new news cache object.
- */
-exports.setNewsCache = function (newsCache) {
-    config.newsCache = newsCache
-}
-
-/**
- * Set whether or not the news has been dismissed (checked)
- *
- * @param {boolean} dismissed Whether or not the news has been dismissed (checked).
- */
-exports.setNewsCacheDismissed = function (dismissed) {
-    config.newsCache.dismissed = dismissed
-}
 
 /**
  * Retrieve the common directory for shared
@@ -1003,7 +1025,7 @@ exports.setP2POnlyMode = function (p2pOnlyMode) {
  * @returns {boolean} Whether or not the P2P prompt has been shown.
  */
 exports.getP2PPromptShown = function () {
-    return config.p2pPromptShown
+    return config.settings.p2pPromptShown
 }
 
 /**
@@ -1012,5 +1034,5 @@ exports.getP2PPromptShown = function () {
  * @param {boolean} shown Whether or not the P2P prompt has been shown.
  */
 exports.setP2PPromptShown = function (shown) {
-    config.p2pPromptShown = shown
+    config.settings.p2pPromptShown = shown
 }
