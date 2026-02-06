@@ -358,7 +358,42 @@ function showNextWarning() {
         const message = Lang.queryJS(`systemChecks.${warningKey}`)
         const title = Lang.queryJS('systemChecks.warningTitle')
 
-        setOverlayContent(title, message, Lang.queryJS('landing.launch.okay'))
+        // OOM Mitigation: Add "Light Mode" button for RAM warnings
+        if (warningKey === 'lowFreeRAM' || warningKey === 'lowTotalRAM') {
+            setOverlayContent(
+                title,
+                message,
+                Lang.queryJS('landing.launch.okay'),
+                Lang.queryJS('systemChecks.lightMode') // Middle button text
+            )
+
+            setMiddleButtonHandler(async () => {
+                const serverId = ConfigManager.getSelectedServer()
+                if (serverId) {
+                    // Set to safe defaults: 1GB Min, 2GB Max
+                    ConfigManager.setMinRAM(serverId, '1024M')
+                    ConfigManager.setMaxRAM(serverId, '2048M')
+                    await ConfigManager.save()
+
+                    // Show confirmation and proceed to next warning
+                    setOverlayContent(
+                        title,
+                        Lang.queryJS('systemChecks.lightModeEnabled'),
+                        Lang.queryJS('landing.launch.okay')
+                    )
+                    setMiddleButtonHandler(null)
+                    setOverlayHandler(showNextWarning)
+                    setDismissHandler(showNextWarning)
+                } else {
+                    showNextWarning()
+                }
+            })
+
+        } else {
+            setOverlayContent(title, message, Lang.queryJS('landing.launch.okay'))
+            setMiddleButtonHandler(null)
+        }
+
         setOverlayHandler(showNextWarning)
         setDismissHandler(showNextWarning)
         toggleOverlay(true, true)

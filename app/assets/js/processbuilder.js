@@ -1,4 +1,5 @@
 /* global setOverlayContent, setOverlayHandler, setDismissHandler, toggleOverlay, setMiddleButtonHandler */
+const { shell } = require('electron')
 const AdmZip = require('adm-zip')
 const child_process = require('child_process')
 const crypto = require('crypto')
@@ -254,6 +255,48 @@ class ProcessBuilder {
                                     launchBtn.click();
                                 }
                             }, 1000);
+
+                        } else if (crashAnalysis.type === 'gpu-driver-outdated') {
+                            setOverlayContent(
+                                Lang.queryJS('processbuilder.crash.driversTitle'),
+                                Lang.queryJS('processbuilder.crash.body', { description: crashAnalysis.description }),
+                                Lang.queryJS('processbuilder.crash.driversUpdate'),
+                                Lang.queryJS('processbuilder.crash.close')
+                            );
+                            setOverlayHandler(() => {
+                                shell.openExternal('https://www.nvidia.com/Download/index.aspx');
+                                toggleOverlay(false);
+                            });
+                            setMiddleButtonHandler(() => {
+                                toggleOverlay(false);
+                            });
+
+                        } else if (crashAnalysis.type === 'gpu-oom') {
+                            setOverlayContent(
+                                Lang.queryJS('processbuilder.crash.oomTitle'),
+                                Lang.queryJS('processbuilder.crash.body', { description: crashAnalysis.description }),
+                                Lang.queryJS('processbuilder.crash.close'),
+                                null
+                            );
+                            setOverlayHandler(() => {
+                                toggleOverlay(false);
+                            });
+                            setMiddleButtonHandler(null);
+
+                        } else if (crashAnalysis.type === 'gpu-gl-on-12') {
+                            setOverlayContent(
+                                Lang.queryJS('processbuilder.crash.glErrorTitle'),
+                                Lang.queryJS('processbuilder.crash.body', { description: crashAnalysis.description }),
+                                Lang.queryJS('processbuilder.crash.driversUpdate'),
+                                Lang.queryJS('processbuilder.crash.close')
+                            );
+                            setOverlayHandler(() => {
+                                shell.openExternal('https://www.intel.com/content/www/us/en/support/detect.html');
+                                toggleOverlay(false);
+                            });
+                            setMiddleButtonHandler(() => {
+                                toggleOverlay(false);
+                            });
 
                         } else {
                             const configPath = path.join(this.gameDir, 'config', crashAnalysis.file);
