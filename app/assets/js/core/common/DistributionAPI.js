@@ -95,8 +95,9 @@ class DistributionAPI {
             const res = await fetch(this.remoteUrl, { cache: 'no-store' });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-            // Get text first to preserve exact bytes for verification
-            const rawText = await res.text();
+            // Get buffer first to preserve exact bytes for verification
+            const rawBuffer = Buffer.from(await res.arrayBuffer());
+            const rawText = rawBuffer.toString('utf-8');
             const data = JSON.parse(rawText);
 
             let signatureValid = true; // Default to true if no keys configured (or logic disabled)
@@ -109,9 +110,9 @@ class DistributionAPI {
                     if (sigRes.ok) {
                         const signatureHex = (await sigRes.text()).trim()
                         const signature = Buffer.from(signatureHex, 'hex')
-                        // Normalize the JSON data to ensure consistency across different OS/formatting
-                        const normalizedText = JSON.stringify(data)
-                        const contentBuffer = Buffer.from(normalizedText, 'utf-8')
+
+                        // Use raw buffer for verification to avoid canonicalization issues
+                        const contentBuffer = rawBuffer;
 
                         const crypto = require('crypto')
                         // ASN.1 Header for Ed25519 Public Key (SPKI)
