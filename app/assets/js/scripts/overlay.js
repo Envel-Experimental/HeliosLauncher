@@ -134,18 +134,26 @@ async function toggleServerSelection(toggleState) {
  * @param {string} dismiss Dismiss button text.
  */
 function setOverlayContent(title, description, acknowledge, acknowledge_mid, dismiss = Lang.queryJS('overlay.dismiss')) {
-    document.getElementById('overlayTitle').innerHTML = title
+    document.getElementById('overlayTitle').textContent = title
     document.getElementById('overlayDesc').innerHTML = description
-    document.getElementById('overlayAcknowledge').innerHTML = acknowledge
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;")
+        .replace(/&lt;br&gt;/g, "<br>") // Restore intended line breaks
+        .replace(/&lt;b&gt;/g, "<b>").replace(/&lt;\/b&gt;/g, "</b>") // Restore intended bold tags
+
+    document.getElementById('overlayAcknowledge').textContent = acknowledge
 
     if (acknowledge_mid != null) {
-        document.getElementById('overlayAcknowledgeMid').innerHTML = acknowledge_mid
+        document.getElementById('overlayAcknowledgeMid').textContent = acknowledge_mid
         document.getElementById('overlayAcknowledgeMid').style.display = ''
     } else {
         document.getElementById('overlayAcknowledgeMid').style.display = 'none'
     }
 
-    document.getElementById('overlayDismiss').innerHTML = dismiss
+    document.getElementById('overlayDismiss').textContent = dismiss
 }
 
 /**

@@ -717,6 +717,23 @@ app.on('ready', async () => {
         }
     )
 
+    // SECURITY: Content Security Policy (CSP)
+    // Block remote scripts, objects, and frames. allow inline styles/scripts for now (stability).
+    // Connect-src * is required for P2P, Mojang, and Microsoft Auth.
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+        // Only enforce strict CSP on local app files (file://) and DevTools
+        if (details.url.startsWith('file://') || details.url.startsWith('devtools://')) {
+            callback({
+                responseHeaders: {
+                    ...details.responseHeaders,
+                    'Content-Security-Policy': ["default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' https:; connect-src 'self' *; object-src 'none'; media-src 'self' https:; worker-src 'self'; frame-ancestors 'none'; form-action 'self';"]
+                }
+            })
+        } else {
+            callback({ responseHeaders: details.responseHeaders })
+        }
+    })
+
 
     createWindow()
     createMenu()

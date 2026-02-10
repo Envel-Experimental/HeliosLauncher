@@ -193,10 +193,11 @@ const refreshMojangStatuses = async function () {
 
     for (let i = 0; i < statuses.length; i++) {
         const service = statuses[i]
+        const safeName = service.name.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;")
 
         const tooltipHTML = `<div class="mojangStatusContainer">
             <span class="mojangStatusIcon" style="color: ${MojangRestAPI.statusToHex(service.status)};">&#8226;</span>
-            <span class="mojangStatusName">${service.name}</span>
+            <span class="mojangStatusName">${safeName}</span>
         </div>`
         if (service.essential) {
             tooltipEssentialHTML += tooltipHTML
