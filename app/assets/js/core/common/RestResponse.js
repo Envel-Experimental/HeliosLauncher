@@ -11,10 +11,21 @@ function isDisplayableError(it) {
 }
 
 async function handleFetchError(operation, error, logger, dataProvider) {
-     const response = {
+    // Serialize Error object to ensure message/stack survive JSON.stringify (IPC)
+    let serializedError = error;
+    if (error instanceof Error) {
+        serializedError = {
+            message: error.message,
+            stack: error.stack,
+            code: error.code,
+            ...error // Spread any other custom properties
+        }
+    }
+
+    const response = {
         data: dataProvider ? dataProvider() : null,
         responseStatus: RestResponseStatus.ERROR,
-        error
+        error: serializedError
     };
     logger.error(`Error during ${operation}`, error);
     return response;

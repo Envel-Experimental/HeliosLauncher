@@ -544,6 +544,12 @@ class P2PEngine extends EventEmitter {
 
             attemptedPeers.add(bestPeer)
 
+            // RACE CONDITION FIX: Ensure socket is still open before attempting request
+            if (bestPeer.socket.destroyed) {
+                if (isDev) console.warn(`[P2PEngine] Peer ${bestPeer.getIP()} disconnected before request could be sent. Retrying...`)
+                continue
+            }
+
             try {
                 await this._executeSingleRequest(bestPeer, stream, hash, expectedSize, relPath, fileId, startOffset)
                 return // Success

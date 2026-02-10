@@ -12,6 +12,14 @@ const settingsState = {
     invalid: new Set()
 }
 
+function formatSpeed(bytesPerSec) {
+    if (bytesPerSec < 1024) return bytesPerSec.toFixed(0) + ' B/s'
+    const k = 1024
+    const sizes = ['KB/s', 'MB/s', 'GB/s']
+    const i = Math.floor(Math.log(bytesPerSec) / Math.log(k)) - 1
+    return parseFloat((bytesPerSec / Math.pow(k, i + 1)).toFixed(2)) + ' ' + sizes[i]
+}
+
 function bindSettingsSelect() {
     for (let ele of document.getElementsByClassName('settingsSelectContainer')) {
         const selectedDiv = ele.getElementsByClassName('settingsSelectSelected')[0]
@@ -223,13 +231,7 @@ const getP2PStatsMarkup = (info) => {
         }
     }
 
-    const formatSpeed = (bytesPerSec) => {
-        if (bytesPerSec < 1024) return bytesPerSec.toFixed(0) + ' B/s'
-        const k = 1024
-        const sizes = ['KB/s', 'MB/s', 'GB/s']
-        const i = Math.floor(Math.log(bytesPerSec) / Math.log(k)) - 1
-        return parseFloat((bytesPerSec / Math.pow(k, i + 1)).toFixed(2)) + ' ' + sizes[i]
-    }
+
 
     let globalStatusText = 'Отключен'
     let globalStatusColor = '#ff4444'
@@ -470,13 +472,7 @@ const updateP2PStatsUI = (info) => {
         disabled.style.display = info.running ? 'none' : 'flex'
     }
 
-    const formatSpeed = (bytesPerSec) => {
-        if (bytesPerSec < 1024) return bytesPerSec.toFixed(0) + ' B/s'
-        const k = 1024
-        const sizes = ['KB/s', 'MB/s', 'GB/s']
-        const i = Math.floor(Math.log(bytesPerSec) / Math.log(k)) - 1
-        return parseFloat((bytesPerSec / Math.pow(k, i + 1)).toFixed(2)) + ' ' + sizes[i]
-    }
+
 
     if (info.running) {
         if (el('p2p-global-topic')) el('p2p-global-topic').innerText = info.topic

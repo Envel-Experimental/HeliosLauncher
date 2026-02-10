@@ -6,21 +6,21 @@ const PROFILES = {
         maxPeers: 3,
         bufferSize: 16 * 1024, // 16KB
         passive: true, // Passive seeding only (do not actively announce as a major source)
-        weight: 1
+        weight: 5
     },
     MID: {
         name: 'MID',
         maxPeers: 15,
         bufferSize: 64 * 1024, // 64KB
         passive: false,
-        weight: 5
+        weight: 25
     },
     HIGH: {
         name: 'HIGH',
         maxPeers: 50,
         bufferSize: 512 * 1024, // 512KB
         passive: false, // Aggressive seeding
-        weight: 10
+        weight: 50
     }
 }
 
