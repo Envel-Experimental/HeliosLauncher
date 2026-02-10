@@ -98,6 +98,7 @@ class P2PEngine extends EventEmitter {
         this.usageTracker = new UsageTracker()
 
         this.starting = false
+        this.stopping = false
         this._discoveryPromise = null
         this.profile = NodeAdapter.getProfile()
         this.activeUploads = 0
@@ -209,6 +210,7 @@ class P2PEngine extends EventEmitter {
         if (this.swarm || this.starting) return // Already running or starting
 
         this.starting = true
+        this.stopping = false
         try {
             await PeerPersistence.load()
             await this.init()
@@ -248,12 +250,19 @@ class P2PEngine extends EventEmitter {
 
     async stop() {
         this.starting = false
+        this.stopping = true
         if (this.swarm) {
             // console.log('[P2PEngine] Stopping...')
-            await this.swarm.destroy()
-            this.swarm = null
-            this.peers = []
+            const swarm = this.swarm
+            this.swarm = null // Nullify immediately to prevent new operations
+            this.peers = [] // Clear peers immediately
+            try {
+                await swarm.destroy()
+            } catch (e) {
+                // Ignore errors during destroy
+            }
         }
+        this.stopping = false
     }
 
     isLocalIP(ip) {
@@ -740,7 +749,7 @@ class P2PEngine extends EventEmitter {
     }
 
     reconfigureSwarm() {
-        if (!this.swarm) return
+        if (!this.swarm || this.stopping || this.swarm.destroyed) return
         const topic = SWARM_TOPIC
         // If critical (game running) OR health check failed (passive mode), disable server announcement
         const isCritical = NodeAdapter.isCritical()
