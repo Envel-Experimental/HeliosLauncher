@@ -61,8 +61,11 @@ const LangLoader = require('./app/assets/js/langloader')
 const SysUtil = require('./app/assets/js/sysutil')
 const ConfigManager = require('./app/assets/js/configmanager')
 
+const { MOJANG_MIRRORS } = require('./network/config')
+
 const P2PEngine = require('./network/P2PEngine')
 const RaceManager = require('./network/RaceManager')
+const MirrorManager = require('./network/MirrorManager')
 
 // Set up single instance lock.
 const gotTheLock = app.requestSingleInstanceLock()
@@ -693,6 +696,13 @@ app.on('ready', async () => {
 
     // Initialize P2P Engine (After Config is loaded)
     P2PEngine.start()
+
+    // Initialize Mirror Manager
+    MirrorManager.init(MOJANG_MIRRORS)
+
+    ipcMain.handle('mirrors:getStatus', () => {
+        return MirrorManager.getMirrorStatus()
+    })
 
     ipcMain.handle('p2p:getInfo', () => {
         return P2PEngine.getNetworkInfo()

@@ -10,7 +10,7 @@ const { LoggerUtil } = require('../util/LoggerUtil');
 const { handleFetchError } = require('../common/RestResponse');
 const { MOJANG_MIRRORS } = require('../../../../../network/config');
 const ConfigManager = require('../../configmanager');
-const MirrorManager = require('./MirrorManager');
+const MirrorManager = require('../../../../../network/MirrorManager');
 
 class MojangIndexProcessor extends IndexProcessor {
     static LAUNCHER_JSON_ENDPOINT = 'https://launchermeta.mojang.com/mc/launcher.json';

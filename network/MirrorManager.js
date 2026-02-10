@@ -1,4 +1,4 @@
-const { LoggerUtil } = require('../util/LoggerUtil')
+const { LoggerUtil } = require('../app/assets/js/core/util/LoggerUtil')
 
 const log = LoggerUtil.getLogger('MirrorManager')
 
@@ -175,15 +175,17 @@ class MirrorManager {
         }
     }
 
-    _findMirrorByUrl(url) {
-        // Heuristic: Check if the provided URL starts with any mirror's base URL properties
-        return this.mirrors.find(m => {
-            const c = m.config
-            return (c.assets && url.startsWith(c.assets)) ||
-                (c.libraries && url.startsWith(c.libraries)) ||
-                (c.client && url.startsWith(c.client)) ||
-                (c.version_manifest && url.startsWith(c.version_manifest))
-        })
+    /**
+     * Get a sanitized status report for all mirrors.
+     * Use this for UI display to avoid exposing full URLs/IPs if sensitive.
+     * @returns {Array<Object>} Array of status objects { name, latency, status }
+     */
+    getMirrorStatus() {
+        return this.mirrors.map((m, index) => ({
+            name: m.config.name || `Mirror #${index + 1}`,
+            latency: m.latency === 9999 ? -1 : m.latency,
+            status: m.status
+        }))
     }
 }
 

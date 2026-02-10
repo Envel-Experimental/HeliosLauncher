@@ -624,8 +624,10 @@ class PeerHandler {
 
                     const isLocal = this.engine.isLocalIP(remoteIP)
                     if (isLocal) {
+                        this.engine.uploadBytesLocal += chunk.length
                         this.engine.totalUploadedLocal = (this.engine.totalUploadedLocal || 0) + chunk.length
                     } else {
+                        this.engine.uploadBytesGlobal += chunk.length
                         this.engine.totalUploadedGlobal = (this.engine.totalUploadedGlobal || 0) + chunk.length
                     }
 

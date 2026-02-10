@@ -140,15 +140,28 @@ class P2PEngine extends EventEmitter {
 
         // Dynamic Bandwidth Management
         this.currentDownloadSpeed = 0
-        this.downloadBytesInWindow = 0
+        this.currentUploadSpeed = 0
+        this.currentDownloadSpeedLocal = 0
+        this.currentUploadSpeedLocal = 0
+        this.downloadBytesLocal = 0
+        this.downloadBytesGlobal = 0
+        this.uploadBytesLocal = 0
+        this.uploadBytesGlobal = 0
         this.maxObservedDownloadSpeed = 0
         this.highBandwidthMode = false
         this.lastLimitUpdate = 0
 
         // Speed & Resource Monitor (Every 2 seconds)
         setInterval(() => {
-            this.currentDownloadSpeed = this.downloadBytesInWindow / 2 // B/s
-            this.downloadBytesInWindow = 0 // Reset window
+            this.currentDownloadSpeed = this.downloadBytesGlobal / 2 // B/s
+            this.currentUploadSpeed = this.uploadBytesGlobal / 2 // B/s
+            this.currentDownloadSpeedLocal = this.downloadBytesLocal / 2 // B/s
+            this.currentUploadSpeedLocal = this.uploadBytesLocal / 2 // B/s
+
+            this.downloadBytesLocal = 0
+            this.downloadBytesGlobal = 0
+            this.uploadBytesLocal = 0
+            this.uploadBytesGlobal = 0
 
             if (this.currentDownloadSpeed > this.maxObservedDownloadSpeed) {
                 this.maxObservedDownloadSpeed = this.currentDownloadSpeed
@@ -653,7 +666,11 @@ class P2PEngine extends EventEmitter {
             }
 
             // Track for Speed Monitor
-            this.downloadBytesInWindow += data.length
+            if (req.peer.isLocal()) {
+                this.downloadBytesLocal += data.length
+            } else {
+                this.downloadBytesGlobal += data.length
+            }
 
             req.stream.push(data)
         }
@@ -987,7 +1004,11 @@ class P2PEngine extends EventEmitter {
             running: !!this.swarm,
             listening: !!this.swarm, // Added for UI compatibility
             mode: isEffectivelyPassive ? 'Passive (Leech)' : 'Active (Seed)',
-            profile: this.profile.name
+            profile: this.profile.name,
+            downloadSpeed: this.currentDownloadSpeed || 0,
+            uploadSpeed: this.currentUploadSpeed || 0,
+            downloadSpeedLocal: this.currentDownloadSpeedLocal || 0,
+            uploadSpeedLocal: this.currentUploadSpeedLocal || 0
         }
     }
 

@@ -11,7 +11,7 @@ const RaceManager = require('../../../../../network/RaceManager');
 const { MAX_PARALLEL_DOWNLOADS } = require('../../../../../network/constants');
 const ConfigManager = require('../../configmanager');
 const isDev = require('../../isdev');
-const MirrorManager = require('./MirrorManager');
+const MirrorManager = require('../../../../../network/MirrorManager');
 
 const log = LoggerUtil.getLogger('DownloadEngine');
 
