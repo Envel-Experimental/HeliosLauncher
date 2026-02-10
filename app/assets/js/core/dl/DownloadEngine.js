@@ -11,6 +11,7 @@ const RaceManager = require('../../../../../network/RaceManager');
 const { MAX_PARALLEL_DOWNLOADS } = require('../../../../../network/constants');
 const ConfigManager = require('../../configmanager');
 const isDev = require('../../isdev');
+const MirrorManager = require('./MirrorManager');
 
 const log = LoggerUtil.getLogger('DownloadEngine');
 
@@ -216,6 +217,9 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
         const currentUrl = typeof candidate === 'string' ? candidate : candidate.url;
         const currentHash = typeof candidate === 'object' && candidate.hash ? candidate.hash : hash;
 
+        // Start Timing for MirrorManager
+        const downloadStartTime = Date.now();
+
         // Strict Blocking: If P2P Only Mode is enabled, BLOCK all official Mojang/Minecraft domains
         // But ALLOW mirrors (which are not mojang.com/minecraft.net)
         if (ConfigManager.getP2POnlyMode()) {
@@ -327,6 +331,9 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
             if (await validateLocalFile(tempPath, algo, currentHash)) {
                 // Success! Atomic rename to final path
                 await fs.rename(tempPath, decodedPath);
+
+                // Report Success to MirrorManager
+                MirrorManager.reportSuccess(currentUrl, Date.now() - downloadStartTime, loaded);
                 return;
             } else {
                 if (isDev) console.error(`[DownloadEngine] Validation failed for ${asset.id}. File size: ${loaded} / ${total}`)
@@ -368,6 +375,9 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
                     method: 'Unknown', // Headers scope is limited, simplifying for safety or need to recalc
                     error: err.message
                 });
+
+                // Report Failure to MirrorManager (network or validation error)
+                MirrorManager.reportFailure(currentUrl);
             }
 
             if (instantDefer) {

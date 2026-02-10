@@ -10,6 +10,7 @@ const { LoggerUtil } = require('../util/LoggerUtil');
 const { handleFetchError } = require('../common/RestResponse');
 const { MOJANG_MIRRORS } = require('../../../../../network/config');
 const ConfigManager = require('../../configmanager');
+const MirrorManager = require('./MirrorManager');
 
 class MojangIndexProcessor extends IndexProcessor {
     static LAUNCHER_JSON_ENDPOINT = 'https://launchermeta.mojang.com/mc/launcher.json';
@@ -47,7 +48,10 @@ class MojangIndexProcessor extends IndexProcessor {
         const fallbacks = [];
         if (!MOJANG_MIRRORS) return fallbacks;
 
-        for (const mirror of MOJANG_MIRRORS) {
+        if (!MOJANG_MIRRORS) return fallbacks;
+
+        const mirrors = MirrorManager.getSortedMirrors()
+        for (const mirror of mirrors) {
             const manifest = await this.getMirrorManifest(mirror);
             if (manifest && manifest.versions) {
                 const versionInfo = manifest.versions.find(v => v.id === versionId);
@@ -60,6 +64,7 @@ class MojangIndexProcessor extends IndexProcessor {
     }
 
     async init() {
+        await MirrorManager.init(MOJANG_MIRRORS)
         const versionManifest = await this.loadVersionManifest();
         this.versionJson = await this.loadVersionJson(this.version, versionManifest);
         this.assetIndex = await this.loadAssetIndex(this.versionJson);
@@ -117,7 +122,8 @@ class MojangIndexProcessor extends IndexProcessor {
         const candidates = [...extraFallbacks];
 
         if (MOJANG_MIRRORS && MOJANG_MIRRORS.length > 0) {
-            for (const mirror of MOJANG_MIRRORS) {
+            const mirrors = MirrorManager.getSortedMirrors()
+            for (const mirror of mirrors) {
                 if (url.includes(MojangIndexProcessor.ASSET_RESOURCE_ENDPOINT) && mirror.assets) {
                     candidates.push(url.replace(MojangIndexProcessor.ASSET_RESOURCE_ENDPOINT, mirror.assets));
                 } else if (url.includes(MojangIndexProcessor.PISTON_META_BASE) && mirror.piston_meta) {
@@ -149,7 +155,8 @@ class MojangIndexProcessor extends IndexProcessor {
 
         const candidates = [];
         if (MOJANG_MIRRORS && MOJANG_MIRRORS.length > 0) {
-            for (const mirror of MOJANG_MIRRORS) {
+            const mirrors = MirrorManager.getSortedMirrors()
+            for (const mirror of mirrors) {
                 if (mirror.version_manifest) {
                     candidates.push(mirror.version_manifest);
                 }
@@ -238,7 +245,8 @@ class MojangIndexProcessor extends IndexProcessor {
 
                 const fallbackUrls = [];
                 if (MOJANG_MIRRORS && MOJANG_MIRRORS.length > 0) {
-                    for (const mirror of MOJANG_MIRRORS) {
+                    const mirrors = MirrorManager.getSortedMirrors()
+                    for (const mirror of mirrors) {
                         if (mirror.assets) {
                             fallbackUrls.push(`${mirror.assets}/${hash.substring(0, 2)}/${hash}`);
                         }
@@ -292,7 +300,9 @@ class MojangIndexProcessor extends IndexProcessor {
                                 algo: HashAlgo.SHA1,
                                 size: artifact.size,
                                 url: artifact.url,
-                                fallbackUrls: MOJANG_MIRRORS.map(m => m.libraries ? artifact.url.replace('https://libraries.minecraft.net', m.libraries) : null).filter(Boolean), // Assuming libraries mirror logic if needed, or strict.
+                                size: artifact.size,
+                                url: artifact.url,
+                                fallbackUrls: MirrorManager.getSortedMirrors().map(m => m.libraries ? artifact.url.replace('https://libraries.minecraft.net', m.libraries) : null).filter(Boolean), // Assuming libraries mirror logic if needed, or strict.
                                 // Actually, libraries usually come from libraries.minecraft.net. 
                                 // Ideally we should have a 'libraries' field in config? Or just use 'assets' generically?
                                 // User request was generic. Let's stick to known overrides.
@@ -330,7 +340,9 @@ class MojangIndexProcessor extends IndexProcessor {
                 size: versionJson.downloads.client.size,
                 url: versionJson.downloads.client.url,
                 path: versionJarPath,
-                fallbackUrls: MOJANG_MIRRORS.map(m => m.client ? versionJson.downloads.client.url.replace('https://piston-data.mojang.com', m.client) : null).filter(Boolean)
+                url: versionJson.downloads.client.url,
+                path: versionJarPath,
+                fallbackUrls: MirrorManager.getSortedMirrors().map(m => m.client ? versionJson.downloads.client.url.replace('https://piston-data.mojang.com', m.client) : null).filter(Boolean)
             }];
         }
         return [];
