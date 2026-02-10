@@ -180,8 +180,37 @@ class GameCrashHandler {
      * @param {number} code Exit code.
      */
     showGenericCrashOverlay(code) {
-        const exitMessage = `Process exited with code: ${code}`
-        sendToSentry(exitMessage, 'error')
+        // IMPROVED CRASH REPORTING: Extract "Smart" Signature for Sentry Grouping
+        let sentryMessage = `Process exited with code: ${code}`
+        let sentryType = 'error'
+
+        if (this.logBuffer && this.logBuffer.length > 0) {
+            const fullLog = this.logBuffer.join('\n')
+
+            // Common Java Exception Patterns
+            const exceptionMatch = fullLog.match(/Exception in thread "[^"]+" ([\w\.]+)/) ||
+                fullLog.match(/(java\.lang\.[\w]+Exception)/) ||
+                fullLog.match(/(java\.lang\.[\w]+Error)/) ||
+                fullLog.match(/([a-zA-Z0-9_\.]*Exception)/)
+
+            if (exceptionMatch) {
+                // Found a specific Java exception (e.g. java.lang.UnsatisfiedLinkError)
+                // Use this as the error message so Sentry groups them together
+                sentryMessage = `Game Crash: ${exceptionMatch[1]}`
+            } else if (fullLog.includes('Out of memory')) {
+                sentryMessage = 'Game Crash: Out of Memory'
+            } else if (fullLog.includes('EXCEPTION_ACCESS_VIOLATION')) {
+                sentryMessage = 'Game Crash: Native Access Violation'
+            }
+
+            // Append log tail to the *details* (stack trace / context) not the title/message if possible
+            // But since we are using captureException(new Error(msg)), we can append it after a newline
+            // Sentry usually groups by the first line or the type.
+            const logTail = this.logBuffer.slice(-25).join('\n')
+            sentryMessage += `\n\n--- Log Tail ---\n${logTail}`
+        }
+
+        sendToSentry(sentryMessage, sentryType)
 
         setOverlayContent(
             Lang.queryJS('processbuilder.exit.crash.title'),

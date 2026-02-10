@@ -317,14 +317,26 @@ class LaunchArgumentBuilder {
         const libs = {}
         const libArr = this.vanillaManifest.libraries
 
-        fs.ensureDirSync(tempNativePath)
+        await fs.ensureDir(tempNativePath)
 
-        for (const lib of libArr) {
-            if (isLibraryCompatible(lib.rules, lib.natives)) {
+        // Dynamic import for ESM p-limit
+        const { default: pLimit } = await import('p-limit')
+        const limit = pLimit(8) // Concurrency 8
+
+        // Track items to clean up after extraction to avoid race conditions (EPERM/ENOTEMPTY)
+        // Access to this set must be synchronized or just pushing is fine in JS event loop (single threaded)
+        // Set to avoid duplicates
+        const globalExclusions = new Set()
+
+        const tasks = libArr.map(lib => {
+            return limit(async () => {
+                if (!isLibraryCompatible(lib.rules, lib.natives)) return
+
+                let exclusions = []
                 if (lib.natives != null) {
-                    await this._extractNative(lib, tempNativePath)
+                    exclusions = await this._extractNative(lib, tempNativePath)
                 } else if (lib.name.includes('natives-')) {
-                    await this._extractNativeNew(lib, tempNativePath, nativesRegex)
+                    exclusions = await this._extractNativeNew(lib, tempNativePath, nativesRegex)
                 } else {
                     const dlInfo = lib.downloads
                     const artifact = dlInfo.artifact
@@ -332,8 +344,29 @@ class LaunchArgumentBuilder {
                     const versionIndependentId = lib.name.substring(0, lib.name.lastIndexOf(':'))
                     libs[versionIndependentId] = to
                 }
+
+                if (exclusions) {
+                    exclusions.forEach(e => globalExclusions.add(e))
+                }
+            })
+        })
+
+        await Promise.all(tasks)
+
+        // Post-Extraction Cleanup (Synchronized)
+        // Remove META-INF and other exclusions *after* all files are extracted.
+        for (const item of globalExclusions) {
+            const target = path.join(tempNativePath, item)
+            // Force remove, ignore errors if already gone
+            try {
+                if (await fs.pathExists(target)) {
+                    await fs.remove(target)
+                }
+            } catch (e) {
+                logger.warn('Failed to clean up native exclusion:', target, e)
             }
         }
+
         return libs
     }
 
@@ -341,43 +374,26 @@ class LaunchArgumentBuilder {
         const exclusionArr = lib.extract != null ? lib.extract.exclude : ['META-INF/']
         const artifact = lib.downloads.classifiers[lib.natives[getMojangOS()].replace('${arch}', process.arch.replace('x', ''))]
         const to = path.join(this.libPath, artifact.path)
-        await this._unzip(to, tempNativePath, exclusionArr)
+        await this._unzip(to, tempNativePath)
+        return exclusionArr
     }
 
     async _extractNativeNew(lib, tempNativePath, nativesRegex) {
         const regexTest = nativesRegex.exec(lib.name)
         const arch = regexTest[2] ?? 'x64'
-        if (arch != process.arch) return
+        if (arch != process.arch) return null
 
         const exclusionArr = lib.extract != null ? lib.extract.exclude : ['META-INF/', '.git', '.sha1']
         const artifact = lib.downloads.artifact
         const to = path.join(this.libPath, artifact.path)
 
-        await this._unzip(to, tempNativePath, exclusionArr, true)
+        await this._unzip(to, tempNativePath)
+        return exclusionArr
     }
 
-    async _unzip(zipPath, dest, exclude, flatten = false) {
+    async _unzip(zipPath, dest) {
         try {
             await extractZip(zipPath, dest)
-
-            // Post-extraction cleanup: Delete excluded files from the destination
-            // Since we extracted EVERYTHING, we need to walk the destination and remove unwanted files.
-            // However, exclude list in standard Natives is usually folders like 'META-INF/'.
-            // Simple approach: Check specific excluded items. 
-            // Better approach for 'META-INF/': Just delete that folder if it exists.
-
-            for (const item of exclude) {
-                const target = path.join(dest, item)
-                if (await fs.pathExists(target)) {
-                    await fs.remove(target)
-                }
-            }
-
-            // Flattening is tricky with bulk extraction. 
-            // Natives usually don't need flattening if the archive structure is correct (root level dlls).
-            // But if 'flatten' is true, we might need to move files from subdirectories to root.
-            // Legacy 'natives-' jars often have dlls at root, so flattening might be a no-op or just for safety.
-
         } catch (e) {
             logger.error('Error extracting native:', e)
         }
