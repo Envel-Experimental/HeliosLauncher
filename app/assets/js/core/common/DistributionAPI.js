@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const { resolve } = require('path');
 const fs = require('fs/promises');
 const { LoggerUtil } = require('../util/LoggerUtil');
@@ -114,7 +115,6 @@ class DistributionAPI {
                         // Use raw buffer for verification to avoid canonicalization issues
                         const contentBuffer = rawBuffer;
 
-                        const crypto = require('crypto')
                         // ASN.1 Header for Ed25519 Public Key (SPKI)
                         const ED25519_SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex')
 
@@ -147,6 +147,16 @@ class DistributionAPI {
             }
 
             console.log('[DistributionAPI] Final signatureValid state:', signatureValid);
+
+            if (!signatureValid && this.trustedKeys && this.trustedKeys.length > 0) {
+                const err = new Error('Distribution signature verification failed.');
+                err.dataPackage = {
+                    data: data,
+                    responseStatus: RestResponseStatus.SUCCESS,
+                    signatureValid: false
+                }
+                throw err;
+            }
 
             return {
                 data: data,

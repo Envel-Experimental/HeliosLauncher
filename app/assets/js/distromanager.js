@@ -22,12 +22,23 @@ const api = new DistributionAPI(
 const originalPullRemote = api.pullRemote.bind(api)
 api.pullRemote = async () => {
     // console.log('[DistroManager] Intercepting pullRemote...');
-    const result = await originalPullRemote()
+    let result;
+    try {
+        result = await originalPullRemote()
+    } catch (err) {
+        if (err.dataPackage && err.dataPackage.signatureValid === false) {
+            console.log('[DistroManager] Signature INVALID! Triggering overlay.');
+            result = err.dataPackage;
+            // Fallthrough to overlay logic
+        } else {
+            throw err;
+        }
+    }
+
     // console.log('[DistroManager] Result:', result ? { ...result, data: '...' } : 'null');
 
     // Ed25519 Signature Verification
     if (result.data != null && result.signatureValid === false) {
-        console.log('[DistroManager] Signature INVALID! Triggering overlay.');
         // Construct the prompt
         // Using a Promise to halt execution until user decides
         return new Promise((resolve) => {
@@ -72,7 +83,11 @@ api.pullRemote = async () => {
                     resetUI()
                     // Add small delay
                     setTimeout(async () => {
-                        resolve(await api.pullRemote())
+                        try {
+                            resolve(await api.pullRemote())
+                        } catch (e) {
+                            resolve(await api.pullRemote())
+                        }
                     }, 500)
                 })
 
