@@ -63,7 +63,7 @@ class ProcessBuilder {
      * 
      * @returns {ChildProcess} The spawned child process.
      */
-    build() {
+    async build() {
         fs.ensureDirSync(this.gameDir)
         const tempNativePath = this._setupTempNatives()
 
@@ -86,7 +86,7 @@ class ProcessBuilder {
         }
 
         // 3. Construct Arguments
-        let args = this.argBuilder.constructJVMArguments(
+        let args = await this.argBuilder.constructJVMArguments(
             modObj.fMods.concat(modObj.lMods),
             tempNativePath,
             this.usingFabricLoader,

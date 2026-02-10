@@ -2,7 +2,7 @@ const fs = require('fs/promises')
 const { createReadStream } = require('fs')
 const crypto = require('crypto')
 const path = require('path')
-const AdmZip = require('adm-zip')
+
 const { exec } = require('child_process')
 const util = require('util')
 const execAsync = util.promisify(exec)
@@ -67,15 +67,64 @@ function calculateHashByBuffer(buffer, algo) {
     return crypto.createHash(algorithm).update(buffer).digest('hex');
 }
 
+// Worker removed in favor of system tools
+
+
 async function extractZip(archivePath, onEntry) {
-    const zip = new AdmZip(archivePath);
-    const entries = zip.getEntries();
+    const destDir = path.dirname(archivePath);
+    const isWin = process.platform === 'win32';
 
-    zip.extractAllTo(path.dirname(archivePath), true);
+    // 1. Extraction
+    if (isWin) {
+        // Try tar first (Windows 10+), fallback to PowerShell
+        try {
+            await execAsync(`tar -xf "${archivePath}" -C "${destDir}"`);
+        } catch (e) {
+            // Fallback to PowerShell for older Windows
+            const cmd = `Expand-Archive -LiteralPath '${archivePath}' -DestinationPath '${destDir}' -Force`;
+            await execAsync(`powershell -NoProfile -Command "${cmd}"`);
+        }
+    } else {
+        await execAsync(`unzip -o "${archivePath}" -d "${destDir}"`);
+    }
 
+    // 2. Mock 'onEntry' for JavaGuard compatibility
+    // JavaGuard needs to know the root folder name.
+    // We can list the zip content to find it.
     if (onEntry) {
+        let entries = [];
+        try {
+            if (isWin) {
+                // tar -tf works on Win10+
+                // PowerShell fallback for listing:
+                // $zip = [System.IO.Compression.ZipFile]::OpenRead("path"); $zip.Entries | Select -ExpandProperty FullName
+                try {
+                    const { stdout } = await execAsync(`tar -tf "${archivePath}"`);
+                    entries = stdout.split(/\r?\n/);
+                } catch (e) {
+                    // PowerShell fallback
+                    const psCmd = `
+                        Add-Type -AssemblyName System.IO.Compression.FileSystem;
+                        [System.IO.Compression.ZipFile]::OpenRead('${archivePath}').Entries | Select-Object -ExpandProperty FullName
+                     `;
+                    const { stdout } = await execAsync(`powershell -NoProfile -Command "${psCmd.replace(/\n/g, '')}"`);
+                    entries = stdout.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+                }
+            } else {
+                const { stdout } = await execAsync(`unzip -Z1 "${archivePath}"`);
+                entries = stdout.split('\n');
+            }
+        } catch (e) {
+            console.warn('[FileUtils] Failed to list zip entries, JavaGuard detection might fail.', e);
+        }
+
         const entriesObj = {};
-        entries.forEach(e => entriesObj[e.entryName] = e);
+        entries.forEach(name => {
+            // Normalize slashes
+            const n = name.replace(/\\/g, '/');
+            if (n) entriesObj[n] = { entryName: n };
+        });
+
         await onEntry({ entries: () => entriesObj });
     }
 }
@@ -91,4 +140,36 @@ async function extractTarGz(archivePath, onEntry) {
     }
 }
 
-module.exports = { validateLocalFile, safeEnsureDir, getLibraryDir, getVersionDir, getVersionJsonPath, getVersionJarPath, calculateHashByBuffer, extractZip, extractTarGz }
+async function readFileFromZip(archivePath, entryName) {
+    const isWin = process.platform === 'win32';
+    const entryPath = entryName.replace(/\\/g, '/'); // Zip standard is forward slashes
+
+    if (isWin) {
+        try {
+            // tar -xOf "archive" "member"
+            // -O extracts to stdout
+            const { stdout } = await execAsync(`tar -xOf "${archivePath}" "${entryPath}"`);
+            return stdout;
+        } catch (e) {
+            // PowerShell Fallback
+            // Note: This reads text. For binary, we might need encoding adjustments, but version.json is text.
+            const psCmd = `
+                Add-Type -AssemblyName System.IO.Compression.FileSystem;
+                $zip = [System.IO.Compression.ZipFile]::OpenRead('${archivePath}');
+                $entry = $zip.GetEntry('${entryPath}');
+                if ($entry) {
+                    $reader = [System.IO.StreamReader]::new($entry.Open());
+                    $reader.ReadToEnd();
+                }
+            `;
+            const { stdout } = await execAsync(`powershell -NoProfile -Command "${psCmd.replace(/\n/g, '')}"`);
+            return stdout;
+        }
+    } else {
+        // unzip -p "archive" "member"
+        const { stdout } = await execAsync(`unzip -p "${archivePath}" "${entryPath}"`);
+        return stdout;
+    }
+}
+
+module.exports = { validateLocalFile, safeEnsureDir, getLibraryDir, getVersionDir, getVersionJsonPath, getVersionJarPath, calculateHashByBuffer, extractZip, extractTarGz, readFileFromZip }

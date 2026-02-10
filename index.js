@@ -444,6 +444,8 @@ function createWindow() {
         },
         backgroundColor: '#171614'
     })
+    const LaunchController = require('./app/assets/js/core/LaunchController')
+    LaunchController.setWindow(win)
     remoteMain.enable(win.webContents)
 
     const data = {
@@ -694,8 +696,9 @@ app.on('ready', async () => {
         }
     }
 
-    // Initialize P2P Engine (After Config is loaded)
-    P2PEngine.start()
+    // Initialize LaunchController
+    const LaunchController = require('./app/assets/js/core/LaunchController')
+    LaunchController.init()
 
     // Initialize Mirror Manager
     MirrorManager.init(MOJANG_MIRRORS)

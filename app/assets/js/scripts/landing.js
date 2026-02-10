@@ -131,7 +131,7 @@ document.getElementById('launch_button').addEventListener('click', async e => {
             toggleLaunchArea(true)
             setLaunchPercentage(0, 100)
 
-            const details = await validateSelectedJvm(ensureJavaDirIsRoot(jExe), server.effectiveJavaOptions.supported)
+            const details = await ipcRenderer.invoke('sys:validateJava', ensureJavaDirIsRoot(jExe), server.effectiveJavaOptions.supported)
             if (details != null) {
                 loggerLanding.info('Jvm Details', details)
                 await dlAsync()
@@ -299,6 +299,18 @@ async function showOfflineWarning() {
 
 /* System (Java) Scan */
 
+// Keep reference to Minecraft Process
+let proc
+// Is DiscordRPC enabled
+let hasRPC = false
+// Joined server regex
+// Change this if your server uses something different.
+const GAME_JOINED_REGEX = /\[.+\]: Sound engine started/
+const GAME_LAUNCH_REGEX = /^\[.+\]: (?:MinecraftForge .+ Initialized|ModLauncher .+ starting: .+|Loading Minecraft .+ with Fabric Loader .+)$/
+const MIN_LINGER = 5000
+
+/* System (Java) Scan */
+
 /**
  * Asynchronously scan the system for valid Java installations.
  *
@@ -310,10 +322,10 @@ async function asyncSystemScan(effectiveJavaOptions, launchAfter = true) {
     toggleLaunchArea(true)
     setLaunchPercentage(0, 100)
 
-    const jvmDetails = await discoverBestJvmInstallation(
-        ConfigManager.getDataDirectory(),
-        effectiveJavaOptions.supported
-    )
+    // IPC Call to Main Process
+    const jvmDetails = await ipcRenderer.invoke('sys:scanJava', {
+        version: effectiveJavaOptions.supported
+    })
 
     if (jvmDetails == null) {
         // If the result is null, no valid Java installation was found.
@@ -359,7 +371,18 @@ async function asyncSystemScan(effectiveJavaOptions, launchAfter = true) {
         toggleOverlay(true, true)
     } else {
         // Java installation found, use this to launch the game.
-        const javaExec = javaExecFromRoot(jvmDetails.path)
+        // We assume Main process returns the full path including executable
+        let javaExec = jvmDetails.path
+        if (jvmDetails.executable) javaExec = jvmDetails.executable // If object returned
+
+        // Ensure we get the executable path if the scanner returns the home dir
+        if (!javaExec.endsWith('java') && !javaExec.endsWith('java.exe') && !javaExec.endsWith('javaw.exe')) {
+            // We can't resolve this easily in Renderer without path/fs access if we are strict.
+            // But we still have nodeIntegration for now.
+            const { javaExecFromRoot } = require('./assets/js/core/java/JavaGuard')
+            javaExec = javaExecFromRoot(javaExec)
+        }
+
         ConfigManager.setJavaExecutable(ConfigManager.getSelectedServer(), javaExec)
         ConfigManager.save()
 
@@ -368,8 +391,6 @@ async function asyncSystemScan(effectiveJavaOptions, launchAfter = true) {
         settingsJavaExecVal.value = javaExec
         await populateJavaExecDetails(settingsJavaExecVal.value)
 
-        // TODO Callback hell, refactor
-        // TODO Move this out, separate concerns.
         if (launchAfter) {
             await dlAsync()
         }
@@ -378,78 +399,59 @@ async function asyncSystemScan(effectiveJavaOptions, launchAfter = true) {
 }
 
 async function downloadJava(effectiveJavaOptions, launchAfter = true) {
+    if (!effectiveJavaOptions) effectiveJavaOptions = {}
 
-    // TODO Error handling.
-    // asset can be null.
-    const asset = await latestOpenJDK(
-        effectiveJavaOptions.suggestedMajor,
-        ConfigManager.getDataDirectory(),
-        effectiveJavaOptions.distribution)
+    // Temporary: Use a hardcoded object if effectiveJavaOptions is empty or mismatched,
+    // assuming standard key names from the distro logic.
+    // effectiveJavaOptions usually has: { platform, architecture, majorVersion (or suggestedMajor) }
 
-    if (asset == null) {
-        throw new Error(Lang.queryJS('landing.downloadJava.findJdkFailure'))
-    }
+    setLaunchDetails(Lang.queryJS('landing.dlAsync.preparingToLaunch')) // Generic "Preparing..."
+    toggleLaunchArea(true)
+    setLaunchPercentage(0, 100)
 
-    let received = 0
-    await downloadFile(asset, ({ transferred }) => {
-        received = transferred
-        setDownloadPercentage(Math.trunc((transferred / asset.size) * 100))
-    })
-    setDownloadPercentage(100)
+    const loggerLaunchSuite = LoggerUtil.getLogger('LaunchSuite')
 
-    if (received != asset.size) {
-        loggerLanding.warn(`Java Download: Expected ${asset.size} bytes but received ${received}`)
-        if (!await validateLocalFile(asset.path, asset.algo, asset.hash)) {
-            log.error(`Hashes do not match, ${asset.id} may be corrupted.`)
-            // Don't know how this could happen, but report it.
-            throw new Error(Lang.queryJS('landing.downloadJava.javaDownloadCorruptedError'))
+    // Listen for progress
+    const progressListener = (event, status) => {
+        if (status.type === 'download') {
+            setLaunchDetails(Lang.queryJS('landing.dlAsync.downloadingFiles')) // Reuse "Downloading Files"
+            setDownloadPercentage(status.progress)
+        } else if (status.type === 'extract') {
+            setLaunchDetails('Extracting Java...') // Hardcoded or new Lang key
+            setLaunchPercentage(100)
         }
     }
+    ipcRenderer.on('dl:progress', progressListener)
 
-    // Extract
-    // Show installing progress bar.
-    remote.getCurrentWindow().setProgressBar(2)
+    try {
+        // Invoke Main
+        const javaPath = await ipcRenderer.invoke('dl:downloadJava', {
+            major: effectiveJavaOptions.majorVersion || effectiveJavaOptions.suggestedMajor || 8,
+            distribution: effectiveJavaOptions.distribution || null
+        })
 
-    // Wait for extration to complete.
-    const eLStr = Lang.queryJS('landing.downloadJava.extractingJava')
-    let dotStr = ''
-    setLaunchDetails(eLStr)
-    const extractListener = setInterval(() => {
-        if (dotStr.length >= 3) {
-            dotStr = ''
-        } else {
-            dotStr += '.'
+        // Success
+        ConfigManager.setJavaExecutable(ConfigManager.getSelectedServer(), javaPath)
+        ConfigManager.save()
+
+        if (document.getElementById('settingsJavaExecVal')) {
+            document.getElementById('settingsJavaExecVal').value = javaPath
+            await populateJavaExecDetails(javaPath)
         }
-        setLaunchDetails(eLStr + dotStr)
-    }, 750)
 
-    const newJavaExec = await extractJdk(asset.path)
+        ipcRenderer.removeListener('dl:progress', progressListener)
 
-    // Extraction complete, remove the loading from the OS progress bar.
-    remote.getCurrentWindow().setProgressBar(-1)
+        if (launchAfter) {
+            await dlAsync()
+        }
 
-    // Extraction completed successfully.
-    ConfigManager.setJavaExecutable(ConfigManager.getSelectedServer(), newJavaExec)
-    ConfigManager.save()
-
-    clearInterval(extractListener)
-    setLaunchDetails(Lang.queryJS('landing.downloadJava.javaInstalled'))
-
-    // TODO Callback hell
-    // Refactor the launch functions
-    asyncSystemScan(effectiveJavaOptions, launchAfter)
-
+    } catch (err) {
+        ipcRenderer.removeListener('dl:progress', progressListener)
+        loggerLaunchSuite.error('Error downloading Java via Main Process.', err)
+        showLaunchFailure('Java Download Failed', err.message || 'Check console codes.')
+    }
 }
 
-// Keep reference to Minecraft Process
-let proc
-// Is DiscordRPC enabled
-let hasRPC = false
-// Joined server regex
-// Change this if your server uses something different.
-const GAME_JOINED_REGEX = /\[.+\]: Sound engine started/
-const GAME_LAUNCH_REGEX = /^\[.+\]: (?:MinecraftForge .+ Initialized|ModLauncher .+ starting: .+|Loading Minecraft .+ with Fabric Loader .+)$/
-const MIN_LINGER = 5000
 
 async function dlAsync(login = true) {
 
@@ -487,140 +489,37 @@ async function dlAsync(login = true) {
     toggleLaunchArea(true)
     setLaunchPercentage(0, 100)
 
-    const fullRepairModule = new FullRepair(
-        ConfigManager.getCommonDirectory(),
-        ConfigManager.getInstanceDirectory(),
-        ConfigManager.getLauncherDirectory(),
-        ConfigManager.getSelectedServer(),
-        DistroAPI.isDevMode()
-    )
+    // Listen for progress from Main
+    const progressListener = (event, status) => {
+        if (status.type === 'verify') {
+            setLaunchDetails(Lang.queryJS('landing.dlAsync.validatingFileIntegrity'))
+            setLaunchPercentage(status.progress)
+        } else if (status.type === 'download') {
+            setLaunchDetails(Lang.queryJS('landing.dlAsync.downloadingFiles'))
+            setDownloadPercentage(status.progress)
+        }
+    }
+    ipcRenderer.on('dl:progress', progressListener)
 
-    // fullRepairModule.spawnReceiver() - Deprecated in monolith
-    // Child process events removed as logic is now in-process.
-
-    loggerLaunchSuite.info('Validating files.')
-    setLaunchDetails(Lang.queryJS('landing.dlAsync.validatingFileIntegrity'))
-    let invalidFileCount = 0
     try {
-        invalidFileCount = await fullRepairModule.verifyFiles(percent => {
-            setLaunchPercentage(percent)
+        // Invoke Main Process Download
+        await ipcRenderer.invoke('dl:start', {
+            serverId: ConfigManager.getSelectedServer(),
+            version: serv.rawServer.minecraftVersion
         })
-        setLaunchPercentage(100)
+
+        // Success
+        setDownloadPercentage(100)
+        ipcRenderer.removeListener('dl:progress', progressListener)
+
     } catch (err) {
-        loggerLaunchSuite.warn('Error during file validation. Checking for offline capability...', err)
-
-        // Refined Offline Fallback: Only go offline if we actually have the critical metadata.
-        // If we don't have the Index JSON, we can't launch.
-        const fs = require('fs-extra')
-        const path = require('path')
-        const version = serv.rawServer.minecraftVersion
-        const versionJsonPath = path.join(ConfigManager.getCommonDirectory(), 'versions', version, `${version}.json`)
-
-        if (await fs.pathExists(versionJsonPath)) {
-            loggerLaunchSuite.info('Offline capability verified. Falling back to offline mode.')
-            isOfflineLaunch = true
-            invalidFileCount = 0
-        } else {
-            loggerLaunchSuite.error('Critical Defect: Version JSON missing. Cannot fall back to offline mode.')
-            showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringFileDownloadTitle'), '<b>Download Failed & No Local Cache</b><br>The required version metadata could not be downloaded and is not found locally.<br>Please check your internet connection.')
-            return
-        }
+        ipcRenderer.removeListener('dl:progress', progressListener)
+        loggerLaunchSuite.warn('Error during file download via Main Process.', err)
+        showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringFileDownloadTitle'), err.message || 'Download Failed')
+        return
     }
 
-
-    if (invalidFileCount > 0) {
-        loggerLaunchSuite.info('Downloading files.')
-        setLaunchDetails(Lang.queryJS('landing.dlAsync.downloadingFiles'))
-        setLaunchPercentage(0)
-        try {
-            await fullRepairModule.download(percent => {
-                setDownloadPercentage(percent)
-            })
-            setDownloadPercentage(100)
-        } catch (err) {
-            loggerLaunchSuite.warn('Error during file download. Stopping launch.', err)
-
-            // Structured Error Handling for Sentry & Console
-            if (err.failedFiles && Array.isArray(err.failedFiles)) {
-                // 1. Console Clean Summary (Always show for user debugging)
-                console.groupCollapsed(`[Download System] Critical Failure: ${err.failedFiles.length} files failed.`);
-                console.table(err.failedFiles.slice(0, 10).map(f => ({
-                    id: f.id,
-                    lastError: f.history && f.history.length > 0 ? f.history[f.history.length - 1].error : 'Unknown'
-                })));
-                if (err.failedFiles.length > 10) console.log(`...and ${err.failedFiles.length - 10} more.`);
-                console.groupEnd();
-
-                // 2. Smart Sentry Filtering
-                // The user specifically requested to avoid "noise" like 404, 502, timeouts (Internet issues).
-                // We only report if there's a "Soft Error" (Logic bug, Integrity/Validation failure).
-
-                const isIgnorableError = (errMsg) => {
-                    if (!errMsg) return true;
-                    const lower = errMsg.toLowerCase();
-                    // Network / Server Side Errors
-                    if (lower.includes('http') && (lower.includes('404') || lower.includes('502') || lower.includes('503') || lower.includes('500'))) return true;
-                    if (lower.includes('timeout') || lower.includes('econn') || lower.includes('enotfound') || lower.match(/http \d{3}/)) return true;
-                    if (lower.includes('fetch failed') || lower.includes('network')) return true;
-
-                    // File System / User Environment Errors (User Problems)
-                    if (lower.includes('eperm') || lower.includes('eacces') || lower.includes('ebusy') || lower.includes('enospc') || lower.includes('unlink')) return true;
-
-                    // Integrity / Logic Flow that acts like environment (Validation Failed)
-                    // User requested to ignore this as it can be caused by bad internet/disk.
-                    if (lower.includes('validation failed') || lower.includes('hash mismatch')) return true;
-
-                    // P2P Specific Noise
-                    if (lower.includes('p2p overloaded') || lower.includes('p2p skipped')) return true;
-
-                    return false;
-                };
-
-                // Check if ANY of the failed files failed due to a NON-ignorable error.
-                // If even one file failed due to Logic/Validation, we report the batch context.
-                const shouldReport = err.failedFiles.some(f => {
-                    // Check the last error of the file (Final Stand reason)
-                    if (!f.history || f.history.length === 0) return true; // Alien error, report.
-                    const lastReason = f.history[f.history.length - 1].error;
-
-                    // Filter out network noise AND validation failures
-                    return !isIgnorableError(lastReason);
-                });
-
-                if (shouldReport) {
-                    const REPORT_LIMIT = 20;
-                    const sentryPayload = {
-                        failedCount: err.failedFiles.length,
-                        failures: err.failedFiles.slice(0, REPORT_LIMIT)
-                    };
-                    if (err.failedFiles.length > REPORT_LIMIT) {
-                        sentryPayload.truncated = true;
-                        sentryPayload.more = err.failedFiles.length - REPORT_LIMIT;
-                    }
-
-                    SafeSentry.captureException(err, {
-                        extra: { downloadDebug: sentryPayload }
-                    });
-                } else {
-                    loggerLaunchSuite.warn('Suppressed Sentry Report for Critical Download Failure (Network/Server noise detected).');
-                }
-
-            } else {
-                // Standard fallback for other errors
-                SafeSentry.captureException(err);
-            }
-
-            showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringFileDownloadTitle'), Lang.queryJS('landing.dlAsync.unableToLoadDistributionIndex'))
-            return
-        }
-    } else {
-        loggerLaunchSuite.info('No invalid files, skipping download.')
-    }
-
-    // Remove download bar.
-    remote.getCurrentWindow().setProgressBar(-1)
-
-    // Receiver destruction removed.
+    // Receiver destruction moved to Main.
 
     if (isOfflineLaunch) {
         setLaunchDetails(Lang.queryJS('landing.dlAsync.launchingOffline'))
@@ -710,7 +609,7 @@ async function dlAsync(login = true) {
 
         try {
             // Build Minecraft process.
-            proc = pb.build()
+            proc = await pb.build()
 
             // Bind listeners to stdout.
             proc.stdout.on('data', tempListener)

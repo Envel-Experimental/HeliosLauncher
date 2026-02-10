@@ -1,13 +1,13 @@
 const { LoggerUtil } = require('../util/LoggerUtil');
 const { IndexProcessor } = require('./IndexProcessor');
 const { AssetGuardError } = require('./AssetGuardError');
-const { validateLocalFile, getVersionJsonPath, safeEnsureDir } = require('../common/FileUtils');
+const { validateLocalFile, getVersionJsonPath, safeEnsureDir, readFileFromZip } = require('../common/FileUtils');
 const { HashAlgo } = require('./Asset');
 const { Type } = require('../common/DistributionClasses');
 const { mcVersionAtLeast } = require('../common/MojangUtils');
 const fs = require('fs/promises');
 const path = require('path');
-const AdmZip = require('adm-zip');
+
 
 class DistributionIndexProcessor extends IndexProcessor {
     static logger = LoggerUtil.getLogger('DistributionIndexProcessor');
@@ -109,11 +109,10 @@ class DistributionIndexProcessor extends IndexProcessor {
         }
         else {
             try {
-                const zip = new AdmZip(modLoaderModule.getPath());
-                const entry = zip.getEntry('version.json');
-                if (!entry) throw new Error('version.json not found in modloader jar');
+                const jsonText = await readFileFromZip(modLoaderModule.getPath(), 'version.json');
+                if (!jsonText || jsonText.trim().length === 0) throw new Error('version.json not found or empty');
 
-                const data = JSON.parse(zip.readAsText(entry));
+                const data = JSON.parse(jsonText);
                 const writePath = getVersionJsonPath(this.commonDir, data.id);
                 await safeEnsureDir(path.dirname(writePath));
                 await fs.writeFile(writePath, JSON.stringify(data));
