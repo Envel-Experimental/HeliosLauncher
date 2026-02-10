@@ -157,6 +157,22 @@ class MirrorManager {
     }
 
     /**
+     * Find a mirror entry by checking if the URL belongs to it.
+     * @param {string} url The URL to check.
+     * @returns {Object|null} The mirror entry or null.
+     */
+    _findMirrorByUrl(url) {
+        if (!url) return null
+        return this.mirrors.find(m => {
+            // Check if the URL starts with any of the mirror's configured base URLs
+            return (m.config.base_url && url.startsWith(m.config.base_url)) ||
+                (m.config.version_manifest && url.startsWith(m.config.version_manifest.substring(0, m.config.version_manifest.lastIndexOf('/') + 1))) ||
+                (m.config.assets && url.startsWith(m.config.assets.substring(0, m.config.assets.lastIndexOf('/') + 1))) ||
+                (m.config.libraries && url.startsWith(m.config.libraries.substring(0, m.config.libraries.lastIndexOf('/') + 1)))
+        })
+    }
+
+    /**
      * Report a failed download from a mirror.
      * @param {string} mirrorUrl The base URL or full URL used.
      */
