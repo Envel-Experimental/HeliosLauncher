@@ -15,6 +15,10 @@ const MirrorManager = require('../../../../../network/MirrorManager');
 
 const log = LoggerUtil.getLogger('DownloadEngine');
 
+// Global HTTP Throttling
+const MAX_HTTP_CONCURRENCY = 10;
+let activeHttpRequests = 0;
+
 // Cleaning Task State
 let lastCleanup = 0;
 const CLEANUP_INTERVAL = 1000 * 60 * 60; // Run at most once per hour
@@ -94,10 +98,17 @@ async function downloadQueue(assets, onProgress) {
                 continue;
             }
 
+            // HTTP Throttling (Global)
+            if (forceHTTP && activeHttpRequests >= MAX_HTTP_CONCURRENCY) {
+                await sleep(100);
+                continue;
+            }
+
             const asset = queue.shift();
             if (!asset) break;
 
             activeDownloads++;
+            if (forceHTTP) activeHttpRequests++;
             try {
                 await runDownload(asset, forceHTTP, instantDefer);
             } catch (err) {
@@ -116,6 +127,7 @@ async function downloadQueue(assets, onProgress) {
                 }
             } finally {
                 activeDownloads--;
+                if (forceHTTP) activeHttpRequests--;
             }
         }
     };
@@ -398,6 +410,6 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
     throw finalError;
 }
 
-let activeHttpRequests = 0;
+
 
 module.exports = { downloadQueue, downloadFile }

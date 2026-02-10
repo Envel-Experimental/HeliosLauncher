@@ -70,8 +70,14 @@ function calculateHashByBuffer(buffer, algo) {
 // Worker removed in favor of system tools
 
 
-async function extractZip(archivePath, onEntry) {
-    const destDir = path.dirname(archivePath);
+async function extractZip(archivePath, destDir, onEntry) {
+    // Support legacy signature: extractZip(archivePath, onEntry)
+    if (typeof destDir === 'function') {
+        onEntry = destDir;
+        destDir = null;
+    }
+    if (!destDir) destDir = path.dirname(archivePath);
+
     const isWin = process.platform === 'win32';
 
     // 1. Extraction

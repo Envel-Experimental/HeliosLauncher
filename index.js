@@ -653,7 +653,16 @@ function handleEPERM() {
     // Check for loop protection
     if (process.argv.includes('--relaunch-admin')) {
         console.error('[EPERM Loop Protection] Already admin, but EPERM persists. Ignoring error to keep app alive.')
-        return false // Ignore error, continue execution
+        // If we are already admin and still getting EPERM, it's likely an antivirus lock, not a permission issue.
+        // We should warn the user instead of infinitely restarting.
+        dialog.showMessageBoxSync({
+            type: 'warning',
+            title: 'Файл заблокирован',
+            message: 'Нужно перезапустить лаунчер от имени администратора.',
+            detail: 'Возможно, мешает антивирус. Попробуй добавить лаунчер в исключения антивируса.',
+            buttons: ['ОК']
+        })
+        return false // Ignore error, continue execution (don't quit/restart)
     }
 
     const choice = dialog.showMessageBoxSync({

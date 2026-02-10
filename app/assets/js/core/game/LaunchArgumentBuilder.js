@@ -358,7 +358,7 @@ class LaunchArgumentBuilder {
 
     async _unzip(zipPath, dest, exclude, flatten = false) {
         try {
-            await extractZip(zipPath)
+            await extractZip(zipPath, dest)
 
             // Post-extraction cleanup: Delete excluded files from the destination
             // Since we extracted EVERYTHING, we need to walk the destination and remove unwanted files.
