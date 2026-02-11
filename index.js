@@ -61,6 +61,9 @@ const LangLoader = require('./app/assets/js/langloader')
 const SysUtil = require('./app/assets/js/sysutil')
 const ConfigManager = require('./app/assets/js/configmanager')
 
+let win
+
+
 const { MOJANG_MIRRORS } = require('./network/config')
 
 const P2PEngine = require('./network/P2PEngine')
@@ -136,14 +139,7 @@ process.on('uncaughtException', (err) => {
         if (handleEPERM()) return
     } else {
         console.error('An uncaught exception occurred:', err)
-        dialog.showMessageBoxSync({
-            type: 'error',
-            title: 'Критическая ошибка',
-            message: 'Произошла непредвиденная ошибка.',
-            detail: err.message,
-            buttons: ['Выйти']
-        })
-        app.quit()
+        showCriticalError(err)
     }
 })
 
@@ -173,16 +169,10 @@ process.on('unhandledRejection', (reason, promise) => {
         if (handleEPERM()) return
     } else {
         console.error('An unhandled rejection occurred:', reason)
-        dialog.showMessageBoxSync({
-            type: 'error',
-            title: 'Критическая ошибка (async)',
-            message: 'Произошла непредвиденная асинхронная ошибка.',
-            detail: (reason && reason.message) ? reason.message : 'Неизвестная ошибка',
-            buttons: ['Выйти']
-        })
-        app.quit()
+        showCriticalError(err)
     }
 })
+
 
 try {
     const Sentry = require('@sentry/electron/main')
@@ -428,8 +418,6 @@ ipcMain.on(MSFT_OPCODE.OPEN_LOGOUT, (ipcEvent, uuid, isLastAccount) => {
     msftLogoutWindow.loadURL('https://login.microsoftonline.com/common/oauth2/v2.0/logout')
 })
 
-let win
-
 function createWindow() {
 
     win = new BrowserWindow({
@@ -515,6 +503,37 @@ function createWindow() {
 
     win.on('closed', () => {
         win = null
+    })
+
+}
+
+function showCriticalError(err) {
+    try {
+        if (typeof win !== 'undefined' && win && !win.isDestroyed()) {
+            win.hide()
+        }
+    } catch (e) {
+        // ignore
+    }
+
+    const errorWin = new BrowserWindow({
+        width: 800,
+        height: 600,
+        frame: false,
+        fullscreen: false,
+        resizable: false,
+        backgroundColor: '#0078d7',
+        webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true
+        }
+    })
+
+    const errorMsg = err.stack || err.message || err.toString()
+    errorWin.loadURL(pathToFileURL(path.join(__dirname, 'app', 'error.html')).toString() + '?error=' + encodeURIComponent(errorMsg))
+
+    errorWin.on('closed', () => {
+        app.quit()
     })
 }
 

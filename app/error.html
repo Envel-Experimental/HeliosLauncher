@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Critical Error</title>
+    <style>
+        body {
+            background-color: #0078d7;
+            /* BSOD Blue */
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            text-align: center;
+            user-select: none;
+            overflow: hidden;
+        }
+
+        h1 {
+            font-size: 8em;
+            margin: 0;
+            font-weight: 100;
+        }
+
+        h2 {
+            font-size: 2em;
+            margin-bottom: 20px;
+        }
+
+        p {
+            font-size: 1.2em;
+            margin-bottom: 40px;
+        }
+
+        .error-code {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-family: monospace;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+
+        button {
+            background: white;
+            color: #0078d7;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            font-weight: bold;
+            border-radius: 3px;
+            margin-top: 20px;
+        }
+
+        button:hover {
+            background: #e6e6e6;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>:(</h1>
+    <h2>Мы столкнулись с проблемой.</h2>
+    <p>Нам нужно собрать информацию об ошибке, <br>а затем вы сможете перезапустить Флаунчер.</p>
+
+    <div class="error-code" id="errMessage">UNKNOWN_ERROR</div>
+
+    <button onclick="window.close()">Закрыть</button>
+
+    <script>
+        // Parse query string for error message
+        const urlParams = new URLSearchParams(window.location.search);
+        const err = urlParams.get('error');
+        if (err) {
+            document.getElementById('errMessage').textContent = err;
+        }
+    </script>
+</body>
+
+</html>
