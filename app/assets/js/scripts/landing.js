@@ -74,7 +74,7 @@ function setLaunchDetails(details) {
 function setLaunchPercentage(percent) {
     launch_progress.setAttribute('max', 100)
     launch_progress.setAttribute('value', percent)
-    launch_progress_label.innerHTML = (percent instanceof Number ? percent : parseFloat(percent)).toFixed(1) + '%'
+    launch_progress_label.innerHTML = Math.round(percent instanceof Number ? percent : parseFloat(percent)) + '%'
 }
 
 /**
