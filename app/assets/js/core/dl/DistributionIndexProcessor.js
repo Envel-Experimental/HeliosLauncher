@@ -109,7 +109,8 @@ class DistributionIndexProcessor extends IndexProcessor {
         }
         else {
             try {
-                const jsonText = await readFileFromZip(modLoaderModule.getPath(), 'version.json');
+                const buffer = await readFileFromZip(modLoaderModule.getPath(), 'version.json');
+                const jsonText = buffer.toString('utf-8');
                 if (!jsonText || jsonText.trim().length === 0) throw new Error('version.json not found or empty');
 
                 const data = JSON.parse(jsonText);

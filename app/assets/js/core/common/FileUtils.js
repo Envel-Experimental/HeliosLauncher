@@ -12,6 +12,10 @@ function sanitizePsPath(p) {
     return p.replace(/'/g, "''")
 }
 
+function sanitizeShellPath(p) {
+    return p.replace(/"/g, '\\"')
+}
+
 async function validateLocalFile(filePath, algo, hash) {
     if (!hash) return true; // No hash to check
     try {
@@ -89,14 +93,14 @@ async function extractZip(archivePath, destDir, onEntry) {
     if (isWin) {
         // Try tar first (Windows 10+), fallback to PowerShell
         try {
-            await execAsync(`tar -xf "${archivePath}" -C "${destDir}"`, { maxBuffer: DEFAULT_MAX_BUFFER });
+            await execAsync(`tar -xf "${sanitizeShellPath(archivePath)}" -C "${sanitizeShellPath(destDir)}"`, { maxBuffer: DEFAULT_MAX_BUFFER });
         } catch (e) {
             // Fallback to PowerShell for older Windows
             const psCmd = `Expand-Archive -LiteralPath '${sanitizePsPath(archivePath)}' -DestinationPath '${sanitizePsPath(destDir)}' -Force`;
             await execAsync(`powershell -NoProfile -Command "${psCmd}"`, { maxBuffer: DEFAULT_MAX_BUFFER });
         }
     } else {
-        await execAsync(`unzip -o "${archivePath}" -d "${destDir}"`, { maxBuffer: DEFAULT_MAX_BUFFER });
+        await execAsync(`unzip -o "${sanitizeShellPath(archivePath)}" -d "${sanitizeShellPath(destDir)}"`, { maxBuffer: DEFAULT_MAX_BUFFER });
     }
 
     // 2. Mock 'onEntry' for JavaGuard compatibility
@@ -110,7 +114,7 @@ async function extractZip(archivePath, destDir, onEntry) {
                 // PowerShell fallback for listing:
                 // $zip = [System.IO.Compression.ZipFile]::OpenRead("path"); $zip.Entries | Select -ExpandProperty FullName
                 try {
-                    const { stdout } = await execAsync(`tar -tf "${archivePath}"`, { maxBuffer: DEFAULT_MAX_BUFFER });
+                    const { stdout } = await execAsync(`tar -tf "${sanitizeShellPath(archivePath)}"`, { maxBuffer: DEFAULT_MAX_BUFFER });
                     entries = stdout.split(/\r?\n/).filter(l => l.trim().length > 0);
                 } catch (e) {
                     // PowerShell fallback
@@ -122,7 +126,7 @@ async function extractZip(archivePath, destDir, onEntry) {
                     entries = stdout.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
                 }
             } else {
-                const { stdout } = await execAsync(`unzip -Z1 "${archivePath}"`, { maxBuffer: DEFAULT_MAX_BUFFER });
+                const { stdout } = await execAsync(`unzip -Z1 "${sanitizeShellPath(archivePath)}"`, { maxBuffer: DEFAULT_MAX_BUFFER });
                 entries = stdout.split('\n').filter(l => l.trim().length > 0);
             }
         } catch (e) {
@@ -142,10 +146,10 @@ async function extractZip(archivePath, destDir, onEntry) {
 
 async function extractTarGz(archivePath, onEntry) {
     const destDir = path.dirname(archivePath);
-    await execAsync(`tar -xzf "${archivePath}" -C "${destDir}"`, { maxBuffer: DEFAULT_MAX_BUFFER });
+    await execAsync(`tar -xzf "${sanitizeShellPath(archivePath)}" -C "${sanitizeShellPath(destDir)}"`, { maxBuffer: DEFAULT_MAX_BUFFER });
 
     if (onEntry) {
-        const { stdout } = await execAsync(`tar -tf "${archivePath}"`, { maxBuffer: DEFAULT_MAX_BUFFER });
+        const { stdout } = await execAsync(`tar -tf "${sanitizeShellPath(archivePath)}"`, { maxBuffer: DEFAULT_MAX_BUFFER });
         const lines = stdout.split('\n').filter(l => l.trim().length > 0);
         await onEntry({ name: lines[0] });
     }
@@ -159,11 +163,11 @@ async function readFileFromZip(archivePath, entryName) {
         try {
             // tar -xOf "archive" "member"
             // -O extracts to stdout. We set encoding to null to get a Buffer.
-            const { stdout } = await execAsync(`tar -xOf "${archivePath}" "${entryPath}"`, { encoding: null, maxBuffer: DEFAULT_MAX_BUFFER });
+            const { stdout } = await execAsync(`tar -xOf "${sanitizeShellPath(archivePath)}" "${sanitizeShellPath(entryPath)}"`, { encoding: null, maxBuffer: DEFAULT_MAX_BUFFER });
             return stdout;
         } catch (e) {
             // PowerShell Fallback
-            // Note: This reads text. For binary, we might need encoding adjustments, but version.json is text.
+            // Note: version.json is text, but we return a Buffer for consistency.
             const psCmd = `
                 Add-Type -AssemblyName System.IO.Compression.FileSystem;
                 $zip = [System.IO.Compression.ZipFile]::OpenRead('${sanitizePsPath(archivePath)}');
@@ -174,11 +178,11 @@ async function readFileFromZip(archivePath, entryName) {
                 }
             `;
             const { stdout } = await execAsync(`powershell -NoProfile -Command "${psCmd.replace(/\n/g, '')}"`, { maxBuffer: DEFAULT_MAX_BUFFER });
-            return stdout;
+            return typeof stdout === 'string' ? Buffer.from(stdout, 'utf-8') : stdout;
         }
     } else {
         // unzip -p "archive" "member"
-        const { stdout } = await execAsync(`unzip -p "${archivePath}" "${entryPath}"`, { encoding: null, maxBuffer: DEFAULT_MAX_BUFFER });
+        const { stdout } = await execAsync(`unzip -p "${sanitizeShellPath(archivePath)}" "${sanitizeShellPath(entryPath)}"`, { encoding: null, maxBuffer: DEFAULT_MAX_BUFFER });
         return stdout;
     }
 }
