@@ -62,6 +62,7 @@ const SysUtil = require('./app/assets/js/sysutil')
 const ConfigManager = require('./app/assets/js/configmanager')
 
 let win
+let errorWin
 
 
 const { MOJANG_MIRRORS } = require('./network/config')
@@ -288,10 +289,23 @@ ipcMain.on('autoUpdateAction', (event, arg, data) => {
     }
 })
 
+let startupWatchdog
+
 ipcMain.on('distributionIndexDone', (event, res) => {
+    // Clear watchdog timer when renderer signals it's done with the preloader
+    if (startupWatchdog) {
+        clearTimeout(startupWatchdog)
+        startupWatchdog = null
+    }
+
     if (!event.sender.isDestroyed()) {
         event.sender.send('distributionIndexDone', res)
     }
+})
+
+ipcMain.on('renderer-error', (event, err) => {
+    console.error('Renderer Error Captured:', err)
+    showCriticalError(err)
 })
 
 ipcMain.handle(SHELL_OPCODE.TRASH_ITEM, async (event, ...args) => {
@@ -444,6 +458,32 @@ function createWindow() {
 
     win.loadURL(pathToFileURL(path.join(__dirname, 'app', 'app.ejs')).toString())
 
+    // Initial load failure handling
+    win.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+        console.error('Window failed to load:', errorDescription)
+        showCriticalError(`Failed to load: ${errorDescription} (${errorCode})`)
+    })
+
+    // Handle preload script load failure
+    win.webContents.on('preload-error', (event, preloadPath, error) => {
+        if (startupWatchdog) {
+            clearTimeout(startupWatchdog)
+            startupWatchdog = null
+        }
+        console.error('Preload script failed to load:', error)
+        showCriticalError(`Preload Error: ${error.message || error}`)
+    })
+
+    // Start Startup Watchdog (Hanging on logo protection)
+    // If the renderer doesn't signal 'distributionIndexDone' within 30 seconds, trigger BSOD.
+    startupWatchdog = setTimeout(() => {
+        if (win && !win.isDestroyed()) {
+            console.error('[Watchdog] Startup timeout reached. Launcher stuck on logo?')
+            showCriticalError('Launcher failed to start (Timeout - Stuck on logo)')
+        }
+    }, 30000)
+
+
     win.once('ready-to-show', async () => {
         const warnings = await SysUtil.performChecks()
         if (win && !win.isDestroyed()) {
@@ -505,9 +545,23 @@ function createWindow() {
         win = null
     })
 
+    win.webContents.on('render-process-gone', (event, details) => {
+        if (startupWatchdog) {
+            clearTimeout(startupWatchdog)
+            startupWatchdog = null
+        }
+        console.error('Render process gone:', details)
+        showCriticalError(`RENDER_PROCESS_GONE (${details.reason}): ${details.exitCode}`)
+    })
+
 }
 
 function showCriticalError(err) {
+    if (errorWin && !errorWin.isDestroyed()) {
+        console.warn('Critical error screen already showing, ignoring additional error:', err)
+        return
+    }
+
     try {
         if (typeof win !== 'undefined' && win && !win.isDestroyed()) {
             win.hide()
@@ -516,7 +570,7 @@ function showCriticalError(err) {
         // ignore
     }
 
-    const errorWin = new BrowserWindow({
+    errorWin = new BrowserWindow({
         width: 800,
         height: 600,
         frame: true,

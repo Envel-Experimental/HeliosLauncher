@@ -1,8 +1,28 @@
 const { ipcRenderer } = require('electron')
+
+// Global error handling for Renderer Process
+// We define these as early as possible to catch startup errors
+window.onerror = (message, source, lineno, colno, error) => {
+    const errorMsg = error ? (error.stack || error.message) : message
+    ipcRenderer.send('renderer-error', errorMsg)
+}
+
+window.onunhandledrejection = (event) => {
+    const errorMsg = event.reason ? (event.reason.stack || event.reason.message || event.reason.toString()) : 'Unhandled Promise Rejection'
+    ipcRenderer.send('renderer-error', errorMsg)
+}
+
+// Add Node-level error handling for the renderer
+process.on('uncaughtException', (error) => {
+    const errorMsg = error.stack || error.message || error.toString()
+    ipcRenderer.send('renderer-error', errorMsg)
+})
+
 const fs = require('fs-extra')
 const { app } = require('@electron/remote')
 const os = require('os')
 const path = require('path')
+
 
 const NetworkConfig = require('../../../network/config')
 const ConfigManager = require('./configmanager')
@@ -22,9 +42,21 @@ async function preloader() {
     try {
         if (process.env.NODE_ENV !== 'development') {
             Sentry = require('@sentry/electron/renderer')
+            let releaseVersion = 'unknown'
+            try {
+                releaseVersion = app.getVersion()
+            } catch (e) {
+                // app might not be ready yet in early preload
+                try {
+                    releaseVersion = require('../../../package.json').version
+                } catch (e2) {
+                    // ignore
+                }
+            }
+
             Sentry.init({
                 dsn: 'https://f02442d2a0733ac2c810b8d8d7f4a21e@o4508545424359424.ingest.de.sentry.io/4508545432027216',
-                release: 'FLauncher@' + app.getVersion(),
+                release: 'FLauncher@' + releaseVersion,
                 ignoreErrors: ['EACCES', 'EPERM']
             })
 
