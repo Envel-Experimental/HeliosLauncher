@@ -519,15 +519,16 @@ function showCriticalError(err) {
     const errorWin = new BrowserWindow({
         width: 800,
         height: 600,
-        frame: false,
-        fullscreen: false,
-        resizable: false,
+        frame: true,
         backgroundColor: '#0078d7',
+        title: 'Critical Error',
+        icon: getPlatformIcon('icon'),
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true
         }
     })
+    errorWin.removeMenu()
 
     const errorMsg = err.stack || err.message || err.toString()
     errorWin.loadURL(pathToFileURL(path.join(__dirname, 'app', 'error.html')).toString() + '?error=' + encodeURIComponent(errorMsg))
@@ -757,6 +758,7 @@ app.on('ready', async () => {
             callback({ redirectURL })
         }
     )
+
 
     // SECURITY: Content Security Policy (CSP)
     // Block remote scripts, objects, and frames. allow inline styles/scripts for now (stability).
