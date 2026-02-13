@@ -41,9 +41,25 @@
             background: rgba(0, 0, 0, 0.2);
             padding: 10px 20px;
             border-radius: 5px;
-            font-family: monospace;
-            max-width: 80%;
+            color: #72767d;
+            font-size: 12px;
+            margin-top: 10px;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            font-weight: bold;
             word-wrap: break-word;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.1);
+            padding: 10px;
+            border-radius: 4px;
+            width: 100%;
+            box-sizing: border-box;
+            font-family: monospace;
+            /* Keep existing font-family */
+            max-width: 80%;
+            /* Keep existing max-width */
         }
 
         button {
@@ -61,6 +77,11 @@
         button:hover {
             background: #e6e6e6;
         }
+
+        .buttons {
+            display: flex;
+            gap: 20px;
+        }
     </style>
 </head>
 
@@ -70,8 +91,10 @@
     <p>Нам нужно собрать информацию об ошибке, <br>а затем вы сможете перезапустить Флаунчер.</p>
 
     <div class="error-code" id="errMessage">UNKNOWN_ERROR</div>
-
-    <button onclick="window.close()">Закрыть</button>
+    <div class="buttons">
+        <button id="supportBtn" style="display: none;">Поддержка</button>
+        <button onclick="window.close()">Закрыть</button>
+    </div>
 
     <script>
         // Parse query string for error message
@@ -79,6 +102,14 @@
         const err = urlParams.get('error');
         if (err) {
             document.getElementById('errMessage').textContent = err;
+        }
+        const supportUrl = urlParams.get('supportUrl');
+        if (supportUrl) {
+            const btn = document.getElementById('supportBtn');
+            btn.style.display = 'block';
+            btn.onclick = () => {
+                window.open(supportUrl, '_blank');
+            };
         }
     </script>
 </body>

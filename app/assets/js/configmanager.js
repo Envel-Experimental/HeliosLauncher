@@ -115,7 +115,8 @@ const DEFAULT_CONFIG = {
     selectedAccount: null,
     authenticationDatabase: {},
     modConfigurations: [],
-    javaConfig: {}
+    javaConfig: {},
+    supportUrl: null // Resolved
 }
 
 let config = null
@@ -761,6 +762,24 @@ exports.getJVMOptions = function (serverid) {
  */
 exports.setJVMOptions = function (serverid, jvmOptions) {
     config.javaConfig[serverid].jvmOptions = jvmOptions
+}
+
+/**
+ * Retrieve the support URL.
+ *
+ * @returns {string} The support URL or null.
+ */
+exports.getSupportUrl = function () {
+    return config.supportUrl
+}
+
+/**
+ * Set the support URL.
+ *
+ * @param {string} url The new support URL.
+ */
+exports.setSupportUrl = function (url) {
+    config.supportUrl = url
 }
 
 // Game Settings

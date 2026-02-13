@@ -87,6 +87,7 @@ async function preloader() {
 
     // P2P Kill Switch Check (Async/Parallel)
     checkP2PKillSwitch()
+    checkSupportConfig()
 
     DistroAPI['commonDir'] = ConfigManager.getCommonDirectory()
     DistroAPI['instanceDir'] = ConfigManager.getInstanceDirectory()
@@ -152,6 +153,23 @@ async function checkP2PKillSwitch() {
         }
     } catch (err) {
         // Optional feature, failure is expected if kill switch is not active.
+    }
+}
+
+async function checkSupportConfig() {
+    try {
+        const response = await fetch(NetworkConfig.SUPPORT_CONFIG_URL, { cache: 'no-store' })
+        if (response.ok) {
+            const data = await response.json()
+            if (data.url) {
+                logger.info('Support URL loaded:', data.url)
+                ConfigManager.setSupportUrl(data.url)
+                await ConfigManager.save()
+            }
+        }
+    } catch (err) {
+        // Optional feature
+        logger.warn('Failed to load support config:', err)
     }
 }
 

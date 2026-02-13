@@ -12,6 +12,7 @@ module.exports = {
     ],
     BOOTSTRAP_URL: 'https://f-launcher.ru/fox/new/bootstrap.json',
     P2P_KILL_SWITCH_URL: 'https://f-launcher.ru/fox/new/p2poff.json',
+    SUPPORT_CONFIG_URL: 'https://f-launcher.ru/fox/new/support.json',
 
     // Optional: Array of mirror base URLs for Mojang assets
     // If primary fails, these will be tried in order.

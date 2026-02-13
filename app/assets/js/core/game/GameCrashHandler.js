@@ -55,9 +55,8 @@ class GameCrashHandler {
             if (crashAnalysis) {
                 this.showSpecificCrashOverlay(crashAnalysis)
             } else {
-                this.showGenericCrashOverlay(code)
+                await this.showGenericCrashOverlay(code)
             }
-            toggleOverlay(true)
         }
     }
 
@@ -123,54 +122,32 @@ class GameCrashHandler {
      * @param {Object} crashAnalysis The analysis result from CrashHandler using logs.
      */
     showSpecificCrashOverlay(crashAnalysis) {
-        setOverlayContent(
-            Lang.queryJS('processbuilder.crash.title'),
-            Lang.queryJS('processbuilder.crash.body', { description: crashAnalysis.description }),
-            Lang.queryJS('processbuilder.crash.fix'),
-            Lang.queryJS('processbuilder.crash.close')
-        )
-
-        // Default handlers
-        setOverlayHandler(() => this.handleCrashFix(crashAnalysis))
-        setMiddleButtonHandler(() => toggleOverlay(false))
-        setDismissHandler(() => toggleOverlay(false))
-
-        // Specific Overrides for Drivers / OOM
-        if (crashAnalysis.type === 'gpu-driver-outdated') {
+        if (ConfigManager.getSupportUrl()) {
             setOverlayContent(
-                Lang.queryJS('processbuilder.crash.driversTitle'),
+                Lang.queryJS('processbuilder.crash.title'),
                 Lang.queryJS('processbuilder.crash.body', { description: crashAnalysis.description }),
-                Lang.queryJS('processbuilder.crash.driversUpdate'), // Button 1
-                Lang.queryJS('processbuilder.crash.close')         // Button 2 (Dismiss)
+                Lang.queryJS('processbuilder.crash.fix'),
+                'Поддержка', // Button 2
+                Lang.queryJS('processbuilder.crash.close') // Button 3 (Dismiss)
             )
-            setOverlayHandler(() => {
-                shell.openExternal('https://www.nvidia.com/Download/index.aspx')
+            setOverlayHandler(() => this.handleCrashFix(crashAnalysis))
+            setMiddleButtonHandler(() => {
+                shell.openExternal(ConfigManager.getSupportUrl())
                 toggleOverlay(false)
             })
-            setMiddleButtonHandler(() => toggleOverlay(false))
-
-        } else if (crashAnalysis.type === 'gpu-oom') {
+            setDismissHandler(() => toggleOverlay(false))
+            toggleOverlay(true, true)
+        } else {
             setOverlayContent(
-                Lang.queryJS('processbuilder.crash.oomTitle'),
+                Lang.queryJS('processbuilder.crash.title'),
                 Lang.queryJS('processbuilder.crash.body', { description: crashAnalysis.description }),
-                Lang.queryJS('processbuilder.crash.close'),
-                null
+                Lang.queryJS('processbuilder.crash.fix'),
+                Lang.queryJS('processbuilder.crash.close') // Button 2
             )
-            setOverlayHandler(() => toggleOverlay(false))
-            setMiddleButtonHandler(null)
-
-        } else if (crashAnalysis.type === 'gpu-gl-on-12') {
-            setOverlayContent(
-                Lang.queryJS('processbuilder.crash.glErrorTitle'),
-                Lang.queryJS('processbuilder.crash.body', { description: crashAnalysis.description }),
-                Lang.queryJS('processbuilder.crash.driversUpdate'),
-                Lang.queryJS('processbuilder.crash.close')
-            )
-            setOverlayHandler(() => {
-                shell.openExternal('https://www.intel.com/content/www/us/en/support/detect.html')
-                toggleOverlay(false)
-            })
+            setOverlayHandler(() => this.handleCrashFix(crashAnalysis))
             setMiddleButtonHandler(() => toggleOverlay(false))
+            setDismissHandler(null)
+            toggleOverlay(true)
         }
     }
 
@@ -179,7 +156,7 @@ class GameCrashHandler {
      * 
      * @param {number} code Exit code.
      */
-    showGenericCrashOverlay(code) {
+    async showGenericCrashOverlay(code) {
         // IMPROVED CRASH REPORTING: Extract "Smart" Signature for Sentry Grouping
         let sentryMessage = `Process exited with code: ${code}`
         let sentryType = 'error'
@@ -212,16 +189,53 @@ class GameCrashHandler {
 
         sendToSentry(sentryMessage, sentryType)
 
-        setOverlayContent(
-            Lang.queryJS('processbuilder.exit.crash.title'),
-            Lang.queryJS('processbuilder.exit.crash.body', { exitCode: code }),
-            Lang.queryJS('processbuilder.exit.crash.close'),
-            Lang.queryJS('processbuilder.exit.crash.disable')
-        )
+        // Check for Support URL again (in case preloader failed or config desync)
+        let supportUrl = ConfigManager.getSupportUrl()
+        if (!supportUrl) {
+            try {
+                // Determine remote URL from network/config
+                const NetworkConfig = require('../../../network/config')
+                const response = await fetch(NetworkConfig.SUPPORT_CONFIG_URL, { cache: 'no-store' })
+                if (response.ok) {
+                    const data = await response.json()
+                    if (data.url) {
+                        supportUrl = data.url
+                        ConfigManager.setSupportUrl(supportUrl)
+                        ConfigManager.save()
+                    }
+                }
+            } catch (err) {
+                logger.warn('Failed to fetch support URL during crash handling', err)
+            }
+        }
 
-        setOverlayHandler(() => toggleOverlay(false))
-        setMiddleButtonHandler(() => this.disableOptionalMods())
-        setDismissHandler(() => toggleOverlay(false))
+        if (supportUrl) {
+            setOverlayContent(
+                Lang.queryJS('processbuilder.exit.crash.title'),
+                Lang.queryJS('processbuilder.exit.crash.body', { exitCode: code }),
+                'Поддержка', // Button 1
+                Lang.queryJS('processbuilder.exit.crash.disable'), // Button 2
+                Lang.queryJS('processbuilder.exit.crash.close') // Button 3
+            )
+            setOverlayHandler(() => {
+                shell.openExternal(supportUrl)
+                toggleOverlay(false)
+            })
+            setMiddleButtonHandler(() => this.disableOptionalMods())
+            setDismissHandler(() => toggleOverlay(false))
+            toggleOverlay(true, true)
+        } else {
+            setOverlayContent(
+                Lang.queryJS('processbuilder.exit.crash.title'),
+                Lang.queryJS('processbuilder.exit.crash.body', { exitCode: code }),
+                Lang.queryJS('processbuilder.exit.crash.close'), // Button 1
+                Lang.queryJS('processbuilder.exit.crash.disable') // Button 2
+            )
+            setOverlayHandler(() => toggleOverlay(false))
+            setMiddleButtonHandler(() => this.disableOptionalMods())
+            setDismissHandler(null)
+            toggleOverlay(true)
+        }
     }
 
     /**

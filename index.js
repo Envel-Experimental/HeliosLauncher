@@ -585,7 +585,13 @@ function showCriticalError(err) {
     errorWin.removeMenu()
 
     const errorMsg = err.stack || err.message || err.toString()
-    errorWin.loadURL(pathToFileURL(path.join(__dirname, 'app', 'error.html')).toString() + '?error=' + encodeURIComponent(errorMsg))
+    const supportUrl = ConfigManager.getSupportUrl()
+    errorWin.loadURL(pathToFileURL(path.join(__dirname, 'app', 'error.html')).toString() + '?error=' + encodeURIComponent(errorMsg) + (supportUrl ? '&supportUrl=' + encodeURIComponent(supportUrl) : ''))
+
+    errorWin.webContents.setWindowOpenHandler(({ url }) => {
+        shell.openExternal(url)
+        return { action: 'deny' }
+    })
 
     errorWin.on('closed', () => {
         app.quit()
