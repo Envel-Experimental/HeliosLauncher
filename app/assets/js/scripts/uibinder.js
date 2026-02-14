@@ -43,9 +43,9 @@ let currentView
  */
 function switchView(current, next, currentFadeTime = 500, nextFadeTime = 500, onCurrentFade = () => { }, onNextFade = () => { }) {
     currentView = next
-    $(`${current}`).fadeOut(currentFadeTime, async () => {
+    fadeOut(document.querySelector(current), currentFadeTime, async () => {
         await onCurrentFade()
-        $(`${next}`).fadeIn(nextFadeTime, async () => {
+        fadeIn(document.querySelector(next), nextFadeTime, async () => {
             await onNextFade()
             if (next === VIEWS.landing) {
                 checkAndShowP2PPrompt()
@@ -123,7 +123,7 @@ async function showMainUI(data) {
     setTimeout(() => {
         document.getElementById('frameBar').style.backgroundColor = 'rgba(0, 0, 0, 0.5)'
         document.body.style.backgroundImage = `url('assets/images/backgrounds/${document.body.getAttribute('bkid')}.jpg')`
-        $('#main').show()
+        show(document.getElementById('main'))
 
         const isLoggedIn = Object.keys(ConfigManager.getAuthAccounts()).length > 0
 
@@ -135,11 +135,11 @@ async function showMainUI(data) {
 
         if (ConfigManager.isFirstLaunch()) {
             currentView = VIEWS.welcome
-            $(VIEWS.welcome).fadeIn(1000)
+            fadeIn(document.querySelector(VIEWS.welcome), 1000)
         } else {
             if (isLoggedIn) {
                 currentView = VIEWS.landing
-                $(VIEWS.landing).fadeIn(1000, () => {
+                fadeIn(document.querySelector(VIEWS.landing), 1000, () => {
                     checkAndShowP2PPrompt()
                 })
             } else {
@@ -147,13 +147,16 @@ async function showMainUI(data) {
                 loginOptionsViewOnLoginSuccess = VIEWS.landing
                 loginOptionsViewOnLoginCancel = VIEWS.loginOptions
                 currentView = VIEWS.loginOptions
-                $(VIEWS.loginOptions).fadeIn(1000)
+                fadeIn(document.querySelector(VIEWS.loginOptions), 1000)
             }
         }
 
         setTimeout(() => {
-            $('#loadingContainer').fadeOut(500, () => {
-                $('#loadSpinnerImage').removeClass('rotating')
+            fadeOut(document.getElementById('loadingContainer'), 500, () => {
+                const spinner = document.getElementById('loadSpinnerImage')
+                if (spinner) {
+                    spinner.classList.remove('rotating')
+                }
             })
         }, 250)
 
@@ -162,7 +165,7 @@ async function showMainUI(data) {
 
 function showFatalStartupError() {
     setTimeout(() => {
-        $('#loadingContainer').fadeOut(250, () => {
+        fadeOut(document.getElementById('loadingContainer'), 250, () => {
             document.getElementById('overlayContainer').style.background = 'none'
             setOverlayContent(
                 Lang.queryJS('uibinder.startup.fatalErrorTitle'),
@@ -440,9 +443,9 @@ async function validateSelectedAccount() {
             setDismissHandler(() => {
                 if (accLen > 1) {
                     prepareAccountSelectionList()
-                    $('#overlayContent').fadeOut(250, () => {
+                    fadeOut(document.getElementById('overlayContent'), 250, () => {
                         bindOverlayKeys(true, 'accountSelectContent', true)
-                        $('#accountSelectContent').fadeIn(250)
+                        fadeIn(document.getElementById('accountSelectContent'), 250)
                     })
                 } else {
                     const accountsObj = ConfigManager.getAuthAccounts()

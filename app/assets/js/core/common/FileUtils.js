@@ -2,22 +2,51 @@ const fs = require('fs/promises')
 const { createReadStream } = require('fs')
 const crypto = require('crypto')
 const path = require('path')
-const { exec } = require('child_process')
-const util = require('util')
-const execAsync = util.promisify(exec)
+const { spawn } = require('child_process')
 
 const DEFAULT_MAX_BUFFER = 50 * 1024 * 1024 // 50MB
 
-function sanitizePsPath(p) {
-    return p.replace(/'/g, "''")
+/**
+ * Execute a command using spawn.
+ * @param {string} cmd Command to run
+ * @param {string[]} args Arguments
+ * @param {object} options Spawn options
+ * @returns {Promise<{stdout: Buffer}>}
+ */
+async function runCommand(cmd, args, options = {}) {
+    return new Promise((resolve, reject) => {
+        const process = spawn(cmd, args, {
+            ...options,
+            shell: false
+        });
+
+        let stdout = Buffer.alloc(0);
+        let stderr = Buffer.alloc(0);
+
+        process.stdout.on('data', (data) => { stdout = Buffer.concat([stdout, data]); });
+        process.stderr.on('data', (data) => { stderr = Buffer.concat([stderr, data]); });
+
+        process.on('close', (code) => {
+            if (code === 0) resolve({ stdout });
+            else reject(new Error(`Command ${cmd} failed with code ${code}: ${stderr.toString()}`));
+        });
+
+        process.on('error', (err) => {
+            reject(err)
+        })
+    });
 }
 
-function sanitizeShellPath(p) {
-    return p.replace(/"/g, '\\"')
+function getSanitizedPath(p) {
+    return p; // Spawn handles escaping, but keeping this hook if needed later
 }
 
 async function validateLocalFile(filePath, algo, hash) {
-    if (!hash) return true; // No hash to check
+    if (hash == null) {
+        console.warn(`[Security] No hash provided for ${filePath}. Skipping validation.`);
+        return true;
+    }
+
     try {
         await fs.access(filePath);
     } catch (e) {
@@ -26,17 +55,14 @@ async function validateLocalFile(filePath, algo, hash) {
 
     return new Promise((resolve, reject) => {
         const stream = createReadStream(filePath);
-        // Normalize algorithm name
         const algorithm = algo.toLowerCase().replace('-', '');
         const hashStream = crypto.createHash(algorithm);
 
         stream.on('error', err => {
-            // File read error
             resolve(false);
         });
 
         hashStream.on('error', err => {
-            // Algorithm error
             resolve(false);
         });
 
@@ -76,9 +102,6 @@ function calculateHashByBuffer(buffer, algo) {
     return crypto.createHash(algorithm).update(buffer).digest('hex');
 }
 
-// Worker removed in favor of system tools
-
-
 async function extractZip(archivePath, destDir, onEntry) {
     // Support legacy signature: extractZip(archivePath, onEntry)
     if (typeof destDir === 'function') {
@@ -89,45 +112,36 @@ async function extractZip(archivePath, destDir, onEntry) {
 
     const isWin = process.platform === 'win32';
 
-    // 1. Extraction
     if (isWin) {
-        // Try tar first (Windows 10+), fallback to PowerShell
         try {
-            await execAsync(`tar -xf "${sanitizeShellPath(archivePath)}" -C "${sanitizeShellPath(destDir)}"`, { maxBuffer: DEFAULT_MAX_BUFFER });
+            await runCommand('tar', ['-xf', archivePath, '-C', destDir]);
         } catch (e) {
-            // Fallback to PowerShell for older Windows
-            const psCmd = `Expand-Archive -LiteralPath '${sanitizePsPath(archivePath)}' -DestinationPath '${sanitizePsPath(destDir)}' -Force`;
-            await execAsync(`powershell -NoProfile -Command "${psCmd}"`, { maxBuffer: DEFAULT_MAX_BUFFER });
+            const psArgs = ['-NoProfile', '-Command', `Expand-Archive -LiteralPath '${archivePath}' -DestinationPath '${destDir}' -Force`];
+            await runCommand('powershell', psArgs);
         }
     } else {
-        await execAsync(`unzip -o "${sanitizeShellPath(archivePath)}" -d "${sanitizeShellPath(destDir)}"`, { maxBuffer: DEFAULT_MAX_BUFFER });
+        await runCommand('unzip', ['-o', archivePath, '-d', destDir]);
     }
 
-    // 2. Mock 'onEntry' for JavaGuard compatibility
-    // JavaGuard needs to know the root folder name.
-    // We can list the zip content to find it.
+    // Mock 'onEntry' for JavaGuard compatibility
     if (onEntry) {
         let entries = [];
         try {
             if (isWin) {
-                // tar -tf works on Win10+
-                // PowerShell fallback for listing:
-                // $zip = [System.IO.Compression.ZipFile]::OpenRead("path"); $zip.Entries | Select -ExpandProperty FullName
                 try {
-                    const { stdout } = await execAsync(`tar -tf "${sanitizeShellPath(archivePath)}"`, { maxBuffer: DEFAULT_MAX_BUFFER });
-                    entries = stdout.split(/\r?\n/).filter(l => l.trim().length > 0);
+                    const { stdout } = await runCommand('tar', ['-tf', archivePath]);
+                    entries = stdout.toString().split(/\r?\n/).filter(l => l.trim().length > 0);
                 } catch (e) {
-                    // PowerShell fallback
                     const psCmd = `
                         Add-Type -AssemblyName System.IO.Compression.FileSystem;
-                        [System.IO.Compression.ZipFile]::OpenRead('${sanitizePsPath(archivePath)}').Entries | Select-Object -ExpandProperty FullName
+                        [System.IO.Compression.ZipFile]::OpenRead('${archivePath}').Entries | Select-Object -ExpandProperty FullName
                      `;
-                    const { stdout } = await execAsync(`powershell -NoProfile -Command "${psCmd.replace(/\n/g, '')}"`, { maxBuffer: DEFAULT_MAX_BUFFER });
-                    entries = stdout.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+                    const { stdout } = await runCommand('powershell', ['-NoProfile', '-Command', psCmd]);
+                    entries = stdout.toString().split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
                 }
             } else {
-                const { stdout } = await execAsync(`unzip -Z1 "${sanitizeShellPath(archivePath)}"`, { maxBuffer: DEFAULT_MAX_BUFFER });
-                entries = stdout.split('\n').filter(l => l.trim().length > 0);
+                const { stdout } = await runCommand('unzip', ['-Z1', archivePath]);
+                entries = stdout.toString().split('\n').filter(l => l.trim().length > 0);
             }
         } catch (e) {
             console.warn('[FileUtils] Failed to list zip entries, JavaGuard detection might fail.', e);
@@ -135,7 +149,6 @@ async function extractZip(archivePath, destDir, onEntry) {
 
         const entriesObj = {};
         entries.forEach(name => {
-            // Normalize slashes
             const n = name.replace(/\\/g, '/');
             if (n) entriesObj[n] = { entryName: n };
         });
@@ -146,43 +159,38 @@ async function extractZip(archivePath, destDir, onEntry) {
 
 async function extractTarGz(archivePath, onEntry) {
     const destDir = path.dirname(archivePath);
-    await execAsync(`tar -xzf "${sanitizeShellPath(archivePath)}" -C "${sanitizeShellPath(destDir)}"`, { maxBuffer: DEFAULT_MAX_BUFFER });
+    await runCommand('tar', ['-xzf', archivePath, '-C', destDir]);
 
     if (onEntry) {
-        const { stdout } = await execAsync(`tar -tf "${sanitizeShellPath(archivePath)}"`, { maxBuffer: DEFAULT_MAX_BUFFER });
-        const lines = stdout.split('\n').filter(l => l.trim().length > 0);
+        const { stdout } = await runCommand('tar', ['-tf', archivePath]);
+        const lines = stdout.toString().split('\n').filter(l => l.trim().length > 0);
         await onEntry({ name: lines[0] });
     }
 }
 
 async function readFileFromZip(archivePath, entryName) {
     const isWin = process.platform === 'win32';
-    const entryPath = entryName.replace(/\\/g, '/'); // Zip standard is forward slashes
+    const entryPath = entryName.replace(/\\/g, '/');
 
     if (isWin) {
         try {
-            // tar -xOf "archive" "member"
-            // -O extracts to stdout. We set encoding to null to get a Buffer.
-            const { stdout } = await execAsync(`tar -xOf "${sanitizeShellPath(archivePath)}" "${sanitizeShellPath(entryPath)}"`, { encoding: null, maxBuffer: DEFAULT_MAX_BUFFER });
+            const { stdout } = await runCommand('tar', ['-xOf', archivePath, entryPath]);
             return stdout;
         } catch (e) {
-            // PowerShell Fallback
-            // Note: version.json is text, but we return a Buffer for consistency.
             const psCmd = `
                 Add-Type -AssemblyName System.IO.Compression.FileSystem;
-                $zip = [System.IO.Compression.ZipFile]::OpenRead('${sanitizePsPath(archivePath)}');
-                $entry = $zip.GetEntry('${sanitizePsPath(entryPath)}');
+                $zip = [System.IO.Compression.ZipFile]::OpenRead('${archivePath}');
+                $entry = $zip.GetEntry('${entryPath}');
                 if ($entry) {
                     $reader = [System.IO.StreamReader]::new($entry.Open());
                     $reader.ReadToEnd();
                 }
             `;
-            const { stdout } = await execAsync(`powershell -NoProfile -Command "${psCmd.replace(/\n/g, '')}"`, { maxBuffer: DEFAULT_MAX_BUFFER });
+            const { stdout } = await runCommand('powershell', ['-NoProfile', '-Command', psCmd]);
             return typeof stdout === 'string' ? Buffer.from(stdout, 'utf-8') : stdout;
         }
     } else {
-        // unzip -p "archive" "member"
-        const { stdout } = await execAsync(`unzip -p "${sanitizeShellPath(archivePath)}" "${sanitizeShellPath(entryPath)}"`, { encoding: null, maxBuffer: DEFAULT_MAX_BUFFER });
+        const { stdout } = await runCommand('unzip', ['-p', archivePath, entryPath]);
         return stdout;
     }
 }

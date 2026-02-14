@@ -113,7 +113,10 @@ async function downloadQueue(assets, onProgress) {
                 await runDownload(asset, forceHTTP, instantDefer);
             } catch (err) {
                 if (!forceHTTP) {
-                    if (isDev) log.debug(`[DownloadEngine] Deferring failed file: ${asset.id} (${err.message}). Will retry at the end.`);
+                    const isNoPeers = err.message && err.message.includes('No peers available')
+                    if (isDev && !isNoPeers) {
+                        log.debug(`[DownloadEngine] Deferring failed file: ${asset.id} (${err.message}). Will retry at the end.`);
+                    }
                     deferredQueue.push(asset);
                 } else {
                     // In final stand, if it fails again, we must collect it to throw later
@@ -348,7 +351,12 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
                 MirrorManager.reportSuccess(currentUrl, Date.now() - downloadStartTime, loaded);
                 return;
             } else {
-                if (isDev) console.error(`[DownloadEngine] Validation failed for ${asset.id}. File size: ${loaded} / ${total}`)
+                const isInstanceFile = decodedPath.replace(/\\/g, '/').includes('/instances/');
+                const isConfig = CONFIG_EXTENSIONS.includes(path.extname(decodedPath));
+                if (isDev) {
+                    const logFn = (isConfig || isInstanceFile) ? console.warn : console.error;
+                    logFn(`[DownloadEngine] Validation failed for ${asset.id}. File size: ${loaded} / ${total}`)
+                }
 
                 // DEBUG: Inspect contents and delete temp
                 try {

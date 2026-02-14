@@ -22,56 +22,52 @@
         }
 
         h1 {
-            font-size: 8em;
+            font-size: 5em;
             margin: 0;
             font-weight: 100;
         }
 
         h2 {
-            font-size: 2em;
-            margin-bottom: 20px;
+            font-size: 1.5em;
+            margin-bottom: 10px;
         }
 
         p {
-            font-size: 1.2em;
-            margin-bottom: 40px;
+            font-size: 1em;
+            margin-bottom: 20px;
         }
 
         .error-code {
             background: rgba(0, 0, 0, 0.2);
-            padding: 10px 20px;
+            padding: 15px;
             border-radius: 5px;
-            color: #72767d;
-            font-size: 12px;
-            margin-top: 10px;
-            margin-bottom: 20px;
-            text-transform: uppercase;
-            font-weight: bold;
+            color: #f0f0f0;
+            font-size: 13px;
+            margin: 10px 0;
+            text-transform: none;
+            font-weight: normal;
             word-wrap: break-word;
             white-space: pre-wrap;
-            max-height: 200px;
+            max-height: 30vh;
             overflow-y: auto;
-            background: rgba(0, 0, 0, 0.1);
-            padding: 10px;
-            border-radius: 4px;
             width: 100%;
             box-sizing: border-box;
-            font-family: monospace;
-            /* Keep existing font-family */
-            max-width: 80%;
-            /* Keep existing max-width */
+            font-family: 'Consolas', 'Monaco', monospace;
+            max-width: 90%;
+            text-align: left;
         }
 
         button {
             background: white;
             color: #0078d7;
             border: none;
-            padding: 10px 20px;
+            padding: 12px 24px;
             font-size: 1em;
             cursor: pointer;
             font-weight: bold;
             border-radius: 3px;
-            margin-top: 20px;
+            margin: 10px;
+            transition: background 0.2s;
         }
 
         button:hover {
@@ -80,7 +76,11 @@
 
         .buttons {
             display: flex;
-            gap: 20px;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 20px;
+            flex-shrink: 0;
         }
     </style>
 </head>

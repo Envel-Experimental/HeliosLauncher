@@ -5,7 +5,7 @@
  * modules, excluding dependencies.
  */
 // Requirements
-const $ = require('jquery')
+Object.assign(window, require('./assets/js/dom_utils'))
 const { ipcRenderer, shell, webFrame } = require('electron')
 const remote = require('@electron/remote')
 const isDev = require('./assets/js/isdev')
@@ -128,10 +128,7 @@ function showUpdateUI(info) {
     toggleOverlay(true, true)
 }
 
-/* jQuery Example
-$(function(){
-    loggerUICore.info('UICore Initialized');
-})*/
+
 
 document.addEventListener('readystatechange', function () {
     if (document.readyState === 'interactive') {
@@ -196,9 +193,14 @@ document.addEventListener('readystatechange', function () {
 /**
  * Open web links in the user's default browser.
  */
-$(document).on('click', 'a[href^="http"]', function (event) {
-    event.preventDefault()
-    shell.openExternal(this.href)
+/**
+ * Open web links in the user's default browser.
+ */
+document.addEventListener('click', (event) => {
+    if (event.target.tagName === 'A' && event.target.href.startsWith('http')) {
+        event.preventDefault()
+        shell.openExternal(event.target.href)
+    }
 })
 
 /**

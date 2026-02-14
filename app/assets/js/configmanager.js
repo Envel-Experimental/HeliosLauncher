@@ -221,9 +221,9 @@ exports.load = async function () {
     try {
         const fileContent = await retry(
             async () => await fs.readFile(configPath, 'UTF-8'),
-            3,
+            5,
             500,
-            err => err.code === 'EBUSY' || err.code === 'EPERM' || err.code === 'EACCES'
+            err => err.code === 'EBUSY' || err.code === 'EPERM' || err.code === 'EACCES' || (err.code === 'ENOENT' && configExists)
         )
         config = JSON.parse(fileContent)
 

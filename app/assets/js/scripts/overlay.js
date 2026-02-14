@@ -78,42 +78,42 @@ function toggleOverlay(toggleState, dismissable = false, content = 'overlayConte
         document.getElementById('main').setAttribute('overlay', true)
         document.getElementById('frameBar').setAttribute('overlay', true)
         // Make things untabbable.
-        $('#main *').attr('tabindex', '-1')
-        $('#' + content).parent().children().hide()
-        $('#' + content).show()
+        document.querySelectorAll('#main *').forEach(el => el.setAttribute('tabindex', '-1'))
+
+        const contentEl = document.getElementById(content)
+        Array.from(contentEl.parentElement.children).forEach(child => hide(child))
+        show(contentEl)
+
+        const dismissEl = document.getElementById('overlayDismiss')
         if (dismissable) {
-            $('#overlayDismiss').show()
+            show(dismissEl)
         } else {
-            $('#overlayDismiss').hide()
+            hide(dismissEl)
         }
-        $('#overlayContainer').fadeIn({
-            duration: 250,
-            start: () => {
-                if (getCurrentView() === VIEWS.settings) {
-                    document.getElementById('settingsContainer').style.backgroundColor = 'transparent'
-                }
+
+        fadeIn(document.getElementById('overlayContainer'), 250, () => {
+            if (getCurrentView() === VIEWS.settings) {
+                document.getElementById('settingsContainer').style.backgroundColor = 'transparent'
             }
         })
     } else {
         document.getElementById('main').removeAttribute('overlay')
         document.getElementById('frameBar').removeAttribute('overlay')
         // Make things tabbable.
-        $('#main *').removeAttr('tabindex')
-        $('#overlayContainer').fadeOut({
-            duration: 250,
-            start: () => {
-                if (getCurrentView() === VIEWS.settings) {
-                    document.getElementById('settingsContainer').style.backgroundColor = 'rgba(0, 0, 0, 0.50)'
-                }
-            },
-            complete: () => {
-                $('#' + content).parent().children().hide()
-                $('#' + content).show()
-                if (dismissable) {
-                    $('#overlayDismiss').show()
-                } else {
-                    $('#overlayDismiss').hide()
-                }
+        document.querySelectorAll('#main *').forEach(el => el.removeAttribute('tabindex'))
+
+        fadeOut(document.getElementById('overlayContainer'), 250, () => {
+            if (getCurrentView() === VIEWS.settings) {
+                document.getElementById('settingsContainer').style.backgroundColor = 'rgba(0, 0, 0, 0.50)'
+            }
+            const contentEl = document.getElementById(content)
+            Array.from(contentEl.parentElement.children).forEach(child => hide(child))
+            show(contentEl)
+            const dismissEl = document.getElementById('overlayDismiss')
+            if (dismissable) {
+                show(dismissEl)
+            } else {
+                hide(dismissEl)
             }
         })
     }
@@ -261,8 +261,8 @@ document.getElementById('serverSelectCancel').addEventListener('click', () => {
 })
 
 document.getElementById('accountSelectCancel').addEventListener('click', () => {
-    $('#accountSelectContent').fadeOut(250, () => {
-        $('#overlayContent').fadeIn(250)
+    fadeOut(document.getElementById('accountSelectContent'), 250, () => {
+        fadeIn(document.getElementById('overlayContent'), 250)
     })
 })
 

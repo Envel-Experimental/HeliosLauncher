@@ -25,7 +25,7 @@ var {
 
 // Internal Requirements
 const ProcessBuilder = require('./assets/js/processbuilder')
-const { SafeSentry } = require('./assets/js/core/util/SentryWrapper.js') // We will create this wrapper to ensure safe access
+const { SafeSentry } = require('./assets/js/core/util/SentryWrapper.js')
 
 // Launch Elements
 const launch_content = document.getElementById('launch_content')
@@ -250,10 +250,10 @@ const refreshServerStatus = async (fade = false) => {
         loggerLanding.debug(err)
     }
     if (fade) {
-        $('#server_status_wrapper').fadeOut(250, () => {
+        fadeOut(document.getElementById('server_status_wrapper'), 250, () => {
             document.getElementById('landingPlayerLabel').innerHTML = pLabel
             document.getElementById('player_count').innerHTML = pVal
-            $('#server_status_wrapper').fadeIn(500)
+            fadeIn(document.getElementById('server_status_wrapper'), 500)
         })
     } else {
         document.getElementById('landingPlayerLabel').innerHTML = pLabel
@@ -348,8 +348,8 @@ async function asyncSystemScan(effectiveJavaOptions, launchAfter = true) {
             }
         })
         setDismissHandler(() => {
-            $('#overlayContent').fadeOut(250, () => {
-                //$('#overlayDismiss').toggle(false)
+            fadeOut(document.getElementById('overlayContent'), 250, () => {
+
                 setOverlayContent(
                     Lang.queryJS('landing.systemScan.javaRequired', { 'major': effectiveJavaOptions.suggestedMajor }),
                     Lang.queryJS('landing.systemScan.javaRequiredMessage', { 'major': effectiveJavaOptions.suggestedMajor }),
@@ -365,7 +365,7 @@ async function asyncSystemScan(effectiveJavaOptions, launchAfter = true) {
 
                     asyncSystemScan(effectiveJavaOptions, launchAfter)
                 })
-                $('#overlayContent').fadeIn(250)
+                fadeIn(document.getElementById('overlayContent'), 250)
             })
         })
         toggleOverlay(true, true)

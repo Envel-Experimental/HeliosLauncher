@@ -716,7 +716,20 @@ function setupSettingsTabs() {
  * @param {boolean} fade Optional. True to fade transition.
  */
 function settingsNavItemListener(ele, fade = true) {
+    const nextTab = ele.getAttribute('rSc')
     if (ele.hasAttribute('selected')) {
+        // If already selected, just ensure it's visible.
+        const tab = document.getElementById(nextTab)
+        if (tab && (tab.style.display === 'none' || getComputedStyle(tab).display === 'none')) {
+            if (fade) {
+                fadeIn(tab, 250, () => {
+                    settingsTabScrollListener({ target: tab })
+                })
+            } else {
+                show(tab)
+                settingsTabScrollListener({ target: tab })
+            }
+        }
         return
     }
     const navItems = document.getElementsByClassName('settingsNavItem')
@@ -727,36 +740,40 @@ function settingsNavItemListener(ele, fade = true) {
     }
     ele.setAttribute('selected', '')
     let prevTab = selectedSettingsTab
-    selectedSettingsTab = ele.getAttribute('rSc')
+    selectedSettingsTab = nextTab
 
     if (selectedSettingsTab === 'settingsTabDelivery') {
         populateMirrorStatus()
     }
 
-    document.getElementById(prevTab).onscroll = null
+    if (prevTab && document.getElementById(prevTab)) {
+        document.getElementById(prevTab).onscroll = null
+    }
     document.getElementById(selectedSettingsTab).onscroll = settingsTabScrollListener
 
     if (fade) {
-        $(`#${prevTab}`).fadeOut(250, () => {
-            $(`#${selectedSettingsTab}`).fadeIn({
-                duration: 250,
-                start: () => {
+        if (prevTab && document.getElementById(prevTab)) {
+            fadeOut(document.getElementById(prevTab), 250, () => {
+                fadeIn(document.getElementById(selectedSettingsTab), 250, () => {
                     settingsTabScrollListener({
                         target: document.getElementById(selectedSettingsTab)
                     })
-                }
+                })
             })
-        })
+        } else {
+            fadeIn(document.getElementById(selectedSettingsTab), 250, () => {
+                settingsTabScrollListener({
+                    target: document.getElementById(selectedSettingsTab)
+                })
+            })
+        }
     } else {
-        $(`#${prevTab}`).hide(0, () => {
-            $(`#${selectedSettingsTab}`).show({
-                duration: 0,
-                start: () => {
-                    settingsTabScrollListener({
-                        target: document.getElementById(selectedSettingsTab)
-                    })
-                }
-            })
+        if (prevTab && document.getElementById(prevTab)) {
+            hide(document.getElementById(prevTab))
+        }
+        show(document.getElementById(selectedSettingsTab))
+        settingsTabScrollListener({
+            target: document.getElementById(selectedSettingsTab)
         })
     }
 }
@@ -985,7 +1002,7 @@ function processLogOut(val, isLastAccount) {
                 switchView(getCurrentView(), VIEWS.loginOptions)
             }
         })
-        $(parent).fadeOut(250, () => {
+        fadeOut(parent, 250, () => {
             parent.remove()
         })
     }
@@ -1579,9 +1596,9 @@ function saveAllModConfigurations() {
  * server is changed.
  */
 function animateSettingsTabRefresh() {
-    $(`#${selectedSettingsTab}`).fadeOut(500, async () => {
+    fadeOut(document.getElementById(selectedSettingsTab), 500, async () => {
         await prepareSettings()
-        $(`#${selectedSettingsTab}`).fadeIn(500)
+        fadeIn(document.getElementById(selectedSettingsTab), 500)
     })
 }
 
@@ -1911,30 +1928,33 @@ function populateAboutVersionInformation() {
  * of the current version. This value is displayed on the UI.
  */
 function populateReleaseNotes() {
-    $.ajax({
-        url: 'https://github.com/Envel-Experimental/HeliosLauncher/releases.atom',
-        success: (data) => {
+    fetch('https://github.com/Envel-Experimental/HeliosLauncher/releases.atom')
+        .then(response => response.text())
+        .then(data => {
             const version = 'v' + remote.app.getVersion()
-            const entries = $(data).find('entry')
+            const parser = new DOMParser()
+            const xmlDoc = parser.parseFromString(data, 'text/xml')
+            const entries = xmlDoc.getElementsByTagName('entry')
 
             for (let i = 0; i < entries.length; i++) {
-                const entry = $(entries[i])
-                let id = entry.find('id').text()
+                const entry = entries[i]
+                let id = entry.getElementsByTagName('id')[0].textContent
                 id = id.substring(id.lastIndexOf('/') + 1)
 
                 if (id === version) {
-                    settingsAboutChangelogTitle.innerHTML = entry.find('title').text()
-                    settingsAboutChangelogText.innerHTML = entry.find('content').text()
-                    settingsAboutChangelogButton.href = entry.find('link').attr('href')
+                    settingsAboutChangelogTitle.innerHTML = entry.getElementsByTagName('title')[0].textContent
+                    settingsAboutChangelogText.innerHTML = entry.getElementsByTagName('content')[0].textContent
+                    settingsAboutChangelogButton.href = entry.getElementsByTagName('link')[0].getAttribute('href')
                 }
             }
 
-        },
-        timeout: 2500
-    }).catch(err => {
-        settingsAboutChangelogText.innerHTML = Lang.queryJS('settings.about.releaseNotesFailed')
-    })
+        })
+        .catch(err => {
+            console.error('Failed to fetch release notes', err)
+            settingsAboutChangelogText.innerHTML = Lang.queryJS('settings.about.releaseNotesFailed')
+        })
 }
+
 
 /**
  * Prepare account tab for display.
