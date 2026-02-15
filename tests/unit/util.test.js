@@ -71,10 +71,11 @@ describe('Util', () => {
 
             const file = '/path/to/file.json'
             const data = { foo: 'bar' }
-            const tempFile = file + '.tmp1234567890'
+            const tempFile = file + '.tmp.' + 1234567890
 
             await Util.safeWriteJson(file, data)
 
+            expect(fs.mkdir).toHaveBeenCalledWith(path.dirname(file), { recursive: true })
             expect(fs.writeFile).toHaveBeenCalledWith(tempFile, JSON.stringify(data, null, 4), 'utf-8')
             expect(fs.rename).toHaveBeenCalledWith(tempFile, file)
         })
@@ -82,7 +83,7 @@ describe('Util', () => {
         it('should clean up temp file if write fails', async () => {
             jest.spyOn(Date, 'now').mockReturnValue(1234567890)
             const file = '/path/to/file.json'
-            const tempFile = file + '.tmp1234567890'
+            const tempFile = file + '.tmp.' + 1234567890
 
             fs.writeFile.mockRejectedValue(new Error('write failed'))
 
@@ -94,6 +95,7 @@ describe('Util', () => {
     describe('move', () => {
         it('should use fs.rename', async () => {
             await Util.move('/src', '/dest')
+            expect(fs.mkdir).toHaveBeenCalledWith(path.dirname('/dest'), { recursive: true })
             expect(fs.rename).toHaveBeenCalledWith('/src', '/dest')
         })
 
@@ -103,6 +105,7 @@ describe('Util', () => {
             fs.rename.mockRejectedValue(error)
 
             await Util.move('/src', '/dest')
+            expect(fs.mkdir).toHaveBeenCalledWith(path.dirname('/dest'), { recursive: true })
             expect(fs.cp).toHaveBeenCalledWith('/src', '/dest', { recursive: true, force: true })
             expect(fs.rm).toHaveBeenCalledWith('/src', { recursive: true, force: true })
         })
