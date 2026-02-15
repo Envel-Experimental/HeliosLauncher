@@ -1,6 +1,6 @@
 const os = require('os')
 const semver = require('semver')
-const fs = require('fs-extra')
+const fs = require('fs')
 const sysPath = require('path')
 
 const DropinModUtil = require('./assets/js/dropinmodutil')
@@ -744,6 +744,8 @@ function settingsNavItemListener(ele, fade = true) {
 
     if (selectedSettingsTab === 'settingsTabDelivery') {
         populateMirrorStatus()
+    } else if (selectedSettingsTab === 'settingsTabAccount') {
+        prepareAccountsTab()
     }
 
     if (prevTab && document.getElementById(prevTab)) {

@@ -1,4 +1,4 @@
-const fs = require('fs-extra')
+const fs = require('fs')
 const path = require('path')
 
 const NON_ASCII_REGEX = /[^\x00-\x7F]/
@@ -58,7 +58,7 @@ function getFallbackDataPath() {
  */
 async function ensureFallbackDirectory(fallbackPath) {
     try {
-        await fs.ensureDir(fallbackPath)
+        await fs.promises.mkdir(fallbackPath, { recursive: true })
     } catch (error) {
         // Log: If the folder cannot be created (e.g., EPERM error on C: drive), throw to trigger fallback failure.
         throw error
@@ -67,7 +67,7 @@ async function ensureFallbackDirectory(fallbackPath) {
 
 function ensureFallbackDirectorySync(fallbackPath) {
     try {
-        fs.ensureDirSync(fallbackPath)
+        fs.mkdirSync(fallbackPath, { recursive: true })
     } catch (error) {
         // Log: If the folder cannot be created (e.g., EPERM error on C: drive), throw to trigger fallback failure.
         throw error
@@ -86,7 +86,7 @@ async function resolveDataPath(app) {
 
     if (isPathValid(defaultPath)) {
         // 1. Path is clean — use AppData (standard OS location).
-        await fs.ensureDir(defaultPath)
+        await fs.promises.mkdir(defaultPath, { recursive: true })
         return defaultPath
     }
 
@@ -100,7 +100,7 @@ async function resolveDataPath(app) {
         // 3. FATAL FALLBACK FAILURE: Could not create C:\.foxford (Permission Denied likely).
         // Log: Warning about reverting to the known unstable path, which will likely lead to a Java crash.
         console.warn('Could not use C:\\.foxford fallback (Permission Denied likely). Reverting to problematic default path.', error)
-        return defaultPath 
+        return defaultPath
     }
 }
 
@@ -108,7 +108,7 @@ function resolveDataPathSync(app) {
     const defaultPath = getDefaultDataPath(app)
 
     if (isPathValid(defaultPath)) {
-        fs.ensureDirSync(defaultPath)
+        fs.mkdirSync(defaultPath, { recursive: true })
         return defaultPath
     }
 

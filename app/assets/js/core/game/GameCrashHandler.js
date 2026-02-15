@@ -1,5 +1,5 @@
 const { shell } = require('electron')
-const fs = require('fs-extra')
+const fs = require('fs')
 const path = require('path')
 const { LoggerUtil } = require('../util/LoggerUtil')
 const { Type } = require('../common/DistributionClasses')
@@ -81,13 +81,15 @@ class GameCrashHandler {
         // 2. Fallback: Check for fresh crash report files
         if (!crashAnalysis) {
             try {
-                if (await fs.pathExists(crashReportsDir)) {
-                    const files = await fs.readdir(crashReportsDir)
+                // Check if directory exists
+                const crashReportsExist = await fs.promises.stat(crashReportsDir).then(() => true).catch(() => false)
+                if (crashReportsExist) {
+                    const files = await fs.promises.readdir(crashReportsDir)
                     const crashFiles = await Promise.all(files
                         .filter(f => f.endsWith('.txt') || f.endsWith('.log'))
                         .map(async f => {
                             const p = path.join(crashReportsDir, f)
-                            const s = await fs.stat(p)
+                            const s = await fs.promises.stat(p)
                             return { name: f, path: p, time: s.mtime.getTime() }
                         }))
                     crashFiles.sort((a, b) => b.time - a.time)
@@ -247,7 +249,7 @@ class GameCrashHandler {
         if (crashAnalysis.type === 'missing-version-file') {
             const versionPath = path.join(this.commonDir, 'versions', path.basename(crashAnalysis.file, '.json'))
             if (fs.existsSync(versionPath)) {
-                fs.removeSync(versionPath)
+                fs.rmSync(versionPath, { recursive: true, force: true })
             }
             toggleOverlay(false)
 

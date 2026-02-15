@@ -1,9 +1,22 @@
 /* global process */
 const child_process = require('child_process')
 const crypto = require('crypto')
-const fs = require('fs-extra')
+const fs = require('fs')
 const os = require('os')
 const path = require('path')
+
+
+// Line 67: fs.ensureDirSync(this.gameDir) -> fs.mkdirSync(this.gameDir, { recursive: true })
+// Line 155: fs.existsSync(ll.getPath()) -> fs.existsSync(ll.getPath()) (Native supports this)
+// Line 182: fs.ensureDirSync(nativeBasePath) -> fs.mkdirSync(nativeBasePath, { recursive: true })
+// Line 195: fs.remove(tempNativePath) -> fs.promises.rm(tempNativePath, { recursive: true, force: true })
+
+// I will do multiple replacements in one go if possible or use multiple blocks.
+// Wait, replace_file_content is for SINGLE CONTIGUOUS block.
+// The file has imports at top, and usages scattered.
+// I will use multi_replace for this file if it's widely used, or just replace the imports and then specific lines.
+// But I have `replace_file_content` available. I'll use `multi_replace_file_content` if I had it, but standard policy says "Use this tool ONLY when you are making MULTIPLE, NON-CONTIGUOUS edits". Yes I should use `multi_replace` here.
+
 
 const { LoggerUtil } = require('./core/util/LoggerUtil')
 const { Type } = require('./core/common/DistributionClasses')
@@ -64,7 +77,7 @@ class ProcessBuilder {
      * @returns {ChildProcess} The spawned child process.
      */
     async build() {
-        fs.ensureDirSync(this.gameDir)
+        fs.mkdirSync(this.gameDir, { recursive: true })
         const tempNativePath = this._setupTempNatives()
 
         // 1. Resolve Mods
@@ -179,7 +192,7 @@ class ProcessBuilder {
         if ((isWindows && currentSystemTemp.includes('~')) || !pathutil.isPathValid(currentSystemTemp) || isUsingFallback) {
             nativeBasePath = path.join(fallbackPath, 'temp_natives')
             try {
-                fs.ensureDirSync(nativeBasePath)
+                fs.mkdirSync(nativeBasePath, { recursive: true })
             } catch (err) {
                 nativeBasePath = currentSystemTemp
             }
@@ -192,7 +205,7 @@ class ProcessBuilder {
      */
     _cleanupTempNatives(tempNativePath) {
         try {
-            fs.remove(tempNativePath).catch(err => logger.warn('Failed to clean temp natives', err))
+            fs.promises.rm(tempNativePath, { recursive: true, force: true }).catch(err => logger.warn('Failed to clean temp natives', err))
         } catch (e) {
             // ignore
         }

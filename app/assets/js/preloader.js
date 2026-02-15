@@ -18,7 +18,7 @@ process.on('uncaughtException', (error) => {
     ipcRenderer.send('renderer-error', errorMsg)
 })
 
-const fs = require('fs-extra')
+const fs = require('fs/promises')
 const { app } = require('@electron/remote')
 const os = require('os')
 const path = require('path')
@@ -116,17 +116,7 @@ async function preloader() {
         ipcRenderer.send('distributionIndexDone', false)
     }
 
-    try {
-        await retry(() => fs.remove(path.join(os.tmpdir(), ConfigManager.getTempNativeFolder())))
-        logger.info('Cleaned natives directory.')
-    } catch (err) {
-        if (err.code === 'EACCES') {
-            logger.warn('Could not clean natives directory, permission denied.')
-        } else {
-            logger.warn('Error while cleaning natives directory:', err)
-            sendToSentry(`Error cleaning natives directory: ${err.message}`, 'error')
-        }
-    }
+    // proceeded without explicit early temp cleanup
 }
 
 // Capture log or error and send to Sentry

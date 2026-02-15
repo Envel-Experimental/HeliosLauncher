@@ -1,4 +1,4 @@
-const fs = require('fs-extra');
+const fs = require('fs/promises');
 const path = require('path');
 
 /**
@@ -8,10 +8,11 @@ const path = require('path');
  * @returns {Promise<string>} The file content (tail).
  */
 async function readLastBytes(filePath, maxBytes = 1024 * 200) {
+    let fh = null;
     try {
-        if (!await fs.pathExists(filePath)) return '';
+        const stats = await fs.stat(filePath).catch(() => null);
+        if (!stats) return '';
 
-        const stats = await fs.stat(filePath);
         const fileSize = stats.size;
         if (fileSize === 0) return '';
 
@@ -19,14 +20,10 @@ async function readLastBytes(filePath, maxBytes = 1024 * 200) {
         const length = fileSize - start;
         const buffer = Buffer.alloc(length);
 
-        const fd = await fs.open(filePath, 'r');
-        let bytesRead = 0;
-        try {
-            const res = await fs.read(fd, buffer, 0, length, start);
-            bytesRead = res.bytesRead !== undefined ? res.bytesRead : res;
-        } finally {
-            await fs.close(fd);
-        }
+        fh = await fs.open(filePath, 'r');
+        // fs.read(buffer, offset, length, position)
+        const res = await fh.read(buffer, 0, length, start);
+        const bytesRead = res.bytesRead;
 
         const content = buffer.toString('utf-8', 0, bytesRead);
         console.log(`[CrashHandler] Read ${bytesRead} bytes from log.`);
@@ -34,6 +31,8 @@ async function readLastBytes(filePath, maxBytes = 1024 * 200) {
     } catch (error) {
         console.error(`[CrashHandler] Failed to read log file tail: ${error.message}`);
         return '';
+    } finally {
+        if (fh) await fh.close();
     }
 }
 

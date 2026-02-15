@@ -1,8 +1,12 @@
-const fs = require('fs-extra')
+const fs = require('fs/promises')
+// We need sync fs for some specific synchronous operations or checks if critical, 
+// but ConfigManager seems to be async-heavy. 
+// However, pathutil.resolveDataPathSync uses helpers. 
+// Let's use fs/promises as primary 'fs'.
 const { LoggerUtil } = require('./core/util/LoggerUtil')
 const os = require('os')
 const path = require('path')
-const { retry } = require('./util')
+const { retry, move } = require('./util')
 const pathutil = require('./pathutil')
 const SecurityUtils = require('./core/util/SecurityUtils')
 
@@ -152,40 +156,28 @@ exports.save = async function () {
 
     return await retry(
         async () => {
-            let configStr
-            let success = false
-
             // Attempt 1: Try to stringify normalized config
             try {
                 // Remove indentation to minimize string length and memory usage
-                configStr = JSON.stringify(configToSave)
+                const configStr = JSON.stringify(configToSave)
 
                 // Enforce strict 1MB size limit to prevent RangeErrors and performance degradation
                 if (configStr.length > 1024 * 1024) {
                     throw new Error('Config exceeds 1MB limit')
                 }
-                success = true
             } catch (err) {
                 logger.warn('Config save failed or exceeded 1MB limit. Initiating fallback cleanup.', err)
-            }
-
-            // Attempt 2: Aggressive cleanup if initial save fails
-            // This clears potentially bloated fields (e.g. modConfigurations) to ensure the file can be written
-            if (!success) {
+                // Attempt 2: Aggressive cleanup if initial save fails
                 logger.warn('Clearing modConfigurations to reduce size.')
                 configToSave.modConfigurations = []
-
-                // Update in-memory config to reflect the cleared state
                 if (Array.isArray(config.modConfigurations)) {
                     config.modConfigurations = []
                 }
-
-                // Retry stringification with cleared data
-                configStr = JSON.stringify(configToSave)
             }
 
-            await fs.writeFile(tempPath, configStr, 'UTF-8')
-            await fs.move(tempPath, configPath, { overwrite: true })
+            // Use safeWriteJson from util.js which handles temp file and move atomic operations
+            const { safeWriteJson } = require('./util')
+            await safeWriteJson(configPath, configToSave)
         },
         3,
         1000,
@@ -200,16 +192,19 @@ exports.save = async function () {
  * need to be externally assigned.
  */
 exports.load = async function () {
-    const configExists = await fs.pathExists(configPath)
-    const legacyConfigExists = await fs.pathExists(configPathLEGACY)
+    // Helper to check existence
+    const exists = async p => !!(await fs.stat(p).catch(() => false))
+
+    const configExists = await exists(configPath)
+    const legacyConfigExists = await exists(configPathLEGACY)
 
     // Fix: Deterministic First Launch Check
     firstLaunch = !configExists && !legacyConfigExists
 
     if (!configExists) {
-        await fs.ensureDir(path.join(configPath, '..'))
+        await fs.mkdir(path.join(configPath, '..'), { recursive: true })
         if (legacyConfigExists) {
-            await fs.move(configPathLEGACY, configPath)
+            await move(configPathLEGACY, configPath)
         } else {
             config = DEFAULT_CONFIG
             await exports.save()
@@ -219,13 +214,14 @@ exports.load = async function () {
     }
 
     try {
+        const { safeReadJson } = require('./util')
         const fileContent = await retry(
-            async () => await fs.readFile(configPath, 'UTF-8'),
+            async () => await safeReadJson(configPath),
             5,
             500,
             err => err.code === 'EBUSY' || err.code === 'EPERM' || err.code === 'EACCES' || (err.code === 'ENOENT' && configExists)
         )
-        config = JSON.parse(fileContent)
+        config = fileContent
 
         // Decrypt Sensitive Data
         if (config.authenticationDatabase) {
@@ -267,7 +263,7 @@ exports.load = async function () {
         if (err instanceof SyntaxError) {
             logger.info('Configuration file contains malformed JSON or is corrupt.')
             logger.info('Generating a new configuration file.')
-            await fs.ensureDir(path.join(configPath, '..'))
+            await fs.mkdir(path.join(configPath, '..'), { recursive: true })
             config = DEFAULT_CONFIG
             await exports.save()
         } else {

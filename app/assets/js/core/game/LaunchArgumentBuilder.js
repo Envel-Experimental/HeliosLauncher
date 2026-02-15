@@ -1,7 +1,7 @@
 /* global process */
 const path = require('path')
 const os = require('os')
-const fs = require('fs-extra')
+const fs = require('fs/promises')
 const { extractZip } = require('../common/FileUtils')
 const { LoggerUtil } = require('../util/LoggerUtil')
 const { getMojangOS, isLibraryCompatible, mcVersionAtLeast } = require('../common/MojangUtils')
@@ -317,7 +317,7 @@ class LaunchArgumentBuilder {
         const libs = {}
         const libArr = this.vanillaManifest.libraries
 
-        await fs.ensureDir(tempNativePath)
+        await fs.mkdir(tempNativePath, { recursive: true })
 
         // Dynamic import for ESM p-limit
         const { default: pLimit } = await import('p-limit')
@@ -359,9 +359,7 @@ class LaunchArgumentBuilder {
             const target = path.join(tempNativePath, item)
             // Force remove, ignore errors if already gone
             try {
-                if (await fs.pathExists(target)) {
-                    await fs.remove(target)
-                }
+                await fs.rm(target, { recursive: true, force: true })
             } catch (e) {
                 logger.warn('Failed to clean up native exclusion:', target, e)
             }

@@ -1,18 +1,21 @@
-const fs = require('fs-extra')
+const fs = require('fs')
 const path = require('path')
-const toml = require('toml')
-const merge = require('lodash.merge')
+const toml = require('smol-toml')
+const { defu } = require('defu')
 
 let lang
 
-exports.loadLanguage = function(id){
-    lang = merge(lang || {}, toml.parse(fs.readFileSync(path.join(__dirname, '..', 'lang', `${id}.toml`))) || {})
+exports.loadLanguage = function (id) {
+    const fileContent = fs.readFileSync(path.join(__dirname, '..', 'lang', `${id}.toml`), 'utf-8')
+    // Load and merge strings
+
+    lang = defu(toml.parse(fileContent) || {}, lang || {})
 }
 
-exports.query = function(id, placeHolders){
+exports.query = function (id, placeHolders) {
     let query = id.split('.')
     let res = lang
-    for(let q of query){
+    for (let q of query) {
         res = res[q]
     }
     let text = res === lang ? '' : res
@@ -24,15 +27,15 @@ exports.query = function(id, placeHolders){
     return text
 }
 
-exports.queryJS = function(id, placeHolders){
+exports.queryJS = function (id, placeHolders) {
     return exports.query(`js.${id}`, placeHolders)
 }
 
-exports.queryEJS = function(id, placeHolders){
+exports.queryEJS = function (id, placeHolders) {
     return exports.query(`ejs.${id}`, placeHolders)
 }
 
-exports.setupLanguage = function(){
+exports.setupLanguage = function () {
     // Load Language Files
     exports.loadLanguage('en_US')
     // Uncomment this when translations are ready
