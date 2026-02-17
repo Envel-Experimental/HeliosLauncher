@@ -2160,3 +2160,10 @@ async function factoryReset() {
 
 // Prepare the settings UI on startup.
 //prepareSettings(true)
+
+// FIX: Ensure accounts are populated if settings.js loads after uibinder's init
+if (document.readyState === 'interactive' || document.readyState === 'complete') {
+    if (typeof prepareAccountsTab === 'function') {
+        prepareAccountsTab()
+    }
+}

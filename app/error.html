@@ -93,10 +93,17 @@
     <div class="error-code" id="errMessage">UNKNOWN_ERROR</div>
     <div class="buttons">
         <button id="supportBtn" style="display: none;">Поддержка</button>
-        <button onclick="window.close()">Закрыть</button>
+        <button onclick="restartApp()">Перезапустить</button>
     </div>
 
     <script>
+        const remote = require('@electron/remote');
+
+        function restartApp() {
+            remote.app.relaunch();
+            remote.app.exit(0);
+        }
+
         // Parse query string for error message
         const urlParams = new URLSearchParams(window.location.search);
         const err = urlParams.get('error');
