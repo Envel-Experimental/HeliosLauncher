@@ -4,6 +4,11 @@
  */
 
 // Mock dependencies used by preloader
+global.fetch = jest.fn(() => Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve({})
+}));
+
 jest.mock('electron', () => ({
     ipcRenderer: {
         send: jest.fn(),
@@ -65,7 +70,7 @@ jest.mock('../../../../../app/assets/js/configmanager', () => mockConfigManager,
 // So jest.mock('@app/assets/js/configmanager') should work IF @app points to <root>/app.
 // BUT if it fails, let's try strict path mocking.
 
-jest.mock('../../../../app/assets/js/configmanager', () => mockConfigManager);
+jest.mock('../../../../../app/assets/js/configmanager', () => mockConfigManager);
 // path from tests/unit/app/assets/js/preloader.test.js to app/assets/js/configmanager is ../../../../../app... no
 // tests/unit/app/assets/js/ -> ../../../../app/assets/js/
 
@@ -105,7 +110,7 @@ jest.mock('@app/assets/js/util', () => ({
 
 const preloader = require('@app/assets/js/preloader');
 
-describe.skip('preloader', () => {
+describe('preloader', () => {
     it('should be loaded', () => {
         expect(preloader).toBeDefined();
     });
