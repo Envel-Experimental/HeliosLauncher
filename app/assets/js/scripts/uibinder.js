@@ -636,4 +636,9 @@ async function prepareSettings(first = false) {
             }
         })
     }
+
+    // FIX: Ensure accounts tab is prepared if the function exists (it's in settings.js)
+    if (typeof prepareAccountsTab === 'function') {
+        prepareAccountsTab()
+    }
 }
