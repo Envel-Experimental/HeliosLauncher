@@ -81,6 +81,8 @@ jobs:
         if: runner.os == 'Windows' || github.event.head_commit.message != '1'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
           GIT_BRANCH: ${{ env.BRANCH_NAME }}
           GIT_SHA:    ${{ env.COMMIT_SHA }}
         shell: bash
