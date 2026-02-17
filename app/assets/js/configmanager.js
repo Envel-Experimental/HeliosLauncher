@@ -154,29 +154,25 @@ exports.save = async function () {
         configToSave.clientToken = SecurityUtils.encryptString(configToSave.clientToken)
     }
 
+    // Validation: Check config size before attempting to save
+    try {
+        const configStr = JSON.stringify(configToSave)
+        if (configStr.length > 1024 * 1024) {
+            throw new Error('Config exceeds 1MB limit')
+        }
+    } catch (err) {
+        logger.warn('Config save failed or exceeded 1MB limit. Initiating fallback cleanup.', err)
+        logger.warn('Clearing modConfigurations to reduce size.')
+        configToSave.modConfigurations = []
+        if (Array.isArray(config.modConfigurations)) {
+            config.modConfigurations = []
+        }
+    }
+
+    // IO Operation: Write with retry mechanism
     try {
         return await retry(
             async () => {
-                // Attempt 1: Try to stringify normalized config
-                try {
-                    // Remove indentation to minimize string length and memory usage
-                    const configStr = JSON.stringify(configToSave)
-
-                    // Enforce strict 1MB size limit to prevent RangeErrors and performance degradation
-                    if (configStr.length > 1024 * 1024) {
-                        throw new Error('Config exceeds 1MB limit')
-                    }
-                } catch (err) {
-                    logger.warn('Config save failed or exceeded 1MB limit. Initiating fallback cleanup.', err)
-                    // Attempt 2: Aggressive cleanup if initial save fails
-                    logger.warn('Clearing modConfigurations to reduce size.')
-                    configToSave.modConfigurations = []
-                    if (Array.isArray(config.modConfigurations)) {
-                        config.modConfigurations = []
-                    }
-                }
-
-                // Use safeWriteJson from util.js which handles temp file and move atomic operations
                 const { safeWriteJson } = require('./util')
                 await safeWriteJson(configPath, configToSave)
             },
