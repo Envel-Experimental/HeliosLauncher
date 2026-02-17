@@ -49,11 +49,6 @@ jobs:
           restore-keys: |
             electron-build-cache-${{ runner.os }}-
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-
       - name: Disable Windows Defender
         if: runner.os == 'Windows'
         run: |
