@@ -49,7 +49,6 @@
     "@babel/core": "^7.29.0",
     "@babel/preset-env": "^7.29.0",
     "@playwright/test": "^1.58.2",
-    "ajv-formats": "^3.0.1",
     "babel-jest": "^30.2.0",
     "baseline-browser-mapping": "^2.9.19",
     "electron": "^40.4.1",
@@ -62,16 +61,8 @@
     "playwright": "^1.58.2"
   },
   "overrides": {
-    "ajv": "^8.17.1",
-    "ajv-keywords": "^5.1.0",
-    "ajv-formats": "^3.0.1",
     "js-yaml": "^4.1.1",
-    "tar": "^7.5.3",
-    "@develar/schema-utils": {
-      "ajv": "^8.17.1",
-      "ajv-keywords": "^5.1.0",
-      "ajv-formats": "^3.0.1"
-    }
+    "tar": "^7.5.3"
   },
   "repository": {
     "type": "git",
