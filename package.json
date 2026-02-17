@@ -64,7 +64,10 @@
   "overrides": {
     "ajv": "^8.18.0",
     "js-yaml": "^4.1.1",
-    "tar": "^7.5.3"
+    "tar": "^7.5.3",
+    "@develar/schema-utils": {
+      "ajv": "^8.18.0"
+    }
   },
   "repository": {
     "type": "git",
