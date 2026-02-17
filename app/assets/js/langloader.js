@@ -1,7 +1,8 @@
 const fs = require('fs')
 const path = require('path')
 const toml = require('smol-toml')
-const { defu } = require('defu')
+const { deepMerge } = require('./util')
+
 
 let lang
 
@@ -9,7 +10,7 @@ exports.loadLanguage = function (id) {
     const fileContent = fs.readFileSync(path.join(__dirname, '..', 'lang', `${id}.toml`), 'utf-8')
     // Load and merge strings
 
-    lang = defu(toml.parse(fileContent) || {}, lang || {})
+    lang = deepMerge(toml.parse(fileContent) || {}, lang || {})
 }
 
 exports.query = function (id, placeHolders) {

@@ -87,3 +87,31 @@ exports.safeReadJson = async function (file) {
         throw err
     }
 }
+
+/**
+ * deeply merges two objects.
+ * @param {object} obj
+ * @param {object} defaults
+ * @returns {object}
+ */
+exports.deepMerge = function (obj, defaults) {
+    if (!defaults) return obj
+    if (!obj) return defaults
+
+    if (typeof obj !== 'object' || typeof defaults !== 'object' || Array.isArray(obj) || Array.isArray(defaults)) {
+        return obj
+    }
+
+    const result = { ...defaults }
+    for (const key in obj) {
+        const val = obj[key]
+        if (val === undefined) continue
+
+        if (Object.prototype.hasOwnProperty.call(result, key) && typeof val === 'object' && val !== null) {
+            result[key] = exports.deepMerge(val, result[key])
+        } else {
+            result[key] = val
+        }
+    }
+    return result
+}
