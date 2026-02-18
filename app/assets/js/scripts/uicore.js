@@ -142,6 +142,49 @@ document.addEventListener('readystatechange', function () {
             })
         })
 
+        function setServerListingHandlers() {
+            const listings = Array.from(document.getElementsByClassName('serverListing'))
+            listings.map((val) => {
+                val.onclick = e => {
+                    if (val.hasAttribute('selected')) {
+                        return
+                    }
+                    const cListings = document.getElementsByClassName('serverListing')
+                    for (let i = 0; i < cListings.length; i++) {
+                        if (cListings[i].hasAttribute('selected')) {
+                            cListings[i].removeAttribute('selected')
+                        }
+                    }
+                    val.setAttribute('selected', '')
+                    document.activeElement.blur()
+                }
+            })
+        }
+
+        function setAccountListingHandlers() {
+            const listings = Array.from(document.getElementsByClassName('accountListing'))
+            listings.map((val) => {
+                val.onclick = e => {
+                    if (val.hasAttribute('selected')) {
+                        return
+                    }
+                    const cListings = document.getElementsByClassName('accountListing')
+                    for (let i = 0; i < cListings.length; i++) {
+                        if (cListings[i].hasAttribute('selected')) {
+                            cListings[i].removeAttribute('selected')
+                        }
+                    }
+                    val.setAttribute('selected', '')
+                    document.activeElement.blur()
+                }
+            })
+        }
+
+        function prepareAccountSelectionList() {
+            populateAccountListings()
+            setAccountListingHandlers()
+        }
+
         // Bind restore down button.
         Array.from(document.getElementsByClassName('fRb')).map((val) => {
             val.addEventListener('click', e => {
