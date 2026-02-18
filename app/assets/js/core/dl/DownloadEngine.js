@@ -171,7 +171,7 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
     if (!asset || !asset.path) {
         throw new Error('Asset or asset path is null or undefined.');
     }
-    const { url, path: assetPath, algo, hash } = asset;
+    const { path: assetPath, algo, hash } = asset;
     const decodedPath = ensureDecodedPath(assetPath);
     const CONFIG_EXTENSIONS = ['.txt', '.json', '.yml', '.yaml', '.dat'];
 

@@ -1,7 +1,7 @@
 const fs = require('fs')
 const path = require('path')
 const { Type } = require('../common/DistributionClasses')
-const ConfigManager = require('../../configmanager')
+
 
 /**
  * Module for handling mod configurations and resolutions.

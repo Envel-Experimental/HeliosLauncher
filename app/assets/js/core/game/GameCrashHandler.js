@@ -4,7 +4,7 @@ const path = require('path')
 const { LoggerUtil } = require('../util/LoggerUtil')
 const { Type } = require('../common/DistributionClasses')
 const { sendToSentry } = require('../../preloader')
-const { retry } = require('../../util')
+
 const CrashHandler = require('../../crash-handler')
 const DropinModUtil = require('../../dropinmodutil')
 const ConfigManager = require('../../configmanager')

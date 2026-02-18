@@ -24,14 +24,14 @@ describe('FileUtils', () => {
         })
 
         it('should return false if file does not exist', async () => {
-            fs.access.mockRejectedValue(new Error('File not found'))
+            fs.stat.mockRejectedValue(new Error('File not found'))
             const result = await validateLocalFile(filePath, 'SHA-256', sha256Hash)
             expect(result).toBe(false)
-            expect(fs.access).toHaveBeenCalledWith(filePath)
+            expect(fs.stat).toHaveBeenCalledWith(filePath)
         })
 
         it('should validate file with SHA-256 correctly', async () => {
-            fs.access.mockResolvedValue(undefined)
+            fs.stat.mockResolvedValue({ size: content.length })
             const mockStream = new Readable({
                 read() {
                     this.push(content)
@@ -40,12 +40,12 @@ describe('FileUtils', () => {
             })
             createReadStream.mockReturnValue(mockStream)
 
-            const result = await validateLocalFile(filePath, 'SHA-256', sha256Hash)
+            const result = await validateLocalFile(filePath, 'SHA-256', sha256Hash, content.length)
             expect(result).toBe(true)
         })
 
         it('should validate file with SHA-1 correctly', async () => {
-            fs.access.mockResolvedValue(undefined)
+            fs.stat.mockResolvedValue({ size: content.length })
             const mockStream = new Readable({
                 read() {
                     this.push(content)
@@ -54,12 +54,12 @@ describe('FileUtils', () => {
             })
             createReadStream.mockReturnValue(mockStream)
 
-            const result = await validateLocalFile(filePath, 'SHA-1', sha1Hash)
+            const result = await validateLocalFile(filePath, 'SHA-1', sha1Hash, content.length)
             expect(result).toBe(true)
         })
 
         it('should return false if hash does not match', async () => {
-            fs.access.mockResolvedValue(undefined)
+            fs.stat.mockResolvedValue({ size: content.length })
             const mockStream = new Readable({
                 read() {
                     this.push('different content')
@@ -68,12 +68,18 @@ describe('FileUtils', () => {
             })
             createReadStream.mockReturnValue(mockStream)
 
-            const result = await validateLocalFile(filePath, 'SHA-256', sha256Hash)
+            const result = await validateLocalFile(filePath, 'SHA-256', sha256Hash, content.length)
+            expect(result).toBe(false)
+        })
+
+        it('should return false if size does not match', async () => {
+            fs.stat.mockResolvedValue({ size: content.length + 1 })
+            const result = await validateLocalFile(filePath, 'SHA-256', sha256Hash, content.length)
             expect(result).toBe(false)
         })
 
         it('should handle stream errors gracefully', async () => {
-            fs.access.mockResolvedValue(undefined)
+            fs.stat.mockResolvedValue({ size: content.length })
             const mockStream = new Readable({
                 read() {
                     this.emit('error', new Error('Read error'))
@@ -81,7 +87,7 @@ describe('FileUtils', () => {
             })
             createReadStream.mockReturnValue(mockStream)
 
-            const result = await validateLocalFile(filePath, 'SHA-256', sha256Hash)
+            const result = await validateLocalFile(filePath, 'SHA-256', sha256Hash, content.length)
             expect(result).toBe(false)
         })
     })

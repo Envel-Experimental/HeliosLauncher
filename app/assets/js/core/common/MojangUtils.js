@@ -42,6 +42,9 @@ function isLibraryCompatible(rules, natives) {
 }
 
 function mcVersionAtLeast(desired, actual) {
+    if (!desired || !actual) {
+        return false;
+    }
     const des = desired.split('.');
     const act = actual.split('.');
     if (act.length < des.length) {

@@ -14,7 +14,7 @@ const execFileAsync = util.promisify(execFile);
 
 const { MOJANG_MIRRORS } = require('../../../../../network/config');
 
-let javaMirrorManifest = null;
+
 let javaMirrorManifestMap = new Map(); // url -> manifest
 
 // Winreg removed in favor of native reg.exe calls to avoid DEP0190
@@ -332,8 +332,7 @@ async function latestGraalVM_GitHub(major, dataDir) {
         }
 
         // Find asset
-        const assetPrefix = `graalvm-community-jdk-${major}`;
-        const assetSuffix = `${sanitizedOS}-${arch}_bin.${ext}`;
+
 
         const asset = targetRelease.assets.find(a =>
             a.name.toLowerCase().includes(sanitizedOS) &&

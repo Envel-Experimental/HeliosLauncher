@@ -9,7 +9,7 @@ const { mcVersionAtLeast, isLibraryCompatible, getMojangOS } = require('../commo
 const { LoggerUtil } = require('../util/LoggerUtil');
 const { handleFetchError } = require('../common/RestResponse');
 const { MOJANG_MIRRORS } = require('../../../../../network/config');
-const ConfigManager = require('../../configmanager');
+require('../../configmanager');
 const MirrorManager = require('../../../../../network/MirrorManager');
 
 class MojangIndexProcessor extends IndexProcessor {

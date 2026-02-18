@@ -68,7 +68,8 @@ describe('DistributionIndexProcessor', () => {
             expect(FileUtils.validateLocalFile).toHaveBeenCalledWith(
                 'path/to/module1.jar',
                 HashAlgo.SHA256,
-                'hash256_1'
+                'hash256_1',
+                100
             )
         })
 
@@ -89,6 +90,7 @@ describe('DistributionIndexProcessor', () => {
             expect(result[0].id).toBe('mod1')
             expect(result[0].hash).toBe('hash256_1')
             expect(result[0].algo).toBe(HashAlgo.SHA256)
+            expect(result[0].size).toBe(100)
         })
 
         it('should skip validation if no supported hash is found', async () => {
@@ -122,12 +124,14 @@ describe('DistributionIndexProcessor', () => {
             expect(FileUtils.validateLocalFile).toHaveBeenCalledWith(
                 'path/to/module1.jar',
                 HashAlgo.SHA256,
-                'hash256_1'
+                'hash256_1',
+                100
             )
             expect(FileUtils.validateLocalFile).toHaveBeenCalledWith(
                 'path/to/module2.jar',
                 HashAlgo.SHA256,
-                'hash256_2'
+                'hash256_2',
+                200
             )
         })
     })
