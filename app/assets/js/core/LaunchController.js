@@ -1,6 +1,5 @@
-const { ipcMain, app } = require('electron');
+const { ipcMain } = require('electron');
 const { FullRepair } = require('./dl/FullRepair');
-const { JavaGuard } = require('./java/JavaGuard');
 const ConfigManager = require('../configmanager');
 const P2PEngine = require('../../../../network/P2PEngine');
 const { LoggerUtil } = require('./util/LoggerUtil');
@@ -86,10 +85,9 @@ class LaunchController {
     }
 
     async startDownload(options) {
-        const { version, serverId, forceChecksum } = options;
+        const { version, serverId } = options;
         log.info(`Starting download for Server: ${serverId}, Version: ${version}`);
 
-        const dataDir = ConfigManager.getDataDirectory();
         const commonDir = ConfigManager.getCommonDirectory();
 
         // Note: instanceDirectory should probably be resolved here or passed in. 

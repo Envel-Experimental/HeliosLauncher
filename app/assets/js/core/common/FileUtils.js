@@ -4,8 +4,6 @@ const crypto = require('crypto')
 const path = require('path')
 const { spawn } = require('child_process')
 
-const DEFAULT_MAX_BUFFER = 50 * 1024 * 1024 // 50MB
-
 /**
  * Execute a command using spawn.
  * @param {string} cmd Command to run
@@ -35,10 +33,6 @@ async function runCommand(cmd, args, options = {}) {
             reject(err)
         })
     });
-}
-
-function getSanitizedPath(p) {
-    return p; // Spawn handles escaping, but keeping this hook if needed later
 }
 
 async function validateLocalFile(filePath, algo, hash) {

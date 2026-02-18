@@ -262,6 +262,15 @@ class RaceManager {
     _createVerifiedStream(sourceStream, algo, hash, expectedSize) {
         // Verify Integrity
         const verifier = new HashVerifierStream(algo, hash, expectedSize)
+
+        // Ensure errors from the source stream are handled and propagated
+        sourceStream.on('error', (err) => {
+            cleanupDownload()
+            if (typeof verifier.destroy === 'function') {
+                verifier.destroy(err)
+            }
+        })
+
         sourceStream.pipe(verifier)
 
         // Return Response
