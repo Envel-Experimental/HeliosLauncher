@@ -25,7 +25,8 @@ module.exports = {
             "version_manifest": "https://f-launcher.ru/fox/new/mirror/metadata/version_manifest_v2.json",
             "piston_meta": "https://f-launcher.ru/fox/new/mirror/metadata",
             "launcher_meta": "https://f-launcher.ru/fox/new/mirror/metadata",
-            "java_manifest": "https://f-launcher.ru/fox/new/mirror/java/manifest.json"
+            "java_manifest": "https://f-launcher.ru/fox/new/mirror/java/manifest.json",
+            "distribution": "https://f-launcher.ru/fox/new/distribution.json"
         }
         // {
         //     name: "Example Mirror",

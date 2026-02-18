@@ -7,14 +7,24 @@ const ConfigManager = require('./configmanager')
 // exports.REMOTE_DISTRO_URL = 'http://mc.westeroscraft.com/WesterosCraftLauncher/distribution.json'
 exports.REMOTE_DISTRO_URL = 'https://f-launcher.ru/fox/new/distribution.json'
 
-const { DISTRO_PUB_KEYS } = require('../../../network/config')
+const { MOJANG_MIRRORS, DISTRO_PUB_KEYS } = require('../../../network/config')
 const Lang = require('./langloader')
+
+// Construct list of distribution sources (Primary + Mirrors)
+const distributionSources = [exports.REMOTE_DISTRO_URL]
+if (MOJANG_MIRRORS && Array.isArray(MOJANG_MIRRORS)) {
+    MOJANG_MIRRORS.forEach(mirror => {
+        if (mirror.distribution) {
+            distributionSources.push(mirror.distribution)
+        }
+    })
+}
 
 const api = new DistributionAPI(
     ConfigManager.getLauncherDirectory(),
     null, // Injected forcefully by the preloader.
     null, // Injected forcefully by the preloader.
-    exports.REMOTE_DISTRO_URL,
+    distributionSources,
     false,
     DISTRO_PUB_KEYS
 )

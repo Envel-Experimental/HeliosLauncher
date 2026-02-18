@@ -8,11 +8,11 @@ const { HeliosDistribution } = require('./DistributionClasses');
 class DistributionAPI {
     static log = LoggerUtil.getLogger('DistributionAPI');
 
-    constructor(launcherDirectory, commonDir, instanceDir, remoteUrl, devMode, trustedKeys) {
+    constructor(launcherDirectory, commonDir, instanceDir, remoteUrls, devMode, trustedKeys) {
         this.launcherDirectory = launcherDirectory;
         this.commonDir = commonDir;
         this.instanceDir = instanceDir;
-        this.remoteUrl = remoteUrl;
+        this.remoteUrls = Array.isArray(remoteUrls) ? remoteUrls : [remoteUrls];
         this.devMode = devMode;
         this.trustedKeys = trustedKeys;
         console.log('[DistributionAPI] Initialized with trusted keys:', this.trustedKeys);
@@ -91,83 +91,101 @@ class DistributionAPI {
     }
 
     async pullRemote() {
-        try {
-            console.log('[DistributionAPI] Pulling remote distribution...');
-            const res = await fetch(this.remoteUrl, { cache: 'no-store' });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        let lastError = null;
 
-            // Get buffer first to preserve exact bytes for verification
-            const rawBuffer = Buffer.from(await res.arrayBuffer());
-            const rawText = rawBuffer.toString('utf-8');
-            const data = JSON.parse(rawText);
+        for (const url of this.remoteUrls) {
+            try {
+                console.log(`[DistributionAPI] Pulling remote distribution from: ${url}`);
+                const res = await fetch(url, { cache: 'no-store' });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-            let signatureValid = true; // Default to true if no keys configured (or logic disabled)
+                // Get buffer first to preserve exact bytes for verification
+                const rawBuffer = Buffer.from(await res.arrayBuffer());
+                const rawText = rawBuffer.toString('utf-8');
+                const data = JSON.parse(rawText);
 
-            if (this.trustedKeys && this.trustedKeys.length > 0) {
-                console.log('[DistributionAPI] Verifying signature...')
-                signatureValid = false
-                try {
-                    const sigRes = await fetch(this.remoteUrl + '.sig', { cache: 'no-store' })
-                    if (sigRes.ok) {
-                        const signatureHex = (await sigRes.text()).trim()
-                        const signature = Buffer.from(signatureHex, 'hex')
+                let signatureValid = true; // Default to true if no keys configured (or logic disabled)
 
-                        // Use raw buffer for verification to avoid canonicalization issues
-                        const contentBuffer = rawBuffer;
+                if (this.trustedKeys && this.trustedKeys.length > 0) {
+                    console.log('[DistributionAPI] Verifying signature...')
+                    signatureValid = false
+                    try {
+                        const sigRes = await fetch(url + '.sig', { cache: 'no-store' })
+                        if (sigRes.ok) {
+                            const signatureHex = (await sigRes.text()).trim()
+                            const signature = Buffer.from(signatureHex, 'hex')
 
-                        // ASN.1 Header for Ed25519 Public Key (SPKI)
-                        const ED25519_SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex')
+                            // Use raw buffer for verification to avoid canonicalization issues
+                            const contentBuffer = rawBuffer;
 
-                        for (const keyHex of this.trustedKeys) {
-                            try {
-                                const rawKey = Buffer.from(keyHex, 'hex')
-                                // Wrap raw key in SPKI format for Node's crypto
-                                const spkiKey = Buffer.concat([ED25519_SPKI_PREFIX, rawKey])
-                                const publicKey = crypto.createPublicKey({
-                                    key: spkiKey,
-                                    format: 'der',
-                                    type: 'spki'
-                                })
+                            // ASN.1 Header for Ed25519 Public Key (SPKI)
+                            const ED25519_SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex')
 
-                                if (crypto.verify(null, contentBuffer, publicKey, signature)) {
-                                    signatureValid = true
-                                    console.log('[DistributionAPI] Signature VALID.')
-                                    break
+                            for (const keyHex of this.trustedKeys) {
+                                try {
+                                    const rawKey = Buffer.from(keyHex, 'hex')
+                                    // Wrap raw key in SPKI format for Node's crypto
+                                    const spkiKey = Buffer.concat([ED25519_SPKI_PREFIX, rawKey])
+                                    const publicKey = crypto.createPublicKey({
+                                        key: spkiKey,
+                                        format: 'der',
+                                        type: 'spki'
+                                    })
+
+                                    if (crypto.verify(null, contentBuffer, publicKey, signature)) {
+                                        signatureValid = true
+                                        console.log('[DistributionAPI] Signature VALID.')
+                                        break
+                                    }
+                                } catch (e) {
+                                    console.warn('[DistributionAPI] Key check failed:', e.message)
                                 }
-                            } catch (e) {
-                                console.warn('[DistributionAPI] Key check failed:', e.message)
                             }
+                        } else {
+                            console.warn(`[DistributionAPI] Signature file missing (${sigRes.status})`)
                         }
-                    } else {
-                        console.warn(`[DistributionAPI] Signature file missing (${sigRes.status})`)
+                    } catch (e) {
+                        DistributionAPI.log.warn('Signature verification error:', e)
                     }
-                } catch (e) {
-                    DistributionAPI.log.warn('Signature verification error:', e)
                 }
-            }
 
-            console.log('[DistributionAPI] Final signatureValid state:', signatureValid);
+                console.log('[DistributionAPI] Final signatureValid state:', signatureValid);
 
-            if (!signatureValid && this.trustedKeys && this.trustedKeys.length > 0) {
-                const err = new Error('Distribution signature verification failed.');
-                err.dataPackage = {
+                if (!signatureValid && this.trustedKeys && this.trustedKeys.length > 0) {
+                    const err = new Error('Distribution signature verification failed.');
+                    err.dataPackage = {
+                        data: data,
+                        responseStatus: RestResponseStatus.SUCCESS,
+                        signatureValid: false
+                    }
+                    throw err;
+                }
+
+                // If successful, return immediately
+                return {
                     data: data,
                     responseStatus: RestResponseStatus.SUCCESS,
-                    signatureValid: false
-                }
-                throw err;
-            }
+                    signatureValid: signatureValid
+                };
 
-            return {
-                data: data,
-                responseStatus: RestResponseStatus.SUCCESS,
-                signatureValid: signatureValid
-            };
+            } catch (error) {
+                console.error(`[DistributionAPI] Pull Failed from ${url}:`, error.message);
+                lastError = error;
+                // If signature validation failed (detected via dataPackage), we might want to return that error immediately
+                // to trigger the overlay prompt instead of trying next mirror?
+                // Actually, if signature fails on mirror A, we should probably try mirror B.
+                // But the `distromanager` logic expects a specific error structure to show the overlay.
+                // If ALL fail, we return the last error.
+                if (error.dataPackage && error.dataPackage.signatureValid === false) {
+                    console.warn('[DistributionAPI] Signature validation failed. Trying next mirror...');
+                    lastError = error; // Save this specific error as it's more informative
+                }
+            }
         }
-        catch (error) {
-            console.error('[DistributionAPI] Pull Failed:', error);
-            return handleFetchError('Pull Remote', error, DistributionAPI.log);
-        }
+
+        // If loop finishes, all failed.
+        console.error('[DistributionAPI] All distribution sources failed.');
+        return handleFetchError('Pull Remote', lastError || new Error('All mirrors failed'), DistributionAPI.log);
     }
 
     async writeDistributionToDisk(distribution) {
