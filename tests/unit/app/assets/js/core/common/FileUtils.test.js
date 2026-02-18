@@ -34,34 +34,28 @@ describe('FileUtils', () => {
         it('should validate hash correctly', async () => {
             fs.stat.mockResolvedValue({ size: 100 });
 
-            const mockStream = {
-                pipe: jest.fn().mockReturnThis(),
+
+
+            const mockHash = {
+                read: jest.fn().mockReturnValue(Buffer.from('aabbcc', 'hex')),
                 on: jest.fn().mockImplementation((event, callback) => {
                     if (event === 'finish') {
-                        callback();
+                        // Use setTimeout to simulate async behavior and allow the promise to be pending first
+                        setTimeout(callback, 0);
                     }
-                    return mockStream;
-                }),
+                    return mockHash;
+                })
+            };
+            crypto.createHash.mockReturnValue(mockHash);
+
+            const mockStream = {
+                pipe: jest.fn().mockReturnValue(mockHash),
+                on: jest.fn(),
                 read: jest.fn()
             };
             createReadStream.mockReturnValue(mockStream);
 
-            const mockHash = {
-                read: jest.fn().mockReturnValue(Buffer.from('correcthash', 'hex')),
-                on: jest.fn()
-            };
-            crypto.createHash.mockReturnValue(mockHash);
-
-            // We need to allow the promise to resolve, which happens on 'finish'
-            // The implementation calls stream.pipe(hashStream).on('finish', ...)
-            // My mock above calls callback() immediately on 'finish' registration.
-
-            // Wait, the implementation:
-            // stream.pipe(hashStream).on('finish', () => { ... })
-
-            // So mockStream.on('finish', cb) calls cb.
-
-            const result = await FileUtils.validateLocalFile('path', 'sha1', 'correcthash');
+            const result = await FileUtils.validateLocalFile('path', 'sha1', 'aabbcc');
             expect(result).toBe(true);
         });
     });
