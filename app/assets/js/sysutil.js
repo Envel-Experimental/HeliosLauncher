@@ -1,6 +1,7 @@
 const os = require('os')
+const fs = require('fs')
 const { exec } = require('child_process') // Built-in Node.js module
-const checkDiskSpace = require('check-disk-space').default
+
 
 // Configurable thresholds
 const TOTAL_RAM_THRESHOLD_GB = 6
@@ -49,16 +50,42 @@ function getAvailableRamGb() {
 }
 
 /**
+ * Gets the free disk space in GB for the primary drive.
+ * Uses native Node.js fs.statfs (Node 19+) to avoid spawning 'wmic'.
+ */
+function getFreeDiskSpaceGb() {
+    return new Promise((resolve, reject) => {
+        const targetPath = os.platform() === 'win32' ? 'C:\\' : '/'
+
+        // Check if fs.statfs exists (Node 19.6.0+)
+        if (typeof fs.statfs === 'function') {
+            fs.statfs(targetPath, (err, stats) => {
+                if (err) return reject(err)
+                // bavail = free blocks available to unprivileged users
+                // bsize = block size
+                const freeBytes = stats.bavail * stats.bsize
+                resolve(freeBytes / BYTES_PER_GB)
+            })
+        } else {
+            // Fallback or skip if strictly older Node, but 'wmic' is broken anyway.
+            // We can try a simple "fs.stats" check or just return a safe value to avoid error spam.
+            // Assuming modern Electron which has modern Node.
+            reject(new Error('fs.statfs not supported in this Node version'))
+        }
+    })
+}
+
+/**
  * Performs system requirement checks for RAM and disk space.
  * @returns {Promise<Array<string>>} A promise that resolves to an array of warning keys.
  */
-exports.performChecks = async function() {
+exports.performChecks = async function () {
     const warnings = []
 
     try {
         // 2. Available RAM Check (every launch)
         const availableRam = await getAvailableRamGb()
-        console.log(`Available RAM: ${availableRam.toFixed(2)} GB`)
+        // console.log(`Available RAM: ${availableRam.toFixed(2)} GB`)
         if (availableRam < FREE_RAM_THRESHOLD_GB) {
             warnings.push('lowFreeRAM')
         }
@@ -72,8 +99,7 @@ exports.performChecks = async function() {
 
     // 3. Free Disk Space Check (every launch)
     try {
-        const diskSpace = await checkDiskSpace(os.platform() === 'win32' ? 'C:' : '/')
-        const freeDisk = diskSpace.free / BYTES_PER_GB
+        const freeDisk = await getFreeDiskSpaceGb()
         if (freeDisk < FREE_DISK_THRESHOLD_GB) {
             warnings.push('lowDiskSpace')
         }

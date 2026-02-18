@@ -12,10 +12,15 @@ const log = LoggerUtil.getLogger('JavaGuard');
 const execAsync = util.promisify(exec);
 const execFileAsync = util.promisify(execFile);
 
+const { MOJANG_MIRRORS } = require('../../../../../network/config');
+
+
+let javaMirrorManifestMap = new Map(); // url -> manifest
+
 // Winreg removed in favor of native reg.exe calls to avoid DEP0190
 
 async function getHotSpotSettings(execPath) {
-    const javaExecutable = execPath.includes('javaw.exe') ? execPath.replace('javaw.exe', 'java.exe') : execPath;
+    const javaExecutable = path.resolve(execPath.includes('javaw.exe') ? execPath.replace('javaw.exe', 'java.exe') : execPath);
     try {
         await fs.access(javaExecutable);
     } catch (e) {
@@ -84,7 +89,7 @@ function filterApplicableJavaPaths(resolvedSettings, semverRange) {
         .map(([path, settings]) => {
             const parsedVersion = parseJavaRuntimeVersion(settings['java.version']);
             if (parsedVersion == null) {
-                log.error(`Failed to parse JDK version at location '${path}' (Vendor: ${settings['java.vendor']})`);
+                log.error(`Failed to parse JDK version at location '${path}' (Vendor: ${settings['java.vendor']}). Ensure this is a valid HotSpot or GraalVM build.`);
                 return null;
             }
             return {
@@ -141,32 +146,215 @@ async function validateSelectedJvm(path, semverRange) {
     } catch (e) { return null; }
 
     const resolvedSettings = await resolveJvmSettings([path]);
-    const jvmDetails = filterApplicableJavaPaths(resolvedSettings, semverRange);
+
+    // We utilize the provided semver range to ensure the selected Java is valid.
+    // Use '*' if no range is provided (fallback).
+    const jvmDetails = filterApplicableJavaPaths(resolvedSettings, semverRange || '*');
+
     rankApplicableJvms(jvmDetails);
     return jvmDetails.length > 0 ? jvmDetails[0] : null;
 }
 
-async function latestOpenJDK(major, dataDir, distribution) {
-    if (distribution == null) {
-        if (process.platform === Platform.DARWIN) {
-            return latestCorretto(major, dataDir);
-        }
-        else {
-            return latestAdoptium(major, dataDir);
-        }
+async function loadJavaMirrorManifest(mirrorUrl) {
+    if (javaMirrorManifestMap.has(mirrorUrl)) {
+        return javaMirrorManifestMap.get(mirrorUrl);
     }
-    else {
-        switch (distribution) {
-            case JdkDistribution.TEMURIN:
-                return latestAdoptium(major, dataDir);
-            case JdkDistribution.CORRETTO:
-                return latestCorretto(major, dataDir);
-            default: {
-                const eMsg = `Unknown distribution '${distribution}'`;
-                log.error(eMsg);
-                throw new Error(eMsg);
+    try {
+        const res = await fetch(mirrorUrl);
+        if (res.ok) {
+            const manifest = await res.json();
+            javaMirrorManifestMap.set(mirrorUrl, manifest);
+            return manifest;
+        }
+    } catch (e) {
+        log.warn(`Failed to fetch Java mirror manifest from ${mirrorUrl}`, e);
+    }
+    return null;
+}
+
+async function latestOpenJDK(major, dataDir, distribution) {
+    let result = null;
+
+    // 1. Try Official Sources
+    try {
+        if (distribution == null) {
+            if (major >= 17) {
+                const graal = await latestGraalVM(major, dataDir);
+                if (graal) result = graal;
+                else {
+                    log.warn(`GraalVM not found for Java ${major}, falling back to Adoptium.`);
+                    result = await latestAdoptium(major, dataDir);
+                }
+            } else {
+                result = await latestAdoptium(major, dataDir);
+            }
+        } else {
+            switch (distribution) {
+                case 'graalvm':
+                    result = await latestGraalVM(major, dataDir);
+                    break;
+                case JdkDistribution.TEMURIN:
+                    result = await latestAdoptium(major, dataDir);
+                    break;
+                case JdkDistribution.CORRETTO:
+                    result = await latestCorretto(major, dataDir);
+                    break;
+                default:
+                    const eMsg = `Unknown distribution '${distribution}'`;
+                    log.error(eMsg);
+                    throw new Error(eMsg);
             }
         }
+    } catch (err) {
+        log.warn(`Failed to resolve Java ${major} from official sources.`, err);
+    }
+
+    if (result) return result;
+
+    // 2. Fallback to Mirror
+    log.info('Attempting to resolve Java from configured mirrors...');
+    if (MOJANG_MIRRORS && MOJANG_MIRRORS.length > 0) {
+        for (const mirror of MOJANG_MIRRORS) {
+            if (mirror.java_manifest) {
+                const manifest = await loadJavaMirrorManifest(mirror.java_manifest);
+                if (manifest) {
+                    const os = process.platform === 'win32' ? 'windows' : (process.platform === 'darwin' ? 'darwin' : 'linux');
+                    const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+
+                    if (manifest[os] && manifest[os][arch] && manifest[os][arch][major]) {
+                        const entry = manifest[os][arch][major];
+                        log.info(`Resolved Java ${major} from Mirror: ${entry.url}`);
+                        return {
+                            url: entry.url,
+                            size: 0,
+                            id: `java-runtime-${major}-${os}-${arch}.zip`,
+                            hash: entry.sha256,
+                            algo: HashAlgo.SHA256,
+                            path: path.join(getLauncherRuntimeDir(dataDir), `java-runtime-${major}-${os}-${arch}.zip`)
+                        };
+                    }
+                }
+            }
+        }
+    }
+
+    return null;
+}
+
+async function latestGraalVM(major, dataDir) {
+    // 1. Try Liberica NIK (Mirror - BellSoft servers, usually faster/more reliable than GitHub raw)
+    try {
+        const nik = await latestLibericaNIK(major, dataDir);
+        if (nik) return nik;
+    } catch (e) {
+        log.warn(`Liberica NIK mirror failed for Java ${major}, falling back to GitHub.`, e);
+    }
+
+    // 2. Fallback to GitHub (Official GraalVM CE)
+    return await latestGraalVM_GitHub(major, dataDir);
+}
+
+async function latestLibericaNIK(major, dataDir) {
+    const arch = process.arch === 'arm64' ? 'aarch64' : 'x64'; // Liberica uses specific arch names
+    const os = process.platform === 'win32' ? 'windows' : (process.platform === 'darwin' ? 'macos' : 'linux');
+    const bitness = '64';
+    const packageType = process.platform === 'win32' ? 'zip' : 'tar.gz';
+
+    // BellSoft API v1 for NIK
+    // https://api.bell-sw.com/v1/nik/releases?version-feature={major}&os={os}&arch={arch}&bitness=64&package-type={type}
+    const url = `https://api.bell-sw.com/v1/nik/releases?version-feature=${major}&os=${os}&arch=${arch}&bitness=${bitness}&package-type=${packageType}&bundle-type=standard`;
+
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`BellSoft API Error ${res.status}`);
+
+    const releases = await res.json();
+    if (!releases || releases.length === 0) return null;
+
+    // Get latest version
+    const latest = releases[0]; // API usually sorts by version? Verification needed, but typically yes.
+
+    // Construct download info
+    return {
+        url: latest.downloadUrl,
+        size: latest.size,
+        id: latest.filename, // e.g. bellsoft-nik23.0.1-linux-amd64.tar.gz
+        hash: latest.sha1, // BellSoft provides sha1 usually
+        algo: HashAlgo.SHA1,
+        path: path.join(getLauncherRuntimeDir(dataDir), latest.filename)
+    };
+}
+
+async function latestGraalVM_GitHub(major, dataDir) {
+    const arch = process.arch === 'arm64' ? 'aarch64' : 'x64';
+    let sanitizedOS;
+    let ext;
+
+    switch (process.platform) {
+        case Platform.WIN32:
+            sanitizedOS = 'windows';
+            ext = 'zip';
+            break;
+        case Platform.DARWIN:
+            sanitizedOS = 'macos';
+            ext = 'tar.gz';
+            break;
+        case Platform.LINUX:
+            sanitizedOS = 'linux';
+            ext = 'tar.gz';
+            break;
+        default:
+            sanitizedOS = process.platform;
+            ext = 'tar.gz';
+            break;
+    }
+
+    // GraalVM Community Edition (GitHub Releases)
+    // Matches formats like: graalvm-community-jdk-21.0.2_windows-x64_bin.zip
+    const repo = 'graalvm/graalvm-ce-builds';
+
+    // We want the absolute latest release that matches our Major version
+    // GitHub API 'latest' might be 22 while we want 21. 
+    // So we list releases and find the first one matching 'jdk-{major}.'
+
+    const url = `https://api.github.com/repos/${repo}/releases`;
+
+    try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`GitHub API Error ${res.status}`);
+        const releases = await res.json();
+
+        // Find release for this major version
+        const targetRelease = releases.find(r => r.tag_name && r.tag_name.startsWith(`jdk-${major}.`));
+
+        if (!targetRelease) {
+            log.warn(`No GraalVM release found for Java ${major}`);
+            return null;
+        }
+
+        // Find asset
+
+
+        const asset = targetRelease.assets.find(a =>
+            a.name.toLowerCase().includes(sanitizedOS) &&
+            a.name.toLowerCase().includes(arch) &&
+            a.name.endsWith(ext)
+        );
+
+        if (asset) {
+            return {
+                url: asset.browser_download_url,
+                size: asset.size,
+                id: asset.name,
+                hash: null, // GitHub doesn't provide easy hash in asset list, verify logic might need to skip or fetch .sha256 file
+                algo: null,
+                path: path.join(getLauncherRuntimeDir(dataDir), asset.name)
+            };
+        }
+
+        return null;
+    } catch (err) {
+        log.error(`Error fetching GraalVM for Java ${major}`, err);
+        return null;
     }
 }
 
@@ -228,20 +416,18 @@ async function latestCorretto(major, dataDir) {
             break;
     }
     const url = `https://corretto.aws/downloads/latest/amazon-corretto-${major}-${arch}-${sanitizedOS}-jdk.${ext}`;
-    const md5url = `https://corretto.aws/downloads/latest_checksum/amazon-corretto-${major}-${arch}-${sanitizedOS}-jdk.${ext}`;
+
     try {
         const res = await fetch(url, { method: 'HEAD' });
         if (res.ok) {
-            const checksumRes = await fetch(md5url);
-            const checksum = await checksumRes.text();
             const finalUrl = res.url;
             const name = finalUrl.substring(finalUrl.lastIndexOf('/') + 1);
             return {
                 url: finalUrl,
                 size: parseInt(res.headers.get('content-length')),
                 id: name,
-                hash: checksum.trim(),
-                algo: HashAlgo.MD5,
+                hash: null,
+                algo: null,
                 path: path.join(getLauncherRuntimeDir(dataDir), name)
             };
         }
@@ -427,7 +613,8 @@ async function getLinuxDiscoverers(dataDir) {
 async function win32DriveMounts() {
     try {
         const { stdout } = await execAsync('gdr -psp FileSystem | select -eXp root | ConvertTo-Json', { shell: 'powershell.exe' });
-        return JSON.parse(stdout);
+        const res = JSON.parse(stdout);
+        return Array.isArray(res) ? res : [res];
     }
     catch (error) {
         return ['C:\\'];

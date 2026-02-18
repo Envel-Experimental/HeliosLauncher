@@ -9,12 +9,21 @@ compression: 'maximum'
 
 asarUnpack:
   - "**/@sentry-internal/node-cpu-profiler/lib/*.node"
+  - "**/sodium-native/**"
+  - "**/udx-native/**"
 
 files:
   - '!{dist,.gitignore,.vscode,docs,dev-app-update.yml,.nvmrc,.eslintrc.json}'
 
 extraResources:
   - 'libraries'
+
+publish:
+  - provider: github
+    owner: Envel-Experimental
+    repo: HeliosLauncher
+  - provider: generic
+    url: 'https://f-launcher.ru/fox/new/updates'
 
 # Windows Configuration
 win: 
@@ -42,7 +51,7 @@ mac:
         - 'universal'
   artifactName: '${productName}-setup-${version}-${arch}.${ext}'
   category: 'public.app-category.games'
-  x64ArchFiles: "**/@sentry-internal/node-cpu-profiler/lib/*-darwin-*-*.node"
+  x64ArchFiles: "**/{sodium-native/prebuilds/**,udx-native/prebuilds/**,@sentry-internal/node-cpu-profiler/lib/*-darwin-*-*.node}"
 
 # Linux Configuration
 linux: 

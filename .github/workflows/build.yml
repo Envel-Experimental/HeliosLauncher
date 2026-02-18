@@ -49,11 +49,6 @@ jobs:
           restore-keys: |
             electron-build-cache-${{ runner.os }}-
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-
       - name: Disable Windows Defender
         if: runner.os == 'Windows'
         run: |
@@ -81,6 +76,8 @@ jobs:
         if: runner.os == 'Windows' || github.event.head_commit.message != '1'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
           GIT_BRANCH: ${{ env.BRANCH_NAME }}
           GIT_SHA:    ${{ env.COMMIT_SHA }}
         shell: bash

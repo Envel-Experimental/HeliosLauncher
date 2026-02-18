@@ -14,14 +14,15 @@ const { FullRepair } = require('./assets/js/core/dl/FullRepair')
 const { DistributionIndexProcessor } = require('./assets/js/core/dl/DistributionIndexProcessor')
 const { MojangIndexProcessor } = require('./assets/js/core/dl/MojangIndexProcessor')
 const { downloadFile } = require('./assets/js/core/dl/DownloadEngine')
-const {
+var {
     latestOpenJDK,
-    extractJdk
+    ensureJavaDirIsRoot
 } = require('./assets/js/core/java/JavaGuard')
-const P2PModule = require('./assets/js/core/dl/P2PManager')
+
 
 // Internal Requirements
 const ProcessBuilder = require('./assets/js/processbuilder')
+require('./assets/js/core/util/SentryWrapper.js')
 
 // Launch Elements
 const launch_content = document.getElementById('launch_content')
@@ -70,7 +71,7 @@ function setLaunchDetails(details) {
 function setLaunchPercentage(percent) {
     launch_progress.setAttribute('max', 100)
     launch_progress.setAttribute('value', percent)
-    launch_progress_label.innerHTML = percent + '%'
+    launch_progress_label.innerHTML = Math.round(percent instanceof Number ? percent : parseFloat(percent)) + '%'
 }
 
 /**
@@ -86,15 +87,23 @@ function setDownloadPercentage(percent) {
 // Launch Button Logic Removed (moved to uibinder.js)
 
 // Bind P2P Status
-P2PModule.start() // Start discovery immediately
-P2PModule.on('peer-update', (count) => {
-    if (count > 0) {
-        p2p_status.style.display = 'flex'
-        p2p_status_text.innerHTML = `P2P (${count})`
-    } else {
-        p2p_status.style.display = 'none'
-    }
-})
+// Bind P2P Status
+
+
+
+// Poll P2P Status every 5 seconds
+setInterval(async () => {
+    try {
+        const stats = await ipcRenderer.invoke('p2p:getInfo')
+        const count = stats.connections
+        if (count > 0) {
+            p2p_status.style.display = 'flex'
+            p2p_status_text.innerHTML = `P2P (${count})`
+        } else {
+            p2p_status.style.display = 'none'
+        }
+    } catch (e) { }
+}, 5000)
 
 // Bind launch button
 document.getElementById('launch_button').addEventListener('click', async e => {
@@ -119,7 +128,7 @@ document.getElementById('launch_button').addEventListener('click', async e => {
             toggleLaunchArea(true)
             setLaunchPercentage(0, 100)
 
-            const details = await validateSelectedJvm(ensureJavaDirIsRoot(jExe), server.effectiveJavaOptions.supported)
+            const details = await ipcRenderer.invoke('sys:validateJava', ensureJavaDirIsRoot(jExe), server.effectiveJavaOptions.supported)
             if (details != null) {
                 loggerLanding.info('Jvm Details', details)
                 await dlAsync()
@@ -181,10 +190,11 @@ const refreshMojangStatuses = async function () {
 
     for (let i = 0; i < statuses.length; i++) {
         const service = statuses[i]
+        const safeName = service.name.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;")
 
         const tooltipHTML = `<div class="mojangStatusContainer">
             <span class="mojangStatusIcon" style="color: ${MojangRestAPI.statusToHex(service.status)};">&#8226;</span>
-            <span class="mojangStatusName">${service.name}</span>
+            <span class="mojangStatusName">${safeName}</span>
         </div>`
         if (service.essential) {
             tooltipEssentialHTML += tooltipHTML
@@ -237,10 +247,10 @@ const refreshServerStatus = async (fade = false) => {
         loggerLanding.debug(err)
     }
     if (fade) {
-        $('#server_status_wrapper').fadeOut(250, () => {
+        fadeOut(document.getElementById('server_status_wrapper'), 250, () => {
             document.getElementById('landingPlayerLabel').innerHTML = pLabel
             document.getElementById('player_count').innerHTML = pVal
-            $('#server_status_wrapper').fadeIn(500)
+            fadeIn(document.getElementById('server_status_wrapper'), 500)
         })
     } else {
         document.getElementById('landingPlayerLabel').innerHTML = pLabel
@@ -286,6 +296,16 @@ async function showOfflineWarning() {
 
 /* System (Java) Scan */
 
+// Keep reference to Minecraft Process
+let proc
+// Is DiscordRPC enabled
+// Joined server regex
+// Change this if your server uses something different.
+const GAME_LAUNCH_REGEX = /^\[.+\]: (?:MinecraftForge .+ Initialized|ModLauncher .+ starting: .+|Loading Minecraft .+ with Fabric Loader .+)$/
+const MIN_LINGER = 5000
+
+/* System (Java) Scan */
+
 /**
  * Asynchronously scan the system for valid Java installations.
  *
@@ -297,10 +317,10 @@ async function asyncSystemScan(effectiveJavaOptions, launchAfter = true) {
     toggleLaunchArea(true)
     setLaunchPercentage(0, 100)
 
-    const jvmDetails = await discoverBestJvmInstallation(
-        ConfigManager.getDataDirectory(),
-        effectiveJavaOptions.supported
-    )
+    // IPC Call to Main Process
+    const jvmDetails = await ipcRenderer.invoke('sys:scanJava', {
+        version: effectiveJavaOptions.supported
+    })
 
     if (jvmDetails == null) {
         // If the result is null, no valid Java installation was found.
@@ -323,8 +343,8 @@ async function asyncSystemScan(effectiveJavaOptions, launchAfter = true) {
             }
         })
         setDismissHandler(() => {
-            $('#overlayContent').fadeOut(250, () => {
-                //$('#overlayDismiss').toggle(false)
+            fadeOut(document.getElementById('overlayContent'), 250, () => {
+
                 setOverlayContent(
                     Lang.queryJS('landing.systemScan.javaRequired', { 'major': effectiveJavaOptions.suggestedMajor }),
                     Lang.queryJS('landing.systemScan.javaRequiredMessage', { 'major': effectiveJavaOptions.suggestedMajor }),
@@ -340,13 +360,24 @@ async function asyncSystemScan(effectiveJavaOptions, launchAfter = true) {
 
                     asyncSystemScan(effectiveJavaOptions, launchAfter)
                 })
-                $('#overlayContent').fadeIn(250)
+                fadeIn(document.getElementById('overlayContent'), 250)
             })
         })
         toggleOverlay(true, true)
     } else {
         // Java installation found, use this to launch the game.
-        const javaExec = javaExecFromRoot(jvmDetails.path)
+        // We assume Main process returns the full path including executable
+        let javaExec = jvmDetails.path
+        if (jvmDetails.executable) javaExec = jvmDetails.executable // If object returned
+
+        // Ensure we get the executable path if the scanner returns the home dir
+        if (!javaExec.endsWith('java') && !javaExec.endsWith('java.exe') && !javaExec.endsWith('javaw.exe')) {
+            // We can't resolve this easily in Renderer without path/fs access if we are strict.
+            // But we still have nodeIntegration for now.
+            const { javaExecFromRoot } = require('./assets/js/core/java/JavaGuard')
+            javaExec = javaExecFromRoot(javaExec)
+        }
+
         ConfigManager.setJavaExecutable(ConfigManager.getSelectedServer(), javaExec)
         ConfigManager.save()
 
@@ -355,8 +386,6 @@ async function asyncSystemScan(effectiveJavaOptions, launchAfter = true) {
         settingsJavaExecVal.value = javaExec
         await populateJavaExecDetails(settingsJavaExecVal.value)
 
-        // TODO Callback hell, refactor
-        // TODO Move this out, separate concerns.
         if (launchAfter) {
             await dlAsync()
         }
@@ -365,78 +394,59 @@ async function asyncSystemScan(effectiveJavaOptions, launchAfter = true) {
 }
 
 async function downloadJava(effectiveJavaOptions, launchAfter = true) {
+    if (!effectiveJavaOptions) effectiveJavaOptions = {}
 
-    // TODO Error handling.
-    // asset can be null.
-    const asset = await latestOpenJDK(
-        effectiveJavaOptions.suggestedMajor,
-        ConfigManager.getDataDirectory(),
-        effectiveJavaOptions.distribution)
+    // Temporary: Use a hardcoded object if effectiveJavaOptions is empty or mismatched,
+    // assuming standard key names from the distro logic.
+    // effectiveJavaOptions usually has: { platform, architecture, majorVersion (or suggestedMajor) }
 
-    if (asset == null) {
-        throw new Error(Lang.queryJS('landing.downloadJava.findJdkFailure'))
-    }
+    setLaunchDetails(Lang.queryJS('landing.dlAsync.preparingToLaunch')) // Generic "Preparing..."
+    toggleLaunchArea(true)
+    setLaunchPercentage(0)
 
-    let received = 0
-    await downloadFile(asset, ({ transferred }) => {
-        received = transferred
-        setDownloadPercentage(Math.trunc((transferred / asset.size) * 100))
-    })
-    setDownloadPercentage(100)
+    const loggerLaunchSuite = LoggerUtil.getLogger('LaunchSuite')
 
-    if (received != asset.size) {
-        loggerLanding.warn(`Java Download: Expected ${asset.size} bytes but received ${received}`)
-        if (!await validateLocalFile(asset.path, asset.algo, asset.hash)) {
-            log.error(`Hashes do not match, ${asset.id} may be corrupted.`)
-            // Don't know how this could happen, but report it.
-            throw new Error(Lang.queryJS('landing.downloadJava.javaDownloadCorruptedError'))
+    // Listen for progress
+    const progressListener = (event, status) => {
+        if (status.type === 'download') {
+            setLaunchDetails(Lang.queryJS('landing.dlAsync.downloadingFiles')) // Reuse "Downloading Files"
+            setDownloadPercentage(status.progress)
+        } else if (status.type === 'extract') {
+            setLaunchDetails('Extracting Java...') // Hardcoded or new Lang key
+            setLaunchPercentage(100)
         }
     }
+    ipcRenderer.on('dl:progress', progressListener)
 
-    // Extract
-    // Show installing progress bar.
-    remote.getCurrentWindow().setProgressBar(2)
+    try {
+        // Invoke Main
+        const javaPath = await ipcRenderer.invoke('dl:downloadJava', {
+            major: effectiveJavaOptions.majorVersion || effectiveJavaOptions.suggestedMajor || 8,
+            distribution: effectiveJavaOptions.distribution || null
+        })
 
-    // Wait for extration to complete.
-    const eLStr = Lang.queryJS('landing.downloadJava.extractingJava')
-    let dotStr = ''
-    setLaunchDetails(eLStr)
-    const extractListener = setInterval(() => {
-        if (dotStr.length >= 3) {
-            dotStr = ''
-        } else {
-            dotStr += '.'
+        // Success
+        ConfigManager.setJavaExecutable(ConfigManager.getSelectedServer(), javaPath)
+        ConfigManager.save()
+
+        if (document.getElementById('settingsJavaExecVal')) {
+            document.getElementById('settingsJavaExecVal').value = javaPath
+            await populateJavaExecDetails(javaPath)
         }
-        setLaunchDetails(eLStr + dotStr)
-    }, 750)
 
-    const newJavaExec = await extractJdk(asset.path)
+        ipcRenderer.removeListener('dl:progress', progressListener)
 
-    // Extraction complete, remove the loading from the OS progress bar.
-    remote.getCurrentWindow().setProgressBar(-1)
+        if (launchAfter) {
+            await dlAsync()
+        }
 
-    // Extraction completed successfully.
-    ConfigManager.setJavaExecutable(ConfigManager.getSelectedServer(), newJavaExec)
-    ConfigManager.save()
-
-    clearInterval(extractListener)
-    setLaunchDetails(Lang.queryJS('landing.downloadJava.javaInstalled'))
-
-    // TODO Callback hell
-    // Refactor the launch functions
-    asyncSystemScan(effectiveJavaOptions, launchAfter)
-
+    } catch (err) {
+        ipcRenderer.removeListener('dl:progress', progressListener)
+        loggerLaunchSuite.error('Error downloading Java via Main Process.', err)
+        showLaunchFailure('Java Download Failed', err.message || 'Check console codes.')
+    }
 }
 
-// Keep reference to Minecraft Process
-let proc
-// Is DiscordRPC enabled
-let hasRPC = false
-// Joined server regex
-// Change this if your server uses something different.
-const GAME_JOINED_REGEX = /\[.+\]: Sound engine started/
-const GAME_LAUNCH_REGEX = /^\[.+\]: (?:MinecraftForge .+ Initialized|ModLauncher .+ starting: .+|Loading Minecraft .+ with Fabric Loader .+)$/
-const MIN_LINGER = 5000
 
 async function dlAsync(login = true) {
 
@@ -465,6 +475,7 @@ async function dlAsync(login = true) {
     if (login) {
         if (ConfigManager.getSelectedAccount() == null) {
             loggerLanding.error('You must be logged into an account.')
+            toggleLaunchArea(false) // FIX: Reset UI
             return
         }
     }
@@ -473,54 +484,37 @@ async function dlAsync(login = true) {
     toggleLaunchArea(true)
     setLaunchPercentage(0, 100)
 
-    const fullRepairModule = new FullRepair(
-        ConfigManager.getCommonDirectory(),
-        ConfigManager.getInstanceDirectory(),
-        ConfigManager.getLauncherDirectory(),
-        ConfigManager.getSelectedServer(),
-        DistroAPI.isDevMode()
-    )
-
-    // fullRepairModule.spawnReceiver() - Deprecated in monolith
-    // Child process events removed as logic is now in-process.
-
-    loggerLaunchSuite.info('Validating files.')
-    setLaunchDetails(Lang.queryJS('landing.dlAsync.validatingFileIntegrity'))
-    let invalidFileCount = 0
-    try {
-        invalidFileCount = await fullRepairModule.verifyFiles(percent => {
-            setLaunchPercentage(percent)
-        })
-        setLaunchPercentage(100)
-    } catch (err) {
-        loggerLaunchSuite.warn('Error during file validation. Continuing with local files.', err)
-        isOfflineLaunch = true
-        invalidFileCount = 0
-    }
-
-
-    if (invalidFileCount > 0) {
-        loggerLaunchSuite.info('Downloading files.')
-        setLaunchDetails(Lang.queryJS('landing.dlAsync.downloadingFiles'))
-        setLaunchPercentage(0)
-        try {
-            await fullRepairModule.download(percent => {
-                setDownloadPercentage(percent)
-            })
-            setDownloadPercentage(100)
-        } catch (err) {
-            loggerLaunchSuite.warn('Error during file download. Stopping launch.', err)
-            showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringFileDownloadTitle'), Lang.queryJS('landing.dlAsync.unableToLoadDistributionIndex'))
-            return
+    // Listen for progress from Main
+    const progressListener = (event, status) => {
+        if (status.type === 'verify') {
+            setLaunchDetails(Lang.queryJS('landing.dlAsync.validatingFileIntegrity'))
+            setLaunchPercentage(status.progress)
+        } else if (status.type === 'download') {
+            setLaunchDetails(Lang.queryJS('landing.dlAsync.downloadingFiles'))
+            setDownloadPercentage(status.progress)
         }
-    } else {
-        loggerLaunchSuite.info('No invalid files, skipping download.')
+    }
+    ipcRenderer.on('dl:progress', progressListener)
+
+    try {
+        // Invoke Main Process Download
+        await ipcRenderer.invoke('dl:start', {
+            serverId: ConfigManager.getSelectedServer(),
+            version: serv.rawServer.minecraftVersion
+        })
+
+        // Success
+        setDownloadPercentage(100)
+        ipcRenderer.removeListener('dl:progress', progressListener)
+
+    } catch (err) {
+        ipcRenderer.removeListener('dl:progress', progressListener)
+        loggerLaunchSuite.warn('Error during file download via Main Process.', err)
+        showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringFileDownloadTitle'), err.message || 'Download Failed')
+        return
     }
 
-    // Remove download bar.
-    remote.getCurrentWindow().setProgressBar(-1)
-
-    // Receiver destruction removed.
+    // Receiver destruction moved to Main.
 
     if (isOfflineLaunch) {
         setLaunchDetails(Lang.queryJS('landing.dlAsync.launchingOffline'))
@@ -531,13 +525,26 @@ async function dlAsync(login = true) {
     const mojangIndexProcessor = new MojangIndexProcessor(
         ConfigManager.getCommonDirectory(),
         serv.rawServer.minecraftVersion)
+    await mojangIndexProcessor.init()
     const distributionIndexProcessor = new DistributionIndexProcessor(
         ConfigManager.getCommonDirectory(),
         distro,
         serv.rawServer.id
     )
 
-    const modLoaderData = await distributionIndexProcessor.loadModLoaderVersionJson(serv)
+    let modLoaderData
+    try {
+        modLoaderData = await distributionIndexProcessor.loadModLoaderVersionJson(serv)
+    } catch (err) {
+        loggerLaunchSuite.error('Error loading ModLoader data', err)
+        if (isOfflineLaunch || DistroAPI._remoteFailed) {
+            showLaunchFailure(Lang.queryJS('landing.dlAsync.launchingOffline'), 'Required ModLoader files are missing! Cannot launch offline.<br>Please connect to the internet and try again.')
+            return
+        } else {
+            showLaunchFailure(Lang.queryJS('landing.dlAsync.fatalError'), 'Failed to load ModLoader version data.<br>' + err.message)
+            return
+        }
+    }
     let versionData
     let mojangOffline = false
     try {
@@ -598,13 +605,26 @@ async function dlAsync(login = true) {
 
         try {
             // Build Minecraft process.
-            proc = pb.build()
+            proc = await pb.build()
 
             // Bind listeners to stdout.
             proc.stdout.on('data', tempListener)
             proc.stderr.on('data', gameErrorListener)
 
             setLaunchDetails(Lang.queryJS('landing.dlAsync.doneEnjoyServer'))
+
+            // FIX: Watch for early exit (Crash on Startup)
+            // If the process exits before we detect "Game Started", reset the UI.
+            proc.on('exit', (code, signal) => {
+                // If onLoadComplete hasn't fired (UI is still showing launch details), close it.
+                if (launch_details.style.display !== 'none') {
+                    loggerLaunchSuite.warn(`Game exited early with code ${code}. Resetting UI.`)
+                    toggleLaunchArea(false)
+                    // Optional: Show error if code != 0? 
+                    // Usually stderr listener catches the specific error, but this ensures UI doesn't hang.
+                    // If clean exit (0), maybe they just closed it fast, but still reset UI.
+                }
+            })
 
 
         } catch (err) {

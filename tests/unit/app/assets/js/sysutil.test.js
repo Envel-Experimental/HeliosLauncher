@@ -1,7 +1,7 @@
 const SysUtil = require('@app/assets/js/sysutil');
 const os = require('os');
+const fs = require('fs');
 const { exec } = require('child_process');
-const checkDiskSpace = require('check-disk-space').default;
 const ConfigManager = require('@app/assets/js/configmanager');
 
 jest.mock('os', () => ({
@@ -10,13 +10,12 @@ jest.mock('os', () => ({
     freemem: jest.fn(),
 }));
 
-jest.mock('child_process', () => ({
-    exec: jest.fn(),
+jest.mock('fs', () => ({
+    statfs: jest.fn()
 }));
 
-jest.mock('check-disk-space', () => ({
-    __esModule: true,
-    default: jest.fn(),
+jest.mock('child_process', () => ({
+    exec: jest.fn(),
 }));
 
 jest.mock('@app/assets/js/configmanager', () => ({
@@ -34,7 +33,16 @@ describe('SysUtil', () => {
         os.platform.mockReturnValue('linux');
         os.totalmem.mockReturnValue(8 * 1024 * 1024 * 1024);
         exec.mockImplementation((command, callback) => callback(null, 'MemAvailable: 8192000 kB'));
-        checkDiskSpace.mockResolvedValue({ free: 20 * 1024 * 1024 * 1024 });
+
+        // Mock fs.statfs for disk space check
+        // bavail * bsize = free space
+        fs.statfs.mockImplementation((path, callback) => {
+            callback(null, {
+                bavail: 5242880, // 5 * 1024 * 1024 blocks
+                bsize: 4096      // 4KB blocks -> 20GB free
+            });
+        });
+
         ConfigManager.getTotalRAMWarningShown.mockReturnValue(false);
 
         const warnings = await SysUtil.performChecks();

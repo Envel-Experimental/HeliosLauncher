@@ -1,9 +1,14 @@
-const fs = require('fs-extra')
+const fs = require('fs/promises')
+// We need sync fs for some specific synchronous operations or checks if critical, 
+// but ConfigManager seems to be async-heavy. 
+// However, pathutil.resolveDataPathSync uses helpers. 
+// Let's use fs/promises as primary 'fs'.
 const { LoggerUtil } = require('./core/util/LoggerUtil')
 const os = require('os')
 const path = require('path')
-const { retry } = require('./util')
+const { retry, move } = require('./util')
 const pathutil = require('./pathutil')
+const SecurityUtils = require('./core/util/SecurityUtils')
 
 const logger = LoggerUtil.getLogger('ConfigManager')
 
@@ -19,8 +24,8 @@ const dataPath = pathutil.resolveDataPathSync(app)
  *
  * @returns {string} The absolute path of the launcher directory (which is now dataPath).
  */
-exports.getLauncherDirectory = function(){
-    return dataPath 
+exports.getLauncherDirectory = function () {
+    return dataPath
 }
 /**
  * Get the launcher's data directory. This is where all files related
@@ -28,7 +33,7 @@ exports.getLauncherDirectory = function(){
  *
  * @returns {string} The absolute path of the launcher's data directory.
  */
-exports.getDataDirectory = function(def = false){
+exports.getDataDirectory = function (def = false) {
     return !def ? config.settings.launcher.dataDirectory : DEFAULT_CONFIG.settings.launcher.dataDirectory
 }
 
@@ -37,34 +42,31 @@ exports.getDataDirectory = function(def = false){
  *
  * @param {string} dataDirectory The new data directory.
  */
-exports.setDataDirectory = function(dataDirectory){
+exports.setDataDirectory = function (dataDirectory) {
     config.settings.launcher.dataDirectory = dataDirectory
 }
 
 const configPath = path.join(exports.getLauncherDirectory(), 'config.json')
 const configPathLEGACY = path.join(app.getPath('userData'), 'config.json')
-let firstLaunch = false;
-(async () => {
-    firstLaunch = !await fs.pathExists(configPath) && !await fs.pathExists(configPathLEGACY)
-})()
+let firstLaunch = false
 
 
-exports.getAbsoluteMinRAM = function(ram){
-    if(ram?.minimum != null) {
+exports.getAbsoluteMinRAM = function (ram) {
+    if (ram?.minimum != null) {
         return ram.minimum / 1024
     } else {
         const mem = os.totalmem()
-        return mem <= (8*1073741824) ? 1 : 3
+        return mem <= (8 * 1073741824) ? 1 : 3
     }
 }
 
-exports.getAbsoluteMaxRAM = function(ram){
+exports.getAbsoluteMaxRAM = function (ram) {
     const mem = os.totalmem()
-    if (mem <= (16*1073741824)) {
+    if (mem <= (16 * 1073741824)) {
         return Math.floor((mem * 3) / (4 * 1073741824))
     } else {
-        const excess = mem - (16*1073741824)
-        return Math.floor((12*1073741824 + excess / 8) / 1073741824)
+        const excess = mem - (16 * 1073741824)
+        return Math.floor((12 * 1073741824 + excess / 8) / 1073741824)
     }
 }
 
@@ -102,19 +104,23 @@ const DEFAULT_CONFIG = {
             allowPrerelease: false,
             dataDirectory: dataPath,
             totalRAMWarningShown: false
-        }
-    },
-    newsCache: {
-        date: null,
-        content: null,
-        dismissed: false
+        },
+        deliveryOptimization: {
+            localOptimization: false,
+            globalOptimization: false,
+            p2pUploadEnabled: false,
+            p2pUploadLimit: 5, // Mbps
+            p2pOnlyMode: false
+        },
+        p2pPromptShown: false
     },
     clientToken: null,
     selectedServer: null, // Resolved
     selectedAccount: null,
     authenticationDatabase: {},
     modConfigurations: [],
-    javaConfig: {}
+    javaConfig: {},
+    supportUrl: null // Resolved
 }
 
 let config = null
@@ -124,13 +130,59 @@ let config = null
 /**
  * Save the current configuration to a file.
  */
-exports.save = async function(){
-    return await retry(
-        () => fs.writeFile(configPath, JSON.stringify(config, null, 4), 'UTF-8'),
-        3,
-        1000,
-        err => err.code === 'EPERM' || err.code === 'EBUSY'
-    )
+exports.save = async function () {
+    // Generate a unique temporary path to avoid race conditions (ENOENT on rename)
+    // when multiple processes (Main/Renderer) save simultaneously.
+    const tempPath = configPath + '.' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2) + '.tmp'
+
+    // Clone config to avoid modifying the in-memory object (which should stay decrypted)
+    const configToSave = JSON.parse(JSON.stringify(config))
+
+    // Encrypt Sensitive Data
+    if (configToSave.authenticationDatabase) {
+        for (const uuid in configToSave.authenticationDatabase) {
+            const acc = configToSave.authenticationDatabase[uuid]
+            if (acc.accessToken) acc.accessToken = SecurityUtils.encryptString(acc.accessToken)
+            if (acc.microsoft) {
+                if (acc.microsoft.access_token) acc.microsoft.access_token = SecurityUtils.encryptString(acc.microsoft.access_token)
+                if (acc.microsoft.refresh_token) acc.microsoft.refresh_token = SecurityUtils.encryptString(acc.microsoft.refresh_token)
+            }
+        }
+    }
+    // Encrypt client token
+    if (configToSave.clientToken) {
+        configToSave.clientToken = SecurityUtils.encryptString(configToSave.clientToken)
+    }
+
+    // Validation: Check config size before attempting to save
+    try {
+        const configStr = JSON.stringify(configToSave)
+        if (configStr.length > 1024 * 1024) {
+            throw new Error('Config exceeds 1MB limit')
+        }
+    } catch (err) {
+        logger.warn('Config save failed or exceeded 1MB limit. Initiating fallback cleanup.', err)
+        logger.warn('Clearing modConfigurations to reduce size.')
+        configToSave.modConfigurations = []
+        if (Array.isArray(config.modConfigurations)) {
+            config.modConfigurations = []
+        }
+    }
+
+    // IO Operation: Write with retry mechanism
+    try {
+        return await retry(
+            async () => {
+                const { safeWriteJson } = require('./util')
+                await safeWriteJson(configPath, configToSave)
+            },
+            3,
+            1000,
+            err => err.code === 'EPERM' || err.code === 'EBUSY' || err.code === 'ENOENT'
+        )
+    } catch (err) {
+        logger.warn('Failed to save configuration file even after retries.', err)
+    }
 }
 
 /**
@@ -139,14 +191,20 @@ exports.save = async function(){
  * be generated. Note that "resolved" values default to null and will
  * need to be externally assigned.
  */
-exports.load = async function(){
-    const configExists = await fs.pathExists(configPath)
-    const legacyConfigExists = await fs.pathExists(configPathLEGACY)
+exports.load = async function () {
+    // Helper to check existence
+    const exists = async p => !!(await fs.stat(p).catch(() => false))
+
+    const configExists = await exists(configPath)
+    const legacyConfigExists = await exists(configPathLEGACY)
+
+    // Fix: Deterministic First Launch Check
+    firstLaunch = !configExists && !legacyConfigExists
 
     if (!configExists) {
-        await fs.ensureDir(path.join(configPath, '..'))
+        await fs.mkdir(path.join(configPath, '..'), { recursive: true })
         if (legacyConfigExists) {
-            await fs.move(configPathLEGACY, configPath)
+            await move(configPathLEGACY, configPath)
         } else {
             config = DEFAULT_CONFIG
             await exports.save()
@@ -156,21 +214,62 @@ exports.load = async function(){
     }
 
     try {
-        const fileContent = await fs.readFile(configPath, 'UTF-8')
-        config = JSON.parse(fileContent)
+        const { safeReadJson } = require('./util')
+        const fileContent = await retry(
+            async () => await safeReadJson(configPath),
+            5,
+            500,
+            err => err.code === 'EBUSY' || err.code === 'EPERM' || err.code === 'EACCES' || (err.code === 'ENOENT' && configExists)
+        )
+        config = fileContent
+
+        // Decrypt Sensitive Data
+        if (config.authenticationDatabase) {
+            for (const uuid in config.authenticationDatabase) {
+                const acc = config.authenticationDatabase[uuid]
+                if (acc.accessToken) {
+                    const decrypted = SecurityUtils.decryptString(acc.accessToken)
+                    // If decryption returns the exact same string, it implies failure (in our current util logic).
+                    // To be safe and prevent double-encryption loop, if it looks encrypted but decrypt failed, we should probably reset it.
+                    // But simpler: just assign. The fix in SecurityUtils.encryptString will prevent re-encryption.
+                    acc.accessToken = decrypted
+                }
+                if (acc.microsoft) {
+                    if (acc.microsoft.access_token) acc.microsoft.access_token = SecurityUtils.decryptString(acc.microsoft.access_token)
+                    if (acc.microsoft.refresh_token) acc.microsoft.refresh_token = SecurityUtils.decryptString(acc.microsoft.refresh_token)
+                }
+            }
+        }
+        if (config.clientToken) {
+            config.clientToken = SecurityUtils.decryptString(config.clientToken)
+        }
+
         config = validateKeySet(DEFAULT_CONFIG, config)
+
+        // Migration: Move p2pPromptShown from root to settings
+        if (typeof config.p2pPromptShown !== 'undefined') {
+            config.settings.p2pPromptShown = config.p2pPromptShown
+            delete config.p2pPromptShown
+        }
+
         if (!pathutil.isPathValid(config.settings.launcher.dataDirectory)) {
             logger.warn(`Bad dataDirectory (${config.settings.launcher.dataDirectory}) in config.json, migrating to ${dataPath}.`)
             config.settings.launcher.dataDirectory = dataPath
         }
         await exports.save()
+
     } catch (err) {
         logger.error(err)
-        logger.info('Configuration file contains malformed JSON or is corrupt.')
-        logger.info('Generating a new configuration file.')
-        await fs.ensureDir(path.join(configPath, '..'))
-        config = DEFAULT_CONFIG
-        await exports.save()
+        if (err instanceof SyntaxError) {
+            logger.info('Configuration file contains malformed JSON or is corrupt.')
+            logger.info('Generating a new configuration file.')
+            await fs.mkdir(path.join(configPath, '..'), { recursive: true })
+            config = DEFAULT_CONFIG
+            await exports.save()
+        } else {
+            logger.error('Unable to read configuration file due to IO error. Aborting to prevent data loss.')
+            throw err
+        }
     }
 
     logger.info('Successfully Loaded')
@@ -179,7 +278,7 @@ exports.load = async function(){
 /**
  * @returns {boolean} Whether or not the manager has been loaded.
  */
-exports.isLoaded = function(){
+exports.isLoaded = function () {
     return config != null
 }
 
@@ -191,16 +290,16 @@ exports.isLoaded = function(){
  * @param {Object} destObj The destination object.
  * @returns {Object} A validated destination object.
  */
-function validateKeySet(srcObj, destObj){
-    if(srcObj == null){
+function validateKeySet(srcObj, destObj) {
+    if (srcObj == null) {
         srcObj = {}
     }
     const validationBlacklist = ['authenticationDatabase', 'javaConfig']
     const keys = Object.keys(srcObj)
-    for(let i=0; i<keys.length; i++){
-        if(typeof destObj[keys[i]] === 'undefined'){
+    for (let i = 0; i < keys.length; i++) {
+        if (typeof destObj[keys[i]] === 'undefined') {
             destObj[keys[i]] = srcObj[keys[i]]
-        } else if(typeof srcObj[keys[i]] === 'object' && srcObj[keys[i]] != null && !(srcObj[keys[i]] instanceof Array) && validationBlacklist.indexOf(keys[i]) === -1){
+        } else if (typeof srcObj[keys[i]] === 'object' && srcObj[keys[i]] != null && !(srcObj[keys[i]] instanceof Array) && validationBlacklist.indexOf(keys[i]) === -1) {
             destObj[keys[i]] = validateKeySet(srcObj[keys[i]], destObj[keys[i]])
         }
     }
@@ -213,7 +312,7 @@ function validateKeySet(srcObj, destObj){
  *
  * @returns {boolean} True if this is the first launch, otherwise false.
  */
-exports.isFirstLaunch = function(){
+exports.isFirstLaunch = function () {
     return firstLaunch
 }
 
@@ -223,7 +322,7 @@ exports.isFirstLaunch = function(){
  *
  * @returns {string} The name of the folder.
  */
-exports.getTempNativeFolder = function(){
+exports.getTempNativeFolder = function () {
     return 'WCNatives'
 }
 
@@ -235,27 +334,12 @@ exports.getTempNativeFolder = function(){
  *
  * @returns {Object} The news cache object.
  */
-exports.getNewsCache = function(){
+exports.getNewsCache = function () {
     return config.newsCache
 }
 
 /**
  * Set the new news cache object.
- *
- * @param {Object} newsCache The new news cache object.
- */
-exports.setNewsCache = function(newsCache){
-    config.newsCache = newsCache
-}
-
-/**
- * Set whether or not the news has been dismissed (checked)
- *
- * @param {boolean} dismissed Whether or not the news has been dismissed (checked).
- */
-exports.setNewsCacheDismissed = function(dismissed){
-    config.newsCache.dismissed = dismissed
-}
 
 /**
  * Retrieve the common directory for shared
@@ -263,7 +347,7 @@ exports.setNewsCacheDismissed = function(dismissed){
  *
  * @returns {string} The launcher's common directory.
  */
-exports.getCommonDirectory = function(){
+exports.getCommonDirectory = function () {
     return path.join(exports.getDataDirectory(), 'common')
 }
 
@@ -273,7 +357,7 @@ exports.getCommonDirectory = function(){
  *
  * @returns {string} The launcher's instance directory.
  */
-exports.getInstanceDirectory = function(){
+exports.getInstanceDirectory = function () {
     return path.join(exports.getDataDirectory(), 'instances')
 }
 
@@ -283,7 +367,7 @@ exports.getInstanceDirectory = function(){
  *
  * @returns {string} The launcher's Client Token.
  */
-exports.getClientToken = function(){
+exports.getClientToken = function () {
     return config.clientToken
 }
 
@@ -292,7 +376,7 @@ exports.getClientToken = function(){
  *
  * @param {string} clientToken The launcher's new Client Token.
  */
-exports.setClientToken = function(clientToken){
+exports.setClientToken = function (clientToken) {
     config.clientToken = clientToken
 }
 
@@ -302,7 +386,7 @@ exports.setClientToken = function(clientToken){
  * @param {boolean} def Optional. If true, the default value will be returned.
  * @returns {string} The ID of the selected serverpack.
  */
-exports.getSelectedServer = function(def = false){
+exports.getSelectedServer = function (def = false) {
     return !def ? config.selectedServer : DEFAULT_CONFIG.clientToken
 }
 
@@ -311,7 +395,7 @@ exports.getSelectedServer = function(def = false){
  *
  * @param {string} serverID The ID of the new selected serverpack.
  */
-exports.setSelectedServer = function(serverID){
+exports.setSelectedServer = function (serverID) {
     config.selectedServer = serverID
 }
 
@@ -320,7 +404,7 @@ exports.setSelectedServer = function(serverID){
  *
  * @returns {Array.<Object>} An array of each stored authenticated account.
  */
-exports.getAuthAccounts = function(){
+exports.getAuthAccounts = function () {
     return config.authenticationDatabase
 }
 
@@ -331,7 +415,7 @@ exports.getAuthAccounts = function(){
  * @param {string} uuid The uuid of the authenticated account.
  * @returns {Object} The authenticated account with the given uuid.
  */
-exports.getAuthAccount = function(uuid){
+exports.getAuthAccount = function (uuid) {
     return config.authenticationDatabase[uuid]
 }
 
@@ -343,7 +427,7 @@ exports.getAuthAccount = function(uuid){
  *
  * @returns {Object} The authenticated account object created by this action.
  */
-exports.updateMojangAuthAccount = function(uuid, accessToken){
+exports.updateMojangAuthAccount = function (uuid, accessToken) {
     config.authenticationDatabase[uuid].accessToken = accessToken
     config.authenticationDatabase[uuid].type = 'mojang' // For gradual conversion.
     return config.authenticationDatabase[uuid]
@@ -359,7 +443,7 @@ exports.updateMojangAuthAccount = function(uuid, accessToken){
  *
  * @returns {Object} The authenticated account object created by this action.
  */
-exports.addMojangAuthAccount = function(uuid, accessToken, username, displayName){
+exports.addMojangAuthAccount = function (uuid, accessToken, username, displayName) {
     config.selectedAccount = uuid
     config.authenticationDatabase[uuid] = {
         type: 'mojang',
@@ -383,7 +467,7 @@ exports.addMojangAuthAccount = function(uuid, accessToken, username, displayName
  *
  * @returns {Object} The authenticated account object created by this action.
  */
-exports.updateMicrosoftAuthAccount = function(uuid, accessToken, msAccessToken, msRefreshToken, msExpires, mcExpires) {
+exports.updateMicrosoftAuthAccount = function (uuid, accessToken, msAccessToken, msRefreshToken, msExpires, mcExpires) {
     config.authenticationDatabase[uuid].accessToken = accessToken
     config.authenticationDatabase[uuid].expiresAt = mcExpires
     config.authenticationDatabase[uuid].microsoft.access_token = msAccessToken
@@ -405,7 +489,7 @@ exports.updateMicrosoftAuthAccount = function(uuid, accessToken, msAccessToken, 
  *
  * @returns {Object} The authenticated account object created by this action.
  */
-exports.addMicrosoftAuthAccount = function(uuid, accessToken, name, mcExpires, msAccessToken, msRefreshToken, msExpires) {
+exports.addMicrosoftAuthAccount = function (uuid, accessToken, name, mcExpires, msAccessToken, msRefreshToken, msExpires) {
     config.selectedAccount = uuid
     config.authenticationDatabase[uuid] = {
         type: 'microsoft',
@@ -432,12 +516,12 @@ exports.addMicrosoftAuthAccount = function(uuid, accessToken, name, mcExpires, m
  *
  * @returns {boolean} True if the account was removed, false if it never existed.
  */
-exports.removeAuthAccount = function(uuid){
-    if(config.authenticationDatabase[uuid] != null){
+exports.removeAuthAccount = function (uuid) {
+    if (config.authenticationDatabase[uuid] != null) {
         delete config.authenticationDatabase[uuid]
-        if(config.selectedAccount === uuid){
+        if (config.selectedAccount === uuid) {
             const keys = Object.keys(config.authenticationDatabase)
-            if(keys.length > 0){
+            if (keys.length > 0) {
                 config.selectedAccount = keys[0]
             } else {
                 config.selectedAccount = null
@@ -454,7 +538,7 @@ exports.removeAuthAccount = function(uuid){
  *
  * @returns {Object} The selected authenticated account.
  */
-exports.getSelectedAccount = function(){
+exports.getSelectedAccount = function () {
     if (!config) return null
 
     return config.authenticationDatabase[config.selectedAccount]
@@ -468,9 +552,9 @@ exports.getSelectedAccount = function(){
  *
  * @returns {Object} The selected authenticated account.
  */
-exports.setSelectedAccount = function(uuid){
+exports.setSelectedAccount = function (uuid) {
     const authAcc = config.authenticationDatabase[uuid]
-    if(authAcc != null) {
+    if (authAcc != null) {
         config.selectedAccount = uuid
     }
     return authAcc
@@ -481,7 +565,7 @@ exports.setSelectedAccount = function(uuid){
  *
  * @returns {Array.<Object>} An array of each stored mod configuration.
  */
-exports.getModConfigurations = function(){
+exports.getModConfigurations = function () {
     return config.modConfigurations
 }
 
@@ -490,7 +574,7 @@ exports.getModConfigurations = function(){
  *
  * @param {Array.<Object>} configurations An array of mod configurations.
  */
-exports.setModConfigurations = function(configurations){
+exports.setModConfigurations = function (configurations) {
     config.modConfigurations = configurations
 }
 
@@ -500,10 +584,10 @@ exports.setModConfigurations = function(configurations){
  * @param {string} serverid The id of the server.
  * @returns {Object} The mod configuration for the given server.
  */
-exports.getModConfiguration = function(serverid){
+exports.getModConfiguration = function (serverid) {
     const cfgs = config.modConfigurations
-    for(let i=0; i<cfgs.length; i++){
-        if(cfgs[i].id === serverid){
+    for (let i = 0; i < cfgs.length; i++) {
+        if (cfgs[i].id === serverid) {
             return cfgs[i]
         }
     }
@@ -516,10 +600,10 @@ exports.getModConfiguration = function(serverid){
  * @param {string} serverid The id of the server for the given mod configuration.
  * @param {Object} configuration The mod configuration for the given server.
  */
-exports.setModConfiguration = function(serverid, configuration){
+exports.setModConfiguration = function (serverid, configuration) {
     const cfgs = config.modConfigurations
-    for(let i=0; i<cfgs.length; i++){
-        if(cfgs[i].id === serverid){
+    for (let i = 0; i < cfgs.length; i++) {
+        if (cfgs[i].id === serverid) {
             cfgs[i] = configuration
             return
         }
@@ -532,7 +616,7 @@ exports.setModConfiguration = function(serverid, configuration){
 // Java Settings
 
 function defaultJavaConfig(effectiveJavaOptions, ram) {
-    if(effectiveJavaOptions.suggestedMajor > 8) {
+    if (effectiveJavaOptions.suggestedMajor > 8) {
         return defaultJavaConfig17(ram)
     } else {
         return defaultJavaConfig8(ram)
@@ -575,8 +659,8 @@ function defaultJavaConfig17(ram) {
  * @param {string} serverid The server id.
  * @param {*} mcVersion The minecraft version of the server.
  */
-exports.ensureJavaConfig = function(serverid, effectiveJavaOptions, ram) {
-    if(!Object.prototype.hasOwnProperty.call(config.javaConfig, serverid)) {
+exports.ensureJavaConfig = function (serverid, effectiveJavaOptions, ram) {
+    if (!Object.prototype.hasOwnProperty.call(config.javaConfig, serverid)) {
         config.javaConfig[serverid] = defaultJavaConfig(effectiveJavaOptions, ram)
     }
 }
@@ -589,7 +673,7 @@ exports.ensureJavaConfig = function(serverid, effectiveJavaOptions, ram) {
  * @param {string} serverid The server id.
  * @returns {string} The minimum amount of memory for JVM initialization.
  */
-exports.getMinRAM = function(serverid){
+exports.getMinRAM = function (serverid) {
     return config.javaConfig[serverid].minRAM
 }
 
@@ -601,7 +685,7 @@ exports.getMinRAM = function(serverid){
  * @param {string} serverid The server id.
  * @param {string} minRAM The new minimum amount of memory for JVM initialization.
  */
-exports.setMinRAM = function(serverid, minRAM){
+exports.setMinRAM = function (serverid, minRAM) {
     config.javaConfig[serverid].minRAM = minRAM
 }
 
@@ -613,7 +697,7 @@ exports.setMinRAM = function(serverid, minRAM){
  * @param {string} serverid The server id.
  * @returns {string} The maximum amount of memory for JVM initialization.
  */
-exports.getMaxRAM = function(serverid){
+exports.getMaxRAM = function (serverid) {
     return config.javaConfig[serverid].maxRAM
 }
 
@@ -625,7 +709,7 @@ exports.getMaxRAM = function(serverid){
  * @param {string} serverid The server id.
  * @param {string} maxRAM The new maximum amount of memory for JVM initialization.
  */
-exports.setMaxRAM = function(serverid, maxRAM){
+exports.setMaxRAM = function (serverid, maxRAM) {
     config.javaConfig[serverid].maxRAM = maxRAM
 }
 
@@ -637,7 +721,7 @@ exports.setMaxRAM = function(serverid, maxRAM){
  * @param {string} serverid The server id.
  * @returns {string} The path of the Java Executable.
  */
-exports.getJavaExecutable = function(serverid){
+exports.getJavaExecutable = function (serverid) {
     return config.javaConfig[serverid].executable
 }
 
@@ -647,7 +731,7 @@ exports.getJavaExecutable = function(serverid){
  * @param {string} serverid The server id.
  * @param {string} executable The new path of the Java Executable.
  */
-exports.setJavaExecutable = function(serverid, executable){
+exports.setJavaExecutable = function (serverid, executable) {
     config.javaConfig[serverid].executable = executable
 }
 
@@ -659,7 +743,7 @@ exports.setJavaExecutable = function(serverid, executable){
  * @param {string} serverid The server id.
  * @returns {Array.<string>} An array of the additional arguments for JVM initialization.
  */
-exports.getJVMOptions = function(serverid){
+exports.getJVMOptions = function (serverid) {
     return config.javaConfig[serverid].jvmOptions
 }
 
@@ -672,8 +756,26 @@ exports.getJVMOptions = function(serverid){
  * @param {Array.<string>} jvmOptions An array of the new additional arguments for JVM
  * initialization.
  */
-exports.setJVMOptions = function(serverid, jvmOptions){
+exports.setJVMOptions = function (serverid, jvmOptions) {
     config.javaConfig[serverid].jvmOptions = jvmOptions
+}
+
+/**
+ * Retrieve the support URL.
+ *
+ * @returns {string} The support URL or null.
+ */
+exports.getSupportUrl = function () {
+    return config.supportUrl
+}
+
+/**
+ * Set the support URL.
+ *
+ * @param {string} url The new support URL.
+ */
+exports.setSupportUrl = function (url) {
+    config.supportUrl = url
 }
 
 // Game Settings
@@ -684,7 +786,7 @@ exports.setJVMOptions = function(serverid, jvmOptions){
  * @param {boolean} def Optional. If true, the default value will be returned.
  * @returns {number} The width of the game window.
  */
-exports.getGameWidth = function(def = false){
+exports.getGameWidth = function (def = false) {
     return !def ? config.settings.game.resWidth : DEFAULT_CONFIG.settings.game.resWidth
 }
 
@@ -693,7 +795,7 @@ exports.getGameWidth = function(def = false){
  *
  * @param {number} resWidth The new width of the game window.
  */
-exports.setGameWidth = function(resWidth){
+exports.setGameWidth = function (resWidth) {
     config.settings.game.resWidth = Number.parseInt(resWidth)
 }
 
@@ -703,7 +805,7 @@ exports.setGameWidth = function(resWidth){
  * @param {number} resWidth The width value to validate.
  * @returns {boolean} Whether or not the value is valid.
  */
-exports.validateGameWidth = function(resWidth){
+exports.validateGameWidth = function (resWidth) {
     const nVal = Number.parseInt(resWidth)
     return Number.isInteger(nVal) && nVal >= 0
 }
@@ -714,7 +816,7 @@ exports.validateGameWidth = function(resWidth){
  * @param {boolean} def Optional. If true, the default value will be returned.
  * @returns {number} The height of the game window.
  */
-exports.getGameHeight = function(def = false){
+exports.getGameHeight = function (def = false) {
     return !def ? config.settings.game.resHeight : DEFAULT_CONFIG.settings.game.resHeight
 }
 
@@ -723,7 +825,7 @@ exports.getGameHeight = function(def = false){
  *
  * @param {number} resHeight The new height of the game window.
  */
-exports.setGameHeight = function(resHeight){
+exports.setGameHeight = function (resHeight) {
     config.settings.game.resHeight = Number.parseInt(resHeight)
 }
 
@@ -733,7 +835,7 @@ exports.setGameHeight = function(resHeight){
  * @param {number} resHeight The height value to validate.
  * @returns {boolean} Whether or not the value is valid.
  */
-exports.validateGameHeight = function(resHeight){
+exports.validateGameHeight = function (resHeight) {
     const nVal = Number.parseInt(resHeight)
     return Number.isInteger(nVal) && nVal >= 0
 }
@@ -744,7 +846,7 @@ exports.validateGameHeight = function(resHeight){
  * @param {boolean} def Optional. If true, the default value will be returned.
  * @returns {boolean} Whether or not the game is set to launch in fullscreen mode.
  */
-exports.getFullscreen = function(def = false){
+exports.getFullscreen = function (def = false) {
     return !def ? config.settings.game.fullscreen : DEFAULT_CONFIG.settings.game.fullscreen
 }
 
@@ -753,7 +855,7 @@ exports.getFullscreen = function(def = false){
  *
  * @param {boolean} fullscreen Whether or not the game should launch in fullscreen mode.
  */
-exports.setFullscreen = function(fullscreen){
+exports.setFullscreen = function (fullscreen) {
     config.settings.game.fullscreen = fullscreen
 }
 
@@ -763,7 +865,7 @@ exports.setFullscreen = function(fullscreen){
  * @param {boolean} def Optional. If true, the default value will be returned.
  * @returns {boolean} Whether or not the game should auto connect to servers.
  */
-exports.getAutoConnect = function(def = false){
+exports.getAutoConnect = function (def = false) {
     return !def ? config.settings.game.autoConnect : DEFAULT_CONFIG.settings.game.autoConnect
 }
 
@@ -772,7 +874,7 @@ exports.getAutoConnect = function(def = false){
  *
  * @param {boolean} autoConnect Whether or not the game should auto connect to servers.
  */
-exports.setAutoConnect = function(autoConnect){
+exports.setAutoConnect = function (autoConnect) {
     config.settings.game.autoConnect = autoConnect
 }
 
@@ -782,7 +884,7 @@ exports.setAutoConnect = function(autoConnect){
  * @param {boolean} def Optional. If true, the default value will be returned.
  * @returns {boolean} Whether or not the game will launch as a detached process.
  */
-exports.getLaunchDetached = function(def = false){
+exports.getLaunchDetached = function (def = false) {
     return !def ? config.settings.game.launchDetached : DEFAULT_CONFIG.settings.game.launchDetached
 }
 
@@ -791,7 +893,7 @@ exports.getLaunchDetached = function(def = false){
  *
  * @param {boolean} launchDetached Whether or not the game should launch as a detached process.
  */
-exports.setLaunchDetached = function(launchDetached){
+exports.setLaunchDetached = function (launchDetached) {
     config.settings.game.launchDetached = launchDetached
 }
 
@@ -803,7 +905,7 @@ exports.setLaunchDetached = function(launchDetached){
  * @param {boolean} def Optional. If true, the default value will be returned.
  * @returns {boolean} Whether or not the launcher should download prerelease versions.
  */
-exports.getAllowPrerelease = function(def = false){
+exports.getAllowPrerelease = function (def = false) {
     return !def ? config.settings.launcher.allowPrerelease : DEFAULT_CONFIG.settings.launcher.allowPrerelease
 }
 
@@ -812,7 +914,7 @@ exports.getAllowPrerelease = function(def = false){
  *
  * @param {boolean} launchDetached Whether or not the launcher should download prerelease versions.
  */
-exports.setAllowPrerelease = function(allowPrerelease){
+exports.setAllowPrerelease = function (allowPrerelease) {
     config.settings.launcher.allowPrerelease = allowPrerelease
 }
 
@@ -822,7 +924,7 @@ exports.setAllowPrerelease = function(allowPrerelease){
  * @param {boolean} def Optional. If true, the default value will be returned.
  * @returns {boolean} Whether or not the total RAM warning has been shown.
  */
-exports.getTotalRAMWarningShown = function(def = false){
+exports.getTotalRAMWarningShown = function (def = false) {
     return !def ? config.settings.launcher.totalRAMWarningShown : DEFAULT_CONFIG.settings.launcher.totalRAMWarningShown
 }
 
@@ -831,6 +933,121 @@ exports.getTotalRAMWarningShown = function(def = false){
  *
  * @param {boolean} shown Whether or not the total RAM warning has been shown.
  */
-exports.setTotalRAMWarningShown = function(shown){
+exports.setTotalRAMWarningShown = function (shown) {
     config.settings.launcher.totalRAMWarningShown = shown
+}
+
+// Delivery Optimization Settings
+
+/**
+ * Check if local optimization (LAN P2P) is enabled.
+ *
+ * @param {boolean} def Optional. If true, the default value will be returned.
+ * @returns {boolean} Whether local optimization is enabled.
+ */
+exports.getLocalOptimization = function (def = false) {
+    return !def ? config.settings.deliveryOptimization.localOptimization : DEFAULT_CONFIG.settings.deliveryOptimization.localOptimization
+}
+
+/**
+ * Set the status of local optimization.
+ *
+ * @param {boolean} enabled Whether local optimization should be enabled.
+ */
+exports.setLocalOptimization = function (enabled) {
+    config.settings.deliveryOptimization.localOptimization = enabled
+}
+
+/**
+ * Check if global optimization (WAN P2P) is enabled.
+ *
+ * @param {boolean} def Optional. If true, the default value will be returned.
+ * @returns {boolean} Whether global optimization is enabled.
+ */
+exports.getGlobalOptimization = function (def = false) {
+    return !def ? config.settings.deliveryOptimization.globalOptimization : DEFAULT_CONFIG.settings.deliveryOptimization.globalOptimization
+}
+
+/**
+ * Set the status of global optimization.
+ *
+ * @param {boolean} enabled Whether global optimization should be enabled.
+ */
+exports.setGlobalOptimization = function (enabled) {
+    config.settings.deliveryOptimization.globalOptimization = enabled
+}
+
+/**
+ * Check if P2P upload (seeding) is enabled.
+ *
+ * @param {boolean} def Optional. If true, the default value will be returned.
+ * @returns {boolean} Whether P2P upload is enabled.
+ */
+exports.getP2PUploadEnabled = function (def = false) {
+    return !def ? config.settings.deliveryOptimization.p2pUploadEnabled : DEFAULT_CONFIG.settings.deliveryOptimization.p2pUploadEnabled
+}
+
+/**
+ * Set the status of P2P upload.
+ *
+ * @param {boolean} enabled Whether P2P upload should be enabled.
+ */
+exports.setP2PUploadEnabled = function (enabled) {
+    config.settings.deliveryOptimization.p2pUploadEnabled = enabled
+}
+
+/**
+ * Get the P2P upload limit in Mbps.
+ *
+ * @param {boolean} def Optional. If true, the default value will be returned.
+ * @returns {number} The P2P upload limit in Mbps.
+ */
+exports.getP2PUploadLimit = function (def = false) {
+    return !def ? config.settings.deliveryOptimization.p2pUploadLimit : DEFAULT_CONFIG.settings.deliveryOptimization.p2pUploadLimit
+}
+
+/**
+ * Set the P2P upload limit in Mbps.
+ *
+ * @param {number} limit The new upload limit in Mbps.
+ */
+exports.setP2PUploadLimit = function (limit) {
+    config.settings.deliveryOptimization.p2pUploadLimit = Number.parseInt(limit)
+}
+
+/**
+ * Check if P2P Only Mode is enabled.
+ *
+ * @param {boolean} def Optional. If true, the default value will be returned.
+ * @returns {boolean} Whether or not P2P Only Mode is enabled.
+ */
+exports.getP2POnlyMode = function (def = false) {
+    return !def ? config.settings.deliveryOptimization.p2pOnlyMode : DEFAULT_CONFIG.settings.deliveryOptimization.p2pOnlyMode
+}
+
+/**
+ * Set whether or not P2P Only Mode is enabled.
+ *
+ * @param {boolean} p2pOnlyMode Whether or not P2P Only Mode is enabled.
+ */
+exports.setP2POnlyMode = function (p2pOnlyMode) {
+    config.settings.deliveryOptimization.p2pOnlyMode = p2pOnlyMode
+}
+
+/**
+ * Check if the P2P prompt has been shown.
+ *
+ * @returns {boolean} Whether or not the P2P prompt has been shown.
+ */
+exports.getP2PPromptShown = function () {
+    return config.settings.p2pPromptShown
+}
+
+/**
+ * Set the status of whether or not the P2P prompt has been shown.
+ *
+ * @param {boolean} shown Whether or not the P2P prompt has been shown.
+ */
+exports.setP2PPromptShown = function (shown) {
+    config.settings.p2pPromptShown = shown
 }

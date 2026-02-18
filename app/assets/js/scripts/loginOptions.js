@@ -10,13 +10,14 @@ let loginOptionsViewOnLoginCancel
 let loginOptionsViewOnCancel
 let loginOptionsViewCancelHandler
 
-function loginOptionsCancelEnabled(val){
-    if(val){
-        $(loginOptionsCancelContainer).show()
+function loginOptionsCancelEnabled(val) {
+    if (val) {
+        show(loginOptionsCancelContainer)
     } else {
-        $(loginOptionsCancelContainer).hide()
+        hide(loginOptionsCancelContainer)
     }
 }
+
 
 loginOptionMicrosoft.onclick = (e) => {
     switchView(getCurrentView(), VIEWS.waiting, 500, 500, () => {
@@ -42,7 +43,7 @@ loginOptionsCancelButton.onclick = (e) => {
         // No cleanup needed for Microsoft.
         loginUsername.value = ''
         loginPassword.value = ''
-        if(loginOptionsViewCancelHandler != null){
+        if (loginOptionsViewCancelHandler != null) {
             loginOptionsViewCancelHandler()
             loginOptionsViewCancelHandler = null
         }

@@ -1,13 +1,15 @@
 const DropinModUtil = require('@app/assets/js/dropinmodutil');
-const fs = require('fs-extra');
+const fs = require('fs');
 const path = require('path');
 const { ipcRenderer } = require('electron');
 
-jest.mock('fs-extra', () => ({
-    ensureDirSync: jest.fn(),
+jest.mock('fs', () => ({
+    mkdirSync: jest.fn(),
     existsSync: jest.fn(),
     readdirSync: jest.fn(),
-    moveSync: jest.fn(),
+    renameSync: jest.fn(),
+    cpSync: jest.fn(),
+    rmSync: jest.fn(),
     rename: jest.fn(),
     readFileSync: jest.fn(),
     writeFileSync: jest.fn(),
@@ -26,7 +28,7 @@ describe('DropinModUtil', () => {
 
     it('should validate that the directory exists', () => {
         DropinModUtil.validateDir('test-dir');
-        expect(fs.ensureDirSync).toHaveBeenCalledWith('test-dir');
+        expect(fs.mkdirSync).toHaveBeenCalledWith('test-dir', { recursive: true });
     });
 
     it('should scan for drop-in mods', () => {
@@ -63,7 +65,8 @@ describe('DropinModUtil', () => {
 
     it('should add drop-in mods', () => {
         DropinModUtil.addDropinMods([{ name: 'test.jar', path: 'test-path' }], 'test-dir');
-        expect(fs.moveSync).toHaveBeenCalledWith('test-path', path.join('test-dir', 'test.jar'));
+        // It now tries renameSync.
+        expect(fs.renameSync).toHaveBeenCalledWith('test-path', path.join('test-dir', 'test.jar'));
     });
 
     it('should delete a drop-in mod', async () => {
@@ -112,6 +115,7 @@ describe('DropinModUtil', () => {
 
     it('should add shaderpacks', () => {
         DropinModUtil.addShaderpacks([{ name: 'test.zip', path: 'test-path' }], 'test-dir');
-        expect(fs.moveSync).toHaveBeenCalledWith('test-path', path.join('test-dir', 'shaderpacks', 'test.zip'));
+        // renameSync
+        expect(fs.renameSync).toHaveBeenCalledWith('test-path', path.join('test-dir', 'shaderpacks', 'test.zip'));
     });
 });

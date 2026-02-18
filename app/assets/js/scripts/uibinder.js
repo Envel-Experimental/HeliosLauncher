@@ -11,7 +11,7 @@ const remoteElectron = require('@electron/remote')
 const AuthManager = require('./assets/js/authmanager')
 const ConfigManager = require('./assets/js/configmanager')
 const { DistroAPI } = require('./assets/js/distromanager')
-const P2PManager = require('./assets/js/core/dl/P2PManager')
+
 
 let rscShouldLoad = false
 let fatalStartupError = false
@@ -43,10 +43,13 @@ let currentView
  */
 function switchView(current, next, currentFadeTime = 500, nextFadeTime = 500, onCurrentFade = () => { }, onNextFade = () => { }) {
     currentView = next
-    $(`${current}`).fadeOut(currentFadeTime, async () => {
+    fadeOut(document.querySelector(current), currentFadeTime, async () => {
         await onCurrentFade()
-        $(`${next}`).fadeIn(nextFadeTime, async () => {
+        fadeIn(document.querySelector(next), nextFadeTime, async () => {
             await onNextFade()
+            if (next === VIEWS.landing) {
+                checkAndShowP2PPrompt()
+            }
         })
     })
 }
@@ -72,12 +75,12 @@ function setLaunchEnabled(val) {
 /**
  * Bind selected server
  */
-function updateSelectedServer(serv) {
+async function updateSelectedServer(serv) {
     if (getCurrentView() === VIEWS.settings) {
         fullSettingsSave()
     }
     ConfigManager.setSelectedServer(serv != null ? serv.rawServer.id : null)
-    ConfigManager.save()
+    await ConfigManager.save()
     const serverSelectionBtn = document.getElementById('server_selection_button')
     serverSelectionBtn.innerHTML = '&#8226; ' + (serv != null ? serv.rawServer.name : Lang.queryJS('landing.noSelection'))
     if (getCurrentView() === VIEWS.settings) {
@@ -109,14 +112,18 @@ async function showMainUI(data) {
         ipcRenderer.send('autoUpdateAction', 'initAutoUpdater', ConfigManager.getAllowPrerelease())
     }
 
-    P2PManager.start()
+
 
     await prepareSettings(true)
-    updateSelectedServer(data.getServerById(ConfigManager.getSelectedServer()))
+    let selectedServ = data.getServerById(ConfigManager.getSelectedServer())
+    if (selectedServ == null) {
+        selectedServ = data.getMainServer()
+    }
+    await updateSelectedServer(selectedServ)
     setTimeout(() => {
         document.getElementById('frameBar').style.backgroundColor = 'rgba(0, 0, 0, 0.5)'
         document.body.style.backgroundImage = `url('assets/images/backgrounds/${document.body.getAttribute('bkid')}.jpg')`
-        $('#main').show()
+        show(document.getElementById('main'))
 
         const isLoggedIn = Object.keys(ConfigManager.getAuthAccounts()).length > 0
 
@@ -128,23 +135,28 @@ async function showMainUI(data) {
 
         if (ConfigManager.isFirstLaunch()) {
             currentView = VIEWS.welcome
-            $(VIEWS.welcome).fadeIn(1000)
+            fadeIn(document.querySelector(VIEWS.welcome), 1000)
         } else {
             if (isLoggedIn) {
                 currentView = VIEWS.landing
-                $(VIEWS.landing).fadeIn(1000)
+                fadeIn(document.querySelector(VIEWS.landing), 1000, () => {
+                    checkAndShowP2PPrompt()
+                })
             } else {
                 loginOptionsCancelEnabled(false)
                 loginOptionsViewOnLoginSuccess = VIEWS.landing
                 loginOptionsViewOnLoginCancel = VIEWS.loginOptions
                 currentView = VIEWS.loginOptions
-                $(VIEWS.loginOptions).fadeIn(1000)
+                fadeIn(document.querySelector(VIEWS.loginOptions), 1000)
             }
         }
 
         setTimeout(() => {
-            $('#loadingContainer').fadeOut(500, () => {
-                $('#loadSpinnerImage').removeClass('rotating')
+            fadeOut(document.getElementById('loadingContainer'), 500, () => {
+                const spinner = document.getElementById('loadSpinnerImage')
+                if (spinner) {
+                    spinner.classList.remove('rotating')
+                }
             })
         }, 250)
 
@@ -153,7 +165,7 @@ async function showMainUI(data) {
 
 function showFatalStartupError() {
     setTimeout(() => {
-        $('#loadingContainer').fadeOut(250, () => {
+        fadeOut(document.getElementById('loadingContainer'), 250, () => {
             document.getElementById('overlayContainer').style.background = 'none'
             setOverlayContent(
                 Lang.queryJS('uibinder.startup.fatalErrorTitle'),
@@ -174,11 +186,15 @@ function showFatalStartupError() {
  *
  * @param {Object} data The distro index object.
  */
-function onDistroRefresh(data) {
+async function onDistroRefresh(data) {
 
     if (!data) return
 
-    updateSelectedServer(data.getServerById(ConfigManager.getSelectedServer()))
+    let selectedServ = data.getServerById(ConfigManager.getSelectedServer())
+    if (selectedServ == null) {
+        selectedServ = data.getMainServer()
+    }
+    await updateSelectedServer(selectedServ)
     syncModConfigurations(data)
     ensureJavaSettings(data)
 }
@@ -188,7 +204,7 @@ function onDistroRefresh(data) {
  *
  * @param {Object} data The distro index object.
  */
-function syncModConfigurations(data) {
+async function syncModConfigurations(data) {
 
     const syncedCfgs = []
 
@@ -264,7 +280,7 @@ function syncModConfigurations(data) {
     }
 
     ConfigManager.setModConfigurations(syncedCfgs)
-    ConfigManager.save()
+    await ConfigManager.save()
 }
 
 /**
@@ -272,14 +288,14 @@ function syncModConfigurations(data) {
  *
  * @param {Object} data The distro index object.
  */
-function ensureJavaSettings(data) {
+async function ensureJavaSettings(data) {
 
     // Nothing too fancy for now.
     for (const serv of data.servers) {
         ConfigManager.ensureJavaConfig(serv.rawServer.id, serv.effectiveJavaOptions, serv.rawServer.javaOptions?.ram)
     }
 
-    ConfigManager.save()
+    await ConfigManager.save()
 }
 
 /**
@@ -427,9 +443,9 @@ async function validateSelectedAccount() {
             setDismissHandler(() => {
                 if (accLen > 1) {
                     prepareAccountSelectionList()
-                    $('#overlayContent').fadeOut(250, () => {
+                    fadeOut(document.getElementById('overlayContent'), 250, () => {
                         bindOverlayKeys(true, 'accountSelectContent', true)
-                        $('#accountSelectContent').fadeIn(250)
+                        fadeIn(document.getElementById('accountSelectContent'), 250)
                     })
                 } else {
                     const accountsObj = ConfigManager.getAuthAccounts()
@@ -454,9 +470,9 @@ async function validateSelectedAccount() {
  *
  * @param {string} uuid The UUID of the account.
  */
-function setSelectedAccount(uuid) {
+async function setSelectedAccount(uuid) {
     const authAcc = ConfigManager.setSelectedAccount(uuid)
-    ConfigManager.save()
+    await ConfigManager.save()
     updateSelectedAccount(authAcc)
     validateSelectedAccount()
 }
@@ -493,8 +509,8 @@ ipcRenderer.on('distributionIndexDone', async (event, res) => {
             return
         }
 
-        syncModConfigurations(data)
-        ensureJavaSettings(data)
+        await syncModConfigurations(data)
+        await ensureJavaSettings(data)
         if (document.readyState === 'interactive' || document.readyState === 'complete') {
             await showMainUI(data)
         } else {
@@ -514,7 +530,7 @@ ipcRenderer.on('power-resume', async () => {
     if (!fatalStartupError) {
         const data = await DistroAPI.getDistribution()
         if (data) {
-            onDistroRefresh(data)
+            await onDistroRefresh(data)
         }
     }
 })
@@ -523,12 +539,106 @@ ipcRenderer.on('power-resume', async () => {
 async function devModeToggle() {
     DistroAPI.toggleDevMode(true)
     const data = await DistroAPI.refreshDistributionOrFallback()
-    ensureJavaSettings(data)
-    updateSelectedServer(data.servers[0])
-    syncModConfigurations(data)
+    await ensureJavaSettings(data)
+    await updateSelectedServer(data.servers[0])
+    await syncModConfigurations(data)
 }
 
-// Graceful shutdown for P2P Manager
-window.addEventListener('beforeunload', () => {
-    P2PManager.stop()
-})
+
+
+/**
+ * Check if the P2P prompt should be showed.
+ */
+function checkAndShowP2PPrompt() {
+    if (!ConfigManager.getP2PPromptShown() && !isOverlayVisible()) {
+
+        // CHANGE: For new users (First Launch), do NOT annoy them.
+        // Silently default to whatever the config defaults are (which are usually safe/disabled by default if that's the policy,
+        // or enabled if that's the strategy). The requirement is "don't ask new users".
+        // We will mark it as shown so they are never asked.
+        if (ConfigManager.isFirstLaunch()) {
+            ConfigManager.setP2PPromptShown(true)
+            ConfigManager.save()
+            return
+        }
+
+        const title = Lang.queryJS('uibinder.p2p.promptTitle')
+        const desc = Lang.queryJS('uibinder.p2p.promptDesc')
+        const enableBtn = Lang.queryJS('uibinder.p2p.enableButton')
+        const disableBtn = Lang.queryJS('uibinder.p2p.disableButton')
+        const settingsNotice = Lang.queryJS('uibinder.p2p.settingsNotice')
+
+        setOverlayContent(title, desc + '<br><br><span style="color: #aaa; font-size: 12px;">' + settingsNotice + '</span>', enableBtn, disableBtn)
+
+        setOverlayHandler(async () => {
+            ConfigManager.setP2PPromptShown(true)
+            ConfigManager.setLocalOptimization(true)
+            ConfigManager.setGlobalOptimization(true)
+            ConfigManager.setP2PUploadEnabled(true)
+            await ConfigManager.save()
+            toggleOverlay(false)
+            ipcRenderer.invoke('p2p:configUpdate') // Notify Main Process
+        })
+
+        setMiddleButtonHandler(async () => {
+            ConfigManager.setP2PPromptShown(true)
+            ConfigManager.setLocalOptimization(false)
+            ConfigManager.setGlobalOptimization(false)
+            ConfigManager.setP2PUploadEnabled(false)
+            await ConfigManager.save()
+            toggleOverlay(false)
+            ipcRenderer.invoke('p2p:configUpdate') // Notify Main Process
+        })
+
+        toggleOverlay(true, false)
+    }
+}
+
+/**
+ * Prepare the settings UI.
+ * @param {boolean} first Whether this is the first load.
+ */
+async function prepareSettings(first = false) {
+    if (first) {
+        if (typeof setupSettingsTabs === 'function') {
+            setupSettingsTabs()
+        }
+        if (typeof initSettingsValidators === 'function') {
+            initSettingsValidators()
+        }
+    }
+
+    const container = document.getElementById('settingsContainer')
+    if (container) {
+        const sEls = container.querySelectorAll('[cValue]')
+        Array.from(sEls).map((v) => {
+            const cVal = v.getAttribute('cValue')
+            const serverDependent = v.hasAttribute('serverDependent')
+            const gFn = ConfigManager['get' + cVal]
+            const gFnOpts = []
+            if (serverDependent) {
+                gFnOpts.push(ConfigManager.getSelectedServer())
+            }
+            if (typeof gFn === 'function') {
+                const value = gFn.apply(null, gFnOpts)
+                if (v.tagName === 'INPUT') {
+                    if (v.type === 'checkbox') {
+                        v.checked = value
+                    } else {
+                        v.value = value
+                    }
+                } else if (v.tagName === 'DIV' && v.classList.contains('rangeSlider')) {
+                    v.setAttribute('value', value)
+                    if (typeof updateRangedSlider === 'function') {
+                        updateRangedSlider(v, value)
+                    }
+                }
+            }
+        })
+    }
+
+    // FIX: Ensure accounts tab is prepared if the function exists (it's in settings.js)
+    if (typeof prepareAccountsTab === 'function') {
+        prepareAccountsTab()
+    }
+}

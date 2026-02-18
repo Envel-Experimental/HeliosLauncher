@@ -16,7 +16,7 @@ function tryFixCyrillicTemp() {
 
         if (hasNonAscii) {
             console.log('[Setup] Non-ASCII characters detected in TEMP path. Attempting redirect...')
-            
+
             // Define a safe path in the root data directory (C:\.foxford\temp_natives)
             const safePath = 'C:\\.foxford\\temp_natives'
 
@@ -27,7 +27,7 @@ function tryFixCyrillicTemp() {
             // Override system environment variables for this process only
             process.env.TEMP = safePath
             process.env.TMP = safePath
-            
+
             // Override Node's internal function
             const oldTmpDir = os.tmpdir
             os.tmpdir = () => safePath
@@ -48,18 +48,28 @@ const remoteMain = require('@electron/remote/main')
 remoteMain.initialize()
 
 // Requirements
-const { app, BrowserWindow, ipcMain, Menu, shell, powerMonitor, dialog } = require('electron')
-const autoUpdater                       = require('electron-updater').autoUpdater
-const { spawn }                         = require('child_process')
-const ejse                              = require('ejs-electron')
+const { app, BrowserWindow, ipcMain, Menu, shell, powerMonitor, dialog, protocol, session } = require('electron')
+const autoUpdater = require('electron-updater').autoUpdater
+const { spawn } = require('child_process')
+const ejse = require('ejs-electron')
 // fs, os, path are already imported at the top
-const isDev                             = require('./app/assets/js/isdev')
-const semver                            = require('semver')
-const { pathToFileURL }                 = require('url')
+const isDev = require('./app/assets/js/isdev')
+const semver = require('semver')
+const { pathToFileURL } = require('url')
 const { AZURE_CLIENT_ID, MSFT_OPCODE, MSFT_REPLY_TYPE, MSFT_ERROR, SHELL_OPCODE } = require('./app/assets/js/ipcconstants')
-const LangLoader                        = require('./app/assets/js/langloader')
-const SysUtil                           = require('./app/assets/js/sysutil')
-const ConfigManager                     = require('./app/assets/js/configmanager')
+const LangLoader = require('./app/assets/js/langloader')
+const SysUtil = require('./app/assets/js/sysutil')
+const ConfigManager = require('./app/assets/js/configmanager')
+
+let win
+let errorWin
+
+
+const { MOJANG_MIRRORS } = require('./network/config')
+
+const P2PEngine = require('./network/P2PEngine')
+const RaceManager = require('./network/RaceManager')
+const MirrorManager = require('./network/MirrorManager')
 
 // Set up single instance lock.
 const gotTheLock = app.requestSingleInstanceLock()
@@ -103,7 +113,7 @@ function isIgnorableError(err) {
 
     // Ignore errors occurring within standard system temporary folders or native library cache (non-critical collateral damage).
     const isTemp = err.path && (err.path.includes('Temp') || err.path.includes('WCNatives'))
-    
+
     // Ignore the error if it involves standard temporary file paths OR is a general cleanup operation.
     return isTemp || isCleanup
 }
@@ -127,17 +137,10 @@ process.on('uncaughtException', (err) => {
 
     if (err.code === 'EPERM') {
         // If returns true: we are handling/relaunching, stop execution.
-        if (handleEPERM()) return 
+        if (handleEPERM()) return
     } else {
         console.error('An uncaught exception occurred:', err)
-        dialog.showMessageBoxSync({
-            type: 'error',
-            title: 'Критическая ошибка',
-            message: 'Произошла непредвиденная ошибка.',
-            detail: err.message,
-            buttons: ['Выйти']
-        })
-        app.quit()
+        showCriticalError(err)
     }
 })
 
@@ -167,22 +170,17 @@ process.on('unhandledRejection', (reason, promise) => {
         if (handleEPERM()) return
     } else {
         console.error('An unhandled rejection occurred:', reason)
-        dialog.showMessageBoxSync({
-            type: 'error',
-            title: 'Критическая ошибка (async)',
-            message: 'Произошла непредвиденная асинхронная ошибка.',
-            detail: (reason && reason.message) ? reason.message : 'Неизвестная ошибка',
-            buttons: ['Выйти']
-        })
-        app.quit()
+        showCriticalError(err)
     }
 })
+
 
 try {
     const Sentry = require('@sentry/electron/main')
     Sentry.init({
         dsn: 'https://f02442d2a0733ac2c810b8d8d7f4a21e@o4508545424359424.ingest.de.sentry.io/4508545432027216',
         release: 'FLauncher@' + app.getVersion(),
+        ignoreErrors: ['EACCES', 'EPERM']
     })
 } catch (error) {
     console.error('Sentry failed to initialize:', error)
@@ -193,15 +191,15 @@ try {
 let autoUpdateListeners = {}
 
 function initAutoUpdater(event, data) {
-    if(data){
+    if (data) {
         autoUpdater.allowPrerelease = true
     }
-    
-    if(isDev){
+
+    if (isDev) {
         autoUpdater.autoInstallOnAppQuit = false
         autoUpdater.updateConfigPath = path.join(__dirname, 'dev-app-update.yml')
     }
-    if(process.platform === 'darwin'){
+    if (process.platform === 'darwin') {
         autoUpdater.autoDownload = false
     }
 
@@ -251,7 +249,7 @@ function initAutoUpdater(event, data) {
 
 ipcMain.on('autoUpdateAction', (event, arg, data) => {
     if (!event.sender.isDestroyed()) {
-        switch(arg){
+        switch (arg) {
             case 'initAutoUpdater':
                 console.log('Initializing auto updater.')
                 initAutoUpdater(event, data)
@@ -270,9 +268,9 @@ ipcMain.on('autoUpdateAction', (event, arg, data) => {
                     })
                 break
             case 'allowPrereleaseChange':
-                if(!data){
+                if (!data) {
                     const preRelComp = semver.prerelease(app.getVersion())
-                    if(preRelComp != null && preRelComp.length > 0){
+                    if (preRelComp != null && preRelComp.length > 0) {
                         autoUpdater.allowPrerelease = true
                     } else {
                         autoUpdater.allowPrerelease = data
@@ -291,17 +289,30 @@ ipcMain.on('autoUpdateAction', (event, arg, data) => {
     }
 })
 
+let startupWatchdog
+
 ipcMain.on('distributionIndexDone', (event, res) => {
+    // Clear watchdog timer when renderer signals it's done with the preloader
+    if (startupWatchdog) {
+        clearTimeout(startupWatchdog)
+        startupWatchdog = null
+    }
+
     if (!event.sender.isDestroyed()) {
         event.sender.send('distributionIndexDone', res)
     }
+})
+
+ipcMain.on('renderer-error', (event, err) => {
+    console.error('Renderer Error Captured:', err)
+    showCriticalError(err)
 })
 
 ipcMain.handle(SHELL_OPCODE.TRASH_ITEM, async (event, ...args) => {
     try {
         await shell.trashItem(args[0])
         return { result: true }
-    } catch(error) {
+    } catch (error) {
         return { result: false, error: error }
     }
 })
@@ -336,7 +347,7 @@ ipcMain.on(MSFT_OPCODE.OPEN_LOGIN, (ipcEvent, ...arguments_) => {
     })
 
     msftAuthWindow.on('close', () => {
-        if(!msftAuthSuccess) {
+        if (!msftAuthSuccess) {
             ipcEvent.reply(MSFT_OPCODE.REPLY_LOGIN, MSFT_REPLY_TYPE.ERROR, MSFT_ERROR.NOT_FINISHED, msftAuthViewOnClose)
         }
     })
@@ -392,36 +403,34 @@ ipcMain.on(MSFT_OPCODE.OPEN_LOGOUT, (ipcEvent, uuid, isLastAccount) => {
             clearTimeout(msftLogoutTimeout)
             msftLogoutTimeout = null
         }
-        if(!msftLogoutSuccess) {
+        if (!msftLogoutSuccess) {
             ipcEvent.reply(MSFT_OPCODE.REPLY_LOGOUT, MSFT_REPLY_TYPE.ERROR, MSFT_ERROR.NOT_FINISHED)
-        } else if(!msftLogoutSuccessSent) {
+        } else if (!msftLogoutSuccessSent) {
             msftLogoutSuccessSent = true
             ipcEvent.reply(MSFT_OPCODE.REPLY_LOGOUT, MSFT_REPLY_TYPE.SUCCESS, uuid, isLastAccount)
         }
     })
-    
+
     msftLogoutWindow.webContents.on('did-navigate', (_, uri) => {
-        if(uri.startsWith('https://login.microsoftonline.com/common/oauth2/v2.0/logoutsession')) {
+        if (uri.startsWith('https://login.microsoftonline.com/common/oauth2/v2.0/logoutsession')) {
             msftLogoutSuccess = true
             msftLogoutTimeout = setTimeout(() => {
-                if(!msftLogoutSuccessSent) {
+                if (!msftLogoutSuccessSent) {
                     msftLogoutSuccessSent = true
                     ipcEvent.reply(MSFT_OPCODE.REPLY_LOGOUT, MSFT_REPLY_TYPE.SUCCESS, uuid, isLastAccount)
                 }
 
-                if(msftLogoutWindow) {
+                if (msftLogoutWindow) {
                     msftLogoutWindow.close()
                     msftLogoutWindow = null
                 }
             }, 5000)
         }
     })
-    
+
     msftLogoutWindow.removeMenu()
     msftLogoutWindow.loadURL('https://login.microsoftonline.com/common/oauth2/v2.0/logout')
 })
-
-let win
 
 function createWindow() {
 
@@ -437,6 +446,8 @@ function createWindow() {
         },
         backgroundColor: '#171614'
     })
+    const LaunchController = require('./app/assets/js/core/LaunchController')
+    LaunchController.setWindow(win)
     remoteMain.enable(win.webContents)
 
     const data = {
@@ -447,12 +458,42 @@ function createWindow() {
 
     win.loadURL(pathToFileURL(path.join(__dirname, 'app', 'app.ejs')).toString())
 
+    // Initial load failure handling
+    win.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+        console.error('Window failed to load:', errorDescription)
+        showCriticalError(`Failed to load: ${errorDescription} (${errorCode})`)
+    })
+
+    // Handle preload script load failure
+    win.webContents.on('preload-error', (event, preloadPath, error) => {
+        if (startupWatchdog) {
+            clearTimeout(startupWatchdog)
+            startupWatchdog = null
+        }
+        console.error('Preload script failed to load:', error)
+        showCriticalError(`Preload Error: ${error.message || error}`)
+    })
+
+    // Start Startup Watchdog (Hanging on logo protection)
+    // If the renderer doesn't signal 'distributionIndexDone' within 30 seconds, trigger BSOD.
+    startupWatchdog = setTimeout(() => {
+        if (win && !win.isDestroyed()) {
+            console.error('[Watchdog] Startup timeout reached. Launcher stuck on logo?')
+            showCriticalError('Launcher failed to start (Timeout - Stuck on logo)')
+        }
+    }, 30000)
+
+
     win.once('ready-to-show', async () => {
         const warnings = await SysUtil.performChecks()
         if (win && !win.isDestroyed()) {
-            
+
             // Protect against crashes when saving config
             try {
+                // RELOAD: Ensure we have the latest config state from Renderer (e.g. P2P prompt or Accounts)
+                // before writing back to disk to avoid overwriting changes with stale memory state.
+                await ConfigManager.load()
+
                 if (!ConfigManager.getTotalRAMWarningShown()) {
                     const totalRam = os.totalmem() / (1024 * 1024 * 1024)
                     if (totalRam < 6) {
@@ -465,7 +506,7 @@ function createWindow() {
                 if (err.code === 'EPERM') {
                     // If true (relaunch needed), stop execution.
                     // If false (ignore), continue showing window.
-                    if (handleEPERM()) return 
+                    if (handleEPERM()) return
                 } else {
                     console.error('Failed to save config during ready-to-show:', err)
                 }
@@ -481,7 +522,7 @@ function createWindow() {
                 // 1. Safety check: Ensure the window still exists (user hasn't closed the app)
                 if (win && !win.isDestroyed()) {
                     console.log('[AutoUpdate] Starting delayed update check...')
-                    
+
                     // 2. Initialize logic (simulate an IPC event by passing the current window)
                     // Note: 'false' means we are not forcing pre-release settings
                     initAutoUpdater({ sender: win.webContents }, false)
@@ -503,10 +544,62 @@ function createWindow() {
     win.on('closed', () => {
         win = null
     })
+
+    win.webContents.on('render-process-gone', (event, details) => {
+        if (startupWatchdog) {
+            clearTimeout(startupWatchdog)
+            startupWatchdog = null
+        }
+        console.error('Render process gone:', details)
+        showCriticalError(`RENDER_PROCESS_GONE (${details.reason}): ${details.exitCode}`)
+    })
+
+}
+
+function showCriticalError(err) {
+    if (errorWin && !errorWin.isDestroyed()) {
+        console.warn('Critical error screen already showing, ignoring additional error:', err)
+        return
+    }
+
+    try {
+        if (typeof win !== 'undefined' && win && !win.isDestroyed()) {
+            win.hide()
+        }
+    } catch (e) {
+        // ignore
+    }
+
+    errorWin = new BrowserWindow({
+        width: 800,
+        height: 600,
+        frame: true,
+        backgroundColor: '#0078d7',
+        title: 'Critical Error',
+        icon: getPlatformIcon('icon'),
+        webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true
+        }
+    })
+    errorWin.removeMenu()
+
+    const errorMsg = err.stack || err.message || err.toString()
+    const supportUrl = ConfigManager.getSupportUrl()
+    errorWin.loadURL(pathToFileURL(path.join(__dirname, 'app', 'error.html')).toString() + '?error=' + encodeURIComponent(errorMsg) + (supportUrl ? '&supportUrl=' + encodeURIComponent(supportUrl) : ''))
+
+    errorWin.webContents.setWindowOpenHandler(({ url }) => {
+        shell.openExternal(url)
+        return { action: 'deny' }
+    })
+
+    errorWin.on('closed', () => {
+        app.quit()
+    })
 }
 
 function createMenu() {
-    if(process.platform === 'darwin') {
+    if (process.platform === 'darwin') {
         let applicationSubMenu = {
             label: 'Application',
             submenu: [{
@@ -560,9 +653,9 @@ function createMenu() {
     }
 }
 
-function getPlatformIcon(filename){
+function getPlatformIcon(filename) {
     let ext
-    switch(process.platform) {
+    switch (process.platform) {
         case 'win32':
             ext = 'ico'
             break
@@ -581,28 +674,28 @@ function getPlatformIcon(filename){
  */
 function relaunchAsAdmin() {
     if (process.platform === 'win32') {
-        
+
         // 1. Release the single instance lock immediately so the new admin instance
         // can start without being blocked by this current instance.
         app.releaseSingleInstanceLock()
-        
+
         const exe = process.execPath
         // 2. Explicitly set working directory to the app's folder (avoids System32 default).
         const cwd = path.dirname(exe)
 
         // 3. Pass --relaunch-admin to signal that we've already tried elevating permissions.
         const command = `Start-Process -FilePath '${exe}' -WorkingDirectory '${cwd}' -ArgumentList '--relaunch-admin' -Verb RunAs`
-        
+
         const ps = spawn('powershell.exe', ['-Command', command], {
             // windowsHide: true -> Hides the black console window but keeps it attached
             // to the session, allowing the UAC prompt to appear.
-            windowsHide: true, 
+            windowsHide: true,
             stdio: 'ignore'
         })
 
         ps.on('error', (err) => {
             // If PowerShell failed to start, reclaim the lock and notify the user.
-            app.requestSingleInstanceLock() 
+            app.requestSingleInstanceLock()
             dialog.showMessageBoxSync({
                 type: 'error',
                 title: 'Ошибка',
@@ -640,7 +733,16 @@ function handleEPERM() {
     // Check for loop protection
     if (process.argv.includes('--relaunch-admin')) {
         console.error('[EPERM Loop Protection] Already admin, but EPERM persists. Ignoring error to keep app alive.')
-        return false // Ignore error, continue execution
+        // If we are already admin and still getting EPERM, it's likely an antivirus lock, not a permission issue.
+        // We should warn the user instead of infinitely restarting.
+        dialog.showMessageBoxSync({
+            type: 'warning',
+            title: 'Файл заблокирован',
+            message: 'Нужно перезапустить лаунчер от имени администратора.',
+            detail: 'Возможно, мешает антивирус. Попробуй добавить лаунчер в исключения антивируса.',
+            buttons: ['ОК']
+        })
+        return false // Ignore error, continue execution (don't quit/restart)
     }
 
     const choice = dialog.showMessageBoxSync({
@@ -652,7 +754,7 @@ function handleEPERM() {
         defaultId: 0,
         cancelId: 1
     })
-    
+
     if (choice === 0) {
         relaunchAsAdmin()
     } else {
@@ -662,20 +764,143 @@ function handleEPERM() {
 }
 
 app.on('ready', async () => {
+
+    // Register P2P/Racing Protocol
+    protocol.handle('mc-asset', (req) => {
+        return RaceManager.handle(req)
+    })
+
+    // Load Config First
     try {
         await ConfigManager.load()
     } catch (err) {
         if (err.code === 'EPERM') {
             // Check if we should ignore the error and proceed, or stop for a restart.
             if (!handleEPERM()) {
-                console.log('Proceeding despite config load failure...')
-            } else {
-                return 
+                // If it returned true, it means we handled it (e.g. by quitting), so we stop here.
+                return
             }
         } else {
-            console.error('Error loading config:', err)
+            console.error('Failed to load config:', err)
         }
     }
+
+    // Initialize LaunchController
+    const LaunchController = require('./app/assets/js/core/LaunchController')
+    LaunchController.init()
+
+    // Initialize Mirror Manager
+    MirrorManager.init(MOJANG_MIRRORS)
+
+    ipcMain.handle('mirrors:getStatus', () => {
+        return MirrorManager.getMirrorStatus()
+    })
+
+    ipcMain.handle('p2p:getInfo', () => {
+        return P2PEngine.getNetworkInfo()
+    })
+
+    const { execFile } = require('child_process')
+    const { BOOTSTRAP_NODES } = require('./network/config')
+
+    ipcMain.handle('p2p:getBootstrapStatus', async () => {
+        const results = []
+        for (let i = 0; i < BOOTSTRAP_NODES.length; i++) {
+            results.push(await checkNodeStatus(BOOTSTRAP_NODES[i], i))
+        }
+        return results
+    })
+
+    function isValidHost(host) {
+        if (typeof host !== 'string' || !host) return false
+        // Allow typical hostname, IPv4, IPv6 (including brackets/port) characters.
+        return /^[0-9A-Za-z\.\-\:\[\]%]+$/.test(host)
+    }
+
+    function checkNodeStatus(node, index) {
+        return new Promise((resolve) => {
+            const platform = process.platform
+            let pingCmd = 'ping'
+            let pingArgs = []
+
+            if (!node || !isValidHost(node.host)) {
+                return resolve({
+                    index: index,
+                    isPrivate: !!(node && node.publicKey),
+                    status: 'timeout',
+                    latency: -1
+                })
+            }
+
+            if (platform === 'win32') {
+                pingArgs = ['-n', '1', '-w', '2000', node.host]
+            } else {
+                pingArgs = ['-c', '1', '-W', '2', node.host]
+            }
+
+            const start = Date.now()
+            execFile(pingCmd, pingArgs, (error, stdout, stderr) => {
+                const latency = Date.now() - start
+                const output = stdout ? stdout.toString() : ''
+                const isOnline = !error && (output.includes('time=') || output.includes('время=') || output.includes('TTL='))
+
+                resolve({
+                    index: index,
+                    isPrivate: !!node.publicKey,
+                    status: isOnline ? 'online' : 'timeout',
+                    latency: isOnline ? parsePingLatency(output, platform) || '< 100' : -1
+                })
+            })
+        })
+    }
+
+    function parsePingLatency(output, platform) {
+        try {
+            const match = output.match(/time[=<]([\d\.]+)/i)
+            return match ? Math.round(parseFloat(match[1])) : null
+        } catch (e) {
+            return null
+        }
+    }
+
+    ipcMain.handle('p2p:configUpdate', async () => {
+        try {
+            await ConfigManager.load()
+            // Re-eval P2P State
+            await P2PEngine.start() // start() checks config internally
+        } catch (err) {
+            console.error('Failed to update P2P Config:', err)
+        }
+    })
+
+    // Intercept Minecraft Asset URLs
+    session.defaultSession.webRequest.onBeforeRequest(
+        { urls: ['*://resources.download.minecraft.net/*', '*://libraries.minecraft.net/*'] },
+        (details, callback) => {
+            const redirectURL = 'mc-asset://' + details.url.replace(/^https?:\/\//, '')
+            callback({ redirectURL })
+        }
+    )
+
+
+    // SECURITY: Content Security Policy (CSP)
+    // Block remote scripts, objects, and frames. allow inline styles/scripts for now (stability).
+    // Connect-src * is required for P2P, Mojang, and Microsoft Auth.
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+        // Only enforce strict CSP on local app files (file://) and DevTools
+        if (details.url.startsWith('file://') || details.url.startsWith('devtools://')) {
+            callback({
+                responseHeaders: {
+                    ...details.responseHeaders,
+                    'Content-Security-Policy': ["default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' https:; connect-src 'self' *; object-src 'none'; media-src 'self' https:; worker-src 'self'; frame-ancestors 'none'; form-action 'self';"]
+                }
+            })
+        } else {
+            callback({ responseHeaders: details.responseHeaders })
+        }
+    })
+
+
     createWindow()
     createMenu()
     powerMonitor.on('resume', () => {

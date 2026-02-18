@@ -1,12 +1,12 @@
 const LangLoader = require('@app/assets/js/langloader');
-const fs = require('fs-extra');
-const toml = require('toml');
+const fs = require('fs');
+const toml = require('smol-toml');
 
-jest.mock('fs-extra', () => ({
+jest.mock('fs', () => ({
     readFileSync: jest.fn(),
 }));
 
-jest.mock('toml', () => ({
+jest.mock('smol-toml', () => ({
     parse: jest.fn(),
 }));
 

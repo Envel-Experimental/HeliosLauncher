@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Critical Error</title>
+    <style>
+        body {
+            background-color: #0078d7;
+            /* BSOD Blue */
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            text-align: center;
+            user-select: text;
+            overflow: hidden;
+        }
+
+        h1 {
+            font-size: 5em;
+            margin: 0;
+            font-weight: 100;
+        }
+
+        h2 {
+            font-size: 1.5em;
+            margin-bottom: 10px;
+        }
+
+        p {
+            font-size: 1em;
+            margin-bottom: 20px;
+        }
+
+        .error-code {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 5px;
+            color: #f0f0f0;
+            font-size: 13px;
+            margin: 10px 0;
+            text-transform: none;
+            font-weight: normal;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            max-height: 30vh;
+            overflow-y: auto;
+            width: 100%;
+            box-sizing: border-box;
+            font-family: 'Consolas', 'Monaco', monospace;
+            max-width: 90%;
+            text-align: left;
+        }
+
+        button {
+            background: white;
+            color: #0078d7;
+            border: none;
+            padding: 12px 24px;
+            font-size: 1em;
+            cursor: pointer;
+            font-weight: bold;
+            border-radius: 3px;
+            margin: 10px;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #e6e6e6;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 20px;
+            flex-shrink: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>:(</h1>
+    <h2>Мы столкнулись с проблемой.</h2>
+    <p>Нам нужно собрать информацию об ошибке, <br>а затем вы сможете перезапустить Флаунчер.</p>
+
+    <div class="error-code" id="errMessage">UNKNOWN_ERROR</div>
+    <div class="buttons">
+        <button onclick="restartApp()">Перезапустить</button>
+        <button id="supportBtn" style="display: none;">Поддержка</button>
+    </div>
+
+    <script>
+        const remote = require('@electron/remote');
+
+        // Whitelist of allowed support destinations, keyed by identifier from the query string.
+        const allowedSupportUrls = {
+            'tg': 'https://t.me/f_launcher_chat',
+            'github': 'https://github.com/Envel-Experimental/HeliosLauncher/issues',
+            'site': 'https://f-launcher.ru'
+        };
+
+        function restartApp() {
+            remote.app.relaunch();
+            remote.app.exit(0);
+        }
+
+        // Parse query string for error message
+        const urlParams = new URLSearchParams(window.location.search);
+        const err = urlParams.get('error');
+        if (err) {
+            document.getElementById('errMessage').textContent = err;
+        }
+
+        const supportUrl = urlParams.get('supportUrl');
+        const safeSupportUrl = supportUrl && allowedSupportUrls[supportUrl];
+
+        if (safeSupportUrl) {
+            const btn = document.getElementById('supportBtn');
+            btn.style.display = 'block';
+            btn.onclick = () => {
+                window.open(safeSupportUrl, '_blank');
+            };
+        }
+    </script>
+</body>
+
+</html>

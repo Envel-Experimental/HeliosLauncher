@@ -1,13 +1,23 @@
-// Requirements
 const os = require('os')
 const semver = require('semver')
+const fs = require('fs')
+const sysPath = require('path')
 
 const DropinModUtil = require('./assets/js/dropinmodutil')
+
 const { MSFT_OPCODE, MSFT_REPLY_TYPE, MSFT_ERROR } = require('./assets/js/ipcconstants')
-const { validateSelectedJvm, ensureJavaDirIsRoot } = require('./assets/js/core/java/JavaGuard')
+var { validateSelectedJvm, ensureJavaDirIsRoot } = require('./assets/js/core/java/JavaGuard')
 
 const settingsState = {
     invalid: new Set()
+}
+
+function formatSpeed(bytesPerSec) {
+    if (bytesPerSec < 1024) return bytesPerSec.toFixed(0) + ' B/s'
+    const k = 1024
+    const sizes = ['KB/s', 'MB/s', 'GB/s']
+    const i = Math.floor(Math.log(bytesPerSec) / Math.log(k)) - 1
+    return parseFloat((bytesPerSec / Math.pow(k, i + 1)).toFixed(2)) + ' ' + sizes[i]
 }
 
 function bindSettingsSelect() {
@@ -163,6 +173,10 @@ async function initSettingsValues() {
                         }
 
                         v.setAttribute('value', val)
+                    } else if (cVal === 'P2PUploadLimit') {
+                        const val = gFn.apply(null, gFnOpts)
+                        v.setAttribute('value', val)
+                        document.getElementById('settingsP2PUploadLabel').innerHTML = val + ' Mbit/s'
                     } else {
                         v.setAttribute('value', Number.parseFloat(gFn.apply(null, gFnOpts)))
                     }
@@ -171,12 +185,401 @@ async function initSettingsValues() {
         }
     }
 
+    // Update P2P Profile Label
+    try {
+        const p2pInfo = await ipcRenderer.invoke('p2p:getInfo')
+        const profileEl = document.getElementById('settingsP2PProfileLabel')
+        if (profileEl && p2pInfo && p2pInfo.profile) {
+            const profiles = {
+                'LOW': 'Экономный (Пассивный)',
+                'MID': 'Сбалансированный',
+                'HIGH': 'Высокопроизводительный'
+            }
+            profileEl.textContent = profiles[p2pInfo.profile] || p2pInfo.profile
+        }
+    } catch (e) { /* ignore */ }
+}
+
+function bindP2PSlider() {
+    const slider = document.getElementById('settingsP2PUploadRange')
+    const label = document.getElementById('settingsP2PUploadLabel')
+
+    // Observer for value change
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'value') {
+                label.textContent = slider.getAttribute('value') + ' Mbit/s'
+            }
+        })
+    })
+    observer.observe(slider, { attributes: true })
+}
+bindP2PSlider()
+
+
+const getP2PStatsMarkup = (info) => {
+    const spinner = '<span class="p2p-status-spinner"></span>'
+    let statusText = 'Отключен'
+    let statusColor = '#ff4444'
+    if (info.listening && ConfigManager.getLocalOptimization()) {
+        if (ConfigManager.getP2PUploadEnabled()) {
+            statusText = 'Активен'
+            statusColor = '#7dbb00'
+        } else {
+            statusText = 'Активен (Только скачивание)'
+            statusColor = '#ffbb00'
+        }
+    }
+
+
+
+    let globalStatusText = 'Отключен'
+    let globalStatusColor = '#ff4444'
+    if (info.running) {
+        globalStatusText = 'Активен'
+        globalStatusColor = '#7dbb00'
+        if (info.mode && info.mode.includes('Passive')) {
+            globalStatusText = 'Активен (Режим экономии)'
+            globalStatusColor = '#ffbb00'
+        }
+    }
+
+    return `
+        <style>
+            @keyframes p2p-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+            .p2p-stats-wrapper {
+                display: flex;
+                gap: 15px;
+                background: rgba(20, 20, 20, 0.85);
+                padding: 20px;
+                border-radius: 18px;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                box-shadow: 0 12px 45px rgba(0,0,0,0.45);
+                width: 100%;
+                max-width: 740px;
+                max-height: 65vh;
+                overflow-y: auto;
+                overflow-x: hidden;
+                box-sizing: border-box;
+                font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            }
+            .p2p-stats-wrapper::-webkit-scrollbar {
+                width: 4px;
+            }
+            .p2p-stats-wrapper::-webkit-scrollbar-track {
+                background: rgba(255, 255, 255, 0.05);
+                border-radius: 10px;
+            }
+            .p2p-stats-wrapper::-webkit-scrollbar-thumb {
+                background: rgba(255, 255, 255, 0.2);
+                border-radius: 10px;
+            }
+            .p2p-column {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                min-width: 280px;
+            }
+            .p2p-divider {
+                width: 1px;
+                background: linear-gradient(to bottom, transparent, rgba(255,255,255,0.12), transparent);
+                flex-shrink: 0;
+            }
+            .p2p-title {
+                font-size: 11px;
+                font-weight: 800;
+                text-transform: uppercase;
+                letter-spacing: 1.5px;
+                color: #888;
+                margin-bottom: 2px;
+            }
+            .p2p-data-row {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 8px 0;
+                border-bottom: 1px solid rgba(255,255,255,0.05);
+            }
+            .p2p-data-label {
+                font-size: 13.5px;
+                color: #aaa;
+            }
+            .p2p-data-value {
+                font-size: 14.5px;
+                font-weight: 600;
+                color: #fff;
+                display: flex;
+                align-items: center;
+            }
+            .p2p-status-spinner {
+                display: inline-block;
+                width: 12px;
+                height: 12px;
+                border: 2px solid rgba(255,255,255,0.1);
+                border-top: 2px solid #7dbb00;
+                border-radius: 50%;
+                animation: p2p-spin 1s linear infinite;
+                margin-left: 8px;
+            }
+            .p2p-topic-tag {
+                font-family: monospace;
+                background: rgba(255,255,255,0.05);
+                padding: 2px 6px;
+                border-radius: 4px;
+                color: #999;
+            }
+        </style>
+        <div id="p2pInfoStats" class="p2p-stats-wrapper">
+            <div class="p2p-column">
+                <div class="p2p-title">Локальная сеть (LAN)</div>
+                <div class="p2p-data-row">
+                    <span class="p2p-data-label">Статус</span>
+                    <span id="p2p-local-status" class="p2p-data-value" style="color: ${statusColor}">
+                        ${statusText} ${info.listening ? spinner : ''}
+                    </span>
+                </div>
+                <div class="p2p-data-row">
+                    <span class="p2p-data-label">Локальные пиры</span>
+                    <span id="p2p-local-peers" class="p2p-data-value">${info.localPeers || 0}</span>
+                </div>
+                <div class="p2p-data-row">
+                    <span class="p2p-data-label">Скорость (Загр/Отд)</span>
+                    <span class="p2p-data-value">
+                        <span id="p2p-local-dl-speed" style="color: #7dbb00;">${formatSpeed(info.downloadSpeedLocal || 0)}</span>
+                        <span style="margin: 0 4px; color: #444;">/</span>
+                        <span id="p2p-local-ul-speed" style="color: #0088ff;">${formatSpeed(info.uploadSpeedLocal || 0)}</span>
+                    </span>
+                </div>
+                <div class="p2p-data-row">
+                    <span class="p2p-data-label">Отдано</span>
+                    <span id="p2p-local-uploaded" class="p2p-data-value">${((info.uploadedLocal || 0) / 1024 / 1024).toFixed(2)} MB</span>
+                </div>
+                <div class="p2p-data-row">
+                    <span class="p2p-data-label">Принято</span>
+                    <span id="p2p-local-downloaded" class="p2p-data-value">${((info.downloadedLocal || 0) / 1024 / 1024).toFixed(2)} MB</span>
+                </div>
+            </div>
+
+            <div class="p2p-divider"></div>
+
+            <div id="p2p-global-container" class="p2p-column">
+                <div class="p2p-title">Глобальная сеть (WAN)</div>
+                <div class="p2p-data-row">
+                    <span class="p2p-data-label">Статус</span>
+                    <span id="p2p-global-status" class="p2p-data-value" style="color: ${globalStatusColor}">
+                        ${globalStatusText} ${info.running ? spinner : ''}
+                    </span>
+                </div>
+                
+                <div id="p2p-global-details" style="display: ${info.running ? 'block' : 'none'}">
+                    <div class="p2p-data-row">
+                        <span class="p2p-data-label">Топик</span>
+                        <span class="p2p-data-value"><span id="p2p-global-topic" class="p2p-topic-tag">${info.topic}</span></span>
+                    </div>
+                    <div class="p2p-data-row">
+                        <span class="p2p-data-label">DHT Узлы</span>
+                        <span id="p2p-global-dht" class="p2p-data-value" style="color: ${info.dhtNodes > 0 ? '#7dbb00' : '#ff4444'}">
+                            ${info.dhtNodes || 0} <span style="color: ${info.bootstrapped ? '#7dbb00' : '#666'}; margin-left: 4px; font-weight: normal;">(${info.bootstrapNodes})</span>
+                        </span>
+                    </div>
+                    <div class="p2p-data-row">
+                        <span class="p2p-data-label">Глобальные пиры</span>
+                        <span id="p2p-global-peers" class="p2p-data-value">${info.globalPeers || 0}</span>
+                    </div>
+                    <div class="p2p-data-row">
+                        <span class="p2p-data-label">Скорость (Загр/Отд)</span>
+                        <span class="p2p-data-value">
+                            <span id="p2p-global-dl-speed" style="color: #7dbb00;">${formatSpeed(info.downloadSpeed || 0)}</span>
+                            <span style="margin: 0 4px; color: #444;">/</span>
+                            <span id="p2p-global-ul-speed" style="color: #0088ff;">${formatSpeed(info.uploadSpeed || 0)}</span>
+                        </span>
+                    </div>
+                    <div class="p2p-data-row">
+                        <span class="p2p-data-label">Активные сессии</span>
+                        <span id="p2p-global-sessions" class="p2p-data-value">
+                            ${info.uploads} <span style="color: #666; font-size: 11px; margin-left: 4px;">(Upload)</span>
+                            ${info.uploads > 0 ? spinner : ''}
+                        </span>
+                    </div>
+                    <div class="p2p-data-row">
+                        <span class="p2p-data-label">Сетевой статус</span>
+                        <span id="p2p-global-mode" class="p2p-data-value" style="color: ${info.mode && info.mode.includes('Active') ? '#7dbb00' : '#ffbb00'}">
+                            ${info.mode && info.mode.includes('Active') ? 'Активный (Полный)' : 'Ограниченный (Загрузка)'}
+                        </span>
+                    </div>
+                    <div class="p2p-data-row">
+                        <span class="p2p-data-label">Отдано</span>
+                        <span id="p2p-global-uploaded" class="p2p-data-value">${((info.uploadedGlobal || 0) / 1024 / 1024).toFixed(2)} MB</span>
+                    </div>
+                    <div class="p2p-data-row">
+                        <span class="p2p-data-label">Принято</span>
+                        <span id="p2p-global-downloaded" class="p2p-data-value">${((info.downloadedGlobal || 0) / 1024 / 1024).toFixed(2)} MB</span>
+                    </div>
+                </div>
+                <div id="p2p-global-disabled" style="display: ${info.running ? 'none' : 'flex'}; flex: 1; align-items: center; justify-content: center; color: #555; font-style: italic; font-size: 13px; text-align: center;">
+                    Глобальная оптимизация<br>отключена в настройках
+                </div>
+            </div>
+        </div>
+    `
+}
+
+const updateP2PStatsUI = (info) => {
+    const el = id => document.getElementById(id)
+    if (!el('p2pInfoStats')) return false
+
+    const spinner = '<span class="p2p-status-spinner"></span>'
+
+    // Local
+    let statusText = 'Отключен', statusColor = '#ff4444'
+    if (info.listening && ConfigManager.getLocalOptimization()) {
+        if (ConfigManager.getP2PUploadEnabled()) {
+            statusText = 'Активен', statusColor = '#7dbb00'
+        } else {
+            statusText = 'Активен (Только скачивание)', statusColor = '#ffbb00'
+        }
+    }
+    const lStatus = el('p2p-local-status')
+    if (lStatus) {
+        lStatus.innerHTML = `${statusText} ${info.listening ? spinner : ''}`
+        lStatus.style.color = statusColor
+    }
+    if (el('p2p-local-peers')) el('p2p-local-peers').innerText = info.localPeers || 0
+    if (el('p2p-local-dl-speed')) el('p2p-local-dl-speed').innerText = formatSpeed(info.downloadSpeedLocal || 0)
+    if (el('p2p-local-ul-speed')) el('p2p-local-ul-speed').innerText = formatSpeed(info.uploadSpeedLocal || 0)
+    if (el('p2p-local-uploaded')) el('p2p-local-uploaded').innerText = `${((info.uploadedLocal || 0) / 1024 / 1024).toFixed(2)} MB`
+    if (el('p2p-local-downloaded')) el('p2p-local-downloaded').innerText = `${((info.downloadedLocal || 0) / 1024 / 1024).toFixed(2)} MB`
+
+    // Global
+    let globalStatusText = 'Отключен', globalStatusColor = '#ff4444'
+    if (info.running) {
+        globalStatusText = 'Активен', globalStatusColor = '#7dbb00'
+        if (info.mode && info.mode.includes('Passive')) {
+            globalStatusText = 'Активен (Режим экономии)', globalStatusColor = '#ffbb00'
+        }
+    }
+    const gStatus = el('p2p-global-status')
+    if (gStatus) {
+        gStatus.innerHTML = `${globalStatusText} ${info.running ? spinner : ''}`
+        gStatus.style.color = globalStatusColor
+    }
+
+    const details = el('p2p-global-details')
+    const disabled = el('p2p-global-disabled')
+    if (details && disabled) {
+        details.style.display = info.running ? 'block' : 'none'
+        disabled.style.display = info.running ? 'none' : 'flex'
+    }
+
+
+
+    if (info.running) {
+        if (el('p2p-global-topic')) el('p2p-global-topic').innerText = info.topic
+        if (el('p2p-global-dl-speed')) el('p2p-global-dl-speed').innerText = formatSpeed(info.downloadSpeed || 0)
+        if (el('p2p-global-ul-speed')) el('p2p-global-ul-speed').innerText = formatSpeed(info.uploadSpeed || 0)
+        const gDht = el('p2p-global-dht')
+        if (gDht) {
+            gDht.innerHTML = `${info.dhtNodes || 0} <span style="color: ${info.bootstrapped ? '#7dbb00' : '#666'}; margin-left: 4px; font-weight: normal;">(${info.bootstrapNodes})</span>`
+            gDht.style.color = info.dhtNodes > 0 ? '#7dbb00' : '#ff4444'
+        }
+        if (el('p2p-global-peers')) el('p2p-global-peers').innerText = info.globalPeers || 0
+        const gSessions = el('p2p-global-sessions')
+        if (gSessions) {
+            gSessions.innerHTML = `${info.uploads} <span style="color: #666; font-size: 11px; margin-left: 4px;">(Upload)</span> ${info.uploads > 0 ? spinner : ''}`
+        }
+        const gMode = el('p2p-global-mode')
+        if (gMode) {
+            gMode.innerText = info.mode && info.mode.includes('Active') ? 'Активный (Полный)' : 'Ограниченный (Загрузка)'
+            gMode.style.color = info.mode && info.mode.includes('Active') ? '#7dbb00' : '#ffbb00'
+        }
+        if (el('p2p-global-uploaded')) el('p2p-global-uploaded').innerText = `${((info.uploadedGlobal || 0) / 1024 / 1024).toFixed(2)} MB`
+        if (el('p2p-global-downloaded')) el('p2p-global-downloaded').innerText = `${((info.downloadedGlobal || 0) / 1024 / 1024).toFixed(2)} MB`
+    }
+    return true
+}
+
+// Bind P2P Info Button
+function bindP2PInfoButton() {
+    const p2pInfoBtn = document.getElementById('settingsP2PInfoButton')
+    if (p2pInfoBtn) {
+        // Clone to remove existing listeners if any, then re-add
+        const newBtn = p2pInfoBtn.cloneNode(true)
+        p2pInfoBtn.parentNode.replaceChild(newBtn, p2pInfoBtn)
+
+        newBtn.onclick = async () => {
+            let intervalId = null
+            try {
+                // Initial fetch
+                let info = {
+                    connected: false,
+                    connections: 0,
+                    downloaded: 0,
+                    uploaded: 0,
+                    downloadSpeed: 0,
+                    uploadSpeed: 0,
+                    mode: 'Unknown'
+                }
+
+                try {
+                    info = await ipcRenderer.invoke('p2p:getInfo')
+                } catch (e) {
+                    console.error('Failed to get initial P2P info', e)
+                }
+
+                const closeOverlay = () => {
+                    if (intervalId) clearInterval(intervalId)
+                    toggleOverlay(false)
+                }
+
+                setOverlayContent(
+                    'Статистика P2P Сети',
+                    '',
+                    'Закрыть'
+                )
+                document.getElementById('overlayDesc').innerHTML = getP2PStatsMarkup(info)
+
+                setOverlayHandler(closeOverlay)
+                setDismissHandler(closeOverlay)
+
+                // Button handler for 'Update' (Middle button) if we wanted one, 
+                // but here we used 'Закрыть' as the primary action.
+                // The overlay function signature is (title, html, dismissText, [confirmText])
+                // We'll just rely on the interval for updates.
+
+                toggleOverlay(true)
+
+                // Update loop
+                intervalId = setInterval(async () => {
+                    // Check if overlay is still open
+                    if (!document.getElementById('p2pInfoStats') || !isOverlayVisible()) {
+                        clearInterval(intervalId)
+                        return
+                    }
+                    try {
+                        const newInfo = await ipcRenderer.invoke('p2p:getInfo')
+                        updateP2PStatsUI(newInfo)
+                    } catch (e) {
+                        console.error('Failed to update P2P stats', e)
+                    }
+                }, 1000)
+
+            } catch (err) {
+                console.error('Info Error', err)
+                setOverlayContent('Ошибка', 'Не удалось загрузить статистику P2P.', 'Закрыть')
+                setOverlayHandler(() => toggleOverlay(false))
+                toggleOverlay(true)
+            }
+        }
+    } else {
+        console.error('bindP2PInfoButton: Button not found!')
+    }
 }
 
 /**
  * Save the settings values.
  */
-function saveSettingsValues() {
+async function saveSettingsValues() {
     const sEls = document.getElementById('settingsContainer').querySelectorAll('[cValue]')
     Array.from(sEls).map((v, index, arr) => {
         const cVal = v.getAttribute('cValue')
@@ -231,9 +634,100 @@ function saveSettingsValues() {
             }
         }
     })
+
+    await ConfigManager.save()
+
+    // Apply P2P Settings immediately
+
+
+    // Notify Main Process to update P2P Engine
+    ipcRenderer.invoke('p2p:configUpdate')
 }
 
 let selectedSettingsTab = 'settingsTabAccount'
+
+async function populateMirrorStatus() {
+    const container = document.getElementById('settingsMirrorStatusContainer')
+    if (!container) return
+
+    try {
+        const mirrors = await ipcRenderer.invoke('mirrors:getStatus')
+        if (!mirrors || mirrors.length === 0) {
+            container.innerHTML = '<div style="text-align: center; color: #888; padding: 10px;">Зеркала не настроены или отключены.</div>'
+            return
+        }
+
+        let html = ''
+        mirrors.forEach(m => {
+            let statusColor = '#888'
+            let statusText = 'Неизвестно'
+            if (m.status === 'active') { statusColor = '#7dbb00'; statusText = 'Активно' }
+            else if (m.status === 'slow') { statusColor = '#ffbb00'; statusText = 'Медленно' }
+            else if (m.status === 'down') { statusColor = '#ff4444'; statusText = 'Недоступно' }
+
+            html += `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                <div style="font-weight: 600; color: #eee;">${m.name}</div>
+                <div style="display: flex; gap: 15px; align-items: center;">
+                    <span style="color: #aaa; font-size: 13px;">${m.latency >= 0 ? m.latency + ' ms' : '--'}</span>
+                    <span style="color: ${statusColor}; font-size: 13px; font-weight: bold;">${statusText}</span>
+                </div>
+            </div>`
+        })
+        container.innerHTML = html
+    } catch (e) {
+        console.error('Failed to load mirror status', e)
+        container.innerHTML = '<div style="text-align: center; color: #ff4444; padding: 10px;">Ошибка загрузки статуса зеркал.</div>'
+    }
+}
+
+async function populateBootstrapStatus() {
+    const container = document.getElementById('settingsBootstrapStatusContainer')
+    if (!container) return
+
+    try {
+        const nodes = await ipcRenderer.invoke('p2p:getBootstrapStatus')
+        if (!nodes || nodes.length === 0) {
+            container.innerHTML = '<div style="text-align: center; color: #888; padding: 10px;">Bootstrap узлы не найдены.</div>'
+            return
+        }
+
+        let html = ''
+        nodes.forEach(n => {
+            let statusColor
+            let statusText
+            let latencyText = '--'
+
+            if (n.status === 'online') {
+                statusColor = '#7dbb00' // Green
+                statusText = 'Онлайн'
+                latencyText = n.latency + ' ms'
+            } else if (n.status === 'timeout') {
+                statusColor = '#ffbb00' // Orange/Yellow
+                statusText = 'Тайм-аут'
+            } else {
+                statusColor = '#ff4444' // Red
+                statusText = 'Ошибка'
+                if (n.error) latencyText = n.error
+            }
+
+            const nodeName = n.isPrivate ? `Приватный узел #${n.index + 1}` : `Публичный узел #${n.index + 1}`
+
+            html += `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                <div style="font-weight: 600; color: #eee; font-family: monospace;">${nodeName}</div>
+                <div style="display: flex; gap: 15px; align-items: center;">
+                    <span style="color: #aaa; font-size: 13px;">${latencyText}</span>
+                    <span style="color: ${statusColor}; font-size: 13px; font-weight: bold;">${statusText}</span>
+                </div>
+            </div>`
+        })
+        container.innerHTML = html
+    } catch (e) {
+        console.error('Failed to load bootstrap status', e)
+        container.innerHTML = '<div style="text-align: center; color: #ff4444; padding: 10px;">Ошибка загрузки статуса Bootstrap узлов.</div>'
+    }
+}
 
 /**
  * Modify the settings container UI when the scroll threshold reaches
@@ -270,7 +764,20 @@ function setupSettingsTabs() {
  * @param {boolean} fade Optional. True to fade transition.
  */
 function settingsNavItemListener(ele, fade = true) {
+    const nextTab = ele.getAttribute('rSc')
     if (ele.hasAttribute('selected')) {
+        // If already selected, just ensure it's visible.
+        const tab = document.getElementById(nextTab)
+        if (tab && (tab.style.display === 'none' || getComputedStyle(tab).display === 'none')) {
+            if (fade) {
+                fadeIn(tab, 250, () => {
+                    settingsTabScrollListener({ target: tab })
+                })
+            } else {
+                show(tab)
+                settingsTabScrollListener({ target: tab })
+            }
+        }
         return
     }
     const navItems = document.getElementsByClassName('settingsNavItem')
@@ -281,32 +788,43 @@ function settingsNavItemListener(ele, fade = true) {
     }
     ele.setAttribute('selected', '')
     let prevTab = selectedSettingsTab
-    selectedSettingsTab = ele.getAttribute('rSc')
+    selectedSettingsTab = nextTab
 
-    document.getElementById(prevTab).onscroll = null
+    if (selectedSettingsTab === 'settingsTabDelivery') {
+        populateMirrorStatus()
+        populateBootstrapStatus()
+    } else if (selectedSettingsTab === 'settingsTabAccount') {
+        prepareAccountsTab()
+    }
+
+    if (prevTab && document.getElementById(prevTab)) {
+        document.getElementById(prevTab).onscroll = null
+    }
     document.getElementById(selectedSettingsTab).onscroll = settingsTabScrollListener
 
     if (fade) {
-        $(`#${prevTab}`).fadeOut(250, () => {
-            $(`#${selectedSettingsTab}`).fadeIn({
-                duration: 250,
-                start: () => {
+        if (prevTab && document.getElementById(prevTab)) {
+            fadeOut(document.getElementById(prevTab), 250, () => {
+                fadeIn(document.getElementById(selectedSettingsTab), 250, () => {
                     settingsTabScrollListener({
                         target: document.getElementById(selectedSettingsTab)
                     })
-                }
+                })
             })
-        })
+        } else {
+            fadeIn(document.getElementById(selectedSettingsTab), 250, () => {
+                settingsTabScrollListener({
+                    target: document.getElementById(selectedSettingsTab)
+                })
+            })
+        }
     } else {
-        $(`#${prevTab}`).hide(0, () => {
-            $(`#${selectedSettingsTab}`).show({
-                duration: 0,
-                start: () => {
-                    settingsTabScrollListener({
-                        target: document.getElementById(selectedSettingsTab)
-                    })
-                }
-            })
+        if (prevTab && document.getElementById(prevTab)) {
+            hide(document.getElementById(prevTab))
+        }
+        show(document.getElementById(selectedSettingsTab))
+        settingsTabScrollListener({
+            target: document.getElementById(selectedSettingsTab)
         })
     }
 }
@@ -328,6 +846,7 @@ function fullSettingsSave() {
     ConfigManager.save()
     saveDropinModConfiguration()
     saveShaderpackSettings()
+    ipcRenderer.invoke('p2p:configUpdate')
 }
 
 /* Closes the settings view and saves all data. */
@@ -534,7 +1053,7 @@ function processLogOut(val, isLastAccount) {
                 switchView(getCurrentView(), VIEWS.loginOptions)
             }
         })
-        $(parent).fadeOut(250, () => {
+        fadeOut(parent, 250, () => {
             parent.remove()
         })
     }
@@ -1128,9 +1647,9 @@ function saveAllModConfigurations() {
  * server is changed.
  */
 function animateSettingsTabRefresh() {
-    $(`#${selectedSettingsTab}`).fadeOut(500, async () => {
+    fadeOut(document.getElementById(selectedSettingsTab), 500, async () => {
         await prepareSettings()
-        $(`#${selectedSettingsTab}`).fadeIn(500)
+        fadeIn(document.getElementById(selectedSettingsTab), 500)
     })
 }
 
@@ -1460,30 +1979,33 @@ function populateAboutVersionInformation() {
  * of the current version. This value is displayed on the UI.
  */
 function populateReleaseNotes() {
-    $.ajax({
-        url: 'https://github.com/Envel-Experimental/HeliosLauncher/releases.atom',
-        success: (data) => {
+    fetch('https://github.com/Envel-Experimental/HeliosLauncher/releases.atom')
+        .then(response => response.text())
+        .then(data => {
             const version = 'v' + remote.app.getVersion()
-            const entries = $(data).find('entry')
+            const parser = new DOMParser()
+            const xmlDoc = parser.parseFromString(data, 'text/xml')
+            const entries = xmlDoc.getElementsByTagName('entry')
 
             for (let i = 0; i < entries.length; i++) {
-                const entry = $(entries[i])
-                let id = entry.find('id').text()
+                const entry = entries[i]
+                let id = entry.getElementsByTagName('id')[0].textContent
                 id = id.substring(id.lastIndexOf('/') + 1)
 
                 if (id === version) {
-                    settingsAboutChangelogTitle.innerHTML = entry.find('title').text()
-                    settingsAboutChangelogText.innerHTML = entry.find('content').text()
-                    settingsAboutChangelogButton.href = entry.find('link').attr('href')
+                    settingsAboutChangelogTitle.innerHTML = entry.getElementsByTagName('title')[0].textContent
+                    settingsAboutChangelogText.innerHTML = entry.getElementsByTagName('content')[0].textContent
+                    settingsAboutChangelogButton.href = entry.getElementsByTagName('link')[0].getAttribute('href')
                 }
             }
 
-        },
-        timeout: 2500
-    }).catch(err => {
-        settingsAboutChangelogText.innerHTML = Lang.queryJS('settings.about.releaseNotesFailed')
-    })
+        })
+        .catch(err => {
+            console.error('Failed to fetch release notes', err)
+            settingsAboutChangelogText.innerHTML = Lang.queryJS('settings.about.releaseNotesFailed')
+        })
 }
+
 
 /**
  * Prepare account tab for display.
@@ -1585,7 +2107,112 @@ async function prepareSettings(first = false) {
     prepareAccountsTab()
     await prepareJavaTab()
     prepareAboutTab()
+    bindP2PInfoButton()
+}
+
+/**
+ * Bind Factory Reset Buttons
+ */
+function bindFactoryReset() {
+    const btn = document.getElementById('settingsFactoryResetButton')
+    if (btn) {
+        btn.onclick = () => {
+            setOverlayContent(
+                Lang.query('ejs.settings.factoryReset.confirmTitle'),
+                Lang.query('ejs.settings.factoryReset.confirmDesc'),
+                Lang.query('ejs.settings.factoryReset.confirmButton'),
+                Lang.query('ejs.settings.factoryReset.cancelButton')
+            )
+            setOverlayHandler(() => {
+                toggleOverlay(false)
+                factoryReset()
+            })
+            setMiddleButtonHandler(() => {
+                toggleOverlay(false)
+            })
+            toggleOverlay(true)
+        }
+    }
+}
+
+bindFactoryReset()
+
+async function factoryReset() {
+    const dataDir = ConfigManager.getDataDirectory()
+
+    // Whitelist of files/folders to KEEP.
+    // Everything else will be deleted.
+    const whitelist = [
+        'options.txt',
+        'optionsof.txt',
+        'servers.dat',
+        'servers.dat_old',
+        'usercache.json',
+        'launcher_profiles.json',
+        'saves',
+        'screenshots',
+        'resourcepacks',
+        'shaderpacks',
+        'logs',
+        'schematics'
+    ]
+
+    try {
+        const files = await fs.readdir(dataDir)
+
+        // Show loading
+        setOverlayContent(
+            Lang.query('ejs.settings.factoryReset.title'),
+            'Processing...',
+            ''
+        )
+        toggleOverlay(true)
+
+        for (const file of files) {
+            if (whitelist.includes(file)) {
+                continue
+            }
+
+            const fullPath = sysPath.join(dataDir, file)
+            try {
+                await fs.remove(fullPath)
+                console.log('Factory Reset: Deleted', fullPath)
+            } catch (err) {
+                console.warn('Factory Reset: Failed to delete', fullPath, err)
+            }
+        }
+
+        // Success & Restart
+        setOverlayContent(
+            Lang.query('ejs.settings.factoryReset.title'),
+            Lang.query('ejs.settings.factoryReset.success'),
+            Lang.queryJS('uicore.update.updateButton') // Reuse 'Update' button style/text or simple OK
+        )
+        // Force restart
+        setTimeout(() => {
+            remote.app.relaunch()
+            remote.app.exit(0)
+        }, 1500)
+
+    } catch (err) {
+        console.error('Factory Reset Error', err)
+        setOverlayContent(
+            Lang.query('ejs.settings.factoryReset.title'),
+            Lang.query('ejs.settings.factoryReset.failed', { error: err.message }),
+            Lang.queryJS('settings.msftLogin.okButton')
+        )
+        setOverlayHandler(() => {
+            toggleOverlay(false)
+        })
+    }
 }
 
 // Prepare the settings UI on startup.
 //prepareSettings(true)
+
+// FIX: Ensure accounts are populated if settings.js loads after uibinder's init
+if (document.readyState === 'interactive' || document.readyState === 'complete') {
+    if (typeof prepareAccountsTab === 'function') {
+        prepareAccountsTab()
+    }
+}

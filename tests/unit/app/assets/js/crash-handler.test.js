@@ -1,16 +1,17 @@
 const CrashHandler = require('@app/assets/js/crash-handler');
-const fs = require('fs-extra');
+const fs = require('fs/promises');
 
-// Mock fs-extra
-jest.mock('fs-extra');
+// Mock fs/promises
+jest.mock('fs/promises', () => ({
+    stat: jest.fn(),
+    open: jest.fn(),
+}));
 
 describe('CrashHandler', () => {
 
     // Reset mocks before each test
     beforeEach(() => {
         jest.clearAllMocks();
-        // Mock pathExists to return true by default
-        fs.pathExists.mockResolvedValue(true);
     });
 
     describe('analyzeLog (synchronous)', () => {
@@ -63,6 +64,15 @@ describe('CrashHandler', () => {
 
     describe('analyzeFile (asynchronous with partial read)', () => {
         const filePath = '/mock/path/to/latest.log';
+        let mockFileHandle;
+
+        beforeEach(() => {
+            mockFileHandle = {
+                read: jest.fn(),
+                close: jest.fn()
+            };
+            fs.open.mockResolvedValue(mockFileHandle);
+        });
 
         it('should read the file tail and detect crash', async () => {
             const crashLog = 'Some log content\nFailed loading config file corrupted.toml\nEnd of log';
@@ -72,27 +82,18 @@ describe('CrashHandler', () => {
             // Mock fs.stat
             fs.stat.mockResolvedValue({ size: fileSize });
 
-            // Mock fs.open
-            const fd = 123;
-            fs.open.mockResolvedValue(fd);
-
-            // Mock fs.read
-            fs.read.mockImplementation(async (fd, buf, offset, length, position) => {
-                // Mimic reading content into buffer
+            // Mock FileHandle.read
+            mockFileHandle.read.mockImplementation(async (buf, offset, length, position) => {
                 buffer.copy(buf);
                 return { bytesRead: buffer.length, buffer: buf };
             });
-
-            // Mock fs.close
-            fs.close.mockResolvedValue();
 
             const result = await CrashHandler.analyzeFile(filePath);
 
             expect(fs.stat).toHaveBeenCalledWith(filePath);
             expect(fs.open).toHaveBeenCalledWith(filePath, 'r');
-            // Should verify that fs.read was called. Argument verification for buffers is tricky but we can check calls.
-            expect(fs.read).toHaveBeenCalled();
-            expect(fs.close).toHaveBeenCalledWith(fd);
+            expect(mockFileHandle.read).toHaveBeenCalled();
+            expect(mockFileHandle.close).toHaveBeenCalled();
 
             expect(result).toEqual({
                 type: 'corrupted-config',
@@ -106,15 +107,15 @@ describe('CrashHandler', () => {
             const fileSize = content.length;
 
             fs.stat.mockResolvedValue({ size: fileSize });
-            fs.open.mockResolvedValue(123);
-            fs.read.mockImplementation(async (fd, buf) => {
+
+            mockFileHandle.read.mockImplementation(async (buf, offset, length, position) => {
                 const len = Buffer.from(content).copy(buf);
                 return { bytesRead: len, buffer: buf };
             });
-            fs.close.mockResolvedValue();
 
             const result = await CrashHandler.analyzeFile(filePath);
-            expect(fs.read).toHaveBeenCalled();
+
+            expect(mockFileHandle.read).toHaveBeenCalled();
             expect(result).toBeNull(); // "Short log" has no crash
         });
 
@@ -127,16 +128,20 @@ describe('CrashHandler', () => {
             expect(result).toBeNull();
         });
 
-        it('should gracefully handle file read errors', async () => {
-            fs.stat.mockRejectedValue(new Error('File not found'));
+        it('should gracefully handle file read errors and log to console.error', async () => {
+            // stat succeeds
+            fs.stat.mockResolvedValue({ size: 100 });
+            // open fails
+            fs.open.mockRejectedValue(new Error('Permission denied'));
 
-            // Mock console.error to keep test output clean
-            const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+            // Mock console.error
+            const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => { });
 
             const result = await CrashHandler.analyzeFile(filePath);
 
             expect(result).toBeNull();
             expect(consoleSpy).toHaveBeenCalled();
+            expect(consoleSpy.mock.calls[0][0]).toContain('Failed to read log file tail');
 
             consoleSpy.mockRestore();
         });

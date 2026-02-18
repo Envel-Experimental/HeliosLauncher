@@ -1,13 +1,13 @@
 const { LoggerUtil } = require('../util/LoggerUtil');
 const { IndexProcessor } = require('./IndexProcessor');
 const { AssetGuardError } = require('./AssetGuardError');
-const { validateLocalFile, getVersionJsonPath, safeEnsureDir } = require('../common/FileUtils');
+const { validateLocalFile, getVersionJsonPath, safeEnsureDir, readFileFromZip } = require('../common/FileUtils');
 const { HashAlgo } = require('./Asset');
 const { Type } = require('../common/DistributionClasses');
 const { mcVersionAtLeast } = require('../common/MojangUtils');
 const fs = require('fs/promises');
 const path = require('path');
-const AdmZip = require('adm-zip');
+
 
 class DistributionIndexProcessor extends IndexProcessor {
     static logger = LoggerUtil.getLogger('DistributionIndexProcessor');
@@ -33,7 +33,7 @@ class DistributionIndexProcessor extends IndexProcessor {
         }
 
         const notValid = await this.validateModules(server.modules);
-        if(onStageComplete) await onStageComplete();
+        if (onStageComplete) await onStageComplete();
         return {
             distribution: notValid
         };
@@ -51,9 +51,9 @@ class DistributionIndexProcessor extends IndexProcessor {
         // Flatten module tree for validation
         const flatModules = [];
         const traverse = (modList) => {
-            for(const mod of modList) {
+            for (const mod of modList) {
                 flatModules.push(mod);
-                if(mod.hasSubModules()) {
+                if (mod.hasSubModules()) {
                     traverse(mod.subModules);
                 }
             }
@@ -62,15 +62,28 @@ class DistributionIndexProcessor extends IndexProcessor {
 
         const tasks = flatModules.map(module => {
             return limit(async () => {
-                const hash = module.rawModule.artifact.MD5;
-                if (!await validateLocalFile(module.getPath(), HashAlgo.MD5, hash)) {
+                const modulePath = module.getPath();
+                let hash = module.rawModule.artifact.SHA256;
+                let algo = HashAlgo.SHA256;
+
+                if (!hash) {
+                    // No supported hash found (SHA256 required). Skip validation.
+                    return null;
+                }
+
+                // Skip validation for anything in 'instances' - these are user-mutable
+                if (modulePath.replace(/\\/g, '/').includes('/instances/')) {
+                    return null;
+                }
+
+                if (!await validateLocalFile(modulePath, algo, hash, module.rawModule.artifact.size)) {
                     return {
                         id: module.rawModule.id,
                         hash: hash,
-                        algo: HashAlgo.MD5,
+                        algo: algo,
                         size: module.rawModule.artifact.size,
                         url: module.rawModule.artifact.url,
-                        path: module.getPath()
+                        path: modulePath
                     };
                 }
                 return null;
@@ -96,17 +109,17 @@ class DistributionIndexProcessor extends IndexProcessor {
         }
         else {
             try {
-                const zip = new AdmZip(modLoaderModule.getPath());
-                const entry = zip.getEntry('version.json');
-                if(!entry) throw new Error('version.json not found in modloader jar');
+                const buffer = await readFileFromZip(modLoaderModule.getPath(), 'version.json');
+                const jsonText = buffer.toString('utf-8');
+                if (!jsonText || jsonText.trim().length === 0) throw new Error('version.json not found or empty');
 
-                const data = JSON.parse(zip.readAsText(entry));
+                const data = JSON.parse(jsonText);
                 const writePath = getVersionJsonPath(this.commonDir, data.id);
                 await safeEnsureDir(path.dirname(writePath));
                 await fs.writeFile(writePath, JSON.stringify(data));
                 return data;
-            } catch(e) {
-                 throw new AssetGuardError('Failed to extract version.json from modloader', e);
+            } catch (e) {
+                throw new AssetGuardError('Failed to extract version.json from modloader', e);
             }
         }
     }

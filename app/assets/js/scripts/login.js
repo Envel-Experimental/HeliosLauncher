@@ -6,14 +6,14 @@ const validUsername = /^[a-zA-Z0-9_]{4,16}$/
 const basicEmail = /^\S+@\S+\.\S+$/
 
 // Login Elements
-const loginCancelContainer  = document.getElementById('loginCancelContainer')
-const loginCancelButton     = document.getElementById('loginCancelButton')
-const loginEmailError       = document.getElementById('loginEmailError')
-const loginUsername         = document.getElementById('loginUsername')
-const checkmarkContainer    = document.getElementById('checkmarkContainer')
-const loginRememberOption   = document.getElementById('loginRememberOption')
-const loginButton           = document.getElementById('loginButton')
-const loginForm             = document.getElementById('loginForm')
+const loginCancelContainer = document.getElementById('loginCancelContainer')
+const loginCancelButton = document.getElementById('loginCancelButton')
+const loginEmailError = document.getElementById('loginEmailError')
+const loginUsername = document.getElementById('loginUsername')
+const checkmarkContainer = document.getElementById('checkmarkContainer')
+const loginRememberOption = document.getElementById('loginRememberOption')
+const loginButton = document.getElementById('loginButton')
+const loginForm = document.getElementById('loginForm')
 
 // Control variables.
 let lu = false
@@ -24,7 +24,7 @@ let lu = false
  * @param {HTMLElement} element The element on which to display the error.
  * @param {string} value The error text.
  */
-function showError(element, value){
+function showError(element, value) {
     element.innerHTML = value
     element.style.opacity = 1
 }
@@ -34,8 +34,8 @@ function showError(element, value){
  *
  * @param {HTMLElement} element The element to shake.
  */
-function shakeError(element){
-    if(element.style.opacity == 1){
+function shakeError(element) {
+    if (element.style.opacity == 1) {
         element.classList.remove('shake')
         void element.offsetWidth
         element.classList.add('shake')
@@ -81,8 +81,8 @@ loginUsername.addEventListener('input', (e) => {
  *
  * @param {boolean} v True to enable, false to disable.
  */
-function loginDisabled(v){
-    if(loginButton.disabled !== v){
+function loginDisabled(v) {
+    if (loginButton.disabled !== v) {
         loginButton.disabled = v
     }
 }
@@ -92,8 +92,8 @@ function loginDisabled(v){
  *
  * @param {boolean} v True to enable, false to disable.
  */
-function loginLoading(v){
-    if(v){
+function loginLoading(v) {
+    if (v) {
         loginButton.setAttribute('loading', v)
         loginButton.innerHTML = loginButton.innerHTML.replace(Lang.queryJS('login.login'), Lang.queryJS('login.loggingIn'))
     } else {
@@ -107,11 +107,11 @@ function loginLoading(v){
  *
  * @param {boolean} v True to enable, false to disable.
  */
-function formDisabled(v){
+function formDisabled(v) {
     loginDisabled(v)
     loginCancelButton.disabled = v
     loginUsername.disabled = v
-    if(v){
+    if (v) {
         checkmarkContainer.setAttribute('disabled', v)
     } else {
         checkmarkContainer.removeAttribute('disabled')
@@ -123,19 +123,20 @@ let loginViewOnSuccess = VIEWS.landing
 let loginViewOnCancel = VIEWS.settings
 let loginViewCancelHandler
 
-function loginCancelEnabled(val){
-    if(val){
-        $(loginCancelContainer).show()
+function loginCancelEnabled(val) {
+    if (val) {
+        show(loginCancelContainer)
     } else {
-        $(loginCancelContainer).hide()
+        hide(loginCancelContainer)
     }
 }
+
 
 loginCancelButton.onclick = (e) => {
     switchView(getCurrentView(), loginViewOnCancel, 500, 500, () => {
         loginUsername.value = ''
         loginCancelEnabled(false)
-        if(loginViewCancelHandler != null){
+        if (loginViewCancelHandler != null) {
             loginViewCancelHandler()
             loginViewCancelHandler = null
         }
@@ -157,24 +158,24 @@ loginButton.addEventListener('click', () => {
     AuthManager.addMojangAccount(loginUsername.value, '').then((value) => {
         updateSelectedAccount(value)
         loginButton.innerHTML = loginButton.innerHTML.replace(Lang.queryJS('login.loggingIn'), Lang.queryJS('login.success'))
-        $('.circle-loader').toggleClass('load-complete')
-        $('.checkmark').toggle()
+        document.querySelectorAll('.circle-loader').forEach(el => toggleClass(el, 'load-complete'))
+        document.querySelectorAll('.checkmark').forEach(el => toggle(el))
         setTimeout(() => {
             switchView(VIEWS.login, loginViewOnSuccess, 500, 500, async () => {
-                if(loginViewOnSuccess === VIEWS.settings){
+                if (loginViewOnSuccess === VIEWS.settings) {
                     await prepareSettings()
                 }
                 loginViewOnSuccess = VIEWS.landing
                 loginCancelEnabled(false)
                 loginViewCancelHandler = null
                 loginUsername.value = ''
-                $('.circle-loader').toggleClass('load-complete')
-                $('.checkmark').toggle()
+                document.querySelectorAll('.circle-loader').forEach(el => toggleClass(el, 'load-complete'))
+                document.querySelectorAll('.checkmark').forEach(el => toggle(el))
                 loginLoading(false)
                 loginButton.innerHTML = loginButton.innerHTML.replace(Lang.queryJS('login.success'), Lang.queryJS('login.login'))
                 formDisabled(false)
 
-                if(ConfigManager.isFirstLaunch()){
+                if (ConfigManager.isFirstLaunch()) {
                     toggleServerSelection(true)
                 }
             })
