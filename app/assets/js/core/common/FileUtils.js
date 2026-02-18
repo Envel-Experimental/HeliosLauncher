@@ -35,14 +35,18 @@ async function runCommand(cmd, args, options = {}) {
     });
 }
 
-async function validateLocalFile(filePath, algo, hash) {
+async function validateLocalFile(filePath, algo, hash, expectedSize) {
     if (hash == null) {
         console.warn(`[Security] No hash provided for ${filePath}. Skipping validation.`);
         return true;
     }
 
     try {
-        await fs.access(filePath);
+        const stat = await fs.stat(filePath);
+        if (expectedSize && stat.size !== expectedSize) {
+            // console.debug(`[FileUtils] Size mismatch for ${path.basename(filePath)}: Expected ${expectedSize}, Got ${stat.size}`);
+            return false;
+        }
     } catch (e) {
         return false;
     }
