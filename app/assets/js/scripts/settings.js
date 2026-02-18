@@ -681,6 +681,54 @@ async function populateMirrorStatus() {
     }
 }
 
+async function populateBootstrapStatus() {
+    const container = document.getElementById('settingsBootstrapStatusContainer')
+    if (!container) return
+
+    try {
+        const nodes = await ipcRenderer.invoke('p2p:getBootstrapStatus')
+        if (!nodes || nodes.length === 0) {
+            container.innerHTML = '<div style="text-align: center; color: #888; padding: 10px;">Bootstrap узлы не найдены.</div>'
+            return
+        }
+
+        let html = ''
+        nodes.forEach(n => {
+            let statusColor = '#888'
+            let statusText = 'Неизвестно'
+            let latencyText = '--'
+
+            if (n.status === 'online') {
+                statusColor = '#7dbb00' // Green
+                statusText = 'Онлайн'
+                latencyText = n.latency + ' ms'
+            } else if (n.status === 'timeout') {
+                statusColor = '#ffbb00' // Orange/Yellow
+                statusText = 'Тайм-аут'
+            } else {
+                statusColor = '#ff4444' // Red
+                statusText = 'Ошибка'
+                if (n.error) latencyText = n.error
+            }
+
+            const nodeName = n.isPrivate ? `Приватный узел #${n.index + 1}` : `Публичный узел #${n.index + 1}`
+
+            html += `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                <div style="font-weight: 600; color: #eee; font-family: monospace;">${nodeName}</div>
+                <div style="display: flex; gap: 15px; align-items: center;">
+                    <span style="color: #aaa; font-size: 13px;">${latencyText}</span>
+                    <span style="color: ${statusColor}; font-size: 13px; font-weight: bold;">${statusText}</span>
+                </div>
+            </div>`
+        })
+        container.innerHTML = html
+    } catch (e) {
+        console.error('Failed to load bootstrap status', e)
+        container.innerHTML = '<div style="text-align: center; color: #ff4444; padding: 10px;">Ошибка загрузки статуса Bootstrap узлов.</div>'
+    }
+}
+
 /**
  * Modify the settings container UI when the scroll threshold reaches
  * a certain poin.
@@ -744,6 +792,7 @@ function settingsNavItemListener(ele, fade = true) {
 
     if (selectedSettingsTab === 'settingsTabDelivery') {
         populateMirrorStatus()
+        populateBootstrapStatus()
     } else if (selectedSettingsTab === 'settingsTabAccount') {
         prepareAccountsTab()
     }

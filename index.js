@@ -800,6 +800,51 @@ app.on('ready', async () => {
         return P2PEngine.getNetworkInfo()
     })
 
+    const { exec } = require('child_process')
+    const { BOOTSTRAP_NODES } = require('./network/config')
+
+    ipcMain.handle('p2p:getBootstrapStatus', async () => {
+        const results = []
+        for (let i = 0; i < BOOTSTRAP_NODES.length; i++) {
+            results.push(await checkNodeStatus(BOOTSTRAP_NODES[i], i))
+        }
+        return results
+    })
+
+    function checkNodeStatus(node, index) {
+        return new Promise((resolve) => {
+            const platform = process.platform
+            let cmd = ''
+            if (platform === 'win32') {
+                cmd = `ping -n 1 -w 2000 ${node.host}`
+            } else {
+                cmd = `ping -c 1 -W 2 ${node.host}`
+            }
+
+            const start = Date.now()
+            exec(cmd, (error, stdout, stderr) => {
+                const latency = Date.now() - start
+                const isOnline = !error && (stdout.includes('time=') || stdout.includes('время=') || stdout.includes('TTL='))
+
+                resolve({
+                    index: index,
+                    isPrivate: !!node.publicKey,
+                    status: isOnline ? 'online' : 'timeout',
+                    latency: isOnline ? parsePingLatency(stdout, platform) || '< 100' : -1
+                })
+            })
+        })
+    }
+
+    function parsePingLatency(output, platform) {
+        try {
+            const match = output.match(/time[=<]([\d\.]+)/i)
+            return match ? Math.round(parseFloat(match[1])) : null
+        } catch (e) {
+            return null
+        }
+    }
+
     ipcMain.handle('p2p:configUpdate', async () => {
         try {
             await ConfigManager.load()
