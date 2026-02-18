@@ -694,8 +694,8 @@ async function populateBootstrapStatus() {
 
         let html = ''
         nodes.forEach(n => {
-            let statusColor = '#888'
-            let statusText = 'Неизвестно'
+            let statusColor
+            let statusText
             let latencyText = '--'
 
             if (n.status === 'online') {

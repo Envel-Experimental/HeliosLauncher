@@ -426,7 +426,7 @@ class LaunchArgumentBuilder {
     }
 
     _resolveModuleLibraries(mdl) {
-        if (!mdl.subModules.length > 0) return {}
+        if (mdl.subModules.length === 0) return {}
         let libs = {}
         for (let sm of mdl.subModules) {
             if (sm.rawModule.type === Type.Library && (sm.rawModule.classpath ?? true)) {

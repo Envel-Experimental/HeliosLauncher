@@ -131,7 +131,7 @@ class P2PEngine extends EventEmitter {
             if (this._lastCleanup && now - this._lastCleanup < 1800000) return
             this._lastCleanup = now
 
-            for (const [ip, strikes] of this.peerStrikes.entries()) {
+            for (const ip of this.peerStrikes.keys()) {
                 // If strikes are high, they are likely in blacklist (which has its own timer)
                 // We just clear the strike counter periodically to save memory
                 this.peerStrikes.delete(ip)
@@ -274,6 +274,12 @@ class P2PEngine extends EventEmitter {
             } catch (e) {
                 // Ignore errors during destroy
             }
+        }
+        if (this.dht) {
+            try {
+                await this.dht.destroy()
+            } catch (e) { }
+            this.dht = null
         }
         this.stopping = false
     }
@@ -668,10 +674,9 @@ class P2PEngine extends EventEmitter {
                 if (isDev) console.error(`[P2P Security] Peer ${req.peer.getIP()} sent too many bytes! Received: ${req.bytesReceived}, Expected: ${req.expectedSize}`)
                 const err = new Error('File size exceeded security limit')
                 err.bytesReceived = req.bytesReceived
+                req.reject(err) // Fix: Reject the request to propagate error
                 return
-            }
-
-            // Track for Speed Monitor
+            }// Track for Speed Monitor
             if (req.peer.isLocal()) {
                 this.downloadBytesLocal += data.length
             } else {

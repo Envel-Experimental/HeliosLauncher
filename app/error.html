@@ -99,6 +99,13 @@
     <script>
         const remote = require('@electron/remote');
 
+        // Whitelist of allowed support destinations, keyed by identifier from the query string.
+        const allowedSupportUrls = {
+            'vk': 'https://vk.com/f_launcher',
+            'discord': 'https://discord.gg/flauncher',
+            'site': 'https://flauncher.ru'
+        };
+
         function restartApp() {
             remote.app.relaunch();
             remote.app.exit(0);
@@ -110,14 +117,15 @@
         if (err) {
             document.getElementById('errMessage').textContent = err;
         }
+
         const supportUrl = urlParams.get('supportUrl');
-        if (supportUrl) {
+        const safeSupportUrl = supportUrl && allowedSupportUrls[supportUrl];
+
+        if (safeSupportUrl) {
             const btn = document.getElementById('supportBtn');
             btn.style.display = 'block';
             btn.onclick = () => {
-                if (supportUrl.startsWith('http://') || supportUrl.startsWith('https://')) {
-                    window.open(supportUrl, '_blank');
-                }
+                window.open(safeSupportUrl, '_blank');
             };
         }
     </script>

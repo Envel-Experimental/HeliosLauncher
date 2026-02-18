@@ -48,8 +48,6 @@ class MojangIndexProcessor extends IndexProcessor {
         const fallbacks = [];
         if (!MOJANG_MIRRORS) return fallbacks;
 
-        if (!MOJANG_MIRRORS) return fallbacks;
-
         const mirrors = MirrorManager.getSortedMirrors()
         for (const mirror of mirrors) {
             const manifest = await this.getMirrorManifest(mirror);
@@ -338,8 +336,6 @@ class MojangIndexProcessor extends IndexProcessor {
                 hash,
                 algo: HashAlgo.SHA1,
                 size: versionJson.downloads.client.size,
-                url: versionJson.downloads.client.url,
-                path: versionJarPath,
                 url: versionJson.downloads.client.url,
                 path: versionJarPath,
                 fallbackUrls: MirrorManager.getSortedMirrors().map(m => m.client ? versionJson.downloads.client.url.replace('https://piston-data.mojang.com', m.client) : null).filter(Boolean)

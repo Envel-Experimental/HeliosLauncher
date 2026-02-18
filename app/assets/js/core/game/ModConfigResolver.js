@@ -224,7 +224,7 @@ class ModConfigResolver {
      * @returns {Object} Map of resolved libraries.
      */
     _resolveModuleLibraries(mdl) {
-        if (!mdl.subModules.length > 0) {
+        if (mdl.subModules.length === 0) {
             return {}
         }
         let libs = {}

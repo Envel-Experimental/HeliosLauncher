@@ -800,7 +800,7 @@ app.on('ready', async () => {
         return P2PEngine.getNetworkInfo()
     })
 
-    const { exec } = require('child_process')
+    const { execFile } = require('child_process')
     const { BOOTSTRAP_NODES } = require('./network/config')
 
     ipcMain.handle('p2p:getBootstrapStatus', async () => {
@@ -811,26 +811,44 @@ app.on('ready', async () => {
         return results
     })
 
+    function isValidHost(host) {
+        if (typeof host !== 'string' || !host) return false
+        // Allow typical hostname, IPv4, IPv6 (including brackets/port) characters.
+        return /^[0-9A-Za-z\.\-\:\[\]%]+$/.test(host)
+    }
+
     function checkNodeStatus(node, index) {
         return new Promise((resolve) => {
             const platform = process.platform
-            let cmd = ''
+            let pingCmd = 'ping'
+            let pingArgs = []
+
+            if (!node || !isValidHost(node.host)) {
+                return resolve({
+                    index: index,
+                    isPrivate: !!(node && node.publicKey),
+                    status: 'timeout',
+                    latency: -1
+                })
+            }
+
             if (platform === 'win32') {
-                cmd = `ping -n 1 -w 2000 ${node.host}`
+                pingArgs = ['-n', '1', '-w', '2000', node.host]
             } else {
-                cmd = `ping -c 1 -W 2 ${node.host}`
+                pingArgs = ['-c', '1', '-W', '2', node.host]
             }
 
             const start = Date.now()
-            exec(cmd, (error, stdout, stderr) => {
+            execFile(pingCmd, pingArgs, (error, stdout, stderr) => {
                 const latency = Date.now() - start
-                const isOnline = !error && (stdout.includes('time=') || stdout.includes('время=') || stdout.includes('TTL='))
+                const output = stdout ? stdout.toString() : ''
+                const isOnline = !error && (output.includes('time=') || output.includes('время=') || output.includes('TTL='))
 
                 resolve({
                     index: index,
                     isPrivate: !!node.publicKey,
                     status: isOnline ? 'online' : 'timeout',
-                    latency: isOnline ? parsePingLatency(stdout, platform) || '< 100' : -1
+                    latency: isOnline ? parsePingLatency(output, platform) || '< 100' : -1
                 })
             })
         })

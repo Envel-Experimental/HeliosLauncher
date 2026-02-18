@@ -407,7 +407,7 @@ async function downloadJava(effectiveJavaOptions, launchAfter = true) {
 
     setLaunchDetails(Lang.queryJS('landing.dlAsync.preparingToLaunch')) // Generic "Preparing..."
     toggleLaunchArea(true)
-    setLaunchPercentage(0, 100)
+    setLaunchPercentage(0)
 
     const loggerLaunchSuite = LoggerUtil.getLogger('LaunchSuite')
 
