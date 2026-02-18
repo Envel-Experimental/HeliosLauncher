@@ -189,7 +189,7 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
             return;
         }
 
-        if (await validateLocalFile(decodedPath, algo, hash)) {
+        if (await validateLocalFile(decodedPath, algo, hash, asset.size)) {
             log.debug(`File already exists and is valid: ${decodedPath}`);
             if (onProgress) onProgress(asset.size); // Account for skipping
             return;
@@ -345,7 +345,7 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
             }
 
             // Validate Atomic Write (RCE Guard)
-            if (await validateLocalFile(tempPath, algo, currentHash)) {
+            if (await validateLocalFile(tempPath, algo, currentHash, asset.size)) {
                 // Success! Atomic rename to final path
                 await fs.rename(tempPath, decodedPath);
 

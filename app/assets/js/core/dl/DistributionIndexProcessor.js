@@ -76,7 +76,7 @@ class DistributionIndexProcessor extends IndexProcessor {
                     return null;
                 }
 
-                if (!await validateLocalFile(modulePath, algo, hash)) {
+                if (!await validateLocalFile(modulePath, algo, hash, module.rawModule.artifact.size)) {
                     return {
                         id: module.rawModule.id,
                         hash: hash,

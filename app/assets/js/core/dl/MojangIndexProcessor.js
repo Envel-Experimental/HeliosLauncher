@@ -251,7 +251,7 @@ class MojangIndexProcessor extends IndexProcessor {
                     }
                 }
 
-                if (!await validateLocalFile(filePath, HashAlgo.SHA1, hash)) {
+                if (!await validateLocalFile(filePath, HashAlgo.SHA1, hash, meta.size)) {
                     return {
                         id,
                         hash,
@@ -291,7 +291,7 @@ class MojangIndexProcessor extends IndexProcessor {
                     if (artifact) {
                         const filePath = path.join(libDir, artifact.path);
                         const hash = artifact.sha1;
-                        if (!await validateLocalFile(filePath, HashAlgo.SHA1, hash)) {
+                        if (!await validateLocalFile(filePath, HashAlgo.SHA1, hash, artifact.size)) {
                             return {
                                 id: libEntry.name,
                                 hash,
@@ -330,7 +330,7 @@ class MojangIndexProcessor extends IndexProcessor {
         const version = versionJson.id;
         const versionJarPath = getVersionJarPath(this.commonDir, version);
         const hash = versionJson.downloads.client.sha1;
-        if (!await validateLocalFile(versionJarPath, HashAlgo.SHA1, hash)) {
+        if (!await validateLocalFile(versionJarPath, HashAlgo.SHA1, hash, versionJson.downloads.client.size)) {
             return [{
                 id: `${version} client`,
                 hash,
@@ -349,7 +349,7 @@ class MojangIndexProcessor extends IndexProcessor {
         const logFile = versionJson.logging.client.file;
         const filePath = path.join(this.assetPath, 'log_configs', logFile.id);
         const hash = logFile.sha1;
-        if (!await validateLocalFile(filePath, HashAlgo.SHA1, hash)) {
+        if (!await validateLocalFile(filePath, HashAlgo.SHA1, hash, logFile.size)) {
             return [{
                 id: logFile.id,
                 hash,

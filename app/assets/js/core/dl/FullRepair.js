@@ -72,7 +72,7 @@ class FullRepair {
             const result = await processor.validate(async () => {
                 completedStages++;
                 const percent = Math.trunc((completedStages / numStages) * 100);
-                if(onProgress) onProgress(percent);
+                if (onProgress) onProgress(percent);
             });
 
             Object.values(result)
@@ -89,21 +89,21 @@ class FullRepair {
 
         let currentPercent = 0;
         const receivedEach = await downloadQueue(this.assets, received => {
-            if(expectedTotalSize > 0) {
+            if (expectedTotalSize > 0) {
                 const nextPercent = Math.trunc((received / expectedTotalSize) * 100);
                 if (currentPercent !== nextPercent) {
                     currentPercent = nextPercent;
-                    if(onProgress) onProgress(currentPercent);
+                    if (onProgress) onProgress(currentPercent);
                 }
             } else {
-                if(onProgress) onProgress(100);
+                if (onProgress) onProgress(100);
             }
         });
 
         for (const asset of this.assets) {
             if (asset.size !== receivedEach[asset.id]) {
                 FullRepair.logger.warn(`Asset ${asset.id} declared a size of ${asset.size} bytes, but ${receivedEach[asset.id]} were received!`);
-                if (!await validateLocalFile(asset.path, asset.algo, asset.hash)) {
+                if (!await validateLocalFile(asset.path, asset.algo, asset.hash, asset.size)) {
                     FullRepair.logger.error(`Hashes do not match, ${asset.id} may be corrupted.`);
                 }
             }
