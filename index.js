@@ -579,7 +579,8 @@ function showCriticalError(err) {
         icon: getPlatformIcon('icon'),
         webPreferences: {
             nodeIntegration: false,
-            contextIsolation: true
+            contextIsolation: true,
+            preload: path.join(__dirname, 'app', 'assets', 'js', 'errorPreload.js')
         }
     })
     errorWin.removeMenu()
@@ -597,6 +598,11 @@ function showCriticalError(err) {
         app.quit()
     })
 }
+
+ipcMain.on('app:restart', () => {
+    app.relaunch()
+    app.exit(0)
+})
 
 function createMenu() {
     if (process.platform === 'darwin') {
@@ -838,9 +844,8 @@ app.on('ready', async () => {
                 pingArgs = ['-c', '1', '-W', '2', node.host]
             }
 
-            const start = Date.now()
+
             execFile(pingCmd, pingArgs, (error, stdout, stderr) => {
-                const latency = Date.now() - start
                 const output = stdout ? stdout.toString() : ''
                 const isOnline = !error && (output.includes('time=') || output.includes('время=') || output.includes('TTL='))
 

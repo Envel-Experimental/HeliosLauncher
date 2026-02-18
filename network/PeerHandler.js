@@ -1,14 +1,12 @@
 const b4a = require('b4a')
 const fs = require('fs')
-const os = require('os')
 const path = require('path')
 const ConfigManager = require('../app/assets/js/configmanager')
-const RateLimiter = require('../app/assets/js/core/util/RateLimiter')
 const PeerPersistence = require('./PeerPersistence')
 const {
     MSG_REQUEST, MSG_DATA, MSG_ERROR, MSG_END,
     MSG_HELLO, MSG_PING, MSG_PONG, MSG_BATCH_REQUEST,
-    MAX_CONCURRENT_UPLOADS, BATCH_SIZE_LIMIT
+    BATCH_SIZE_LIMIT
 } = require('./constants')
 
 const TrafficState = require('./TrafficState')

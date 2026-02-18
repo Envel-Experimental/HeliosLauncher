@@ -97,20 +97,6 @@
     </div>
 
     <script>
-        const remote = require('@electron/remote');
-
-        // Whitelist of allowed support destinations, keyed by identifier from the query string.
-        const allowedSupportUrls = {
-            'tg': 'https://t.me/f_launcher_chat',
-            'github': 'https://github.com/Envel-Experimental/HeliosLauncher/issues',
-            'site': 'https://f-launcher.ru'
-        };
-
-        function restartApp() {
-            remote.app.relaunch();
-            remote.app.exit(0);
-        }
-
         // Parse query string for error message
         const urlParams = new URLSearchParams(window.location.search);
         const err = urlParams.get('error');
@@ -119,14 +105,18 @@
         }
 
         const supportUrl = urlParams.get('supportUrl');
-        const safeSupportUrl = supportUrl && allowedSupportUrls[supportUrl];
 
-        if (safeSupportUrl) {
+        // Basic validation to ensure it is a URL
+        if (supportUrl) {
             const btn = document.getElementById('supportBtn');
             btn.style.display = 'block';
             btn.onclick = () => {
-                window.open(safeSupportUrl, '_blank');
+                window.errorApi.openUrl(supportUrl);
             };
+        }
+
+        function restartApp() {
+            window.errorApi.restart();
         }
     </script>
 </body>

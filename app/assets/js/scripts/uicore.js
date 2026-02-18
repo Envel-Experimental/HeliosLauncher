@@ -285,10 +285,7 @@ async function prepareServerSelectionList() {
     setServerListingHandlers()
 }
 
-function prepareAccountSelectionList() {
-    populateAccountListings()
-    setAccountListingHandlers()
-}
+
 
 // System Warnings
 let warningQueue = []
