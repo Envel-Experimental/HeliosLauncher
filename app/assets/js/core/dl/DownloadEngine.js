@@ -240,7 +240,9 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
         if (ConfigManager.getP2POnlyMode()) {
             try {
                 const urlObj = new URL(currentUrl);
-                if (urlObj.hostname.endsWith('mojang.com') || urlObj.hostname.endsWith('minecraft.net')) {
+                const hostname = urlObj.hostname.toLowerCase();
+                if (hostname === 'mojang.com' || hostname.endsWith('.mojang.com') ||
+                    hostname === 'minecraft.net' || hostname.endsWith('.minecraft.net')) {
                     // log.debug(`[DownloadEngine] Blocking official URL in P2P Only Mode: ${currentUrl}`);
                     continue;
                 }

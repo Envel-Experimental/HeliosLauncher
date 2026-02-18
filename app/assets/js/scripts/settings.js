@@ -195,7 +195,7 @@ async function initSettingsValues() {
                 'MID': 'Сбалансированный',
                 'HIGH': 'Высокопроизводительный'
             }
-            profileEl.innerHTML = profiles[p2pInfo.profile] || p2pInfo.profile
+            profileEl.textContent = profiles[p2pInfo.profile] || p2pInfo.profile
         }
     } catch (e) { /* ignore */ }
 }
@@ -208,7 +208,7 @@ function bindP2PSlider() {
     const observer = new MutationObserver((mutations) => {
         mutations.forEach((mutation) => {
             if (mutation.type === 'attributes' && mutation.attributeName === 'value') {
-                label.innerHTML = slider.getAttribute('value') + ' Mbit/s'
+                label.textContent = slider.getAttribute('value') + ' Mbit/s'
             }
         })
     })

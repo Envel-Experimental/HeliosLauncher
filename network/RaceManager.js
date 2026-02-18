@@ -133,7 +133,9 @@ class RaceManager {
             if (ConfigManager.getP2POnlyMode()) {
                 try {
                     const urlObj = new URL(url)
-                    if (urlObj.hostname.endsWith('mojang.com') || urlObj.hostname.endsWith('minecraft.net')) {
+                    const hostname = urlObj.hostname.toLowerCase()
+                    if (hostname === 'mojang.com' || hostname.endsWith('.mojang.com') ||
+                        hostname === 'minecraft.net' || hostname.endsWith('.minecraft.net')) {
                         reject(new Error('HTTP Blocked: P2P Only Mode is Enabled (Mojang Protected)'))
                         return
                     }

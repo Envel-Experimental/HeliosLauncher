@@ -115,7 +115,9 @@
             const btn = document.getElementById('supportBtn');
             btn.style.display = 'block';
             btn.onclick = () => {
-                window.open(supportUrl, '_blank');
+                if (supportUrl.startsWith('http://') || supportUrl.startsWith('https://')) {
+                    window.open(supportUrl, '_blank');
+                }
             };
         }
     </script>
