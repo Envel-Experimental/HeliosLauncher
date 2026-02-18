@@ -115,7 +115,7 @@ class MojangIndexProcessor extends IndexProcessor {
         }
     }
 
-    async loadContentWithRemoteFallback(url, filePath, hash, extraFallbacks = []) {
+    async loadContentWithRemoteFallback(url, filePath, hash, extraFallbacks = [], size = 0) {
         // Prepare Mirror Candidates
         const candidates = [...extraFallbacks];
 
@@ -140,7 +140,8 @@ class MojangIndexProcessor extends IndexProcessor {
             path: filePath,
             algo: hash ? hash.algo : null,
             hash: hash ? hash.value : null,
-            fallbackUrls: candidates
+            fallbackUrls: candidates,
+            size: size
         };
 
         await downloadFile(asset);

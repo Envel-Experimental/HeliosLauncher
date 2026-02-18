@@ -87,7 +87,8 @@ describe('DistributionAPI', () => {
 
             const result = await distributionAPI.pullRemote();
 
-            expect(result).toBeNull();
+            expect(result.responseStatus).toBe('ERROR');
+            expect(result.error.message).toBe('Network error');
         });
     });
 

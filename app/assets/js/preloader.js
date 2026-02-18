@@ -18,7 +18,7 @@ process.on('uncaughtException', (error) => {
     ipcRenderer.send('renderer-error', errorMsg)
 })
 
-const fs = require('fs/promises')
+
 const { app } = require('@electron/remote')
 const os = require('os')
 const path = require('path')

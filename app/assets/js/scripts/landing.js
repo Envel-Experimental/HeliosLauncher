@@ -16,16 +16,13 @@ const { MojangIndexProcessor } = require('./assets/js/core/dl/MojangIndexProcess
 const { downloadFile } = require('./assets/js/core/dl/DownloadEngine')
 var {
     latestOpenJDK,
-    extractJdk,
-    discoverBestJvmInstallation,
-    ensureJavaDirIsRoot,
-    javaExecFromRoot
+    ensureJavaDirIsRoot
 } = require('./assets/js/core/java/JavaGuard')
 
 
 // Internal Requirements
 const ProcessBuilder = require('./assets/js/processbuilder')
-const { SafeSentry } = require('./assets/js/core/util/SentryWrapper.js')
+require('./assets/js/core/util/SentryWrapper.js')
 
 // Launch Elements
 const launch_content = document.getElementById('launch_content')
@@ -302,10 +299,8 @@ async function showOfflineWarning() {
 // Keep reference to Minecraft Process
 let proc
 // Is DiscordRPC enabled
-let hasRPC = false
 // Joined server regex
 // Change this if your server uses something different.
-const GAME_JOINED_REGEX = /\[.+\]: Sound engine started/
 const GAME_LAUNCH_REGEX = /^\[.+\]: (?:MinecraftForge .+ Initialized|ModLauncher .+ starting: .+|Loading Minecraft .+ with Fabric Loader .+)$/
 const MIN_LINGER = 5000
 
@@ -530,6 +525,7 @@ async function dlAsync(login = true) {
     const mojangIndexProcessor = new MojangIndexProcessor(
         ConfigManager.getCommonDirectory(),
         serv.rawServer.minecraftVersion)
+    await mojangIndexProcessor.init()
     const distributionIndexProcessor = new DistributionIndexProcessor(
         ConfigManager.getCommonDirectory(),
         distro,
