@@ -1,4 +1,4 @@
-const { shell, ipcRenderer } = require('electron')
+const { shell } = require('electron')
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
@@ -278,7 +278,7 @@ class GameCrashHandler {
 
             this.restartGame()
 
-            this.restartGame()
+
 
         } else if (crashAnalysis.type === 'java-corruption') {
             this.handleJavaRepair()
@@ -317,6 +317,58 @@ class GameCrashHandler {
         )
         setOverlayHandler(() => toggleOverlay(false))
         setMiddleButtonHandler(null)
+    }
+
+    /**
+     * Attempts to repair a corrupted Java installation by deleting it and resetting config.
+     */
+    handleJavaRepair() {
+        const serverId = this.server.rawServer.id
+        const javaPath = ConfigManager.getJavaExecutable(serverId)
+
+        if (!javaPath) {
+            logger.warn('Cannot repair Java: No Java executable configured.')
+            this.restartGame()
+            return
+        }
+
+        const dataDir = ConfigManager.getDataDirectory()
+        // Simple check: is the java path inside the data directory?
+        const isManaged = javaPath.startsWith(dataDir)
+
+        if (isManaged) {
+            logger.info(`Detected corrupted managed Java at ${javaPath}. Attempting removal...`)
+
+            try {
+                const runtimeDir = path.join(dataDir, 'runtime')
+                // If the path is definitely inside runtime
+                if (javaPath.startsWith(runtimeDir)) {
+                    // Standard structure: <dataDir>/runtime/<arch>/<folder>/bin/java...
+                    const relative = path.relative(runtimeDir, javaPath)
+                    const parts = relative.split(path.sep)
+
+                    // parts[0] = arch, parts[1] = java-folder
+                    if (parts.length >= 2) {
+                        const dirToDelete = path.join(runtimeDir, parts[0], parts[1])
+                        logger.info(`Removing Java directory: ${dirToDelete}`)
+                        if (fs.existsSync(dirToDelete)) {
+                            fs.rmSync(dirToDelete, { recursive: true, force: true })
+                        }
+                    }
+                }
+            } catch (e) {
+                logger.error('Failed to repair Java', e)
+            }
+        } else {
+            logger.warn('Java is not managed by launcher (custom path). Resetting config to force re-selection.')
+        }
+
+        // Reset config to force re-download or re-selection
+        ConfigManager.setJavaExecutable(serverId, null)
+        ConfigManager.save()
+        logger.info('Java configuration reset. Restarting...')
+
+        this.restartGame()
     }
 
     /**

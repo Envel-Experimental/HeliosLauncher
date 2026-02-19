@@ -1,5 +1,5 @@
 const GameCrashHandler = require('@app/assets/js/core/game/GameCrashHandler');
-const ConfigManager = require('@app/assets/js/configmanager');
+
 
 jest.mock('@app/assets/js/configmanager');
 jest.mock('@app/assets/js/core/util/LoggerUtil', () => ({
