@@ -83,7 +83,12 @@ exports.decryptString = function (encryptedHex) {
 
     // check if it uses our fallback prefix
     if (encryptedHex.startsWith('FB:')) {
-        return fallbackDecrypt(encryptedHex.substring(3))
+        const result = fallbackDecrypt(encryptedHex.substring(3))
+        // If fallbackDecrypt failed/returned original, return the full original string (with prefix)
+        if (result === encryptedHex.substring(3)) {
+            return encryptedHex
+        }
+        return result
     }
 
     // Try safeStorage

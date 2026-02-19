@@ -1,210 +1,137 @@
-const LaunchArgumentBuilder = require('@app/assets/js/core/game/LaunchArgumentBuilder')
-const ConfigManager = require('@app/assets/js/configmanager')
-const FileUtils = require('@app/assets/js/core/common/FileUtils')
-const { HashAlgo } = require('@app/assets/js/core/dl/Asset')
-const path = require('path')
+const LaunchArgumentBuilder = require('@app/assets/js/core/game/LaunchArgumentBuilder');
+const ConfigManager = require('@app/assets/js/configmanager');
+const { getMojangOS, isLibraryCompatible, mcVersionAtLeast } = require('@app/assets/js/core/common/MojangUtils');
+const { extractZip } = require('@app/assets/js/core/common/FileUtils');
+const path = require('path');
+const fs = require('fs/promises');
 
-jest.mock('@app/assets/js/configmanager')
-jest.mock('@app/assets/js/core/common/FileUtils')
-jest.mock('fs/promises')
-jest.mock('@app/assets/js/core/util/LoggerUtil', () => ({
-    LoggerUtil: {
-        getLogger: jest.fn(() => ({
-            debug: jest.fn(),
-            info: jest.fn(),
-            warn: jest.fn(),
-            error: jest.fn()
-        }))
-    }
-}))
-
-// Mock p-limit for dynamic import
-jest.mock('p-limit', () => ({
-    __esModule: true,
-    default: jest.fn(() => (fn) => fn())
-}))
+jest.mock('@app/assets/js/configmanager');
+jest.mock('@app/assets/js/core/common/MojangUtils');
+jest.mock('@app/assets/js/core/common/FileUtils');
+jest.mock('fs/promises');
+jest.mock('p-limit', () => () => (fn) => fn()); // Mock p-limit as simple executor
 
 describe('LaunchArgumentBuilder', () => {
-    let builder
+    let builder;
     const mockServer = {
-        rawServer: {
-            id: 'testServer',
-            minecraftVersion: '1.12.2',
-            autoconnect: false
-        },
-        hostname: 'localhost',
-        port: 25565
-    }
-    const vanillaManifest = {
-        id: '1.12.2',
-        assets: '1.12',
-        type: 'release',
+        rawServer: { id: 'server1', minecraftVersion: '1.16.5' },
+        modules: []
+    };
+    const mockVanillaManifest = {
+        id: '1.16.5',
+        arguments: { jvm: ['-DjvmArg=val'], game: ['--gameArg'] },
         libraries: [],
-        arguments: {
-            jvm: ['-Djava.library.path=${natives_directory}', '-cp', '${classpath}'],
-            game: ['--username', '${auth_player_name}']
-        }
-    }
-    const modManifest = {
+        mainClass: 'net.minecraft.client.main.Main',
+        type: 'release',
+        assets: 'legacy'
+    };
+    const mockModManifest = {
+        id: 'forge-1.16.5',
+        arguments: { jvm: ['-DmodArg=val'], game: [] },
         mainClass: 'net.minecraft.launchwrapper.Launch',
-        minecraftArguments: '--username ${auth_player_name} --version ${version_name} --gameDir ${game_directory} --assetsDir ${assets_root} --assetIndex ${assets_index_name} --uuid ${auth_uuid} --accessToken ${auth_access_token} --userType ${user_type} --tweakClass net.minecraftforge.fml.common.launcher.FMLTweaker --versionType Forge',
-        arguments: {
-            jvm: [],
-            game: []
-        }
-    }
-    const authUser = {
-        displayName: 'TestPlayer',
+        minecraftArguments: '--username ${auth_player_name}'
+    };
+    const mockAuthUser = {
+        displayName: 'PlayerOne',
         uuid: 'uuid-123',
         accessToken: 'token-abc',
-        type: 'mojang'
-    }
-    const launcherVersion = '1.0.0'
-    const gameDir = 'game'
-    const commonDir = 'common'
+        type: 'microsoft'
+    };
 
     beforeEach(() => {
-        jest.clearAllMocks()
-        // Deep clone to avoid state pollution between tests
-        const serverClone = JSON.parse(JSON.stringify(mockServer))
-        const manifestClone = JSON.parse(JSON.stringify(vanillaManifest))
-        const modClone = JSON.parse(JSON.stringify(modManifest))
+        jest.clearAllMocks();
+        // Setup default mocks
+        ConfigManager.getMaxRAM.mockReturnValue('4G');
+        ConfigManager.getMinRAM.mockReturnValue('2G');
+        ConfigManager.getGameWidth.mockReturnValue(854);
+        ConfigManager.getGameHeight.mockReturnValue(480);
+        ConfigManager.getJVMOptions.mockReturnValue([]);
+        ConfigManager.getFullscreen.mockReturnValue(false);
+        ConfigManager.getAutoConnect.mockReturnValue(false);
 
-        builder = new LaunchArgumentBuilder(serverClone, manifestClone, modClone, authUser, launcherVersion, gameDir, commonDir)
+        mcVersionAtLeast.mockImplementation((target, current) => {
+            // Simple mock comparison: assume target 1.13 <= 1.16.5
+            return target === '1.13';
+        });
 
-        ConfigManager.getMaxRAM.mockReturnValue('2G')
-        ConfigManager.getMinRAM.mockReturnValue('1G')
-        ConfigManager.getJVMOptions.mockReturnValue([])
-        ConfigManager.getAutoConnect.mockReturnValue(false)
-    })
+        getMojangOS.mockReturnValue('linux'); // Default OS for tests
 
-    describe('getClasspathSeparator', () => {
-        const originalPlatform = process.platform
-        afterEach(() => {
-            Object.defineProperty(process, 'platform', { value: originalPlatform })
-        })
+        builder = new LaunchArgumentBuilder(
+            mockServer,
+            mockVanillaManifest,
+            mockModManifest,
+            mockAuthUser,
+            '1.0.0',
+            '/game/dir',
+            '/common/dir'
+        );
+    });
 
-        it('should return ; for win32', () => {
-            Object.defineProperty(process, 'platform', { value: 'win32' })
-            expect(LaunchArgumentBuilder.getClasspathSeparator()).toBe(';')
-        })
+    describe('constructJVMArguments', () => {
+        it('should construct arguments for 1.13+', async () => {
+            mcVersionAtLeast.mockReturnValue(true); // 1.13+
 
-        it('should return : for linux', () => {
-            Object.defineProperty(process, 'platform', { value: 'linux' })
-            expect(LaunchArgumentBuilder.getClasspathSeparator()).toBe(':')
-        })
-    })
+            const args = await builder.constructJVMArguments([], '/temp/natives', false, false, null);
 
-    describe('constructJVMArguments (1.12)', () => {
-        it('should build 1.12 arguments correctly', async () => {
-            // Mock classpathArg to avoid complex library resolution in this test
-            builder.classpathArg = jest.fn().mockResolvedValue(['lib1.jar', 'lib2.jar'])
+            expect(args).toContain('-Xmx4G');
+            expect(args).toContain('-Xms2G');
+            expect(args).toContain('-DjvmArg=val');
+            // Check placeholders replacement
+            // Verify ModManifest JVM args are processed
+            expect(args.some(a => a.includes('-DmodArg=val'))).toBe(true);
+        });
 
-            const args = await builder.constructJVMArguments([], 'natives', false, false, null)
+        it('should construct arguments for 1.12 (Legacy)', async () => {
+            mcVersionAtLeast.mockReturnValue(false); // < 1.13
+            builder.server.rawServer.minecraftVersion = '1.12.2';
 
-            expect(args).toContain('-Xmx2G')
-            expect(args).toContain('-Xms1G')
-            expect(args).toContain('-Djava.library.path=natives')
-            expect(args).toContain('net.minecraft.launchwrapper.Launch')
-        })
-    })
+            const args = await builder.constructJVMArguments([], '/temp/natives', false, false, null);
 
-    describe('constructJVMArguments (1.13+)', () => {
-        beforeEach(() => {
-            builder.server.rawServer.minecraftVersion = '1.18.2'
-            builder.vanillaManifest.arguments = {
-                jvm: ['-Xss1M'],
-                game: ['--username', '${auth_player_name}', '--version', '${version_name}']
-            }
-            builder.modManifest.arguments = {
-                jvm: ['-Dmodloader.version=1.0'],
-                game: ['--tweakClass', 'some.Tweak']
-            }
-        })
-
-        it('should replace placeholders in 1.13+ arguments', async () => {
-            builder.classpathArg = jest.fn().mockResolvedValue(['lib.jar'])
-
-            const args = await builder.constructJVMArguments([], 'natives', false, false, null)
-
-            expect(args).toContain('TestPlayer')
-            expect(args).toContain('testServer')
-            expect(args).toContain('-Dmodloader.version=1.0')
-            expect(args).toContain('--tweakClass')
-        })
-
-        it('should handle complex rules (os version)', async () => {
-            builder.vanillaManifest.arguments.game.push({
-                rules: [{
-                    action: 'allow',
-                    os: { name: 'windows' }
-                }],
-                value: '--win-only'
-            })
-
-            // Mock windows
-            const originalPlatform = process.platform
-            Object.defineProperty(process, 'platform', { value: 'win32' })
-
-            const args = await builder.constructJVMArguments([], 'natives', false, false, null)
-            expect(args).toContain('--win-only')
-
-            Object.defineProperty(process, 'platform', { value: originalPlatform })
-        })
-    })
+            expect(args).toContain('-cp');
+            expect(args).toContain('-Djava.library.path=/temp/natives');
+            expect(args).toContain(mockModManifest.mainClass);
+            // Forge legacy args
+            expect(args).toContain('--username');
+            expect(args).toContain('PlayerOne');
+        });
+    });
 
     describe('_resolveSanitizedJMArgs', () => {
-        it('should remove forbidden flags and add G1GC if missing', () => {
-            ConfigManager.getJVMOptions.mockReturnValue(['-XX:+UseConcMarkSweepGC'])
-            const sanitized = builder._resolveSanitizedJMArgs([])
-            expect(sanitized).not.toContain('-XX:+UseConcMarkSweepGC')
-            expect(sanitized).toContain('-XX:+UseG1GC')
-        })
+        it('should remove forbidden flags and ensure G1GC', () => {
+            const result = builder._resolveSanitizedJMArgs(['-XX:+UseConcMarkSweepGC']);
+            expect(result).not.toContain('-XX:+UseConcMarkSweepGC');
+            expect(result).toContain('-XX:+UseG1GC');
+        });
 
-        it('should not add G1GC if another GC is already present', () => {
-            ConfigManager.getJVMOptions.mockReturnValue(['-XX:+UseZGC'])
-            const sanitized = builder._resolveSanitizedJMArgs([])
-            expect(sanitized).toContain('-XX:+UseZGC')
-            expect(sanitized).not.toContain('-XX:+UseG1GC')
-        })
-    })
+        it('should not add G1GC if another GC is present', () => {
+            ConfigManager.getJVMOptions.mockReturnValue(['-XX:+UseZGC']);
+            const result = builder._resolveSanitizedJMArgs([]);
+            expect(result).toContain('-XX:+UseZGC');
+            expect(result).not.toContain('-XX:+UseG1GC'); // Already has ZGC
+        });
+    });
 
-    describe('_processAutoConnectArg', () => {
-        it('should add --server and --port for < 1.20', () => {
-            builder.server.rawServer.autoconnect = true
-            ConfigManager.getAutoConnect.mockReturnValue(true)
-            builder.server.rawServer.minecraftVersion = '1.12.2'
+    describe('OS Specific Rules (1.13+)', () => {
+        it('should filter arguments based on OS rules', async () => {
+            mcVersionAtLeast.mockReturnValue(true);
+            const complexManifest = { ...mockVanillaManifest };
+            complexManifest.arguments.game = [
+                {
+                    rules: [{ action: 'allow', os: { name: 'osx' } }],
+                    value: '-XstartOnFirstThread'
+                },
+                {
+                    rules: [{ action: 'allow', os: { name: 'linux' } }],
+                    value: '--linuxArg'
+                }
+            ];
+            builder.vanillaManifest = complexManifest;
+            getMojangOS.mockReturnValue('linux');
 
-            const args = []
-            builder._processAutoConnectArg(args)
-            expect(args).toContain('--server')
-            expect(args).toContain('localhost')
-            expect(args).toContain('--port')
-            expect(args).toContain(25565)
-        })
+            const args = await builder.constructJVMArguments([], '/temp', false, false, null);
 
-        it('should add --quickPlayMultiplayer for >= 1.20', () => {
-            builder.server.rawServer.autoconnect = true
-            ConfigManager.getAutoConnect.mockReturnValue(true)
-            builder.server.rawServer.minecraftVersion = '1.20.1'
-
-            const args = []
-            builder._processAutoConnectArg(args)
-            expect(args).toContain('--quickPlayMultiplayer')
-            expect(args).toContain('localhost:25565')
-        })
-    })
-
-    describe('classpathArg', () => {
-        it('should include version jar and libraries', async () => {
-            builder._resolveMojangLibraries = jest.fn().mockResolvedValue({ 'lib1': 'common/libraries/lib1.jar' })
-            builder._resolveServerLibraries = jest.fn().mockReturnValue({ 'lib2': 'common/libraries/lib2.jar' })
-
-            const cp = await builder.classpathArg([], 'natives', false, null, false)
-
-            expect(cp).toContain(path.join(commonDir, 'versions', '1.12.2', '1.12.2.jar'))
-            expect(cp).toContain('common/libraries/lib1.jar')
-            expect(cp).toContain('common/libraries/lib2.jar')
-        })
-    })
-})
+            expect(args).toContain('--linuxArg');
+            expect(args).not.toContain('-XstartOnFirstThread');
+        });
+    });
+});

@@ -6,3 +6,4 @@
 /dist/
 test-results
 test-data
+coverage/
