@@ -1,5 +1,6 @@
-const { shell } = require('electron')
+const { shell, ipcRenderer } = require('electron')
 const fs = require('fs')
+const os = require('os')
 const path = require('path')
 const { LoggerUtil } = require('../util/LoggerUtil')
 const { Type } = require('../common/DistributionClasses')
@@ -53,6 +54,9 @@ class GameCrashHandler {
             const crashAnalysis = await this.analyzeCrash()
 
             if (crashAnalysis) {
+                if (crashAnalysis.type === 'java-oom') {
+                    this.enrichOOMAnalysis(crashAnalysis)
+                }
                 this.showSpecificCrashOverlay(crashAnalysis)
             } else {
                 await this.showGenericCrashOverlay(code)
@@ -274,6 +278,10 @@ class GameCrashHandler {
 
             this.restartGame()
 
+            this.restartGame()
+
+        } else if (crashAnalysis.type === 'java-corruption') {
+            this.handleJavaRepair()
         } else {
             // Config file corruption
             const configPath = path.join(this.gameDir, 'config', crashAnalysis.file)
@@ -320,6 +328,26 @@ class GameCrashHandler {
             const launchBtn = document.getElementById('launch_button')
             if (launchBtn) launchBtn.click()
         }, 1000)
+    }
+
+    /**
+     * Enriches the OOM crash analysis with specific advice based on system memory.
+     * @param {Object} analysis The crash analysis object.
+     */
+    enrichOOMAnalysis(analysis) {
+        const totalMem = os.totalmem() / (1024 * 1024 * 1024) // GB
+        const freeMem = os.freemem() / (1024 * 1024 * 1024) // GB
+
+        let advice = ""
+        if (totalMem < 6) {
+            advice = "У вас мало физической памяти (RAM). Попробуйте закрыть все лишние программы перед запуском."
+        } else if (freeMem < 2.5) {
+            advice = "Свободной памяти мало. Закройте другие программы."
+        } else {
+            advice = "Свободной памяти достаточно. Попробуйте выделить больше памяти игре в настройках лаунчера (Настройки -> Java)."
+        }
+
+        analysis.description = `Игра вылетела из-за нехватки памяти.\n\n${advice}\n\n(Свободно: ${freeMem.toFixed(1)} GB, Всего: ${totalMem.toFixed(1)} GB)`
     }
 }
 
