@@ -1,5 +1,6 @@
 const { shell } = require('electron')
 const fs = require('fs')
+const os = require('os')
 const path = require('path')
 const { LoggerUtil } = require('../util/LoggerUtil')
 const { Type } = require('../common/DistributionClasses')
@@ -53,6 +54,9 @@ class GameCrashHandler {
             const crashAnalysis = await this.analyzeCrash()
 
             if (crashAnalysis) {
+                if (crashAnalysis.type === 'java-oom') {
+                    this.enrichOOMAnalysis(crashAnalysis)
+                }
                 this.showSpecificCrashOverlay(crashAnalysis)
             } else {
                 await this.showGenericCrashOverlay(code)
@@ -274,6 +278,10 @@ class GameCrashHandler {
 
             this.restartGame()
 
+
+
+        } else if (crashAnalysis.type === 'java-corruption') {
+            this.handleJavaRepair()
         } else {
             // Config file corruption
             const configPath = path.join(this.gameDir, 'config', crashAnalysis.file)
@@ -312,6 +320,58 @@ class GameCrashHandler {
     }
 
     /**
+     * Attempts to repair a corrupted Java installation by deleting it and resetting config.
+     */
+    handleJavaRepair() {
+        const serverId = this.server.rawServer.id
+        const javaPath = ConfigManager.getJavaExecutable(serverId)
+
+        if (!javaPath) {
+            logger.warn('Cannot repair Java: No Java executable configured.')
+            this.restartGame()
+            return
+        }
+
+        const dataDir = ConfigManager.getDataDirectory()
+        // Simple check: is the java path inside the data directory?
+        const isManaged = javaPath.startsWith(dataDir)
+
+        if (isManaged) {
+            logger.info(`Detected corrupted managed Java at ${javaPath}. Attempting removal...`)
+
+            try {
+                const runtimeDir = path.join(dataDir, 'runtime')
+                // If the path is definitely inside runtime
+                if (javaPath.startsWith(runtimeDir)) {
+                    // Standard structure: <dataDir>/runtime/<arch>/<folder>/bin/java...
+                    const relative = path.relative(runtimeDir, javaPath)
+                    const parts = relative.split(path.sep)
+
+                    // parts[0] = arch, parts[1] = java-folder
+                    if (parts.length >= 2) {
+                        const dirToDelete = path.join(runtimeDir, parts[0], parts[1])
+                        logger.info(`Removing Java directory: ${dirToDelete}`)
+                        if (fs.existsSync(dirToDelete)) {
+                            fs.rmSync(dirToDelete, { recursive: true, force: true })
+                        }
+                    }
+                }
+            } catch (e) {
+                logger.error('Failed to repair Java', e)
+            }
+        } else {
+            logger.warn('Java is not managed by launcher (custom path). Resetting config to force re-selection.')
+        }
+
+        // Reset config to force re-download or re-selection
+        ConfigManager.setJavaExecutable(serverId, null)
+        ConfigManager.save()
+        logger.info('Java configuration reset. Restarting...')
+
+        this.restartGame()
+    }
+
+    /**
      * Attempt to automatically restart the game.
      */
     restartGame() {
@@ -320,6 +380,26 @@ class GameCrashHandler {
             const launchBtn = document.getElementById('launch_button')
             if (launchBtn) launchBtn.click()
         }, 1000)
+    }
+
+    /**
+     * Enriches the OOM crash analysis with specific advice based on system memory.
+     * @param {Object} analysis The crash analysis object.
+     */
+    enrichOOMAnalysis(analysis) {
+        const totalMem = os.totalmem() / (1024 * 1024 * 1024) // GB
+        const freeMem = os.freemem() / (1024 * 1024 * 1024) // GB
+
+        let advice = ""
+        if (totalMem < 6) {
+            advice = "У вас мало физической памяти (RAM). Попробуйте закрыть все лишние программы перед запуском."
+        } else if (freeMem < 2.5) {
+            advice = "Свободной памяти мало. Закройте другие программы."
+        } else {
+            advice = "Свободной памяти достаточно. Попробуйте выделить больше памяти игре в настройках лаунчера (Настройки -> Java)."
+        }
+
+        analysis.description = `Игра вылетела из-за нехватки памяти.\n\n${advice}\n\n(Свободно: ${freeMem.toFixed(1)} GB, Всего: ${totalMem.toFixed(1)} GB)`
     }
 }
 

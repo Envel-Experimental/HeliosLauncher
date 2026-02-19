@@ -159,6 +159,45 @@ exports.analyzeLog = function (logContent) {
         };
     }
 
+    // 10. Java Runtime Corruption (Critical files missing)
+    if (logContent.includes('java.io.FileNotFoundException') && (
+        logContent.includes('lib\\tzdb.dat') ||
+        logContent.includes('lib\\modules') ||
+        logContent.includes('lib\\jvm.cfg') ||
+        logContent.includes('bin\\server\\jvm.dll') ||
+        logContent.includes('bin\\client\\jvm.dll')
+    )) {
+        return {
+            type: 'java-corruption',
+            file: 'Java Runtime',
+            description: "Критическая ошибка Java: файлы повреждены. Требуется переустановка Java."
+        };
+    }
+
+    // 11. Java Native Library Corruption (UnsatisfiedLinkError)
+    if (logContent.includes('java.lang.UnsatisfiedLinkError') && (
+        logContent.includes('awt') ||
+        logContent.includes('net') ||
+        logContent.includes('nio') ||
+        logContent.includes('fontmanager') ||
+        logContent.includes('sunec')
+    )) {
+        return {
+            type: 'java-corruption',
+            file: 'Java Natives',
+            description: "Критическая ошибка Java: повреждены нативные библиотеки. Требуется переустановка Java."
+        };
+    }
+
+    // 12. Java Heap OutOfMemoryError
+    if (logContent.includes('java.lang.OutOfMemoryError')) {
+        return {
+            type: 'java-oom',
+            file: 'Memory',
+            description: "Недостаточно оперативной памяти."
+        };
+    }
+
     return null;
 }
 
