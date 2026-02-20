@@ -155,7 +155,7 @@ exports.analyzeLog = function (logContent) {
         return {
             type: 'gpu-gl-on-12',
             file: 'OpenGLOn12.dll',
-            description: "Сбой в драйвере OpenCL/OpenGL. Попробуй обновить драйверы Intel/NVIDIA или перезапустить лаунчер."
+            description: "Сбой в драйвере OpenCL/OpenGL. Попробуй обновить драйверы видеокарты или перезапустить лаунчер."
         };
     }
 

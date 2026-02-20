@@ -552,15 +552,14 @@ async function devModeToggle() {
 function checkAndShowP2PPrompt() {
     if (!ConfigManager.getP2PPromptShown() && !isOverlayVisible()) {
 
-        // CHANGE: For new users (First Launch), do NOT ask them.
-        // We automatically enable P2P for them without a prompt.
         if (ConfigManager.isFirstLaunch()) {
             ConfigManager.setP2PPromptShown(true)
             ConfigManager.setLocalOptimization(true)
             ConfigManager.setGlobalOptimization(true)
             ConfigManager.setP2PUploadEnabled(true)
+            ConfigManager.markFirstLaunchCompleted()
             ConfigManager.save()
-            ipcRenderer.invoke('p2p:configUpdate') // Notify Main Process
+            ipcRenderer.invoke('p2p:configUpdate')
             return
         }
 
@@ -577,6 +576,7 @@ function checkAndShowP2PPrompt() {
             ConfigManager.setLocalOptimization(true)
             ConfigManager.setGlobalOptimization(true)
             ConfigManager.setP2PUploadEnabled(true)
+            ConfigManager.markFirstLaunchCompleted()
             await ConfigManager.save()
             toggleOverlay(false)
             ipcRenderer.invoke('p2p:configUpdate') // Notify Main Process
@@ -587,6 +587,7 @@ function checkAndShowP2PPrompt() {
             ConfigManager.setLocalOptimization(false)
             ConfigManager.setGlobalOptimization(false)
             ConfigManager.setP2PUploadEnabled(false)
+            ConfigManager.markFirstLaunchCompleted()
             await ConfigManager.save()
             toggleOverlay(false)
             ipcRenderer.invoke('p2p:configUpdate') // Notify Main Process
