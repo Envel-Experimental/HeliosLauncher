@@ -1,6 +1,6 @@
 const os = require('os')
 const semver = require('semver')
-const fs = require('fs')
+const fs = require('fs').promises
 const sysPath = require('path')
 
 const DropinModUtil = require('./assets/js/dropinmodutil')
@@ -2175,7 +2175,7 @@ async function factoryReset() {
 
             const fullPath = sysPath.join(dataDir, file)
             try {
-                await fs.remove(fullPath)
+                await fs.rm(fullPath, { recursive: true, force: true })
                 console.log('Factory Reset: Deleted', fullPath)
             } catch (err) {
                 console.warn('Factory Reset: Failed to delete', fullPath, err)
@@ -2188,11 +2188,14 @@ async function factoryReset() {
             Lang.query('ejs.settings.factoryReset.success'),
             Lang.queryJS('uicore.update.updateButton') // Reuse 'Update' button style/text or simple OK
         )
-        // Force restart
-        setTimeout(() => {
-            remote.app.relaunch()
-            remote.app.exit(0)
-        }, 1500)
+        // Force restart without timeout, more reliably
+        const app = remote.app
+        const options = {
+            args: process.argv.slice(1).filter(arg => !arg.includes('--enable-logging') && !arg.includes('--remote-debugging-port')),
+            execPath: process.execPath
+        }
+        app.relaunch(options)
+        app.quit()
 
     } catch (err) {
         console.error('Factory Reset Error', err)
