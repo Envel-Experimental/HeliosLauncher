@@ -29,7 +29,7 @@ const ConfigManager = require('./configmanager')
 const { DistroAPI } = require('./distromanager')
 const LangLoader = require('./langloader')
 const { LoggerUtil } = require('./core/util/LoggerUtil')
-const { retry } = require('./util')
+const { retry, fetchWithTimeout } = require('./util')
 let Sentry
 
 const logger = LoggerUtil.getLogger('Preloader')
@@ -132,7 +132,7 @@ function sendToSentry(message, type = 'info') {
 
 async function checkP2PKillSwitch() {
     try {
-        const response = await fetch(NetworkConfig.P2P_KILL_SWITCH_URL, { cache: 'no-store' })
+        const response = await fetchWithTimeout(NetworkConfig.P2P_KILL_SWITCH_URL, { cache: 'no-store' }, 5000)
         if (response.ok) {
             logger.info('P2P Kill Switch activated by remote configuration.')
             ConfigManager.setLocalOptimization(false)
@@ -148,7 +148,7 @@ async function checkP2PKillSwitch() {
 
 async function checkSupportConfig() {
     try {
-        const response = await fetch(NetworkConfig.SUPPORT_CONFIG_URL, { cache: 'no-store' })
+        const response = await fetchWithTimeout(NetworkConfig.SUPPORT_CONFIG_URL, { cache: 'no-store' }, 5000)
         if (response.ok) {
             const data = await response.json()
             if (data.url) {

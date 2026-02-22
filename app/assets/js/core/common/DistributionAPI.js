@@ -4,6 +4,7 @@ const fs = require('fs/promises');
 const { LoggerUtil } = require('../util/LoggerUtil');
 const { RestResponseStatus, handleFetchError } = require('./RestResponse');
 const { HeliosDistribution } = require('./DistributionClasses');
+const { fetchWithTimeout } = require('../../util');
 
 class DistributionAPI {
     static log = LoggerUtil.getLogger('DistributionAPI');
@@ -96,7 +97,7 @@ class DistributionAPI {
         for (const url of this.remoteUrls) {
             try {
                 console.log(`[DistributionAPI] Pulling remote distribution from: ${url}`);
-                const res = await fetch(url, { cache: 'no-store' });
+                const res = await fetchWithTimeout(url, { cache: 'no-store' }, 8000);
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
                 // Get buffer first to preserve exact bytes for verification
@@ -110,7 +111,7 @@ class DistributionAPI {
                     console.log('[DistributionAPI] Verifying signature...')
                     signatureValid = false
                     try {
-                        const sigRes = await fetch(url + '.sig', { cache: 'no-store' })
+                        const sigRes = await fetchWithTimeout(url + '.sig', { cache: 'no-store' }, 5000)
                         if (sigRes.ok) {
                             const signatureHex = (await sigRes.text()).trim()
                             const signature = Buffer.from(signatureHex, 'hex')

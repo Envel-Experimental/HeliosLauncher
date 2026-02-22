@@ -19,6 +19,30 @@ exports.retry = async function (func, retries = 3, delay = 1000, isRetryable = (
 }
 
 /**
+ * Perform a fetch with a timeout.
+ * 
+ * @param {string} url The URL to fetch.
+ * @param {object} options The fetch options.
+ * @param {number} timeout The timeout in milliseconds.
+ * @returns {Promise<Response>} The fetch promise.
+ */
+exports.fetchWithTimeout = async function (url, options = {}, timeout = 5000) {
+    const controller = new AbortController()
+    const id = setTimeout(() => controller.abort(), timeout)
+    try {
+        const response = await fetch(url, {
+            ...options,
+            signal: controller.signal
+        })
+        clearTimeout(id)
+        return response
+    } catch (error) {
+        clearTimeout(id)
+        throw error
+    }
+}
+
+/**
  * Ensures that the directory exists. If the directory structure does not exist, it is created.
  */
 exports.ensureDir = async function (dirPath) {

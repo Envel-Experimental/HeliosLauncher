@@ -1349,9 +1349,10 @@ function saveModConfiguration() {
  */
 function _saveModConfiguration(modConf) {
     for (let m of Object.entries(modConf)) {
+        if (!settingsModsContainer) break
         const tSwitch = settingsModsContainer.querySelectorAll(`[formod='${m[0]}']`)
 
-        if (tSwitch.length > 0) {
+        if (tSwitch && tSwitch.length > 0 && tSwitch[0]) {
             if (tSwitch[0].hasAttribute('dropin')) {
                 continue
             }
@@ -1555,9 +1556,12 @@ function setShadersOptions(arr, selected) {
 
 function saveShaderpackSettings() {
     let sel = 'OFF'
-    for (let opt of document.getElementById('settingsShadersOptions').childNodes) {
-        if (opt.hasAttribute('selected')) {
-            sel = opt.getAttribute('value')
+    const optionsContainer = document.getElementById('settingsShadersOptions')
+    if (optionsContainer) {
+        for (let opt of optionsContainer.children) {
+            if (opt.hasAttribute('selected')) {
+                sel = opt.getAttribute('value')
+            }
         }
     }
     DropinModUtil.setEnabledShaderpack(CACHE_SETTINGS_INSTANCE_DIR, sel)

@@ -253,7 +253,9 @@ ipcMain.on('autoUpdateAction', (event, arg, data) => {
             case 'initAutoUpdater':
                 console.log('Initializing auto updater.')
                 initAutoUpdater(event, data)
-                event.sender.send('autoUpdateNotification', 'ready')
+                if (event.sender && !event.sender.isDestroyed()) {
+                    event.sender.send('autoUpdateNotification', 'ready')
+                }
                 break
             case 'checkForUpdate':
                 autoUpdater.checkForUpdates()
