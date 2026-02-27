@@ -38,7 +38,7 @@ class LaunchController {
         ipcMain.handle('dl:downloadJava', async (event, options) => {
             const { major, distribution } = options;
             const JavaGuard = require('./java/JavaGuard');
-            const { downloadFile } = require('./dl/DownloadEngine');
+            const { downloadFile, cleanupStaleTempFiles } = require('./dl/DownloadEngine');
 
             // 1. Resolve Asset
             // Default to 8 if not provided (safe fallback)
@@ -82,6 +82,10 @@ class LaunchController {
 
         // Ensure P2P Engine is started in Main
         P2PEngine.start();
+
+        // Run background stale .tmp file cleanup once on startup
+        const { cleanupStaleTempFiles: startCleanup } = require('./dl/DownloadEngine');
+        startCleanup().catch(e => log.error('Initial Cleanup Error:', e));
     }
 
     async startDownload(options) {

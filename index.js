@@ -461,7 +461,8 @@ function createWindow() {
     win.loadURL(pathToFileURL(path.join(__dirname, 'app', 'app.ejs')).toString())
 
     // Initial load failure handling
-    win.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    win.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+        if (!isMainFrame) return
         console.error('Window failed to load:', errorDescription)
         showCriticalError(`Failed to load: ${errorDescription} (${errorCode})`)
     })
@@ -481,7 +482,7 @@ function createWindow() {
     startupWatchdog = setTimeout(() => {
         if (win && !win.isDestroyed()) {
             console.error('[Watchdog] Startup timeout reached. Launcher stuck on logo?')
-            showCriticalError('Launcher failed to start (Timeout - Stuck on logo)')
+            // showCriticalError('Launcher failed to start (Timeout - Stuck on logo)')
         }
     }, 30000)
 

@@ -67,9 +67,6 @@ async function cleanupStaleTempFiles() {
 }
 
 async function downloadQueue(assets, onProgress) {
-    // Run cleanup in background (don't await)
-    cleanupStaleTempFiles().catch(e => log.error('Cleanup Error:', e));
-
     P2PEngine.start();
     const limit = MAX_PARALLEL_DOWNLOADS;
     const receivedTotals = assets.reduce((acc, a) => ({ ...acc, [a.id]: 0 }), {});
@@ -422,4 +419,4 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
 
 
 
-module.exports = { downloadQueue, downloadFile }
+module.exports = { downloadQueue, downloadFile, cleanupStaleTempFiles }

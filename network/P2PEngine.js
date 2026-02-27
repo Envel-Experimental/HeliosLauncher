@@ -312,7 +312,7 @@ class P2PEngine extends EventEmitter {
             }
 
             this.dht = new HyperDHT({
-                ephemeral: false,
+                ephemeral: true,
                 bootstrap: Config.BOOTSTRAP_NODES.map(n => ({
                     host: n.host,
                     port: n.port,
