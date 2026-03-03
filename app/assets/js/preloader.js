@@ -30,6 +30,7 @@ const { DistroAPI } = require('./distromanager')
 const LangLoader = require('./langloader')
 const { LoggerUtil } = require('./core/util/LoggerUtil')
 const { retry, fetchWithTimeout } = require('./util')
+const isDev = require('./isdev')
 let Sentry
 
 const logger = LoggerUtil.getLogger('Preloader')
@@ -40,7 +41,7 @@ async function preloader() {
     LangLoader.setupLanguage()
 
     try {
-        if (process.env.NODE_ENV !== 'development') {
+        if (!isDev) {
             Sentry = require('@sentry/electron/renderer')
             let releaseVersion = 'unknown'
             try {

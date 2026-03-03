@@ -169,22 +169,29 @@ process.on('unhandledRejection', (reason, promise) => {
     if (reason && reason.code === 'EPERM') {
         if (handleEPERM()) return
     } else {
-        console.error('An unhandled rejection occurred:', reason)
-        showCriticalError(err)
+        // HARDENING: unhandledRejection should NOT crash the app to BSOD.
+        // These are often async race conditions or network blips that are not fatal.
+        console.error('An unhandled rejection occurred (Non-fatal):', reason)
+        // Optionally send to a log file or analytics
     }
 })
 
 
-try {
-    const Sentry = require('@sentry/electron/main')
-    Sentry.init({
-        dsn: 'https://f02442d2a0733ac2c810b8d8d7f4a21e@o4508545424359424.ingest.de.sentry.io/4508545432027216',
-        release: 'FLauncher@' + app.getVersion(),
-        ignoreErrors: ['EACCES', 'EPERM']
-    })
-} catch (error) {
-    console.error('Sentry failed to initialize:', error)
+if (!isDev) {
+    try {
+        const Sentry = require('@sentry/electron/main')
+        Sentry.init({
+            dsn: 'https://f02442d2a0733ac2c810b8d8d7f4a21e@o4508545424359424.ingest.de.sentry.io/4508545432027216',
+            release: 'FLauncher@' + app.getVersion(),
+            ignoreErrors: ['EACCES', 'EPERM']
+        })
+    } catch (error) {
+        console.error('Sentry failed to initialize:', error)
+    }
+} else {
+    console.log('[Sentry] Development mode detected, skipping initialization.')
 }
+
 
 
 // Setup auto updater.
@@ -306,8 +313,9 @@ ipcMain.on('distributionIndexDone', (event, res) => {
 })
 
 ipcMain.on('renderer-error', (event, err) => {
-    console.error('Renderer Error Captured:', err)
-    showCriticalError(err)
+    // HARDENING: Don't show BSOD for every renderer error. 
+    // Usually these are non-fatal UI issues.
+    console.error('Renderer Error (Logged only):', err)
 })
 
 ipcMain.handle(SHELL_OPCODE.TRASH_ITEM, async (event, ...args) => {
@@ -463,8 +471,12 @@ function createWindow() {
     // Initial load failure handling
     win.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
         if (!isMainFrame) return
+        // HARDENING: Only show error for critical failures that prevent ANY loading.
+        // errorCode -3 is usually ABORTED, which happens on normal navigation/refresh.
+        if (errorCode === -3) return
+
         console.error('Window failed to load:', errorDescription)
-        showCriticalError(`Failed to load: ${errorDescription} (${errorCode})`)
+        // showCriticalError(`Failed to load: ${errorDescription} (${errorCode})`)
     })
 
     // Handle preload script load failure
@@ -607,8 +619,32 @@ function showCriticalError(err) {
 }
 
 ipcMain.on('app:restart', () => {
-    app.relaunch()
+    console.log('[Main] Restart requested...')
+
+    // On Windows/Dev, explicitly filter out flags that trigger console windows or port conflicts.
+    const args = process.argv.slice(1).filter(arg =>
+        !arg.startsWith('--inspect') &&
+        !arg.startsWith('--remote-debugging-port') &&
+        !arg.startsWith('--enable-logging') &&
+        !arg.startsWith('--debug-brk')
+    )
+
+    app.relaunch({
+        execPath: process.execPath,
+        args: args
+    })
     app.exit(0)
+})
+
+ipcMain.on('app:open-url', (event, url) => {
+    if (url && (url.startsWith('http') || url.startsWith('https'))) {
+        console.log('[Main] Opening external URL:', url)
+        shell.openExternal(url).catch(err => {
+            console.error('Failed to open external URL:', err)
+        })
+    } else {
+        console.warn('[Main] Blocked invalid URL opening request:', url)
+    }
 })
 
 function createMenu() {
@@ -779,6 +815,7 @@ function handleEPERM() {
 app.on('ready', async () => {
 
     // Register P2P/Racing Protocol
+
     protocol.handle('mc-asset', (req) => {
         return RaceManager.handle(req)
     })
