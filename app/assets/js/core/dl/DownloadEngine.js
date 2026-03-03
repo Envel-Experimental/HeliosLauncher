@@ -67,7 +67,10 @@ async function cleanupStaleTempFiles() {
 }
 
 async function downloadQueue(assets, onProgress) {
-    P2PEngine.start();
+    // Make sure we catch any async initialization errors from P2PEngine
+    P2PEngine.start().catch(e => {
+        log.warn('[DownloadEngine] P2PEngine failed to start (Unhandled Async). Falling back entirely to HTTP.', e);
+    });
     const limit = MAX_PARALLEL_DOWNLOADS;
     const receivedTotals = assets.reduce((acc, a) => ({ ...acc, [a.id]: 0 }), {});
     let receivedGlobal = 0;

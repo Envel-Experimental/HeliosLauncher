@@ -227,6 +227,10 @@ class P2PEngine extends EventEmitter {
         try {
             await PeerPersistence.load()
             await this.init()
+        } catch (e) {
+            console.error('[P2PEngine] Unhandled exception during P2PEngine initialization. Gracefully degrading to HTTP-only.', e)
+            this.stop()
+            return
         } finally {
             this.starting = false
         }
