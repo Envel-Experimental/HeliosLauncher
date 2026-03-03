@@ -140,7 +140,20 @@ exports.analyzeLog = function (logContent) {
         };
     }
 
-    // 8. OpenGL Out of Memory / Internal Error
+    // 8. Java/System OutOfMemoryError (System RAM Exhaustion)
+    // Put this before GPU OOM, because if system RAM is exhausted, GPU drivers often fail to allocate too,
+    // leading to a false "Update your video drivers/Decrease video settings" message.
+    if (logContent.includes('java.lang.OutOfMemoryError') ||
+        logContent.includes('Native memory allocation (malloc) failed') ||
+        logContent.includes('insufficient memory for the Java Runtime Environment')) {
+        return {
+            type: 'java-oom',
+            file: 'Memory',
+            description: "Недостаточно оперативной памяти."
+        };
+    }
+
+    // 9. OpenGL Out of Memory / Internal Error
     if (logContent.includes('GL_OUT_OF_MEMORY') ||
         logContent.includes('The NVIDIA OpenGL driver has encountered an out of memory error')) {
         return {
@@ -174,7 +187,7 @@ exports.analyzeLog = function (logContent) {
         };
     }
 
-    // 11. Java Native Library Corruption (UnsatisfiedLinkError)
+    // 12. Java Native Library Corruption (UnsatisfiedLinkError)
     if (logContent.includes('java.lang.UnsatisfiedLinkError') && (
         logContent.includes('awt') ||
         logContent.includes('net') ||
@@ -186,15 +199,6 @@ exports.analyzeLog = function (logContent) {
             type: 'java-corruption',
             file: 'Java Natives',
             description: "Критическая ошибка Java: повреждены нативные библиотеки. Требуется переустановка Java."
-        };
-    }
-
-    // 12. Java Heap OutOfMemoryError
-    if (logContent.includes('java.lang.OutOfMemoryError')) {
-        return {
-            type: 'java-oom',
-            file: 'Memory',
-            description: "Недостаточно оперативной памяти."
         };
     }
 

@@ -317,6 +317,13 @@ exports.isFirstLaunch = function () {
 }
 
 /**
+ * Mark the first launch process as completed.
+ */
+exports.markFirstLaunchCompleted = function () {
+    firstLaunch = false
+}
+
+/**
  * Returns the name of the folder in the OS temp directory which we
  * will use to extract and store native dependencies for game launch.
  *

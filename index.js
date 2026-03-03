@@ -554,6 +554,10 @@ function createWindow() {
             startupWatchdog = null
         }
         console.error('Render process gone:', details)
+        if (details.reason === 'oom') {
+            showCriticalError('Лаунчер был закрыт системой из-за нехватки оперативной памяти (OOM).\nЗакрой лишние фоновые программы или уменьши выделение памяти игре.')
+            return
+        }
         showCriticalError(`RENDER_PROCESS_GONE (${details.reason}): ${details.exitCode}`)
     })
 
@@ -797,6 +801,24 @@ app.on('ready', async () => {
     // Initialize LaunchController
     const LaunchController = require('./app/assets/js/core/LaunchController')
     LaunchController.init()
+
+    // Handle system power events to prevent Wi-Fi adapter crash from P2PEngine flooding
+    powerMonitor.on('suspend', () => {
+        console.log('[PowerMonitor] System suspended. Pausing P2PEngine.')
+        P2PEngine.stop()
+    })
+    powerMonitor.on('resume', () => {
+        console.log('[PowerMonitor] System resumed. Restarting P2PEngine.')
+        setTimeout(() => P2PEngine.start(), 5000)
+    })
+    powerMonitor.on('lock-screen', () => {
+        console.log('[PowerMonitor] Screen locked. Pausing P2PEngine.')
+        P2PEngine.stop()
+    })
+    powerMonitor.on('unlock-screen', () => {
+        console.log('[PowerMonitor] Screen unlocked. Restarting P2PEngine.')
+        setTimeout(() => P2PEngine.start(), 3000)
+    })
 
     // Initialize Mirror Manager
     MirrorManager.init(MOJANG_MIRRORS)

@@ -180,7 +180,7 @@ class GameCrashHandler {
                 // Found a specific Java exception (e.g. java.lang.UnsatisfiedLinkError)
                 // Use this as the error message so Sentry groups them together
                 sentryMessage = `Game Crash: ${exceptionMatch[1]}`
-            } else if (fullLog.includes('Out of memory')) {
+            } else if (fullLog.includes('Out of memory') || fullLog.includes('Native memory allocation (malloc) failed')) {
                 sentryMessage = 'Game Crash: Out of Memory'
             } else if (fullLog.includes('EXCEPTION_ACCESS_VIOLATION')) {
                 sentryMessage = 'Game Crash: Native Access Violation'
@@ -193,7 +193,10 @@ class GameCrashHandler {
             sentryMessage += `\n\n--- Log Tail ---\n${logTail}`
         }
 
-        sendToSentry(sentryMessage, sentryType)
+        // Ignore Sentry reports for Game OOM (it's user's machine exhaustion, not our bug)
+        if (!sentryMessage.includes('Game Crash: Out of Memory')) {
+            sendToSentry(sentryMessage, sentryType)
+        }
 
         // Check for Support URL again (in case preloader failed or config desync)
         let supportUrl = ConfigManager.getSupportUrl()
