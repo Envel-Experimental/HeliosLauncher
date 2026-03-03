@@ -116,8 +116,31 @@ async function fullMicrosoftAuthFlow(entryCode, authMode) {
         const mcTokenResponse = await MicrosoftAuth.getMCAccessToken(xstsResonse.data)
         if (mcTokenResponse.responseStatus === RestResponseStatus.ERROR) throw new Error(mcTokenResponse.microsoftErrorCode)
 
-        const mcProfileResponse = await MicrosoftAuth.getMCProfile(mcTokenResponse.data.access_token)
-        if (mcProfileResponse.responseStatus === RestResponseStatus.ERROR) throw new Error(mcProfileResponse.microsoftErrorCode)
+        let mcProfileResponse = await MicrosoftAuth.getMCProfile(mcTokenResponse.data.access_token)
+        if (mcProfileResponse.responseStatus === RestResponseStatus.ERROR) {
+            if (mcProfileResponse.microsoftErrorCode === MicrosoftErrorCode.NO_PROFILE) {
+                let username = 'Player'
+                try {
+                    if (xstsResonse && xstsResonse.data && xstsResonse.data.DisplayClaims && xstsResonse.data.DisplayClaims.xui && xstsResonse.data.DisplayClaims.xui.length > 0) {
+                        if (xstsResonse.data.DisplayClaims.xui[0].gtg) {
+                            username = xstsResonse.data.DisplayClaims.xui[0].gtg
+                        }
+                    }
+                } catch (e) {
+                    // Ignore extraction errors
+                }
+                const uuidHex = generateOfflineUUID(username).replace(/-/g, '')
+                mcProfileResponse = {
+                    responseStatus: RestResponseStatus.SUCCESS,
+                    data: {
+                        id: uuidHex,
+                        name: username
+                    }
+                }
+            } else {
+                throw new Error(mcProfileResponse.microsoftErrorCode)
+            }
+        }
 
         return {
             accessToken,
