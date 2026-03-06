@@ -105,7 +105,7 @@ exports.addDropinMods = function (files, modsdir) {
  * @returns {Promise.<boolean>} True if the mod was deleted, otherwise false.
  */
 exports.deleteDropinMod = async function (modsDir, fullName) {
-
+    /** @type {boolean} */
     const res = await ipcRenderer.invoke(SHELL_OPCODE.TRASH_ITEM, path.join(modsDir, fullName))
 
     if (!res.result) {

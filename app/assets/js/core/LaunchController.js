@@ -1,17 +1,32 @@
+// @ts-check
+
 const { ipcMain } = require('electron');
 const { FullRepair } = require('./dl/FullRepair');
 const ConfigManager = require('../configmanager');
 const P2PEngine = require('../../../../network/P2PEngine');
 const { LoggerUtil } = require('./util/LoggerUtil');
 
+/**
+ * @typedef {import('electron').BrowserWindow} BrowserWindow
+ */
+
 const log = LoggerUtil.getLogger('LaunchController');
 
 class LaunchController {
     constructor() {
+        /**
+         * @type {BrowserWindow | null}
+         */
         this.mainWindow = null;
+        /**
+         * @type {FullRepair | null}
+         */
         this.repair = null;
     }
 
+    /**
+     * @param {BrowserWindow} window
+     */
     setWindow(window) {
         this.mainWindow = window;
     }
@@ -88,6 +103,10 @@ class LaunchController {
         startCleanup().catch(e => log.error('Initial Cleanup Error:', e));
     }
 
+    /**
+     * @param {{ version: string, serverId: string }} options
+     * @returns {Promise<{ success: boolean }>}
+     */
     async startDownload(options) {
         const { version, serverId } = options;
         log.info(`Starting download for Server: ${serverId}, Version: ${version}`);

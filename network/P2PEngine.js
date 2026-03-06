@@ -1,3 +1,4 @@
+// @ts-check
 const Hyperswarm = require('hyperswarm')
 const HyperDHT = require('hyperdht')
 const b4a = require('b4a')
@@ -24,6 +25,10 @@ class UsageTracker {
         this.data = new Map() // IP -> { credits: number, lastUpdate: number }
     }
 
+    /**
+     * @param {string} key 
+     * @returns {number}
+     */
     getCredits(key) {
         const { MAX_CREDITS_PER_IP, CREDIT_REGEN_RATE } = require('./constants')
         let entry = this.data.get(key)
@@ -50,6 +55,10 @@ class UsageTracker {
         return entry.credits
     }
 
+    /**
+     * @param {string} key 
+     * @param {number} amountMB 
+     */
     consume(key, amountMB) {
         const current = this.getCredits(key)
         const entry = this.data.get(key)
@@ -58,6 +67,11 @@ class UsageTracker {
         }
     }
 
+    /**
+     * @param {string} key 
+     * @param {number} amountMB 
+     * @returns {boolean}
+     */
     reserve(key, amountMB) {
         const current = this.getCredits(key)
         if (current >= amountMB) {
@@ -68,6 +82,10 @@ class UsageTracker {
         return false
     }
 
+    /**
+     * @param {string} key 
+     * @param {number} amountMB 
+     */
     refund(key, amountMB) {
         const { MAX_CREDITS_PER_IP } = require('./constants')
         const entry = this.data.get(key)
@@ -90,18 +108,24 @@ class UsageTracker {
 class P2PEngine extends EventEmitter {
     constructor() {
         super()
+        /** @type {PeerHandler[]} */
         this.peers = [] // Array of PeerHandler
+        /** @type {Map<number, { stream: Readable, peer: PeerHandler, expectedSize: number, timestamp: number, bytesReceived: number, resolve: Function, reject: Function }>} */
         this.requests = new Map() // reqId -> { stream: Readable, timeout: Timer }
+        /** @type {Set<string>} */
         this.blacklist = new Set() // IP/PubKey strings
+        /** @type {Map<string, number>} */
         this.peerStrikes = new Map() // Peer IP -> strikes count
         this.setMaxListeners(100)
         this.usageTracker = new UsageTracker()
 
         this.starting = false
         this.stopping = false
+        /** @type {Promise<boolean> | null} */
         this._discoveryPromise = null
         this.profile = NodeAdapter.getProfile()
         this.activeUploads = 0
+        /** @type {Map<string, number>} */
         this.uploadCounts = new Map() // IP -> Count
 
         this.totalUploaded = 0
@@ -209,6 +233,9 @@ class P2PEngine extends EventEmitter {
         }, 2000)
     }
 
+    /**
+     * @param {any} rm 
+     */
     setRaceManager(rm) {
         this.raceManager = rm
     }
@@ -296,14 +323,18 @@ class P2PEngine extends EventEmitter {
         this.stopping = false
     }
 
+    /**
+     * @param {string} ip 
+     * @returns {boolean}
+     */
     isLocalIP(ip) {
         if (!ip) return false
         if (ip.startsWith('::ffff:')) ip = ip.substring(7)
 
-        // Comprehensive Local Check (Regex optimized for common ranges)
-        // Includes: 127.0.0.1, 192.168.x.x, 10.x.x.x, 172.16-31.x.x, 169.254.x.x (APIPA)
-        // Also: 100.64.0.0/10 (CGNAT/VPN), fe80:: (IPv6 LL), ::1 (IPv6 Loopback)
-        return /^(127\.|192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.|169\.254\.|100\.(6[4-9]|[7-9]\d|1[0-1]\d|12[0-7])\.|fe80::|::1$)/.test(ip) || ip === '::1'
+        // Comprehensive Local Check (IPv4 + IPv6)
+        // IPv4: 127.0.0.1, 192.168.x.x, 10.x.x.x, 172.16-31.x.x, 169.254.x.x, 100.64.0.0/10
+        // IPv6: fe80:: (Link-local), ::1 (Loopback), fc00::/7 (Unique local)
+        return /^(127\.|192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.|169\.254\.|100\.(6[4-9]|[7-9]\d|1[0-1]\d|12[0-7])\.|fe80:|fc00:|fd[0-9a-f]{2}:|::1$)/i.test(ip) || ip === '::1'
     }
 
     async init() {
@@ -459,25 +490,16 @@ class P2PEngine extends EventEmitter {
         }
     }
 
-    getLoadStatus() {
-        if (!this.swarm || this.peers.length === 0) return 'offline'
-        const reqs = this.requests.size
-        const peers = this.peers.length
 
-        // "Ambition Control"
-        // If we have very few peers (e.g. 1), we shouldn't pile on too many requests.
-        // Ratio: 3 requests per peer is "Busy", 6 is "Overloaded" (Allow more deep queue for single peer)
-        if (reqs > peers * 6) return 'overloaded'
-        if (reqs > peers * 3) return 'busy'
-        return 'ok'
-    }
 
-    getOptimalConcurrency(defaultLimit = 32) {
-        if (!this.swarm || this.peers.length === 0) return defaultLimit
-        // "Calculate strength": 6 threads per peer, clamped between 6 and defaultLimit
-        return Math.max(6, Math.min(defaultLimit, this.peers.length * 6))
-    }
-
+    /**
+     * @param {string} hash 
+     * @param {number} expectedSize 
+     * @param {string | null} relPath 
+     * @param {string | null} fileId 
+     * @param {number} startOffset 
+     * @returns {Readable}
+     */
     requestFile(hash, expectedSize = 0, relPath = null, fileId = null, startOffset = 0) {
         // if (isDev) console.debug(`[P2P Debug] requestFile called for ${hash.substring(0, 8)} (${fileId || 'n/a'}) Offset: ${startOffset}`)
         const stream = new Readable({
@@ -595,6 +617,15 @@ class P2PEngine extends EventEmitter {
         stream.emit('error', new Error('Download failed after exhausted peer list'))
     }
 
+    /**
+     * @param {PeerHandler} peer 
+     * @param {Readable} stream 
+     * @param {string} hash 
+     * @param {number} expectedSize 
+     * @param {string | null} relPath 
+     * @param {string | null} fileId 
+     * @param {number} startOffset 
+     */
     _executeSingleRequest(peer, stream, hash, expectedSize, relPath, fileId, startOffset = 0) {
         return new Promise((resolve, reject) => {
             // VULNERABILITY FIX: Hard Cap mechanisms for Requests Map
@@ -684,6 +715,7 @@ class P2PEngine extends EventEmitter {
             const tolerance = 1048576 // 1MB
             if (req.expectedSize > 0 && req.bytesReceived > (req.expectedSize + tolerance)) {
                 if (isDev) console.error(`[P2P Security] Peer ${req.peer.getIP()} sent too many bytes! Received: ${req.bytesReceived}, Expected: ${req.expectedSize}`)
+                /** @type {Error & { bytesReceived?: number }} */
                 const err = new Error('File size exceeded security limit')
                 err.bytesReceived = req.bytesReceived
                 req.reject(err) // Fix: Reject the request to propagate error
@@ -706,6 +738,7 @@ class P2PEngine extends EventEmitter {
 
             // Strict Size Validation
             if (req.expectedSize > 0 && req.bytesReceived !== req.expectedSize) {
+                /** @type {Error & { bytesReceived?: number }} */
                 const err = new Error(`Incomplete transfer: Received ${req.bytesReceived} of ${req.expectedSize}`)
                 err.bytesReceived = req.bytesReceived
                 req.reject(err)
@@ -719,6 +752,7 @@ class P2PEngine extends EventEmitter {
             const duration = (Date.now() - req.timestamp) / 1000
             if (duration > 0 && req.bytesReceived > 102400) {
                 const speed = req.bytesReceived / duration
+                // @ts-ignore
                 req.peer.lastTransferSpeed = speed
             }
 
@@ -732,6 +766,7 @@ class P2PEngine extends EventEmitter {
             if (req.peer !== senderPeer) return;
 
             const msg = messageBuffer.toString('utf-8')
+            /** @type {Error & { bytesReceived?: number }} */
             const err = new Error(`Peer error: ${msg}`)
             err.bytesReceived = req.bytesReceived
             req.reject(err)
@@ -876,12 +911,13 @@ class P2PEngine extends EventEmitter {
 
     _getRoutingTableSize() {
         if (!this.dht) return 0
+        const dhtAny = /** @type {any} */(this.dht)
         const candidates = [
             this.dht.nodes,
-            this.dht.routingTable,
-            this.dht.table,
-            this.dht._dht?.nodes,
-            this.dht.kbucket
+            dhtAny.routingTable,
+            dhtAny.table,
+            dhtAny._dht?.nodes,
+            dhtAny.kbucket
         ]
 
         for (const table of candidates) {
@@ -942,6 +978,10 @@ class P2PEngine extends EventEmitter {
         // }
     }
 
+    /**
+     * @param {number} baseLimit 
+     * @returns {number}
+     */
     getOptimalConcurrency(baseLimit) {
         const { MIN_PARALLEL_DOWNLOADS, MAX_PARALLEL_DOWNLOADS, PEER_CONCURRENCY_FACTOR } = require('./constants')
         const ResourceMonitor = require('./ResourceMonitor')
@@ -983,6 +1023,9 @@ class P2PEngine extends EventEmitter {
         return Math.max(MIN_PARALLEL_DOWNLOADS, Math.min(MAX_PARALLEL_DOWNLOADS, final))
     }
 
+    /**
+     * @returns {string}
+     */
     getLoadStatus() {
         // Simple heuristic: if we have many active requests relative to peer count
         if (this.peers.length === 0) return 'idle'
@@ -1147,7 +1190,7 @@ class P2PEngine extends EventEmitter {
             for (const details of iface) {
                 // We care about address and status (implied by existence)
                 // We ignore 'internal' loopback for fingerprinting usually, but for P2P restart it might matter if ONLY loopback exists.
-                if (!details.internal && (details.family === 'IPv4' || details.family === 4)) {
+                if (!details.internal && (details.family === 'IPv4' || /** @type {any} */(details.family) === 4)) {
                     fingerprint += `${key}:${details.address}|`
                 }
             }

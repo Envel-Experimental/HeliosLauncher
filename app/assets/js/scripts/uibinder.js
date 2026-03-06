@@ -495,6 +495,10 @@ document.addEventListener('readystatechange', async () => {
 }, false)
 
 // Actions that must be performed after the distribution index is downloaded.
+/**
+ * @param {import('electron').IpcRendererEvent} event
+ * @param {any} res
+ */
 ipcRenderer.on('distributionIndexDone', async (event, res) => {
     if (res) {
         const data = await DistroAPI.getDistribution()
@@ -526,6 +530,9 @@ ipcRenderer.on('distributionIndexDone', async (event, res) => {
     }
 })
 
+/**
+ * Handle system power resume
+ */
 ipcRenderer.on('power-resume', async () => {
     if (!fatalStartupError) {
         const data = await DistroAPI.getDistribution()

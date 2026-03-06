@@ -1,3 +1,5 @@
+// @ts-check
+
 const { LoggerUtil } = require('../util/LoggerUtil');
 const { validateLocalFile, safeEnsureDir } = require('../common/FileUtils');
 const { ensureDecodedPath, sleep } = require('../util/NodeUtil');
@@ -13,6 +15,10 @@ const ConfigManager = require('../../configmanager');
 const isDev = require('../../isdev');
 const MirrorManager = require('../../../../../network/MirrorManager');
 
+/**
+ * @typedef {import('../../../../../types').HeliosDistributionData} HeliosDistributionData
+ */
+
 const log = LoggerUtil.getLogger('DownloadEngine');
 
 // Global HTTP Throttling
@@ -23,6 +29,11 @@ let activeHttpRequests = 0;
 let lastCleanup = 0;
 const CLEANUP_INTERVAL = 1000 * 60 * 60; // Run at most once per hour
 
+/**
+ * Clears old `.tmp` files left over from failed downloads.
+ * 
+ * @returns {Promise<void>}
+ */
 async function cleanupStaleTempFiles() {
     const now = Date.now();
     if (now - lastCleanup < CLEANUP_INTERVAL) return;
@@ -66,6 +77,13 @@ async function cleanupStaleTempFiles() {
     }
 }
 
+/**
+ * Processes a queue of assets to download, utilizing parallel downloads and P2P logic.
+ * 
+ * @param {Array<any>} assets An array of asset objects to download.
+ * @param {Function} [onProgress] Callback function for progress tracking.
+ * @returns {Promise<Record<string, number>>} A promise resolving to an object mapping asset IDs to received bytes.
+ */
 async function downloadQueue(assets, onProgress) {
     // Make sure we catch any async initialization errors from P2PEngine
     P2PEngine.start().catch(e => {
@@ -167,6 +185,15 @@ async function downloadQueue(assets, onProgress) {
     return receivedTotals;
 }
 
+/**
+ * Downloads a single file with resilience and retry logic.
+ * 
+ * @param {any} asset The asset to download.
+ * @param {Function} [onProgress] Callback function for progress tracking.
+ * @param {boolean} [forceHTTP=false] Whether to bypass P2P and force HTTP.
+ * @param {boolean} [instantDefer=false] Whether to fail fast (defer) if no peers are found and P2P is preferred.
+ * @returns {Promise<void>}
+ */
 async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer = false) {
     if (!asset || !asset.path) {
         throw new Error('Asset or asset path is null or undefined.');

@@ -36,6 +36,11 @@ webFrame.setVisualZoomLevelLimits(1, 1)
 
 // Initialize auto updates in production environments.
 let updateCheckListener
+/**
+ * @param {import('electron').IpcRendererEvent} event
+ * @param {string} arg
+ * @param {any} info
+ */
 ipcRenderer.on('autoUpdateNotification', (event, arg, info) => {
     switch (arg) {
         case 'checking-for-update':
@@ -383,6 +388,10 @@ function showNextWarning() {
     }
 }
 
+/**
+ * @param {import('electron').IpcRendererEvent} event
+ * @param {any[]} warnings
+ */
 ipcRenderer.on('system-warnings', (event, warnings) => {
     if (warnings && warnings.length > 0) {
         warningQueue = warnings

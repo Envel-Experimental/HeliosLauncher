@@ -4,7 +4,7 @@ const path = require('path')
 /**
  * Asynchronously retries a function with a specified number of attempts and delay.
  */
-exports.retry = async function (func, retries = 3, delay = 1000, isRetryable = () => true) {
+exports.retry = async function (func, retries = 3, delay = 1000, isRetryable = (err) => true) {
     for (let i = 0; i < retries; i++) {
         try {
             return await func()

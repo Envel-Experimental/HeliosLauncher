@@ -1,3 +1,5 @@
+// @ts-check
+
 const crypto = require('crypto');
 const { resolve } = require('path');
 const fs = require('fs/promises');
@@ -9,6 +11,14 @@ const { fetchWithTimeout } = require('../../util');
 class DistributionAPI {
     static log = LoggerUtil.getLogger('DistributionAPI');
 
+    /**
+     * @param {string} launcherDirectory 
+     * @param {string} commonDir 
+     * @param {string} instanceDir 
+     * @param {string | string[]} remoteUrls 
+     * @param {boolean} devMode 
+     * @param {string[]} [trustedKeys] 
+     */
     constructor(launcherDirectory, commonDir, instanceDir, remoteUrls, devMode, trustedKeys) {
         this.launcherDirectory = launcherDirectory;
         this.commonDir = commonDir;
@@ -21,10 +31,19 @@ class DistributionAPI {
         this.DISTRO_FILE_DEV = 'distribution_dev.json';
         this.distroPath = resolve(launcherDirectory, this.DISTRO_FILE);
         this.distroDevPath = resolve(launcherDirectory, this.DISTRO_FILE_DEV);
+        /**
+         * @type {DistributionData | null}
+         */
         this.rawDistribution = null;
+        /**
+         * @type {HeliosDistribution | null}
+         */
         this.distribution = null;
     }
 
+    /**
+     * @returns {Promise<HeliosDistribution>}
+     */
     async getDistribution() {
         if (this.rawDistribution == null) {
             this.rawDistribution = await this.loadDistribution();
@@ -33,6 +52,9 @@ class DistributionAPI {
         return this.distribution;
     }
 
+    /**
+     * @returns {Promise<HeliosDistribution>}
+     */
     async getDistributionLocalLoadOnly() {
         if (this.rawDistribution == null) {
             const x = await this.pullLocal();
@@ -45,6 +67,9 @@ class DistributionAPI {
         return this.distribution;
     }
 
+    /**
+     * @returns {Promise<HeliosDistribution | null>}
+     */
     async refreshDistributionOrFallback() {
         const distro = await this._loadDistributionNullable();
         if (distro == null) {
@@ -58,6 +83,9 @@ class DistributionAPI {
         }
     }
 
+    /**
+     * @param {boolean} dev 
+     */
     toggleDevMode(dev) {
         this.devMode = dev;
     }
@@ -66,6 +94,9 @@ class DistributionAPI {
         return this.devMode;
     }
 
+    /**
+     * @returns {Promise<DistributionData>}
+     */
     async loadDistribution() {
         const distro = await this._loadDistributionNullable();
         if (distro == null) {
@@ -74,8 +105,12 @@ class DistributionAPI {
         return distro;
     }
 
+    /**
+     * @returns {Promise<DistributionData | null>}
+     */
     async _loadDistributionNullable() {
-        let distro;
+        /** @type {DistributionData | null} */
+        let distro = null;
         if (!this.devMode) {
             distro = (await this.pullRemote()).data;
             if (distro == null) {
@@ -153,6 +188,7 @@ class DistributionAPI {
                 console.log('[DistributionAPI] Final signatureValid state:', signatureValid);
 
                 if (!signatureValid && this.trustedKeys && this.trustedKeys.length > 0) {
+                    /** @type {Error & { dataPackage?: any }} */
                     const err = new Error('Distribution signature verification failed.');
                     err.dataPackage = {
                         data: data,
@@ -169,14 +205,11 @@ class DistributionAPI {
                     signatureValid: signatureValid
                 };
 
-            } catch (error) {
+            } catch (err) {
+                /** @type {Error & { dataPackage?: any }} */
+                const error = err instanceof Error ? err : new Error(String(err));
                 console.error(`[DistributionAPI] Pull Failed from ${url}:`, error.message);
                 lastError = error;
-                // If signature validation failed (detected via dataPackage), we might want to return that error immediately
-                // to trigger the overlay prompt instead of trying next mirror?
-                // Actually, if signature fails on mirror A, we should probably try mirror B.
-                // But the `distromanager` logic expects a specific error structure to show the overlay.
-                // If ALL fail, we return the last error.
                 if (error.dataPackage && error.dataPackage.signatureValid === false) {
                     console.warn('[DistributionAPI] Signature validation failed. Trying next mirror...');
                     lastError = error; // Save this specific error as it's more informative
@@ -189,14 +222,24 @@ class DistributionAPI {
         return handleFetchError('Pull Remote', lastError || new Error('All mirrors failed'), DistributionAPI.log);
     }
 
+    /**
+     * @param {DistributionData} distribution 
+     */
     async writeDistributionToDisk(distribution) {
         await fs.writeFile(this.distroPath, JSON.stringify(distribution, null, 4));
     }
 
+    /**
+     * @returns {Promise<DistributionData | null>}
+     */
     async pullLocal() {
         return await this.readDistributionFromFile(!this.devMode ? this.distroPath : this.distroDevPath);
     }
 
+    /**
+     * @param {string} path 
+     * @returns {Promise<DistributionData | null>}
+     */
     async readDistributionFromFile(path) {
         try {
             await fs.access(path);

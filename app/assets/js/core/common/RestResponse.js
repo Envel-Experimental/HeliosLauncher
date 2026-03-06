@@ -1,8 +1,24 @@
+// @ts-check
+
+/**
+ * @typedef {Object} RestResponse
+ * @property {any} data
+ * @property {string} responseStatus
+ * @property {any} [error]
+ */
+
+/**
+ * @enum {string}
+ */
 const RestResponseStatus = {
     SUCCESS: 'SUCCESS',
     ERROR: 'ERROR'
 }
 
+/**
+ * @param {any} it
+ * @returns {boolean}
+ */
 function isDisplayableError(it) {
     return typeof it == 'object'
         && it != null
@@ -10,6 +26,13 @@ function isDisplayableError(it) {
         && Object.prototype.hasOwnProperty.call(it, 'desc');
 }
 
+/**
+ * @param {string} operation 
+ * @param {any} error 
+ * @param {any} logger 
+ * @param {Function} [dataProvider] 
+ * @returns {Promise<RestResponse>}
+ */
 async function handleFetchError(operation, error, logger, dataProvider) {
     // Serialize Error object to ensure message/stack survive JSON.stringify (IPC)
     let serializedError = error;
@@ -17,7 +40,7 @@ async function handleFetchError(operation, error, logger, dataProvider) {
         serializedError = {
             message: error.message,
             stack: error.stack,
-            code: error.code,
+            code: /** @type {any} */(error).code,
             ...error // Spread any other custom properties
         }
     }

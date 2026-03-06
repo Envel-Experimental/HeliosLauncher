@@ -44,11 +44,12 @@ function tryFixCyrillicTemp() {
 tryFixCyrillicTemp()
 // ====================================================================
 
+// Requirements
+const { app, BrowserWindow, ipcMain, Menu, shell, powerMonitor, dialog, protocol, session } = require('electron')
+
 const remoteMain = require('@electron/remote/main')
 remoteMain.initialize()
 
-// Requirements
-const { app, BrowserWindow, ipcMain, Menu, shell, powerMonitor, dialog, protocol, session } = require('electron')
 const autoUpdater = require('electron-updater').autoUpdater
 const { spawn } = require('child_process')
 const ejse = require('ejs-electron')
@@ -253,7 +254,11 @@ function initAutoUpdater(event, data) {
     autoUpdater.on('checking-for-update', checkingForUpdateListener)
     autoUpdater.on('error', errorListener)
 }
-
+/**
+ * @param {import('electron').IpcMainEvent} event
+ * @param {string} arg
+ * @param {any} data
+ */
 ipcMain.on('autoUpdateAction', (event, arg, data) => {
     if (!event.sender.isDestroyed()) {
         switch (arg) {
@@ -299,7 +304,10 @@ ipcMain.on('autoUpdateAction', (event, arg, data) => {
 })
 
 let startupWatchdog
-
+/**
+ * @param {import('electron').IpcMainEvent} event
+ * @param {any} res
+ */
 ipcMain.on('distributionIndexDone', (event, res) => {
     // Clear watchdog timer when renderer signals it's done with the preloader
     if (startupWatchdog) {
@@ -318,6 +326,11 @@ ipcMain.on('renderer-error', (event, err) => {
     console.error('Renderer Error (Logged only):', err)
 })
 
+/**
+ * @param {import('electron').IpcMainInvokeEvent} event
+ * @param {...any} args
+ * @returns {Promise<{result: boolean, error?: Error}>}
+ */
 ipcMain.handle(SHELL_OPCODE.TRASH_ITEM, async (event, ...args) => {
     try {
         await shell.trashItem(args[0])
@@ -335,6 +348,11 @@ let msftAuthWindow
 let msftAuthSuccess
 let msftAuthViewSuccess
 let msftAuthViewOnClose
+
+/**
+ * @param {import('electron').IpcMainEvent} ipcEvent
+ * @param {...any} arguments_
+ */
 ipcMain.on(MSFT_OPCODE.OPEN_LOGIN, (ipcEvent, ...arguments_) => {
     if (msftAuthWindow) {
         ipcEvent.reply(MSFT_OPCODE.REPLY_LOGIN, MSFT_REPLY_TYPE.ERROR, MSFT_ERROR.ALREADY_OPEN, msftAuthViewOnClose)
@@ -383,6 +401,12 @@ let msftLogoutWindow
 let msftLogoutSuccess
 let msftLogoutSuccessSent
 let msftLogoutTimeout
+
+/**
+ * @param {import('electron').IpcMainEvent} ipcEvent
+ * @param {string} uuid
+ * @param {boolean} isLastAccount
+ */
 ipcMain.on(MSFT_OPCODE.OPEN_LOGOUT, (ipcEvent, uuid, isLastAccount) => {
     if (msftLogoutWindow) {
         ipcEvent.reply(MSFT_OPCODE.REPLY_LOGOUT, MSFT_REPLY_TYPE.ERROR, MSFT_ERROR.ALREADY_OPEN)
@@ -617,8 +641,10 @@ function showCriticalError(err) {
         app.quit()
     })
 }
-
-ipcMain.on('app:restart', () => {
+/**
+ * @param {import('electron').IpcMainEvent} event
+ */
+ipcMain.on('app:restart', (event) => {
     console.log('[Main] Restart requested...')
 
     // On Windows/Dev, explicitly filter out flags that trigger console windows or port conflicts.
@@ -635,7 +661,10 @@ ipcMain.on('app:restart', () => {
     })
     app.exit(0)
 })
-
+/**
+ * @param {import('electron').IpcMainEvent} event
+ * @param {string} url
+ */
 ipcMain.on('app:open-url', (event, url) => {
     if (url && (url.startsWith('http') || url.startsWith('https'))) {
         console.log('[Main] Opening external URL:', url)
@@ -860,10 +889,16 @@ app.on('ready', async () => {
     // Initialize Mirror Manager
     MirrorManager.init(MOJANG_MIRRORS)
 
+    /**
+     * @returns {Promise<any>}
+     */
     ipcMain.handle('mirrors:getStatus', () => {
         return MirrorManager.getMirrorStatus()
     })
 
+    /**
+     * @returns {Promise<any>}
+     */
     ipcMain.handle('p2p:getInfo', () => {
         return P2PEngine.getNetworkInfo()
     })
@@ -871,6 +906,9 @@ app.on('ready', async () => {
     const { execFile } = require('child_process')
     const { BOOTSTRAP_NODES } = require('./network/config')
 
+    /**
+     * @returns {Promise<Array<{index: number, isPrivate: boolean, status: string, latency: number | string}>>}
+     */
     ipcMain.handle('p2p:getBootstrapStatus', async () => {
         const results = []
         for (let i = 0; i < BOOTSTRAP_NODES.length; i++) {
@@ -930,6 +968,9 @@ app.on('ready', async () => {
         }
     }
 
+    /**
+     * @returns {Promise<void>}
+     */
     ipcMain.handle('p2p:configUpdate', async () => {
         try {
             await ConfigManager.load()

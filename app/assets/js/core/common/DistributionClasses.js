@@ -1,3 +1,5 @@
+// @ts-check
+
 const { MavenUtil } = require('./MavenUtil');
 const { join } = require('path');
 const { ensureEncodedPath } = require('../util/NodeUtil');
@@ -28,8 +30,14 @@ const JdkDistribution = {
 }
 
 class HeliosDistribution {
+    /**
+     * @param {DistributionData} rawDistribution 
+     * @param {string} commonDir 
+     * @param {string} instanceDir 
+     */
     constructor(rawDistribution, commonDir, instanceDir) {
         this.rawDistribution = rawDistribution;
+        /** @type {number | null} */
         this.mainServerIndex = null;
         this.resolveMainServerIndex();
         this.servers = this.rawDistribution.servers.map(s => new HeliosServer(s, commonDir, instanceDir));
@@ -58,25 +66,42 @@ class HeliosDistribution {
         }
     }
 
+    /**
+     * @returns {HeliosServer | null}
+     */
     getMainServer() {
-        return this.mainServerIndex < this.servers.length ? this.servers[this.mainServerIndex] : null;
+        return this.mainServerIndex != null && this.mainServerIndex < this.servers.length ? this.servers[this.mainServerIndex] : null;
     }
 
+    /**
+     * @param {string} id 
+     * @returns {HeliosServer | null}
+     */
     getServerById(id) {
         return this.servers.find(s => s.rawServer.id === id) || null;
     }
 }
 
 class HeliosServer {
-    constructor(rawServer, commonDir, instanceDir) {
-        this.rawServer = rawServer;
+    /**
+     * @param {ServerData} data
+     * @param {string} commonDir 
+     * @param {string} instanceDir 
+     */
+    constructor(data, commonDir, instanceDir) {
+        this.rawServer = data;
+        this.commonDir = commonDir;
+        this.instanceDir = instanceDir;
         const { hostname, port } = this.parseAddress();
         this.hostname = hostname;
         this.port = port;
         this.effectiveJavaOptions = this.parseEffectiveJavaOptions();
-        this.modules = rawServer.modules.map(m => new HeliosModule(m, rawServer.id, commonDir, instanceDir));
+        this.modules = this.rawServer.modules.map(m => new HeliosModule(m, this.rawServer.id, commonDir, instanceDir));
     }
 
+    /**
+     * @returns {{hostname: string, port: number}}
+     */
     parseAddress() {
         if (this.rawServer.address.includes(':')) {
             const pieces = this.rawServer.address.split(':');
@@ -93,6 +118,7 @@ class HeliosServer {
 
     parseEffectiveJavaOptions() {
         const options = this.rawServer.javaOptions?.platformOptions ?? [];
+        /** @type {any[]} */
         const mergeableProps = [];
         for (const option of options) {
             if (option.platform === process.platform) {
@@ -146,6 +172,12 @@ class HeliosServer {
 }
 
 class HeliosModule {
+    /**
+     * @param {ModuleData} rawModule 
+     * @param {string} serverId 
+     * @param {string} commonDir 
+     * @param {string} instanceDir 
+     */
     constructor(rawModule, serverId, commonDir, instanceDir) {
         this.rawModule = rawModule;
         this.serverId = serverId;
@@ -156,12 +188,13 @@ class HeliosModule {
             this.subModules = this.rawModule.subModules.map(m => new HeliosModule(m, serverId, commonDir, instanceDir));
         }
         else {
+            /** @type {HeliosModule[]} */
             this.subModules = [];
         }
     }
 
     resolveMavenComponents() {
-        if (this.rawModule.type === Type.File && this.rawModule.artifact.path != null) {
+        if (this.rawModule.type === Type.File && this.rawModule.artifact && this.rawModule.artifact.path != null) {
             return null;
         }
         if (this.rawModule.type === Type.VersionManifest) {
@@ -203,7 +236,7 @@ class HeliosModule {
         if (this.rawModule.type === Type.VersionManifest) {
             return ensureEncodedPath(join(commonDir, 'versions', this.rawModule.id, `${this.rawModule.id}.json`));
         }
-        const relativePath = this.rawModule.artifact.path ?? MavenUtil.mavenComponentsAsNormalizedPath(this.mavenComponents.group, this.mavenComponents.artifact, this.mavenComponents.version, this.mavenComponents.classifier, this.mavenComponents.extension);
+        const relativePath = (this.rawModule.artifact && this.rawModule.artifact.path) ?? MavenUtil.mavenComponentsAsNormalizedPath(this.mavenComponents.group, this.mavenComponents.artifact, this.mavenComponents.version, this.mavenComponents.classifier, this.mavenComponents.extension);
         switch (this.rawModule.type) {
             case Type.Library:
             case Type.Forge:

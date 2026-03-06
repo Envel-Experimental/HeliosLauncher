@@ -47,7 +47,7 @@ exports.setDataDirectory = function (dataDirectory) {
 }
 
 const configPath = path.join(exports.getLauncherDirectory(), 'config.json')
-const configPathLEGACY = path.join(app.getPath('userData'), 'config.json')
+const configPathLEGACY = app && typeof app.getPath === 'function' ? path.join(app.getPath('userData'), 'config.json') : path.join(exports.getLauncherDirectory(), 'config_legacy.json')
 let firstLaunch = false
 
 
@@ -465,8 +465,8 @@ exports.addMojangAuthAccount = function (uuid, accessToken, username, displayNam
  * @param {string} accessToken The new Access Token.
  * @param {string} msAccessToken The new Microsoft Access Token
  * @param {string} msRefreshToken The new Microsoft Refresh Token
- * @param {date} msExpires The date when the microsoft access token expires
- * @param {date} mcExpires The date when the mojang access token expires
+ * @param {Date} msExpires The date when the microsoft access token expires
+ * @param {Date} mcExpires The date when the mojang access token expires
  *
  * @returns {Object} The authenticated account object created by this action.
  */
@@ -485,10 +485,10 @@ exports.updateMicrosoftAuthAccount = function (uuid, accessToken, msAccessToken,
  * @param {string} uuid The uuid of the authenticated account.
  * @param {string} accessToken The accessToken of the authenticated account.
  * @param {string} name The in game name of the authenticated account.
- * @param {date} mcExpires The date when the mojang access token expires
+ * @param {Date} mcExpires The date when the mojang access token expires
  * @param {string} msAccessToken The microsoft access token
  * @param {string} msRefreshToken The microsoft refresh token
- * @param {date} msExpires The date when the microsoft access token expires
+ * @param {Date} msExpires The date when the microsoft access token expires
  *
  * @returns {Object} The authenticated account object created by this action.
  */
@@ -660,7 +660,8 @@ function defaultJavaConfig17(ram) {
  * Ensure a java config property is set for the given server.
  *
  * @param {string} serverid The server id.
- * @param {*} mcVersion The minecraft version of the server.
+ * @param {any} effectiveJavaOptions 
+ * @param {any} [ram]
  */
 exports.ensureJavaConfig = function (serverid, effectiveJavaOptions, ram) {
     if (!Object.prototype.hasOwnProperty.call(config.javaConfig, serverid)) {
@@ -799,7 +800,7 @@ exports.getGameWidth = function (def = false) {
  * @param {number} resWidth The new width of the game window.
  */
 exports.setGameWidth = function (resWidth) {
-    config.settings.game.resWidth = Number.parseInt(resWidth)
+    config.settings.game.resWidth = Number.parseInt(String(resWidth), 10)
 }
 
 /**
@@ -809,7 +810,7 @@ exports.setGameWidth = function (resWidth) {
  * @returns {boolean} Whether or not the value is valid.
  */
 exports.validateGameWidth = function (resWidth) {
-    const nVal = Number.parseInt(resWidth)
+    const nVal = Number.parseInt(String(resWidth), 10)
     return Number.isInteger(nVal) && nVal >= 0
 }
 
@@ -829,7 +830,7 @@ exports.getGameHeight = function (def = false) {
  * @param {number} resHeight The new height of the game window.
  */
 exports.setGameHeight = function (resHeight) {
-    config.settings.game.resHeight = Number.parseInt(resHeight)
+    config.settings.game.resHeight = Number.parseInt(String(resHeight), 10)
 }
 
 /**
@@ -839,7 +840,7 @@ exports.setGameHeight = function (resHeight) {
  * @returns {boolean} Whether or not the value is valid.
  */
 exports.validateGameHeight = function (resHeight) {
-    const nVal = Number.parseInt(resHeight)
+    const nVal = Number.parseInt(String(resHeight), 10)
     return Number.isInteger(nVal) && nVal >= 0
 }
 
@@ -915,7 +916,7 @@ exports.getAllowPrerelease = function (def = false) {
 /**
  * Change the status of Whether or not the launcher should download prerelease versions.
  *
- * @param {boolean} launchDetached Whether or not the launcher should download prerelease versions.
+ * @param {boolean} allowPrerelease Whether or not the launcher should download prerelease versions.
  */
 exports.setAllowPrerelease = function (allowPrerelease) {
     config.settings.launcher.allowPrerelease = allowPrerelease
@@ -1012,10 +1013,10 @@ exports.getP2PUploadLimit = function (def = false) {
 /**
  * Set the P2P upload limit in Mbps.
  *
- * @param {number} limit The new upload limit in Mbps.
+ * @param {number|string} limit The new upload limit in Mbps.
  */
 exports.setP2PUploadLimit = function (limit) {
-    config.settings.deliveryOptimization.p2pUploadLimit = Number.parseInt(limit)
+    config.settings.deliveryOptimization.p2pUploadLimit = Number.parseInt(String(limit), 10)
 }
 
 /**

@@ -94,6 +94,7 @@ function setDownloadPercentage(percent) {
 // Poll P2P Status every 5 seconds
 setInterval(async () => {
     try {
+        /** @type {any} */
         const stats = await ipcRenderer.invoke('p2p:getInfo')
         const count = stats.connections
         if (count > 0) {
@@ -128,6 +129,7 @@ document.getElementById('launch_button').addEventListener('click', async e => {
             toggleLaunchArea(true)
             setLaunchPercentage(0, 100)
 
+            /** @type {any} */
             const details = await ipcRenderer.invoke('sys:validateJava', ensureJavaDirIsRoot(jExe), server.effectiveJavaOptions.supported)
             if (details != null) {
                 loggerLanding.info('Jvm Details', details)
@@ -318,6 +320,7 @@ async function asyncSystemScan(effectiveJavaOptions, launchAfter = true) {
     setLaunchPercentage(0, 100)
 
     // IPC Call to Main Process
+    /** @type {any} */
     const jvmDetails = await ipcRenderer.invoke('sys:scanJava', {
         version: effectiveJavaOptions.supported
     })
@@ -420,6 +423,7 @@ async function downloadJava(effectiveJavaOptions, launchAfter = true) {
 
     try {
         // Invoke Main
+        /** @type {string} */
         const javaPath = await ipcRenderer.invoke('dl:downloadJava', {
             major: effectiveJavaOptions.majorVersion || effectiveJavaOptions.suggestedMajor || 8,
             distribution: effectiveJavaOptions.distribution || null

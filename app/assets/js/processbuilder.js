@@ -5,19 +5,6 @@ const fs = require('fs')
 const os = require('os')
 const path = require('path')
 
-
-// Line 67: fs.ensureDirSync(this.gameDir) -> fs.mkdirSync(this.gameDir, { recursive: true })
-// Line 155: fs.existsSync(ll.getPath()) -> fs.existsSync(ll.getPath()) (Native supports this)
-// Line 182: fs.ensureDirSync(nativeBasePath) -> fs.mkdirSync(nativeBasePath, { recursive: true })
-// Line 195: fs.remove(tempNativePath) -> fs.promises.rm(tempNativePath, { recursive: true, force: true })
-
-// I will do multiple replacements in one go if possible or use multiple blocks.
-// Wait, replace_file_content is for SINGLE CONTIGUOUS block.
-// The file has imports at top, and usages scattered.
-// I will use multi_replace for this file if it's widely used, or just replace the imports and then specific lines.
-// But I have `replace_file_content` available. I'll use `multi_replace_file_content` if I had it, but standard policy says "Use this tool ONLY when you are making MULTIPLE, NON-CONTIGUOUS edits". Yes I should use `multi_replace` here.
-
-
 const { LoggerUtil } = require('./core/util/LoggerUtil')
 const { Type } = require('./core/common/DistributionClasses')
 const { mcVersionAtLeast } = require('./core/common/MojangUtils')
@@ -74,7 +61,7 @@ class ProcessBuilder {
     /**
      * Main method to build and spawn the Minecraft process.
      * 
-     * @returns {ChildProcess} The spawned child process.
+     * @returns {Promise<import('child_process').ChildProcess>} The spawned child process.
      */
     async build() {
         fs.mkdirSync(this.gameDir, { recursive: true })
@@ -128,6 +115,8 @@ class ProcessBuilder {
         logger.info('Launch Arguments:', args)
 
         // 6. Spawn Process
+        const javaPath = ConfigManager.getJavaExecutable(this.server.rawServer.id)
+
         if (!javaPath || !fs.existsSync(javaPath)) {
             throw new Error('Не удалось найти Java. Проверьте настройки в разделе Java.')
         }

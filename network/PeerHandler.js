@@ -1,3 +1,5 @@
+// @ts-check
+
 const b4a = require('b4a')
 const fs = require('fs')
 const path = require('path')
@@ -13,10 +15,16 @@ const TrafficState = require('./TrafficState')
 const isDev = require('../app/assets/js/isdev')
 
 class PeerHandler {
+    /**
+     * @param {any} socket 
+     * @param {any} engine 
+     * @param {any} info 
+     */
     constructor(socket, engine, info) {
         this.socket = socket
         this.engine = engine
         this.info = info
+        /** @type {Buffer[]} */
         this.chunks = []
         this.chunksLen = 0
         this.processing = false
@@ -25,6 +33,8 @@ class PeerHandler {
         this.remoteWeight = 0
         this.rtt = 0
         this.wasBusy = false
+        this.lastTransferSpeed = 0
+        this.currentTransferSpeed = 0
 
         // VULNERABILITY FIX (Slowloris): 30s Timeout
         this.socket.setTimeout(30000)
@@ -72,12 +82,18 @@ class PeerHandler {
         this.sendPing()
     }
 
+    /**
+     * @returns {string}
+     */
     getIP() {
         let ip = (this.info && this.info.peer && this.info.peer.host) || this.socket.remoteAddress || (this.socket.rawStream && this.socket.rawStream.remoteAddress) || 'unknown'
         if (typeof ip === 'string' && ip.startsWith('::ffff:')) ip = ip.substring(7)
         return ip
     }
 
+    /**
+     * @returns {string}
+     */
     getID() {
         const ip = this.getIP()
         // If IP is unknown, use the Public Key as a stable, unique ID
@@ -100,7 +116,7 @@ class PeerHandler {
                 // If the first chunk is too small for the header, consolidate chunks.
                 // This ensures we don't repeatedly traverse a list of small buffers (O(N^2))
                 if (this.chunks[0].length < 9) {
-                    this.chunks = [b4a.concat(this.chunks)]
+                    this.chunks = [/** @type {Buffer} */(/** @type {any} */(b4a.concat(this.chunks)))]
                 }
 
                 // Peek at the header without consuming info if we don't have the full body yet
@@ -137,36 +153,43 @@ class PeerHandler {
         }
     }
 
+    /**
+     * @param {number} n 
+     * @returns {Buffer}
+     */
     _peekBytes(n) {
         if (this.chunksLen < n) throw new Error('Not enough data')
 
         if (this.chunks[0].length >= n) {
-            return this.chunks[0].subarray(0, n)
+            return /** @type {Buffer} */(/** @type {any} */(this.chunks[0].subarray(0, n)))
         }
 
         // Header spans multiple chunks - rare but possible
-        // Ideally we shouldn't copy much here, but for header (9 bytes) it's cheap.
-        return b4a.concat(this.chunks).subarray(0, n)
+        return /** @type {Buffer} */(/** @type {any} */(b4a.concat(this.chunks).subarray(0, n)))
     }
 
+    /**
+     * @param {number} n 
+     * @returns {Buffer}
+     */
     _readBytes(n) {
-        if (n === 0) return b4a.alloc(0)
+        if (n === 0) return /** @type {Buffer} */(/** @type {any} */(b4a.alloc(0)))
         if (this.chunksLen < n) throw new Error('Not enough data')
 
         this.chunksLen -= n
 
         // Fast path: fully contained in first chunk
         if (this.chunks[0].length === n) {
-            return this.chunks.shift()
+            return /** @type {Buffer} */(/** @type {any} */(this.chunks.shift()))
         }
         if (this.chunks[0].length > n) {
-            const buf = this.chunks[0].subarray(0, n)
-            this.chunks[0] = this.chunks[0].subarray(n)
+            const buf = /** @type {Buffer} */(/** @type {any} */(this.chunks[0].subarray(0, n)))
+            this.chunks[0] = /** @type {Buffer} */(/** @type {any} */(this.chunks[0].subarray(n)))
             return buf
         }
 
         // Slow path: spans multiple chunks
-        const res = b4a.alloc(n)
+        const res = /** @type {Buffer} */(b4a.alloc(n))
         let offset = 0
         while (offset < n) {
             const chunk = this.chunks[0]
@@ -177,13 +200,18 @@ class PeerHandler {
                 this.chunks.shift()
             } else {
                 chunk.copy(res, offset, 0, remaining)
-                this.chunks[0] = chunk.subarray(remaining)
+                this.chunks[0] = /** @type {Buffer} */(chunk.subarray(remaining))
                 offset += remaining
             }
         }
         return res
     }
 
+    /**
+     * @param {number} type 
+     * @param {number} reqId 
+     * @param {Buffer} payload 
+     */
     handleMessage(type, reqId, payload) {
         switch (type) {
             case MSG_REQUEST:
@@ -213,6 +241,9 @@ class PeerHandler {
         }
     }
 
+    /**
+     * @param {Buffer} payload 
+     */
     handleHello(payload) {
         if (payload.length >= 1) {
             this.remoteWeight = payload.readUInt8(0)
@@ -251,11 +282,17 @@ class PeerHandler {
         }
     }
 
+    /**
+     * @param {number} reqId 
+     */
     handlePing(reqId) {
         // Reply with PONG
         this.sendPong(reqId)
     }
 
+    /**
+     * @param {number} reqId 
+     */
     handlePong(reqId) {
         // Calculate RTT
         const now = Date.now()
@@ -264,6 +301,9 @@ class PeerHandler {
     }
 
     // Unpack Batch and process individually
+    /**
+     * @param {Buffer} payload 
+     */
     handleBatchRequest(payload) {
         let offset = 0
         if (payload.length < 2) return
@@ -287,6 +327,10 @@ class PeerHandler {
         }
     }
 
+    /**
+     * @param {number} reqId 
+     * @param {Buffer} payload 
+     */
     async handleRequest(reqId, payload) {
         // Seeder Logic
         let hash = payload.toString('utf-8')
@@ -391,6 +435,13 @@ class PeerHandler {
         this.executeRequest(reqId, hash, relPath, fileId, startOffset)
     }
 
+    /**
+     * @param {number} reqId 
+     * @param {string} hash 
+     * @param {string | null} relPath 
+     * @param {string | null} fileId 
+     * @param {number} startOffset 
+     */
     async executeRequest(reqId, hash, relPath, fileId, startOffset = 0) {
         let remoteIP = this.socket.remoteAddress || this.socket.remoteHost || (this.socket.rawStream && this.socket.rawStream.remoteAddress)
         if (!remoteIP && this.info && this.info.peer) remoteIP = this.info.peer.host
@@ -487,14 +538,16 @@ class PeerHandler {
                 // VULNERABILITY FIX 3: Global Rate Limiter Bug
                 // Do NOT call RateLimiter.update() here, as it sets it for EVERYONE.
                 // Instead, we use the singleton instance and pipe through it ONLY if needed.
+                // @ts-ignore
                 const RateLimiter = require('../app/assets/js/core/util/RateLimiter')
 
+                /** @type {import('stream').Readable} */
                 let source = stream
 
                 if (!isLocalUpload) {
                     // WAN: Pipe through Global Rate Limiter
                     // Limiter is a Transform stream
-                    source = stream.pipe(RateLimiter.throttle())
+                    source = /** @type {any} */(stream.pipe(RateLimiter.throttle()))
                 }
 
                 // Performance Monitoring
@@ -645,7 +698,8 @@ class PeerHandler {
                 stream.on('error', (err) => {
                     errorOccurred = true
                     // Ignore common file access errors (EACCES/EPERM) to prevent log spam
-                    if (err.code !== 'EACCES' && err.code !== 'EPERM') {
+                    const code = /** @type {any} */(err).code
+                    if (code !== 'EACCES' && code !== 'EPERM') {
                         if (isDev) console.error(`[P2P Debug] Read Error on ${foundPath}:`, err.message)
                     }
                     this.sendError(reqId, 'Read Error')
@@ -664,38 +718,44 @@ class PeerHandler {
         }
     }
 
-    getIP() {
-        let ip = this.socket.remoteAddress || this.socket.remoteHost || (this.socket.rawStream && this.socket.rawStream.remoteAddress)
-        if (!ip && this.info && this.info.peer) ip = this.info.peer.host
-        if (ip && ip.startsWith('::ffff:')) ip = ip.substring(7)
-        return ip || 'unknown'
-    }
+
 
     isLocal() {
         if (this.info && this.info.local) return true
         return this.engine.isLocalIP(this.getIP())
     }
 
+    /**
+     * @param {number} reqId 
+     * @param {Buffer} data 
+     */
     sendData(reqId, data) {
         if (this.socket.destroyed) return; // Guard against dead socket
-        const header = b4a.alloc(9)
+        const header = /** @type {Buffer} */(b4a.alloc(9))
         header[0] = MSG_DATA
         header.writeUInt32BE(reqId, 1)
         header.writeUInt32BE(data.length, 5)
         this.socket.write(b4a.concat([header, data]))
     }
 
+    /**
+     * @param {number} reqId 
+     * @param {string} message 
+     */
     sendError(reqId, message) {
         const payload = b4a.from(message, 'utf-8')
-        const header = b4a.alloc(9)
+        const header = /** @type {Buffer} */(b4a.alloc(9))
         header[0] = MSG_ERROR
         header.writeUInt32BE(reqId, 1)
         header.writeUInt32BE(payload.length, 5)
         this.socket.write(b4a.concat([header, payload]))
     }
 
+    /**
+     * @param {number} reqId 
+     */
     sendEnd(reqId) {
-        const header = b4a.alloc(9)
+        const header = /** @type {Buffer} */(b4a.alloc(9))
         header[0] = MSG_END
         header.writeUInt32BE(reqId, 1)
         header.writeUInt32BE(0, 5) // No payload
@@ -706,11 +766,11 @@ class PeerHandler {
         // Payload: [Weight (1 byte), Capabilities (1 byte)]
         // Capabilities: Bit 0 = Batch Support
         const localWeight = this.engine.profile.weight
-        const payload = b4a.alloc(2)
+        const payload = /** @type {Buffer} */(b4a.alloc(2))
         payload.writeUInt8(localWeight, 0)
         payload.writeUInt8(0x01, 1) // Advertise Batch Support
 
-        const header = b4a.alloc(9)
+        const header = /** @type {Buffer} */(b4a.alloc(9))
         header[0] = MSG_HELLO
         header.writeUInt32BE(0, 1) // reqId 0 for system messages
         header.writeUInt32BE(payload.length, 5)
@@ -718,36 +778,49 @@ class PeerHandler {
     }
 
     sendPing() {
-        const header = b4a.alloc(9)
+        const header = /** @type {Buffer} */(b4a.alloc(9))
         header[0] = MSG_PING
         header.writeUInt32BE(0, 1)
         header.writeUInt32BE(0, 5)
         this.socket.write(header)
     }
 
+    /**
+     * @param {number} reqId 
+     */
     sendPong(reqId) {
-        const header = b4a.alloc(9)
+        const header = /** @type {Buffer} */(b4a.alloc(9))
         header[0] = MSG_PONG
         header.writeUInt32BE(reqId, 1) // Echo reqId if needed, though usually 0 for system
         header.writeUInt32BE(0, 5)
         this.socket.write(header)
     }
 
-    sendRequest(reqId, hash, relPath = null, fileId = null) {
+    /**
+     * @param {number} reqId 
+     * @param {string} hash 
+     * @param {string | null} [relPath] 
+     * @param {string | null} [fileId] 
+     * @param {number} [startOffset]
+     */
+    sendRequest(reqId, hash, relPath = null, fileId = null, startOffset = 0) {
         let payload
-        if (relPath || fileId) {
-            payload = b4a.from(JSON.stringify({ h: hash, p: relPath, id: fileId }), 'utf-8')
+        if (relPath || fileId || startOffset > 0) {
+            payload = b4a.from(JSON.stringify({ h: hash, p: relPath, id: fileId, o: startOffset }), 'utf-8')
         } else {
             payload = b4a.from(hash, 'utf-8')
         }
 
-        const header = b4a.alloc(9)
+        const header = /** @type {Buffer} */(b4a.alloc(9))
         header[0] = MSG_REQUEST
         header.writeUInt32BE(reqId, 1)
         header.writeUInt32BE(payload.length, 5)
         this.socket.write(b4a.concat([header, payload]))
     }
 
+    /**
+     * @param {Array<{reqId: number, hash: string}>} requests 
+     */
     sendBatchRequest(requests) {
         // requests: Array<{ reqId, hash }>
         // Payload: Count(2) + [ReqId(4) + Len(1) + Hash(N)]...
@@ -763,7 +836,7 @@ class PeerHandler {
             totalSize += 4 + 1 + Buffer.byteLength(req.hash, 'utf-8');
         }
 
-        const payload = b4a.alloc(totalSize);
+        const payload = /** @type {Buffer} */(b4a.alloc(totalSize));
         let offset = 0;
         payload.writeUInt16BE(requests.length, offset);
         offset += 2;
@@ -771,20 +844,24 @@ class PeerHandler {
         for (const req of requests) {
             payload.writeUInt32BE(req.reqId, offset);
             offset += 4;
-            const hashBuf = b4a.from(req.hash, 'utf-8');
+            const hashBuf = /** @type {Buffer} */(b4a.from(req.hash, 'utf-8'));
             payload.writeUInt8(hashBuf.length, offset);
             offset += 1;
             hashBuf.copy(payload, offset)
             offset += hashBuf.length
         }
 
-        const header = b4a.alloc(9)
+        const header = /** @type {Buffer} */(b4a.alloc(9))
         header[0] = MSG_BATCH_REQUEST
         header.writeUInt32BE(0, 1) // ReqID 0 for container messages usually
         header.writeUInt32BE(payload.length, 5)
         this.socket.write(b4a.concat([header, payload]))
     }
 
+    /**
+     * @param {string} filePath 
+     * @returns {boolean}
+     */
     _isPathSecure(filePath) {
         try {
             const dataDir = ConfigManager.getDataDirectory().trim()

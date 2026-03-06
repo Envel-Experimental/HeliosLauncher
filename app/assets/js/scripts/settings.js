@@ -187,6 +187,7 @@ async function initSettingsValues() {
 
     // Update P2P Profile Label
     try {
+        /** @type {any} */
         const p2pInfo = await ipcRenderer.invoke('p2p:getInfo')
         const profileEl = document.getElementById('settingsP2PProfileLabel')
         if (profileEl && p2pInfo && p2pInfo.profile) {
@@ -557,6 +558,7 @@ function bindP2PInfoButton() {
                         return
                     }
                     try {
+                        /** @type {any} */
                         const newInfo = await ipcRenderer.invoke('p2p:getInfo')
                         updateP2PStatsUI(newInfo)
                     } catch (e) {
@@ -651,6 +653,7 @@ async function populateMirrorStatus() {
     if (!container) return
 
     try {
+        /** @type {any[]} */
         const mirrors = await ipcRenderer.invoke('mirrors:getStatus')
         if (!mirrors || mirrors.length === 0) {
             container.innerHTML = '<div style="text-align: center; color: #888; padding: 10px;">Зеркала не настроены или отключены.</div>'
@@ -686,6 +689,7 @@ async function populateBootstrapStatus() {
     if (!container) return
 
     try {
+        /** @type {any[]} */
         const nodes = await ipcRenderer.invoke('p2p:getBootstrapStatus')
         if (!nodes || nodes.length === 0) {
             container.innerHTML = '<div style="text-align: center; color: #888; padding: 10px;">Bootstrap узлы не найдены.</div>'
@@ -879,6 +883,10 @@ document.getElementById('settingsAddMicrosoftAccount').onclick = (e) => {
 }
 
 // Bind reply for Microsoft Login.
+/**
+ * @param {import('electron').IpcRendererEvent} _
+ * @param {any[]} arguments_
+ */
 ipcRenderer.on(MSFT_OPCODE.REPLY_LOGIN, (_, ...arguments_) => {
     if (arguments_[0] === MSFT_REPLY_TYPE.ERROR) {
 
@@ -1060,6 +1068,10 @@ function processLogOut(val, isLastAccount) {
 }
 
 // Bind reply for Microsoft Logout.
+/**
+ * @param {import('electron').IpcRendererEvent} _
+ * @param {any[]} arguments_
+ */
 ipcRenderer.on(MSFT_OPCODE.REPLY_LOGOUT, (_, ...arguments_) => {
     if (arguments_[0] === MSFT_REPLY_TYPE.ERROR) {
         switchView(getCurrentView(), VIEWS.settings, 500, 500, () => {

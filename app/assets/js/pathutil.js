@@ -37,7 +37,10 @@ function isPathValid(p) {
  * @returns {string} The default data directory.
  */
 function getDefaultDataPath(app) {
-    const sysRoot = process.platform === 'linux' ? app.getPath('home') : app.getPath('appData')
+    let sysRoot = process.env.APPDATA || (process.platform === 'darwin' ? process.env.HOME + '/Library/Application Support' : process.env.HOME)
+    if (app && typeof app.getPath === 'function') {
+        sysRoot = process.platform === 'linux' ? app.getPath('home') : app.getPath('appData')
+    }
     return path.join(sysRoot, '.foxford')
 }
 
