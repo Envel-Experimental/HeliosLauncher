@@ -75,7 +75,7 @@ function bindFileSelectors() {
                 ]
             }
 
-            const res = await remote.dialog.showOpenDialog(remote.getCurrentWindow(), options)
+            const res = await remoteDialog.showOpenDialog(currentWindow, options)
             if (!res.canceled) {
                 ele.previousElementSibling.value = res.filePaths[0]
                 if (isJavaExecSel) {
@@ -1946,7 +1946,7 @@ const settingsAboutChangelogButton = settingsTabAbout.getElementsByClassName('se
 
 // Bind the devtools toggle button.
 document.getElementById('settingsAboutDevToolsButton').onclick = (e) => {
-    let window = remote.getCurrentWindow()
+    const window = currentWindow
     window.toggleDevTools()
 }
 
@@ -1987,7 +1987,7 @@ function populateVersionInformation(version, valueElement, titleElement, checkEl
  * Retrieve the version information and display it on the UI.
  */
 function populateAboutVersionInformation() {
-    populateVersionInformation(remote.app.getVersion(), document.getElementById('settingsAboutCurrentVersionValue'), document.getElementById('settingsAboutCurrentVersionTitle'), document.getElementById('settingsAboutCurrentVersionCheck'))
+    populateVersionInformation(appVersion, document.getElementById('settingsAboutCurrentVersionValue'), document.getElementById('settingsAboutCurrentVersionTitle'), document.getElementById('settingsAboutCurrentVersionCheck'))
 }
 
 /**
@@ -1998,7 +1998,7 @@ function populateReleaseNotes() {
     fetch('https://github.com/Envel-Experimental/HeliosLauncher/releases.atom')
         .then(response => response.text())
         .then(data => {
-            const version = 'v' + remote.app.getVersion()
+            const version = 'v' + appVersion
             const parser = new DOMParser()
             const xmlDoc = parser.parseFromString(data, 'text/xml')
             const entries = xmlDoc.getElementsByTagName('entry')
@@ -2083,7 +2083,7 @@ function populateSettingsUpdateInformation(data) {
     } else {
         settingsUpdateTitle.innerHTML = Lang.queryJS('settings.updates.latestVersionTitle')
         settingsUpdateChangelogCont.style.display = 'none'
-        populateVersionInformation(remote.app.getVersion(), settingsUpdateVersionValue, settingsUpdateVersionTitle, settingsUpdateVersionCheck)
+        populateVersionInformation(appVersion, settingsUpdateVersionValue, settingsUpdateVersionTitle, settingsUpdateVersionCheck)
         settingsUpdateButtonStatus(Lang.queryJS('settings.updates.checkForUpdatesButton'), false, () => {
             if (!isDev) {
                 ipcRenderer.send('autoUpdateAction', 'checkForUpdate')
@@ -2205,7 +2205,7 @@ async function factoryReset() {
             Lang.queryJS('uicore.update.updateButton') // Reuse 'Update' button style/text or simple OK
         )
         // Force restart without timeout, more reliably
-        const app = remote.app
+        const app = remoteApp
         const options = {
             args: process.argv.slice(1).filter(arg => !arg.includes('--enable-logging') && !arg.includes('--remote-debugging-port')),
             execPath: process.execPath

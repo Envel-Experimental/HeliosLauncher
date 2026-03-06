@@ -2,12 +2,15 @@
   "compilerOptions": {
     "target": "es2022",
     "module": "commonjs",
-    "checkJs": true,
+    "checkJs": false,
     "allowJs": true,
     "strict": false,
     "baseUrl": ".",
+    "rootDirs": [".", "./app"],
     "paths": {
-      "*": ["*"]
+      "./assets/js/*": ["./app/assets/js/*"],
+      "assets/*": ["app/assets/*"],
+      "*": ["*", "app/*"]
     }
   },
   "exclude": [

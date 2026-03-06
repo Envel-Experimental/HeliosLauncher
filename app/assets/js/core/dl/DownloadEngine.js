@@ -217,7 +217,7 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
         }
 
         if (await validateLocalFile(decodedPath, algo, hash, asset.size)) {
-            log.debug(`File already exists and is valid: ${decodedPath}`);
+            // log.debug(`File already exists and is valid: ${decodedPath}`);
             if (onProgress) onProgress(asset.size); // Account for skipping
             return;
         }

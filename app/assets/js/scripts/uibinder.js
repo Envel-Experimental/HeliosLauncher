@@ -173,8 +173,7 @@ function showFatalStartupError() {
                 Lang.queryJS('uibinder.startup.closeButton')
             )
             setOverlayHandler(() => {
-                const window = remoteElectron.getCurrentWindow()
-                window.close()
+                currentWindow.close()
             })
             toggleOverlay(true)
         })

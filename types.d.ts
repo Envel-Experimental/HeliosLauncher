@@ -48,3 +48,16 @@ interface P2PMessage {
     type: string;
     payload: any;
 }
+
+declare var currentWindow: any;
+declare var remoteApp: any;
+declare var appVersion: string;
+declare var currentWebContents: any;
+declare var remoteDialog: any;
+
+declare var remote: any;
+declare var ipcRenderer: any;
+declare var shell: any;
+declare var ConfigManager: any;
+declare var Lang: any;
+declare var DistroAPI: any;

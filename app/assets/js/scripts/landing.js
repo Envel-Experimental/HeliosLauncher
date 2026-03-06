@@ -80,7 +80,7 @@ function setLaunchPercentage(percent) {
  * @param {number} percent Percentage (0-100)
  */
 function setDownloadPercentage(percent) {
-    remote.getCurrentWindow().setProgressBar(percent / 100)
+    currentWindow.setProgressBar(percent / 100)
     setLaunchPercentage(percent)
 }
 
@@ -571,7 +571,7 @@ async function dlAsync(login = true) {
     if (login) {
         const authUser = ConfigManager.getSelectedAccount()
         loggerLaunchSuite.info(`Sending selected account (${authUser.displayName}) to ProcessBuilder.`)
-        let pb = new ProcessBuilder(serv, versionData, modLoaderData, authUser, remote.app.getVersion())
+        let pb = new ProcessBuilder(serv, versionData, modLoaderData, authUser, appVersion)
         setLaunchDetails(Lang.queryJS('landing.dlAsync.launchingGame'))
 
         // const SERVER_JOINED_REGEX = /\[.+\]: \[CHAT\] [a-zA-Z0-9_]{1,16} joined the game/

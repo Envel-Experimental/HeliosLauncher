@@ -14,6 +14,11 @@ const Lang = require('./assets/js/langloader')
 
 const loggerUICore = LoggerUtil.getLogger('UICore')
 const loggerAutoUpdater = LoggerUtil.getLogger('AutoUpdater')
+var currentWindow = remote.getCurrentWindow()
+var remoteApp = remote.app
+var appVersion = remoteApp.getVersion()
+var currentWebContents = remote.getCurrentWebContents()
+var remoteDialog = remote.dialog
 
 // Log deprecation and process warnings.
 process.traceProcessWarnings = true
@@ -26,7 +31,7 @@ window.eval = global.eval = function () {
 }
 
 // Display warning when devtools window is opened.
-remote.getCurrentWebContents().on('devtools-opened', () => {
+currentWebContents.on('devtools-opened', () => {
     console.log('%c Здесь не рекомендуется ничего вводить, так как это может привести к последствиям, за которые мы не несем ответственность.', 'color: white; -webkit-text-stroke: 1px #a02d2a; font-size: 18px; font-weight: bold')
 })
 
@@ -142,8 +147,7 @@ document.addEventListener('readystatechange', function () {
         // Bind close button.
         Array.from(document.getElementsByClassName('fCb')).map((val) => {
             val.addEventListener('click', e => {
-                const window = remote.getCurrentWindow()
-                window.close()
+                currentWindow.close()
             })
         })
 
@@ -193,11 +197,10 @@ document.addEventListener('readystatechange', function () {
         // Bind restore down button.
         Array.from(document.getElementsByClassName('fRb')).map((val) => {
             val.addEventListener('click', e => {
-                const window = remote.getCurrentWindow()
-                if (window.isMaximized()) {
-                    window.unmaximize()
+                if (currentWindow.isMaximized()) {
+                    currentWindow.unmaximize()
                 } else {
-                    window.maximize()
+                    currentWindow.maximize()
                 }
                 document.activeElement.blur()
             })
@@ -206,8 +209,7 @@ document.addEventListener('readystatechange', function () {
         // Bind minimize button.
         Array.from(document.getElementsByClassName('fMb')).map((val) => {
             val.addEventListener('click', e => {
-                const window = remote.getCurrentWindow()
-                window.minimize()
+                currentWindow.minimize()
                 document.activeElement.blur()
             })
         })
@@ -258,8 +260,7 @@ document.addEventListener('click', (event) => {
  */
 document.addEventListener('keydown', function (e) {
     if ((e.key === 'I' || e.key === 'i') && e.ctrlKey && e.shiftKey) {
-        let window = remote.getCurrentWindow()
-        window.toggleDevTools()
+        currentWindow.toggleDevTools()
     }
 })
 
