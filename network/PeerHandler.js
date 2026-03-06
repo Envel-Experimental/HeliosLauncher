@@ -32,9 +32,8 @@ class PeerHandler {
         this.resumptionSupport = true // Always supported in this version
         this.remoteWeight = 0
         this.rtt = 0
-        this.wasBusy = false
-        this.lastTransferSpeed = 0
         this.currentTransferSpeed = 0
+        this.baselineRTT = 0
 
         // VULNERABILITY FIX (Slowloris): 30s Timeout
         this.socket.setTimeout(30000)
@@ -77,9 +76,12 @@ class PeerHandler {
         // Send Hello with local weight
         this.sendHello()
 
-        // Measure Latency
-        this.pingTimestamp = Date.now()
-        this.sendPing()
+        // sendHello already called above
+        
+        // Start Metric Observation
+        this.metricsInterval = setInterval(() => {
+            this.updateMetrics()
+        }, 5000)
     }
 
     /**
@@ -229,12 +231,6 @@ class PeerHandler {
             case MSG_HELLO:
                 this.handleHello(payload)
                 break
-            case MSG_PING:
-                this.handlePing(reqId)
-                break
-            case MSG_PONG:
-                this.handlePong(reqId)
-                break
             case MSG_BATCH_REQUEST:
                 this.handleBatchRequest(payload)
                 break
@@ -283,21 +279,28 @@ class PeerHandler {
     }
 
     /**
-     * @param {number} reqId 
+     * Update metrics using native UDX RTT
      */
-    handlePing(reqId) {
-        // Reply with PONG
-        this.sendPong(reqId)
-    }
+    updateMetrics() {
+        if (this.socket.destroyed) {
+            clearInterval(this.metricsInterval)
+            return
+        }
 
-    /**
-     * @param {number} reqId 
-     */
-    handlePong(reqId) {
-        // Calculate RTT
-        const now = Date.now()
-        this.rtt = now - this.pingTimestamp
-        // console.log(`[PeerHandler] RTT: ${this.rtt}ms`)
+        // UDX/Hyperswarm provide RTT in rawStream
+        const nativeRTT = this.socket.rawStream ? this.socket.rawStream.rtt : 0
+        
+        if (nativeRTT > 0) {
+            this.rtt = nativeRTT
+            
+            // Update baseline (minimum seen)
+            if (this.baselineRTT === 0 || this.rtt < this.baselineRTT) {
+                this.baselineRTT = this.rtt
+            }
+
+            // Notify engine for congestion detection
+            this.engine.onPeerRTTUpdate(this, this.rtt)
+        }
     }
 
     // Unpack Batch and process individually
@@ -557,12 +560,22 @@ class PeerHandler {
 
                 const onSocketClose = () => {
                     if (!stream.destroyed) {
-                        errorOccurred = true // Socket died during transfer
+                        errorOccurred = true 
                         stream.destroy()
                     }
                 }
+
+                let isPausedLocal = false
+                const onDrain = () => {
+                    if (isPausedLocal && source) {
+                        isPausedLocal = false
+                        source.resume()
+                    }
+                }
+
                 this.socket.on('close', onSocketClose)
                 this.socket.on('error', onSocketClose)
+                this.socket.on('drain', onDrain)
 
                 // Watchdog: Anti-Slowloris & Inactivity Protection
                 let lastActivity = Date.now()
@@ -634,7 +647,9 @@ class PeerHandler {
 
                     this.socket.removeListener('close', onSocketClose)
                     this.socket.removeListener('error', onSocketClose)
+                    this.socket.removeListener('drain', onDrain)
                     clearInterval(watchdog)
+                    clearInterval(this.metricsInterval)
 
                     // Robust Stream Destruction
                     if (!stream.destroyed) stream.destroy()
@@ -683,7 +698,12 @@ class PeerHandler {
                     }
 
                     this.engine.totalUploaded = (this.engine.totalUploaded || 0) + chunk.length
-                    this.sendData(reqId, chunk)
+                    
+                    // BACKPRESSURE: Independent per-stream state in closure
+                    if (!this.sendData(reqId, chunk)) {
+                        isPausedLocal = true
+                        source.pause()
+                    }
                 })
 
                 if (isDev) {
@@ -728,14 +748,15 @@ class PeerHandler {
     /**
      * @param {number} reqId 
      * @param {Buffer} data 
+     * @returns {boolean} returns false if the socket buffer is full
      */
     sendData(reqId, data) {
-        if (this.socket.destroyed) return; // Guard against dead socket
+        if (this.socket.destroyed) return true; // Guard against dead socket
         const header = /** @type {Buffer} */(b4a.alloc(9))
         header[0] = MSG_DATA
         header.writeUInt32BE(reqId, 1)
         header.writeUInt32BE(data.length, 5)
-        this.socket.write(b4a.concat([header, data]))
+        return this.socket.write(b4a.concat([header, data]))
     }
 
     /**
@@ -777,24 +798,10 @@ class PeerHandler {
         this.socket.write(b4a.concat([header, payload]))
     }
 
-    sendPing() {
-        const header = /** @type {Buffer} */(b4a.alloc(9))
-        header[0] = MSG_PING
-        header.writeUInt32BE(0, 1)
-        header.writeUInt32BE(0, 5)
-        this.socket.write(header)
-    }
 
     /**
      * @param {number} reqId 
      */
-    sendPong(reqId) {
-        const header = /** @type {Buffer} */(b4a.alloc(9))
-        header[0] = MSG_PONG
-        header.writeUInt32BE(reqId, 1) // Echo reqId if needed, though usually 0 for system
-        header.writeUInt32BE(0, 5)
-        this.socket.write(header)
-    }
 
     /**
      * @param {number} reqId 

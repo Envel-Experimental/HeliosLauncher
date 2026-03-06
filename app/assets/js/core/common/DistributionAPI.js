@@ -117,7 +117,12 @@ class DistributionAPI {
                 distro = await this.pullLocal();
             }
             else {
-                await this.writeDistributionToDisk(distro);
+                try {
+                    await this.writeDistributionToDisk(distro);
+                } catch (err) {
+                    console.error('[DistributionAPI] Failed to write distribution to disk:', err);
+                    // Continue anyway with the in-memory distro to let user play
+                }
             }
         }
         else {
@@ -226,6 +231,8 @@ class DistributionAPI {
      * @param {DistributionData} distribution 
      */
     async writeDistributionToDisk(distribution) {
+        // Ensure directory exists (v3.1 Fix for ENOENT)
+        await fs.mkdir(this.launcherDirectory, { recursive: true });
         await fs.writeFile(this.distroPath, JSON.stringify(distribution, null, 4));
     }
 

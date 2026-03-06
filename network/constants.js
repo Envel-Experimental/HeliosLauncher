@@ -22,5 +22,14 @@ module.exports = {
     // Dynamic Concurrency (Global) Constants
     MIN_PARALLEL_DOWNLOADS: 8,        // Never drop below 8 parallel downloads (Global)
     MAX_PARALLEL_DOWNLOADS: 32,       // Never exceed 32 parallel downloads (Global)
-    PEER_CONCURRENCY_FACTOR: 8        // Multiply peer count by 8 to determine parallel slots
+    PEER_CONCURRENCY_FACTOR: 8,       // Multiply peer count by 8 to determine parallel slots
+
+    // Adaptive Smart Seeding Constants
+    MIN_UPLOAD_LIMIT_MBPS: 1,         // Absolute floor
+    MAX_UPLOAD_LIMIT_MBPS: 15,        // Max 15Mbps limit as requested
+    RTT_CONGESTION_DELTA_MS: 50,      // Trigger backoff if MedianDelta > 50ms
+    STEP_UP_INTERVAL_MS: 5000,        // Update every 5s
+    ADDITIVE_INCREASE_MBPS: 0.5,      // AIMD Step: +0.5 Mbps
+    SLOW_START_MULTIPLIER: 1.5,       // Exponential growth multiplier
+    MAX_ADAPTIVE_SLOTS: 6             // Strict cap on simultaneous upload slots
 }

@@ -127,6 +127,11 @@ class P2PEngine extends EventEmitter {
         this.activeUploads = 0
         /** @type {Map<string, number>} */
         this.uploadCounts = new Map() // IP -> Count
+        this.adaptiveSlotCount = 5
+        this.minDeltaRTT = 0
+        this.lastStableLimit = 0
+        this.slowStart = true
+        this.currentLimitIsSlowStart = true
 
         this.totalUploaded = 0
         this.totalDownloaded = 0
@@ -174,6 +179,13 @@ class P2PEngine extends EventEmitter {
         this.maxObservedDownloadSpeed = 0
         this.highBandwidthMode = false
         this.lastLimitUpdate = 0
+        
+        // Limit Persistence (v3.1): Start from 50% of last stable or 5Mbps
+        const initialLimit = this.lastStableLimit > 0 ? Math.max(5, this.lastStableLimit * 0.5) : 5
+        this.currentUploadLimitMbps = initialLimit
+        
+        this.lastStepUpTime = Date.now()
+        this.congestionDetected = false
 
         // Speed & Resource Monitor (Every 2 seconds)
         this.speedMonitorInterval = setInterval(() => {
@@ -233,9 +245,6 @@ class P2PEngine extends EventEmitter {
         }, 2000)
     }
 
-    /**
-     * @param {any} rm 
-     */
     setRaceManager(rm) {
         this.raceManager = rm
     }
@@ -564,8 +573,8 @@ class P2PEngine extends EventEmitter {
                 const weight = p.remoteWeight || 1
                 const rtt = p.rtt || 200
                 let speedFactor = 1.0
-                if (p.lastTransferSpeed) {
-                    speedFactor = Math.max(0.1, p.lastTransferSpeed / 102400)
+                if (p.currentTransferSpeed) {
+                    speedFactor = Math.max(0.1, p.currentTransferSpeed / 102400)
                     speedFactor = Math.min(10.0, speedFactor)
                 }
                 let lanFactor = p.isLocal() ? 100.0 : 1.0
@@ -682,7 +691,7 @@ class P2PEngine extends EventEmitter {
                     const req = this.requests.get(reqId)
                     this.requests.delete(reqId)
                     const err = new Error('P2P Timeout')
-                    err.bytesReceived = req.bytesReceived
+                    Object.assign(err, { bytesReceived: req.bytesReceived })
                     req.reject(err)
                 }
             }, Config.PROTOCOL.TIMEOUT)
@@ -947,8 +956,7 @@ class P2PEngine extends EventEmitter {
     processServerQueue() {
         if (!this.serverQueue || this.serverQueue.length === 0) return
 
-        const { MAX_CONCURRENT_UPLOADS } = require('./constants')
-        const max = MAX_CONCURRENT_UPLOADS || 5
+        const max = (typeof this.adaptiveSlotCount === 'number') ? this.adaptiveSlotCount : 5
 
         while (this.activeUploads < max && this.serverQueue.length > 0) {
             const req = this.serverQueue.shift()
@@ -1094,45 +1102,126 @@ class P2PEngine extends EventEmitter {
     }
 
 
-    updateDynamicLimits() {
+    /**
+     * Update metrics using native UDX RTT
+     * @param {any} peer
+     * @param {number} rtt
+     */
+    onPeerRTTUpdate(peer, rtt) {
+        if (peer.isLocal()) return
+
+        const { RTT_CONGESTION_DELTA_MS } = require('./constants')
+        
+        // Calculate Delta for THIS peer
+        const delta = rtt - (/** @type {any} */(peer).baselineRTT || rtt)
+        
+        // We calculate MedianDelta during the updateDynamicLimits loop to be more accurate
+        // Here we just ensure we have data
+    }
+
+    triggerCongestionBackoff() {
+        const { MIN_UPLOAD_LIMIT_MBPS } = require('./constants')
+        // Save the limit before cutting as a reference for "stable"
+        this.lastStableLimit = this.currentUploadLimitMbps
+        
+        // Multiplicative Decrease
+        this.currentUploadLimitMbps = Math.max(MIN_UPLOAD_LIMIT_MBPS, this.currentUploadLimitMbps * 0.5)
+        this.slowStart = false // Exit Slow Start on FIRST congestion
+        this.lastStepUpTime = Date.now() + 10000 
+        this.updateDynamicLimits(true)
+    }
+
+    updateDynamicLimits(force = false) {
         if (!ConfigManager.isLoaded()) return
         if (!ConfigManager.getP2PUploadEnabled()) return
 
-        // 1. Resource Check
-        // Only MID and HIGH profiles (sufficient RAM/CPU) are eligible for boost
-        const profile = this.profile
-        const canBoost = (profile.name === 'MID' || profile.name === 'HIGH')
+        const { 
+            MAX_UPLOAD_LIMIT_MBPS, 
+            STEP_UP_INTERVAL_MS,
+            ADDITIVE_INCREASE_MBPS,
+            SLOW_START_MULTIPLIER,
+            MAX_ADAPTIVE_SLOTS,
+            RTT_CONGESTION_DELTA_MS
+        } = require('./constants')
 
-        // 2. Bandwidth Check
-        // Must have proven high bandwidth capacity
-        const hasBandwidth = this.highBandwidthMode
+        const now = Date.now()
 
-        // 3. System Load Check
-        // Ensure system isn't currently overwhelmed
-        const load = os.loadavg() // [1min, 5min, 15min]
-        const cpus = os.cpus().length
-        // If 1-min load avg > CPU count * 0.8, we are under stress
-        const isStressed = load[0] > (cpus * 0.8)
+        // 0. Calculate Median Delta among WAN peers
+        const wanPeers = this.peers.filter(p => !p.isLocal() && p.rtt > 0)
+        if (wanPeers.length > 0) {
+            const deltas = wanPeers.map(p => p.rtt - (/** @type {any} */(p).baselineRTT || p.rtt)).sort((a, b) => a - b)
+            const medianDelta = deltas[Math.floor(deltas.length / 2)]
 
-        let newLimitMbps = 5 // Default Safe Limit
-
-        if (canBoost && hasBandwidth && !isStressed) {
-            newLimitMbps = 15 // Boost Mode
-        } else {
-            // If downgrading, log reason for debugging
-            if (canBoost && hasBandwidth && isStressed) {
-                if (isDev) console.warn(`[P2PEngine] System stressed (Load: ${load[0].toFixed(2)}). Downgrading upload limit.`)
+            if (medianDelta > RTT_CONGESTION_DELTA_MS) {
+                if (!this.congestionDetected) {
+                    if (isDev) console.warn(`[P2PEngine] LOCAL CONGESTION detected via WAN Median Delta: ${medianDelta}ms.`)
+                    this.congestionDetected = true
+                    this.triggerCongestionBackoff()
+                    return // triggerCongestionBackoff calls updateDynamicLimits(true)
+                }
             }
         }
 
+        // 1. Step-Up Logic (Slow Start vs AIMD)
+        if (!this.congestionDetected && now - this.lastStepUpTime > STEP_UP_INTERVAL_MS) {
+            if (this.currentUploadLimitMbps < MAX_UPLOAD_LIMIT_MBPS) {
+                if (this.slowStart) {
+                    // Exponential Increase
+                    this.currentUploadLimitMbps = Math.min(MAX_UPLOAD_LIMIT_MBPS, this.currentUploadLimitMbps * SLOW_START_MULTIPLIER)
+                    if (isDev) console.log(`[P2PEngine] Slow Start: New limit ${this.currentUploadLimitMbps.toFixed(1)} Mbps.`)
+                } else {
+                    // Additive Increase
+                    this.currentUploadLimitMbps = Math.min(MAX_UPLOAD_LIMIT_MBPS, this.currentUploadLimitMbps + ADDITIVE_INCREASE_MBPS)
+                    if (isDev) console.log(`[P2PEngine] AIMD Increase: New limit ${this.currentUploadLimitMbps.toFixed(1)} Mbps.`)
+                }
+                this.lastStepUpTime = now
+                
+                // Track highest stable limit (v3.1)
+                if (this.currentUploadLimitMbps > this.lastStableLimit) {
+                    this.lastStableLimit = this.currentUploadLimitMbps
+                }
+            }
+        }
+
+        // Reset congestion metrics for next evaluation cycle
+        this.congestionDetected = false
+
+        // 3. Resource & Load Check
+        const profile = this.profile
+        const canBoost = (profile.name === 'MID' || profile.name === 'HIGH')
+        const load = os.loadavg()
+        const cpus = os.cpus().length
+        const isStressed = load[0] > (cpus * 0.8)
+
+        let finalLimitMbps = this.currentUploadLimitMbps
+
+        // 3. Hardware Profile Enforcements (v3.2)
+        if (profile.name === 'LOW') {
+            finalLimitMbps = 0 // Seeding disabled for LOW profile
+        } else if (profile.name === 'MID') {
+            finalLimitMbps = Math.min(finalLimitMbps, 5) // Cap MID at 5Mbps
+        }
+        // HIGH allows up to MAX_UPLOAD_LIMIT_MBPS (15)
+
+        // 4. Load-based throttling (additional safety)
+        if (isStressed) {
+            finalLimitMbps = Math.min(finalLimitMbps, 2) // Drastic cut under load
+        }
+
+        // 4. Strict Slot Management (Anti-Fragmentation)
+        this.adaptiveSlotCount = MAX_ADAPTIVE_SLOTS 
+
         // Apply Limit
         const RateLimiter = require('../app/assets/js/core/util/RateLimiter')
-        RateLimiter.update(newLimitMbps * 125000, true)
+        RateLimiter.update(finalLimitMbps * 125000, true)
 
-        // if (isDev) console.debug(`[P2PEngine] Dynamic Upload Limit set to ${newLimitMbps} Mbps`)
+        if (isDev && (force || finalLimitMbps !== this._lastFinalLimit)) {
+            console.debug(`[P2PEngine] Dynamic Upload Limit: ${finalLimitMbps.toFixed(1)} Mbps (Slots: ${this.adaptiveSlotCount})`)
+            this._lastFinalLimit = finalLimitMbps
+        }
     }
+
     checkSeederHealth() {
-        // If we are already self-isolated, check if it's time to recover
         if (this.healthCheckPassive) {
             if (Date.now() - this.healthCheckPassiveStart > 3600000) { // 1 Hour
                 console.log('[P2PEngine] Health Check: Probation period ended. Re-enabling active mode.')
@@ -1143,13 +1232,9 @@ class P2PEngine extends EventEmitter {
             return
         }
 
-        // Logic: "Consensus of Failure"
-        // 1. "3 Witnesses" Rule: Must have significant load to judge (at least 3 active upload peers)
         const activeUploadPeers = this.peers.filter(p => p.currentTransferSpeed > 0)
 
         if (activeUploadPeers.length < 3) {
-            // Not enough witnesses to judge "Consensus"
-            // Decay strikes to be forgiving if load drops
             if (this.selfStrikes > 0) this.selfStrikes--
             return
         }
@@ -1157,13 +1242,11 @@ class P2PEngine extends EventEmitter {
         const fastPeers = activeUploadPeers.filter(p => p.currentTransferSpeed > 512000) // > 500 KB/s
         const slowPeers = activeUploadPeers.filter(p => p.currentTransferSpeed < 128000) // < 125 KB/s
 
-        // "I am fine" check: If at least one peer is fast, my upload is fine.
         if (fastPeers.length > 0) {
             this.selfStrikes = 0
             return
         }
 
-        // "It's me" check: If ALL peers are slow.
         if (slowPeers.length === activeUploadPeers.length) {
             this.selfStrikes = (this.selfStrikes || 0) + 1
             console.warn(`[P2PEngine] Health Check: Warning! ${activeUploadPeers.length}/${activeUploadPeers.length} peers are slow. Self-Strike ${this.selfStrikes}/3.`)
@@ -1175,7 +1258,6 @@ class P2PEngine extends EventEmitter {
                 this.reconfigureSwarm()
             }
         } else {
-            // Mixed results (some medium speed, some slow) - Give benefit of doubt, decrement strike
             if (this.selfStrikes > 0) this.selfStrikes--
         }
     }
@@ -1183,13 +1265,10 @@ class P2PEngine extends EventEmitter {
     _getNetworkFingerprint() {
         const interfaces = os.networkInterfaces()
         let fingerprint = ''
-        // Sort keys to ensure stability
         const sortedKeys = Object.keys(interfaces).sort()
         for (const key of sortedKeys) {
             const iface = interfaces[key]
             for (const details of iface) {
-                // We care about address and status (implied by existence)
-                // We ignore 'internal' loopback for fingerprinting usually, but for P2P restart it might matter if ONLY loopback exists.
                 if (!details.internal && (details.family === 'IPv4' || /** @type {any} */(details.family) === 4)) {
                     fingerprint += `${key}:${details.address}|`
                 }
