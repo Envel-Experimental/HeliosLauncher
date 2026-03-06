@@ -181,7 +181,8 @@ class P2PEngine extends EventEmitter {
         this.lastLimitUpdate = 0
         
         // Limit Persistence (v3.1): Start from 50% of last stable or 5Mbps
-        const initialLimit = this.lastStableLimit > 0 ? Math.max(5, this.lastStableLimit * 0.5) : 5
+        const userMax = ConfigManager.isLoaded() ? ConfigManager.getP2PUploadLimit() : 15
+        const initialLimit = this.lastStableLimit > 0 ? Math.max(1, Math.min(userMax, this.lastStableLimit * 0.5)) : Math.min(userMax, 5)
         this.currentUploadLimitMbps = initialLimit
         
         this.lastStepUpTime = Date.now()
@@ -472,12 +473,8 @@ class P2PEngine extends EventEmitter {
             })
 
             // Initialize Global Rate Limiter
-            if (ConfigManager.getP2PUploadEnabled()) {
-                const limitMbps = ConfigManager.getP2PUploadLimit()
-                // RateLimiter is a singleton, so we set it once here
-                const RateLimiter = require('../app/assets/js/core/util/RateLimiter')
-                RateLimiter.update(limitMbps * 125000, true)
-            }
+            // Initial Dynamic Limit application
+            this.updateDynamicLimits(true)
 
             await discovery.flushed()
             console.log(`[P2PEngine] P2P Service Started. Debug Mode: ${isDev}`)
@@ -1136,13 +1133,15 @@ class P2PEngine extends EventEmitter {
         if (!ConfigManager.getP2PUploadEnabled()) return
 
         const { 
-            MAX_UPLOAD_LIMIT_MBPS, 
             STEP_UP_INTERVAL_MS,
             ADDITIVE_INCREASE_MBPS,
             SLOW_START_MULTIPLIER,
             MAX_ADAPTIVE_SLOTS,
             RTT_CONGESTION_DELTA_MS
         } = require('./constants')
+
+        const userMaxLimit = ConfigManager.getP2PUploadLimit()
+        const absoluteMax = Math.max(1, userMaxLimit) // Absolute ceiling from settings
 
         const now = Date.now()
 
@@ -1164,14 +1163,14 @@ class P2PEngine extends EventEmitter {
 
         // 1. Step-Up Logic (Slow Start vs AIMD)
         if (!this.congestionDetected && now - this.lastStepUpTime > STEP_UP_INTERVAL_MS) {
-            if (this.currentUploadLimitMbps < MAX_UPLOAD_LIMIT_MBPS) {
+            if (this.currentUploadLimitMbps < absoluteMax) {
                 if (this.slowStart) {
                     // Exponential Increase
-                    this.currentUploadLimitMbps = Math.min(MAX_UPLOAD_LIMIT_MBPS, this.currentUploadLimitMbps * SLOW_START_MULTIPLIER)
+                    this.currentUploadLimitMbps = Math.min(absoluteMax, this.currentUploadLimitMbps * SLOW_START_MULTIPLIER)
                     if (isDev) console.log(`[P2PEngine] Slow Start: New limit ${this.currentUploadLimitMbps.toFixed(1)} Mbps.`)
                 } else {
                     // Additive Increase
-                    this.currentUploadLimitMbps = Math.min(MAX_UPLOAD_LIMIT_MBPS, this.currentUploadLimitMbps + ADDITIVE_INCREASE_MBPS)
+                    this.currentUploadLimitMbps = Math.min(absoluteMax, this.currentUploadLimitMbps + ADDITIVE_INCREASE_MBPS)
                     if (isDev) console.log(`[P2PEngine] AIMD Increase: New limit ${this.currentUploadLimitMbps.toFixed(1)} Mbps.`)
                 }
                 this.lastStepUpTime = now
@@ -1180,6 +1179,9 @@ class P2PEngine extends EventEmitter {
                 if (this.currentUploadLimitMbps > this.lastStableLimit) {
                     this.lastStableLimit = this.currentUploadLimitMbps
                 }
+            } else if (this.currentUploadLimitMbps > absoluteMax) {
+                // If user lowered the limit in settings while we were higher
+                this.currentUploadLimitMbps = absoluteMax
             }
         }
 
@@ -1201,7 +1203,9 @@ class P2PEngine extends EventEmitter {
         } else if (profile.name === 'MID') {
             finalLimitMbps = Math.min(finalLimitMbps, 5) // Cap MID at 5Mbps
         }
-        // HIGH allows up to MAX_UPLOAD_LIMIT_MBPS (15)
+        
+        // 3.5. Final User Ceiling (Ensures settings are ALWAYS respected)
+        finalLimitMbps = Math.min(finalLimitMbps, absoluteMax)
 
         // 4. Load-based throttling (additional safety)
         if (isStressed) {
