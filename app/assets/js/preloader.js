@@ -122,7 +122,7 @@ async function preloader() {
 
 // Capture log or error and send to Sentry
 function sendToSentry(message, type = 'info') {
-    if (Sentry) {
+    if (Sentry && !isDev) {
         if (type === 'error') {
             Sentry.captureException(new Error(message))
         } else {

@@ -128,7 +128,17 @@ class ProcessBuilder {
         logger.info('Launch Arguments:', args)
 
         // 6. Spawn Process
-        const child = child_process.spawn(ConfigManager.getJavaExecutable(this.server.rawServer.id), args, {
+        if (!javaPath || !fs.existsSync(javaPath)) {
+            throw new Error('Не удалось найти Java. Проверьте настройки в разделе Java.')
+        }
+
+        try {
+            fs.accessSync(javaPath, fs.constants.X_OK)
+        } catch (e) {
+            throw new Error('Проблема с доступом к файлам Java (недостаточно прав).')
+        }
+
+        const child = child_process.spawn(javaPath, args, {
             cwd: this.gameDir,
             detached: ConfigManager.getLaunchDetached()
         })

@@ -281,7 +281,10 @@ class RaceManager {
         // which was causing "[object ReadableStream]" to be written to disk.
         TrafficState.incrementDownloads()
 
+        let cleanupDone = false;
         const cleanupDownload = () => {
+            if (cleanupDone) return;
+            cleanupDone = true;
             TrafficState.decrementDownloads()
 
             if (!TrafficState.isBusy()) {

@@ -124,7 +124,7 @@ class P2PEngine extends EventEmitter {
         this.discoveryLogThrottled = false
 
         // Periodic Memory Cleanup
-        setInterval(() => {
+        this.memoryCleanupInterval = setInterval(() => {
             this.usageTracker.cleanup()
             // Cleanup strikes older than 30 mins
             const now = Date.now()
@@ -152,7 +152,7 @@ class P2PEngine extends EventEmitter {
         this.lastLimitUpdate = 0
 
         // Speed & Resource Monitor (Every 2 seconds)
-        setInterval(() => {
+        this.speedMonitorInterval = setInterval(() => {
             this.currentDownloadSpeed = this.downloadBytesGlobal / 2 // B/s
             this.currentUploadSpeed = this.uploadBytesGlobal / 2 // B/s
             this.currentDownloadSpeedLocal = this.downloadBytesLocal / 2 // B/s
@@ -268,6 +268,14 @@ class P2PEngine extends EventEmitter {
     async stop() {
         this.starting = false
         this.stopping = true
+        if (this.memoryCleanupInterval) {
+            clearInterval(this.memoryCleanupInterval)
+            this.memoryCleanupInterval = null
+        }
+        if (this.speedMonitorInterval) {
+            clearInterval(this.speedMonitorInterval)
+            this.speedMonitorInterval = null
+        }
         if (this.swarm) {
             // console.log('[P2PEngine] Stopping...')
             const swarm = this.swarm
@@ -859,7 +867,7 @@ class P2PEngine extends EventEmitter {
 
     decrementUploadCountForIP(ip) {
         const count = this.getUploadCountForIP(ip)
-        if (count > 0) {
+        if (count > 1) {
             this.uploadCounts.set(ip, count - 1)
         } else {
             this.uploadCounts.delete(ip)

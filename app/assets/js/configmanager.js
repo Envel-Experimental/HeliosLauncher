@@ -171,7 +171,7 @@ exports.save = async function () {
 
     // IO Operation: Write with retry mechanism
     try {
-        return await retry(
+        await retry(
             async () => {
                 const { safeWriteJson } = require('./util')
                 await safeWriteJson(configPath, configToSave)
@@ -229,9 +229,6 @@ exports.load = async function () {
                 const acc = config.authenticationDatabase[uuid]
                 if (acc.accessToken) {
                     const decrypted = SecurityUtils.decryptString(acc.accessToken)
-                    // If decryption returns the exact same string, it implies failure (in our current util logic).
-                    // To be safe and prevent double-encryption loop, if it looks encrypted but decrypt failed, we should probably reset it.
-                    // But simpler: just assign. The fix in SecurityUtils.encryptString will prevent re-encryption.
                     acc.accessToken = decrypted
                 }
                 if (acc.microsoft) {
@@ -260,9 +257,8 @@ exports.load = async function () {
 
     } catch (err) {
         logger.error(err)
-        if (err instanceof SyntaxError) {
-            logger.info('Configuration file contains malformed JSON or is corrupt.')
-            logger.info('Generating a new configuration file.')
+        if (err instanceof SyntaxError || err.code === 'EADDRINUSE') {
+            logger.info('Configuration file is corrupt or unreadable. Generating a new configuration file (Emergency Reset).')
             await fs.mkdir(path.join(configPath, '..'), { recursive: true })
             config = DEFAULT_CONFIG
             await exports.save()
@@ -347,7 +343,7 @@ exports.getNewsCache = function () {
 
 /**
  * Set the new news cache object.
-
+ 
 /**
  * Retrieve the common directory for shared
  * game files (assets, libraries, etc).

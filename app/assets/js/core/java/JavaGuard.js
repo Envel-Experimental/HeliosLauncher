@@ -12,12 +12,28 @@ const log = LoggerUtil.getLogger('JavaGuard');
 const execAsync = util.promisify(exec);
 const execFileAsync = util.promisify(execFile);
 
+/**
+ * Perform a fetch with a 10s timeout.
+ */
+async function fetchWithTimeout(url, options = {}, timeout = 10000) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    try {
+        const response = await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+        clearTimeout(id);
+        return response;
+    } catch (error) {
+        clearTimeout(id);
+        throw error;
+    }
+}
+
 const { MOJANG_MIRRORS } = require('../../../../../network/config');
 
-
 let javaMirrorManifestMap = new Map(); // url -> manifest
-
-// Winreg removed in favor of native reg.exe calls to avoid DEP0190
 
 async function getHotSpotSettings(execPath) {
     const javaExecutable = path.resolve(execPath.includes('javaw.exe') ? execPath.replace('javaw.exe', 'java.exe') : execPath);
@@ -160,7 +176,7 @@ async function loadJavaMirrorManifest(mirrorUrl) {
         return javaMirrorManifestMap.get(mirrorUrl);
     }
     try {
-        const res = await fetch(mirrorUrl);
+        const res = await fetchWithTimeout(mirrorUrl);
         if (res.ok) {
             const manifest = await res.json();
             javaMirrorManifestMap.set(mirrorUrl, manifest);
@@ -264,7 +280,7 @@ async function latestLibericaNIK(major, dataDir) {
     // https://api.bell-sw.com/v1/nik/releases?version-feature={major}&os={os}&arch={arch}&bitness=64&package-type={type}
     const url = `https://api.bell-sw.com/v1/nik/releases?version-feature=${major}&os=${os}&arch=${arch}&bitness=${bitness}&package-type=${packageType}&bundle-type=standard`;
 
-    const res = await fetch(url);
+    const res = await fetchWithTimeout(url);
     if (!res.ok) throw new Error(`BellSoft API Error ${res.status}`);
 
     const releases = await res.json();
@@ -319,7 +335,7 @@ async function latestGraalVM_GitHub(major, dataDir) {
     const url = `https://api.github.com/repos/${repo}/releases`;
 
     try {
-        const res = await fetch(url);
+        const res = await fetchWithTimeout(url);
         if (!res.ok) throw new Error(`GitHub API Error ${res.status}`);
         const releases = await res.json();
 
@@ -330,9 +346,6 @@ async function latestGraalVM_GitHub(major, dataDir) {
             log.warn(`No GraalVM release found for Java ${major}`);
             return null;
         }
-
-        // Find asset
-
 
         const asset = targetRelease.assets.find(a =>
             a.name.toLowerCase().includes(sanitizedOS) &&
@@ -345,7 +358,7 @@ async function latestGraalVM_GitHub(major, dataDir) {
                 url: asset.browser_download_url,
                 size: asset.size,
                 id: asset.name,
-                hash: null, // GitHub doesn't provide easy hash in asset list, verify logic might need to skip or fetch .sha256 file
+                hash: null,
                 algo: null,
                 path: path.join(getLauncherRuntimeDir(dataDir), asset.name)
             };
@@ -363,7 +376,7 @@ async function latestAdoptium(major, dataDir) {
     const arch = process.arch === 'arm64' ? 'aarch64' : 'x64';
     const url = `https://api.adoptium.net/v3/assets/latest/${major}/hotspot?vendor=eclipse`;
     try {
-        const res = await fetch(url);
+        const res = await fetchWithTimeout(url);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const body = await res.json();
 
@@ -418,7 +431,7 @@ async function latestCorretto(major, dataDir) {
     const url = `https://corretto.aws/downloads/latest/amazon-corretto-${major}-${arch}-${sanitizedOS}-jdk.${ext}`;
 
     try {
-        const res = await fetch(url, { method: 'HEAD' });
+        const res = await fetchWithTimeout(url, { method: 'HEAD' });
         if (res.ok) {
             const finalUrl = res.url;
             const name = finalUrl.substring(finalUrl.lastIndexOf('/') + 1);
@@ -444,7 +457,7 @@ async function extractJdk(archivePath) {
     let javaExecPath = null;
     if (archivePath.endsWith('zip')) {
         await extractZip(archivePath, async (zip) => {
-            const entries = zip.entries(); // This is the mock object I made in FileUtils
+            const entries = zip.entries();
             const keys = Object.keys(entries);
             javaExecPath = javaExecFromRoot(path.join(path.dirname(archivePath), keys[0]));
         });
@@ -717,7 +730,6 @@ class Win32RegistryJavaDiscoverer {
 
         for (const keyPath of regKeys) {
             try {
-                // List subkeys (versions)
                 const { stdout } = await execFileAsync('reg', ['query', 'HKLM' + keyPath]);
                 if (!stdout) continue;
 
@@ -726,11 +738,9 @@ class Win32RegistryJavaDiscoverer {
 
                 for (const subkey of subkeys) {
                     try {
-                        // Get JavaHome for each subkey
                         const { stdout: valStdout } = await execFileAsync('reg', ['query', subkey.trim(), '/v', 'JavaHome']);
                         if (!valStdout) continue;
 
-                        // Parse JavaHome    REG_SZ    Path
                         const match = valStdout.match(/\sJavaHome\s+REG_SZ\s+(.*)/i);
                         if (match && match[1]) {
                             const javaHome = match[1].trim();
@@ -739,11 +749,9 @@ class Win32RegistryJavaDiscoverer {
                             }
                         }
                     } catch (e) {
-                        // Ignore errors reading specific subkey
                     }
                 }
             } catch (e) {
-                // Key might not exist, ignore
             }
         }
         return [...candidates];
