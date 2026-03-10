@@ -372,7 +372,8 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
             }
 
             // Validate Atomic Write (RCE Guard)
-            if (await validateLocalFile(tempPath, algo, currentHash, asset.size)) {
+            const isP2P = !!response.p2pStream;
+            if (await validateLocalFile(tempPath, algo, currentHash, asset.size, isP2P)) {
                 // Success! Atomic rename to final path
                 await fs.rename(tempPath, decodedPath);
 
@@ -410,14 +411,16 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
 
             // On failure, do NOT delete .tmp if it's a P2P error (we might resume later)
             // But if it's a validation error (hash mismatch on full file), we MUST delete it.
-            const isValidationError = err.message === 'Validation failed'
+            const isValidationError = err.code === 'HASH_MISMATCH' || 
+                                      err.message === 'Validation failed' || 
+                                      (err.message && err.message.toLowerCase().includes('hash mismatch'));
 
             if (isValidationError) {
                 try { await fs.unlink(decodedPath + '.tmp') } catch (e) { }
             }
 
             // Record failure if not already recorded (Validation failed adds its own)
-            if (err.message !== 'Validation failed') {
+            if (!isValidationError) {
                 attemptHistory.push({
                     attempt: attempt + 1,
                     url: currentUrl,

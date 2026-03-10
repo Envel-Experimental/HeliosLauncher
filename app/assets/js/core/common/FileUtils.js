@@ -35,9 +35,23 @@ async function runCommand(cmd, args, options = {}) {
     });
 }
 
-async function validateLocalFile(filePath, algo, hash, expectedSize) {
+async function validateLocalFile(filePath, algo, hash, expectedSize, requireHash = false) {
     if (hash == null) {
         console.warn(`[Security] No hash provided for ${filePath}. Skipping validation.`);
+        if (requireHash) {
+            console.error(`[Security] Validation failed: Hash is strictly required for this file.`);
+            return false;
+        }
+        
+        try {
+            const stat = await fs.stat(filePath);
+            if (expectedSize && stat.size !== expectedSize) {
+                return false;
+            }
+        } catch (e) {
+            return false;
+        }
+        
         return true;
     }
 
@@ -52,8 +66,19 @@ async function validateLocalFile(filePath, algo, hash, expectedSize) {
     }
 
     return new Promise((resolve, reject) => {
+        let algorithm;
+        try {
+            if (typeof algo !== 'string') {
+                throw new Error('Algorithm must be a string');
+            }
+            algorithm = algo.toLowerCase().replace('-', '');
+            crypto.createHash(algorithm); // Test if available
+        } catch (e) {
+            console.error(`[FileUtils] Unsupported or missing hash algorithm: ${algo}`);
+            return resolve(false);
+        }
+
         const stream = createReadStream(filePath);
-        const algorithm = algo.toLowerCase().replace('-', '');
         const hashStream = crypto.createHash(algorithm);
 
         stream.on('error', err => {
@@ -96,8 +121,14 @@ function getVersionJarPath(commonDir, version) {
 }
 
 function calculateHashByBuffer(buffer, algo) {
-    const algorithm = algo.toLowerCase().replace('-', '');
-    return crypto.createHash(algorithm).update(buffer).digest('hex');
+    try {
+        if (typeof algo !== 'string') throw new Error('Algorithm must be a string');
+        const algorithm = algo.toLowerCase().replace('-', '');
+        return crypto.createHash(algorithm).update(buffer).digest('hex');
+    } catch (e) {
+        console.error(`[FileUtils] Failed to calculate hash: ${e.message}`);
+        return null;
+    }
 }
 
 async function extractZip(archivePath, destDir, onEntry) {

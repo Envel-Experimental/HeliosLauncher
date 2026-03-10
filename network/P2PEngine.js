@@ -142,7 +142,7 @@ class P2PEngine extends EventEmitter {
         this.totalDownloadedGlobal = 0
 
         // Batching
-        this.batchQueue = new Map() // Peer -> Array<{ reqId, hash }>
+        this.batchQueue = new WeakMap() // Peer -> Array<{ reqId, hash }>
         this.batchFlushScheduled = false
 
         // Circuit Breaker (Panic Mode)
@@ -230,7 +230,7 @@ class P2PEngine extends EventEmitter {
                     // Restart logic
                     this.stop().then(() => {
                         // Small delay to let OS settle
-                        setTimeout(() => this.start(), 2000)
+                        this._restartTimeout = setTimeout(() => this.start(), 2000)
                     })
                 } else if (!this.lastNetworkFingerprint) {
                     this.lastNetworkFingerprint = currentFingerprint
@@ -313,6 +313,34 @@ class P2PEngine extends EventEmitter {
             clearInterval(this.speedMonitorInterval)
             this.speedMonitorInterval = null
         }
+        if (this._discoveryTimeout) {
+            clearTimeout(this._discoveryTimeout)
+            this._discoveryTimeout = null
+        }
+        if (this._batchFlushTimeout) {
+            clearTimeout(this._batchFlushTimeout)
+            this._batchFlushTimeout = null
+            this.batchFlushScheduled = false
+        }
+        if (this._restartTimeout) {
+            clearTimeout(this._restartTimeout)
+            this._restartTimeout = null
+        }
+        if (this._panicTimeout) {
+            clearTimeout(this._panicTimeout)
+            this._panicTimeout = null
+        }
+        if (this.blacklistTimeouts) {
+            for (const t of this.blacklistTimeouts.values()) clearTimeout(t)
+            this.blacklistTimeouts.clear()
+        }
+        // Clear all request timeouts
+        for (const req of this.requests.values()) {
+            if (req.timeoutId) clearTimeout(req.timeoutId)
+            req.reject(new Error('P2P Engine stopped'))
+        }
+        this.requests.clear()
+
         if (this.swarm) {
             // console.log('[P2PEngine] Stopping...')
             const swarm = this.swarm
@@ -341,10 +369,26 @@ class P2PEngine extends EventEmitter {
         if (!ip) return false
         if (ip.startsWith('::ffff:')) ip = ip.substring(7)
 
-        // Comprehensive Local Check (IPv4 + IPv6)
-        // IPv4: 127.0.0.1, 192.168.x.x, 10.x.x.x, 172.16-31.x.x, 169.254.x.x, 100.64.0.0/10
-        // IPv6: fe80:: (Link-local), ::1 (Loopback), fc00::/7 (Unique local)
-        return /^(127\.|192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.|169\.254\.|100\.(6[4-9]|[7-9]\d|1[0-1]\d|12[0-7])\.|fe80:|fc00:|fd[0-9a-f]{2}:|::1$)/i.test(ip) || ip === '::1'
+        if (ip.includes(':')) {
+            return ip === '::1' || ip.startsWith('fe80:') || ip.toLowerCase().startsWith('fc') || ip.toLowerCase().startsWith('fd')
+        }
+
+        const parts = ip.split('.')
+        if (parts.length !== 4) return false
+
+        const num = ((parseInt(parts[0], 10) << 24) |
+                     (parseInt(parts[1], 10) << 16) |
+                     (parseInt(parts[2], 10) << 8) |
+                      parseInt(parts[3], 10)) >>> 0;
+
+        if ((num & 0xff000000) >>> 0 === 0x0a000000) return true; // 10.0.0.0/8
+        if ((num & 0xffff0000) >>> 0 === 0xc0a80000) return true; // 192.168.0.0/16
+        if ((num & 0xfff00000) >>> 0 === 0xac100000) return true; // 172.16.0.0/12
+        if ((num & 0xff000000) >>> 0 === 0x7f000000) return true; // 127.0.0.0/8
+        if ((num & 0xffff0000) >>> 0 === 0xa9fe0000) return true; // 169.254.0.0/16
+        if ((num & 0xffc00000) >>> 0 === 0x64400000) return true; // 100.64.0.0/10
+
+        return false
     }
 
     async init() {
@@ -536,8 +580,8 @@ class P2PEngine extends EventEmitter {
 
                 if (!this._discoveryPromise) {
                     this._discoveryPromise = new Promise(resolve => {
-                        const onConn = () => { this.off('peer_added', onConn); clearTimeout(t); this._discoveryPromise = null; resolve(true) }
-                        const t = setTimeout(() => { this.off('peer_added', onConn); this._discoveryPromise = null; resolve(false) }, 10000)
+                        const onConn = () => { this.off('peer_added', onConn); clearTimeout(this._discoveryTimeout); this._discoveryPromise = null; resolve(true) }
+                        this._discoveryTimeout = setTimeout(() => { this.off('peer_added', onConn); this._discoveryPromise = null; resolve(false) }, 10000)
                         this.once('peer_added', onConn)
                     })
                 }
@@ -647,43 +691,26 @@ class P2PEngine extends EventEmitter {
                 reqId = crypto.randomBytes(4).readUInt32BE(0)
             } while (this.requests.has(reqId) || reqId === 0)
 
-            // if (isDev) console.debug(`[P2P Debug] Requesting ${hash.substring(0, 8)} (${fileId || 'n/a'}) from ${peer.getIP()} [${peer.isLocal() ? 'LAN' : 'WAN'}]`)
-
-            // Register Request
-            this.requests.set(reqId, {
-                stream,
-                peer,
-                expectedSize,
-                timestamp: Date.now(),
-                bytesReceived: startOffset, // Initialize with offset so size checks are correct
-                resolve,
-                reject
-            })
-
-            // Sending request
-            const useBatching = peer.batchSupport && (expectedSize > 0 && expectedSize < 1024 * 1024) && !relPath
-
-            if (useBatching) {
-                if (!this.batchQueue.has(peer)) {
-                    this.batchQueue.set(peer, [])
-                }
-                this.batchQueue.get(peer).push({ reqId, hash })
-
-                if (!this.batchFlushScheduled) {
-                    this.batchFlushScheduled = true
-                    setTimeout(() => this.flushBatches(), 20)
-                }
-            } else {
-                try {
-                    peer.sendRequest(reqId, hash, relPath, fileId, startOffset)
-                } catch (e) {
+            const onSocketError = (err) => {
+                if (this.requests.has(reqId)) {
+                    const req = this.requests.get(reqId)
                     this.requests.delete(reqId)
-                    reject(e)
-                    return
+                    const error = new Error(`Peer socket closed/errored: ${err ? err.message : 'Unknown error'}`)
+                    Object.assign(error, { bytesReceived: req.bytesReceived })
+                    req.reject(error)
                 }
             }
 
-            setTimeout(() => {
+            peer.socket.once('error', onSocketError)
+            peer.socket.once('close', onSocketError)
+
+            const cleanup = () => {
+                peer.socket.off('error', onSocketError)
+                peer.socket.off('close', onSocketError)
+            }
+
+            // Register Request
+            const timeoutId = setTimeout(() => {
                 if (this.requests.has(reqId)) {
                     const req = this.requests.get(reqId)
                     this.requests.delete(reqId)
@@ -692,6 +719,58 @@ class P2PEngine extends EventEmitter {
                     req.reject(err)
                 }
             }, Config.PROTOCOL.TIMEOUT)
+
+            const customResolve = (...args) => {
+                cleanup()
+                clearTimeout(timeoutId)
+                resolve(...args)
+            }
+
+            const customReject = (err) => {
+                cleanup()
+                clearTimeout(timeoutId)
+                reject(err)
+            }
+
+            this.requests.set(reqId, {
+                stream,
+                peer,
+                expectedSize,
+                timestamp: Date.now(),
+                bytesReceived: startOffset, // Initialize with offset so size checks are correct
+                resolve: customResolve,
+                reject: customReject,
+                timeoutId
+            })
+
+            // Sending request
+            const useBatching = peer.batchSupport && (expectedSize > 0 && expectedSize < 1024 * 1024) && !relPath
+
+            if (useBatching) {
+                let batches = this.batchQueue.get(peer)
+                if (!batches) {
+                    batches = []
+                    this.batchQueue.set(peer, batches)
+                }
+                batches.push({ reqId, hash })
+
+                if (!this.batchFlushScheduled) {
+                    this.batchFlushScheduled = true
+                    this._batchFlushTimeout = setTimeout(() => this.flushBatches(), 20)
+                }
+            } else {
+                try {
+                    peer.sendRequest(reqId, hash, relPath, fileId, startOffset)
+                } catch (e) {
+                    if (this.requests.has(reqId)) {
+                        this.requests.delete(reqId)
+                        clearTimeout(timeoutId)
+                        cleanup()
+                        reject(e)
+                    }
+                    return
+                }
+            }
         })
     }
 
@@ -782,8 +861,12 @@ class P2PEngine extends EventEmitter {
 
     flushBatches() {
         this.batchFlushScheduled = false
-        for (const [peer, initialRequests] of this.batchQueue) {
-            if (peer.socket.destroyed || !this.peers.includes(peer)) {
+        this._batchFlushTimeout = null
+        for (const peer of this.peers) {
+            const initialRequests = this.batchQueue.get(peer)
+            if (!initialRequests) continue
+
+            if (peer.socket.destroyed) {
                 this.batchQueue.delete(peer)
                 continue
             }
@@ -798,8 +881,8 @@ class P2PEngine extends EventEmitter {
                     console.error('[P2PEngine] Failed to send batch', e)
                 }
             }
+            this.batchQueue.delete(peer)
         }
-        this.batchQueue.clear()
     }
 
     reportUploadStats(speed, isError) {
@@ -872,8 +955,12 @@ class P2PEngine extends EventEmitter {
         if (strikes >= 3) {
             console.error(`[P2P Security] BLACKLISTING ID: ${id} for suspicious behavior.`)
             this.blacklist.add(id)
-            // Remove blacklist after 10 minutes
-            setTimeout(() => this.blacklist.delete(id), 600000)
+            if (!this.blacklistTimeouts) this.blacklistTimeouts = new Map()
+            const tId = setTimeout(() => {
+                this.blacklist.delete(id)
+                this.blacklistTimeouts.delete(id)
+            }, 600000)
+            this.blacklistTimeouts.set(id, tId)
         }
 
         // Always disconnect the peer on a strike
@@ -889,7 +976,7 @@ class P2PEngine extends EventEmitter {
 
             this.panicMode = true
             this.stop()
-            setTimeout(() => {
+            this._panicTimeout = setTimeout(() => {
                 this.panicMode = false
                 this.attackCounter = 0
                 this.start()
