@@ -140,6 +140,28 @@ process.on('uncaughtException', (err) => {
         // If returns true: we are handling/relaunching, stop execution.
         if (handleEPERM()) return
     } else {
+        // HARDENING: Prevent P2P background tasks from crashing the entire launcher
+        const stack = err.stack ? err.stack.toLowerCase() : ''
+        if (stack.includes('network\\p2pengine') || stack.includes('network/p2pengine') || stack.includes('hyperswarm') || stack.includes('hyperdht') || stack.includes('b4a')) {
+            console.error('[P2P] Uncaught Exception caught to prevent fatal crash:', err)
+            try {
+                if (P2PEngine) {
+                    const isDead = !P2PEngine.swarm || P2PEngine.swarm.destroyed || !P2PEngine.dht || P2PEngine.dht.destroyed
+                    if (isDead && !P2PEngine.starting && !P2PEngine.stopping) {
+                        console.log('[P2P] Core components appear dead. Attempting to restart P2P engine...')
+                        P2PEngine.stop().then(() => {
+                            setTimeout(() => P2PEngine.start(), 5000)
+                        })
+                    } else {
+                        console.log('[P2P] Engine seems to still be running, ignoring error to preserve active connections.')
+                    }
+                }
+            } catch (p2pErr) {
+                console.error('[P2P] Failed to auto-restart P2PEngine after crash:', p2pErr)
+            }
+            return
+        }
+
         console.error('An uncaught exception occurred:', err)
         showCriticalError(err)
     }

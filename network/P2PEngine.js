@@ -313,6 +313,10 @@ class P2PEngine extends EventEmitter {
             clearInterval(this.speedMonitorInterval)
             this.speedMonitorInterval = null
         }
+        if (this._dhtReadyTimeout) {
+            clearTimeout(this._dhtReadyTimeout)
+            this._dhtReadyTimeout = null
+        }
         if (this._discoveryTimeout) {
             clearTimeout(this._discoveryTimeout)
             this._discoveryTimeout = null
@@ -451,7 +455,10 @@ class P2PEngine extends EventEmitter {
                     */
                 }
 
-                setTimeout(() => {
+                this._dhtReadyTimeout = setTimeout(() => {
+                    this._dhtReadyTimeout = null
+                    if (!this.dht) return // VULNERABILITY FIX: Prevent null pointer if engine stopped
+
                     const currentNodes = this._getRoutingTableSize()
                     // if (isDev) console.debug(`[P2P Debug] DHT Status after 5s. Bootstrapped: ${this.dht.bootstrapped}. Routing Nodes: ${currentNodes}`)
                     if (currentNodes === 0 && !this.dht.bootstrapped) {
@@ -661,6 +668,7 @@ class P2PEngine extends EventEmitter {
                 // If it was a "Not Found" or "Busy", we just continue the loop to the next peer.
                 // Small sleep to avoid instant hammering
                 await new Promise(r => setTimeout(r, 200))
+                if (this.stopping || !this.swarm) return
             }
         }
 
@@ -1158,7 +1166,7 @@ class P2PEngine extends EventEmitter {
             downloadedGlobal: this.totalDownloadedGlobal || 0,
             dhtNodes: routingNodes,
             bootstrapNodes: Config.BOOTSTRAP_NODES.length,
-            bootstrapped: this.dht && this.dht.bootstrapped,
+            bootstrapped: this.dht ? this.dht.bootstrapped : false,
             running: !!this.swarm,
             listening: !!this.swarm, // Added for UI compatibility
             mode: isEffectivelyPassive ? 'Passive (Leech)' : 'Active (Seed)',
