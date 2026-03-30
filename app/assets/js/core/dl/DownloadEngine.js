@@ -173,12 +173,15 @@ async function downloadQueue(assets, onProgress) {
     // 3. Last Check
     if (deferredQueue.length > 0) {
         const names = deferredQueue.map(a => a.id).join(', ');
-        const criticalError = new Error(`Critical failure: Failed to download ${deferredQueue.length} files even after deferral: ${names}`);
-        criticalError.failedFiles = deferredQueue.map(a => ({
-            id: a.id,
-            url: a.url,
-            history: a.history || []
-        }));
+        const fileWord = deferredQueue.length === 1 ? 'file' : 'files';
+        const errorMsg = `Failed to download ${deferredQueue.length} ${fileWord}: ${names}. Please check your internet connection and try again.`;
+        const criticalError = Object.assign(new Error(errorMsg), {
+            failedFiles: deferredQueue.map(a => ({
+                id: a.id,
+                url: a.url,
+                history: a.history || []
+            }))
+        });
         throw criticalError;
     }
 
@@ -434,8 +437,9 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
 
             if (instantDefer) {
                 // Return immediate failure to defer the file
-                const deferError = new Error(err.message);
-                deferError.history = attemptHistory;
+                const deferError = Object.assign(new Error(err.message), {
+                    history: attemptHistory
+                });
                 throw deferError;
             }
             // Continue to next attempt
@@ -443,10 +447,10 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
     }
 
     // If we're here, all retries failed
-    // If we're here, all retries failed
     log.error(`Failed to download ${asset.id} after 5 attempts: ${lastError ? lastError.message : 'Unknown error'}`);
-    const finalError = lastError || new Error('Download failed after multiple attempts');
-    finalError.history = attemptHistory;
+    const finalError = Object.assign(lastError || new Error('Download failed after multiple attempts'), {
+        history: attemptHistory
+    });
     throw finalError;
 }
 

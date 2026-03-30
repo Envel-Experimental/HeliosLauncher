@@ -514,8 +514,28 @@ async function dlAsync(login = true) {
     } catch (err) {
         ipcRenderer.removeListener('dl:progress', progressListener)
         loggerLaunchSuite.warn('Error during file download via Main Process.', err)
-        showLaunchFailure(Lang.queryJS('landing.dlAsync.errorDuringFileDownloadTitle'), err.message || 'Download Failed')
-        return
+
+        // Provide an option to skip download failures and try to launch anyway
+        const skip = await new Promise((resolve) => {
+            setOverlayContent(
+                Lang.queryJS('landing.dlAsync.errorDuringFileDownloadTitle'),
+                err.message + '<br><br>' + Lang.queryJS('landing.dlAsync.skipQuestion'),
+                Lang.queryJS('landing.dlAsync.retryButton'),
+                Lang.queryJS('landing.dlAsync.skipButton')
+            )
+            setOverlayHandler(() => {
+                toggleOverlay(false)
+                toggleLaunchArea(false)
+                resolve(false)
+            })
+            setMiddleButtonHandler(() => {
+                toggleOverlay(false)
+                resolve(true)
+            })
+            toggleOverlay(true)
+        })
+
+        if (!skip) return
     }
 
     // Receiver destruction moved to Main.
