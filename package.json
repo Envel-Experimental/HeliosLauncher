@@ -23,8 +23,9 @@
     "test:unit": "jest tests/unit",
     "test:integration": "jest tests/integration",
     "test:coverage": "jest --coverage",
-    "test:performance": "xvfb-run --auto-servernum --server-args=\"-screen 0 1280x960x24\" -- playwright test tests/performance",
-    "test:smoke": "xvfb-run --auto-servernum --server-args=\"-screen 0 1280x960x24\" -- playwright test tests/smoke.spec.js"
+    "test:performance": "playwright test tests/performance",
+    "test:smoke": "playwright test tests/smoke.spec.js",
+    "test:e2e": "playwright test tests/e2e.spec.js"
   },
   "engines": {
     "node": ">=20.x.x"

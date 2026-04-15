@@ -24,10 +24,12 @@ var remoteDialog = remote.dialog
 process.traceProcessWarnings = true
 process.traceDeprecation = true
 
-// Disable eval function.
-// eslint-disable-next-line
-window.eval = global.eval = function () {
-    throw new Error('Sorry, this app does not support window.eval().')
+// Disable eval function in production.
+if (!isDev) {
+    // eslint-disable-next-line
+    window.eval = global.eval = function () {
+        throw new Error('Sorry, this app does not support window.eval().')
+    }
 }
 
 // Display warning when devtools window is opened.
