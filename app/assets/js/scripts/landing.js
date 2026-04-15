@@ -630,6 +630,7 @@ async function dlAsync(login = true) {
         try {
             // Build Minecraft process.
             proc = await pb.build()
+            window.activeMinecraftProcess = proc // Expose for E2E testing
 
             // Bind listeners to stdout.
             proc.stdout.on('data', tempListener)

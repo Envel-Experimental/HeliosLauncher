@@ -179,7 +179,13 @@ test.describe('HeliosLauncher E2E Flow', () => {
                 window.waitForTimeout(120000).then(() => { throw new Error('Timeout waiting for Minecraft log line'); })
             ]);
             
-            console.log('Target log detected successfully. Launch verified.');
+            console.log('Target log detected successfully. Terminating game process...');
+            await window.evaluate(() => {
+                if (window.activeMinecraftProcess) {
+                    window.activeMinecraftProcess.kill();
+                }
+            });
+            console.log('Game process killed. Launch verified.');
         });
     });
 });
