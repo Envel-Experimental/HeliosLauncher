@@ -105,34 +105,81 @@ test.describe('HeliosLauncher E2E Flow', () => {
             }
         });
 
-        await test.step('Account: Open Login View', async () => {
+        await test.step('Account: Login via UI', async () => {
+            await switchSettingsTab(window, 'settingsTabAccount');
             await window.locator('#settingsAddMojangAccount').click();
             await expect(window.locator('#loginContainer')).toBeVisible();
-            await window.locator('#loginCancelButton').click();
-            await expect(window.locator('#settingsContainer')).toBeVisible();
+
+            const usernameInput = window.locator('#loginUsername');
+            await usernameInput.fill('TestUserTwo');
+            
+            const loginBtn = window.locator('#loginButton');
+            await expect(loginBtn).toBeEnabled();
+            await loginBtn.click();
+
+            // Success might return to settings or landing depending on where it was opened
+            // Wait for login container to disappear
+            await expect(window.locator('#loginContainer')).toBeHidden({ timeout: 15000 });
+            console.log('UI-based login successful (container hidden).');
         });
 
-        await test.step('Landing: Verify Instance List', async () => {
-            await window.locator('#settingsNavDone').click();
+        await test.step('Landing: Verify Instance List Content', async () => {
+            // Ensure we are on landing for this test
+            if (!await window.locator('#landingContainer').isVisible()) {
+                await window.locator('#settingsNavDone').click();
+            }
             await expect(window.locator('#landingContainer')).toBeVisible();
 
             const serverBtn = window.locator('#server_selection_button');
             await serverBtn.click();
             
             const serverList = window.locator('#serverSelectListScrollable');
-            // Give it a moment to populate
-            await window.waitForTimeout(1000);
             await expect(serverList).toBeVisible();
-            console.log('Instance list opened.');
+            
+            // Wait for server listings to appear
+            const serverItems = window.locator('.serverListing');
+            await serverItems.first().waitFor({ state: 'attached', timeout: 5000 });
+            
+            const serverCount = await serverItems.count();
+            console.log(`Verified ${serverCount} servers in the list.`);
+            expect(serverCount).toBeGreaterThan(0);
+            
+            await window.keyboard.press('Escape');
         });
 
-        await test.step('Final Checks: Launch button', async () => {
-            await window.keyboard.press('Escape');
+        await test.step('Game: Attempt Launch Lifecycle', async () => {
             await expect(window.locator('#landingContainer')).toBeVisible();
-
+            
             const launchBtn = window.locator('#launch_button');
-            await expect(launchBtn).toBeVisible();
-            console.log('All E2E scenarios completed.');
+            const launchDetails = window.locator('#launch_details');
+            
+            console.log('Starting launch process...');
+
+            // Prepare a promise that resolves when the specific log is detected
+            const logFoundPromise = new Promise((resolve) => {
+                window.on('console', msg => {
+                    const text = msg.text();
+                    if (text.includes('[Minecraft]') && text.includes('Setting user:')) {
+                        console.log('Detected Minecraft login log: ' + text);
+                        resolve();
+                    }
+                });
+            });
+
+            await launchBtn.click();
+
+            // First check for UI feedback
+            await expect(launchDetails).toHaveText(/Запуск игры|Загрузка файлов|Проверка|Подготовка/i, { timeout: 30000 });
+            console.log('UI confirmed launch start. Waiting for process logs...');
+
+            // Wait for the specific log line from the process (timeout 2min)
+            // Note: In test environment this requires dummy assets to be found or skipped
+            await Promise.race([
+                logFoundPromise,
+                window.waitForTimeout(120000).then(() => { throw new Error('Timeout waiting for Minecraft log line'); })
+            ]);
+            
+            console.log('Target log detected successfully. Launch verified.');
         });
     });
 });
