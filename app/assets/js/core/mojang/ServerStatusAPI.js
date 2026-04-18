@@ -64,6 +64,10 @@ async function checkSrv(hostname) {
 }
 
 async function getServerStatus(protocol, hostname, port = 25565) {
+    if (process.type === 'renderer') {
+        return await HeliosAPI.ipc.invoke('server:status', protocol, hostname, port)
+    }
+
     const srvRecord = await checkSrv(hostname);
     if (srvRecord != null) {
         hostname = srvRecord.name;

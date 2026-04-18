@@ -11,8 +11,8 @@ const { Readable, Transform } = require('stream');
 const P2PEngine = require('../../../../../network/P2PEngine');
 const RaceManager = require('../../../../../network/RaceManager');
 const { MAX_PARALLEL_DOWNLOADS } = require('../../../../../network/constants');
-const ConfigManager = require('../../configmanager');
-const isDev = require('../../isdev');
+const ConfigManager = require('../configmanager');
+const isDev = require('../isdev');
 const MirrorManager = require('../../../../../network/MirrorManager');
 
 /**
@@ -67,11 +67,11 @@ async function cleanupStaleTempFiles() {
     };
 
     try {
-        const dataDir = ConfigManager.getDataDirectory().trim();
-        const commonDir = ConfigManager.getCommonDirectory().trim();
+        const dataDir = ConfigManager.getDataDirectory();
+        const commonDir = await ConfigManager.getCommonDirectory();
 
-        await scanAndClean(dataDir);
-        if (commonDir !== dataDir) await scanAndClean(commonDir);
+        if (dataDir) await scanAndClean(dataDir);
+        if (commonDir && commonDir !== dataDir) await scanAndClean(commonDir);
     } catch (e) {
         log.warn('[Cleanup] Cleanup failed:', e);
     }

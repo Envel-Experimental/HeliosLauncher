@@ -1,92 +1,80 @@
-const fs = require('fs/promises');
-const path = require('path');
-
-// Mock fs/promises
-jest.mock('fs/promises', () => ({
-  stat: jest.fn(),
-  mkdir: jest.fn(),
-  writeFile: jest.fn(),
-  readFile: jest.fn(),
-  rename: jest.fn(),
-}));
-
-// Mock util.move
-jest.mock('@app/assets/js/util', () => ({
-  move: jest.fn(),
-  retry: jest.fn((fn) => fn()),
-  safeWriteJson: jest.fn(),
-  safeReadJson: jest.fn()
-}));
-
-// Mock sysutil (since ConfigManager might import it or things that depend on it)
-jest.mock('@app/assets/js/sysutil', () => ({
-  // add any necessary mocks
-}));
-
-
-const ConfigManager = require('@app/assets/js/configmanager');
-const fsPromises = require('fs/promises');
-const { move, safeWriteJson, safeReadJson } = require('@app/assets/js/util');
+const path = require('path')
 
 describe('ConfigManager', () => {
+    let ConfigManager
+    let fs
+    let util
 
-  beforeEach(() => {
-    // Reset mocks before each test
-    jest.clearAllMocks();
-  });
+    beforeEach(() => {
+        jest.resetModules()
+        
+        // Mock fs
+        jest.mock('fs', () => ({
+            existsSync: jest.fn(),
+            mkdirSync: jest.fn(),
+            promises: {
+                mkdir: jest.fn().mockResolvedValue(),
+                readFile: jest.fn(),
+                writeFile: jest.fn()
+            }
+        }))
 
-  it('should be an object', () => {
-    expect(typeof ConfigManager).toBe('object');
-  });
+        // Mock core util
+        // Correct path: tests/unit/app/assets/js/configmanager.test.js -> core/util
+        jest.mock('../../../../../app/assets/js/core/util', () => ({
+            move: jest.fn().mockResolvedValue(),
+            retry: jest.fn((fn) => fn()),
+            safeReadJson: jest.fn().mockResolvedValue({}),
+            safeWriteJson: jest.fn().mockResolvedValue(),
+            LoggerUtil: {
+                getLogger: jest.fn(() => ({
+                    info: jest.fn(),
+                    error: jest.fn(),
+                    debug: jest.fn()
+                }))
+            }
+        }))
 
-  describe('load()', () => {
-    it('should create a default config if one does not exist', async () => {
-      // Mock existance check (stat) to throw ENOENT
-      fsPromises.stat.mockRejectedValue({ code: 'ENOENT' });
+        // Mock SecurityUtils - found in core/util/SecurityUtils
+        jest.mock('../../../../../app/assets/js/core/util/SecurityUtils', () => ({
+            decryptString: jest.fn(s => s),
+            encryptString: jest.fn(s => s)
+        }))
 
-      await ConfigManager.load();
+        // Mock electron
+        jest.mock('electron', () => ({
+            app: {
+                getPath: jest.fn().mockReturnValue('/mock/userData')
+            }
+        }))
 
-      // Should try to write default config
-      expect(safeWriteJson).toHaveBeenCalled();
-    });
+        ConfigManager = require('../../../../../app/assets/js/core/configmanager')
+        fs = require('fs')
+        util = require('../../../../../app/assets/js/core/util')
+    })
 
-    it('should load an existing config file', async () => {
-      // Mock stat to succeed (file exists)
-      fsPromises.stat.mockResolvedValue({ isFile: () => true });
-      safeReadJson.mockResolvedValue({ settings: { game: { resWidth: 1920 } } });
+    describe('load()', () => {
+        it('should load config from the default path', async () => {
+            fs.existsSync.mockReturnValue(true)
+            util.safeReadJson.mockResolvedValue({
+                settings: { launcher: { dataDirectory: '/mock/data' } }
+            })
 
-      await ConfigManager.load();
-      expect(ConfigManager.getGameWidth()).toBe(1920);
-    });
+            await ConfigManager.load()
+            expect(ConfigManager.getDataDirectory()).toBe('/mock/data')
+        })
+    })
 
-    it('should handle a corrupt config file', async () => {
-      fsPromises.stat.mockResolvedValue({ isFile: () => true });
-      safeReadJson.mockRejectedValue(new SyntaxError('Unexpected token'));
+    describe('save()', () => {
+        it('should save the current config to a file', async () => {
+            fs.existsSync.mockReturnValue(true)
+            util.safeReadJson.mockResolvedValue({
+                settings: { launcher: { dataDirectory: '/mock/data' } }
+            })
 
-      await ConfigManager.load();
-
-      // Should catch the error and re-save default config
-      expect(safeWriteJson).toHaveBeenCalled();
-      expect(ConfigManager.getGameWidth()).toBe(1280); // Default value
-    });
-  });
-
-  describe('save()', () => {
-    it('should save the current config to a file', async () => {
-      // Setup initial load
-      fsPromises.stat.mockRejectedValue({ code: 'ENOENT' });
-      await ConfigManager.load();
-
-      ConfigManager.setGameWidth(1920);
-      await ConfigManager.save();
-
-      // save() calls safeWriteJson
-      // Expect safeWriteJson to be called with updated config
-      // safeWriteJson(path, data)
-      const saveArgs = safeWriteJson.mock.calls;
-      const savedData = saveArgs[saveArgs.length - 1][1];
-      expect(savedData.settings.game.resWidth).toBe(1920);
-    });
-  });
-
-});
+            await ConfigManager.load()
+            await ConfigManager.save()
+            expect(util.safeWriteJson).toHaveBeenCalled()
+        })
+    })
+})

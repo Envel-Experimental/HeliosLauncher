@@ -2,7 +2,7 @@
 
 const { ipcMain } = require('electron');
 const { FullRepair } = require('./dl/FullRepair');
-const ConfigManager = require('../configmanager');
+const ConfigManager = require('./configmanager');
 const P2PEngine = require('../../../../network/P2PEngine');
 const { LoggerUtil } = require('./util/LoggerUtil');
 
@@ -58,10 +58,22 @@ class LaunchController {
             // 1. Resolve Asset
             // Default to 8 if not provided (safe fallback)
             const javaVersion = major || 8;
+            
+            // Check for path stability
+            const { isPathValid } = require('./pathutil');
+            const isDirtyPath = !isPathValid(ConfigManager.getDataDirectory());
+            
+            // If path is dirty, we prefer an installer (Adoptium MSI) to ensure Java is registered globally
+            const effectiveDistro = (isDirtyPath && process.platform === 'win32') ? 'installer' : (distribution || null);
+
+            if (isDirtyPath) {
+                log.warn('Dirty path detected! Switching to installer-based Java deployment.');
+            }
+
             const asset = await JavaGuard.latestOpenJDK(
                 javaVersion,
                 ConfigManager.getDataDirectory(),
-                distribution || null
+                effectiveDistro
             );
 
             if (!asset) {
@@ -89,6 +101,18 @@ class LaunchController {
                 this.mainWindow.webContents.send('dl:progress', { type: 'extract', progress: 0 });
             }
 
+            if (asset.isInstaller) {
+                if (this.mainWindow) {
+                    this.mainWindow.webContents.send('dl:progress', { type: 'extract', progress: 50 }); // Progress marker
+                }
+                log.info('Running Java installer...');
+                await JavaGuard.runInstaller(asset.path);
+                
+                // After installer, we still need to find where it was installed
+                // Or just return null and let the next scan find it
+                return null;
+            }
+
             const javaPath = await JavaGuard.extractJdk(asset.path);
 
             // 4. Return
@@ -111,20 +135,20 @@ class LaunchController {
         const { version, serverId } = options;
         log.info(`Starting download for Server: ${serverId}, Version: ${version}`);
 
-        const commonDir = ConfigManager.getCommonDirectory();
+        const commonDir = await ConfigManager.getCommonDirectory();
+        const instanceDir = await ConfigManager.getInstanceDirectory();
+        const launcherDir = await ConfigManager.getLauncherDirectory();
 
-        // Note: instanceDirectory should probably be resolved here or passed in. 
-        // Based on FullRepair.js, it takes explicit paths.
-        // Assuming strict structure for now based on ConfigManager.
-        const instanceDir = ConfigManager.getInstanceDirectory();
+        const { DISTRO_PUB_KEYS } = require('../../../../network/config');
 
         // Initialize FullRepair
         this.repair = new FullRepair(
             commonDir,
             instanceDir,
-            ConfigManager.getLauncherDirectory(),
+            launcherDir,
             serverId,
-            false // isDev
+            false, // isDev
+            DISTRO_PUB_KEYS
         );
 
         try {

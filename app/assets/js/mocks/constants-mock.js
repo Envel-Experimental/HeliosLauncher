@@ -1,0 +1,16 @@
+module.exports = {
+    UV_UDP_REUSEADDR: 4,
+    O_RDONLY: 0,
+    O_WRONLY: 1,
+    O_RDWR: 2,
+    S_IFMT: 61440,
+    S_IFREG: 32768,
+    S_IFDIR: 16384,
+    S_IFCHR: 8192,
+    S_IFBLK: 24576,
+    S_IFIFO: 4096,
+    S_IFLNK: 40960,
+    S_IFSOCK: 49152,
+    ENGINE_METHOD_ALL: 65535,
+    ALPN_ENABLED: 1
+}

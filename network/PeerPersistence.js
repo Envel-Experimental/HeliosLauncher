@@ -2,11 +2,11 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const os = require('os');
-const ConfigManager = require('../app/assets/js/configmanager');
+const ConfigManager = require('../app/assets/js/core/configmanager');
 
 class PeerPersistence {
     constructor() {
-        this.filePath = path.join(ConfigManager.getLauncherDirectory(), 'peers.enc');
+        this.filePath = path.join(ConfigManager.getLauncherDirectorySync(), 'peers.enc');
         // Machine-specific encryption
         try {
             this.secret = 'XFc7SgZJ' + os.userInfo().username;

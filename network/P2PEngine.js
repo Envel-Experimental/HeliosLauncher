@@ -8,14 +8,14 @@ const { EventEmitter } = require('events')
 const { Readable } = require('stream')
 const Config = require('./config')
 const NodeAdapter = require('./NodeAdapter')
-const ConfigManager = require('../app/assets/js/configmanager')
+const ConfigManager = require('../app/assets/js/core/configmanager')
 const PeerHandler = require('./PeerHandler')
 const TrafficState = require('./TrafficState')
 const PeerPersistence = require('./PeerPersistence')
 
 // Fixed topic for the "Zombie" network
 const { SWARM_TOPIC_SEED } = require('./constants')
-const isDev = require('../app/assets/js/isdev')
+const isDev = require('../app/assets/js/core/isdev')
 
 // Fixed topic for the "Zombie" network
 const SWARM_TOPIC = crypto.createHash('sha256').update(SWARM_TOPIC_SEED).digest()
@@ -251,7 +251,7 @@ class P2PEngine extends EventEmitter {
     }
 
     async start() {
-        if (!ConfigManager.getGlobalOptimization()) {
+        if (!ConfigManager.getSettings().deliveryOptimization?.globalOptimization) {
             // console.log('[P2PEngine] Global Optimization Disabled. Not starting.')
             this.stop()
             return

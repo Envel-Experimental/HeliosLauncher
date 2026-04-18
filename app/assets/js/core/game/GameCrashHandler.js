@@ -4,12 +4,13 @@ const os = require('os')
 const path = require('path')
 const { LoggerUtil } = require('../util/LoggerUtil')
 const { Type } = require('../common/DistributionClasses')
-const { sendToSentry } = require('../../preloader')
+// Sentry is handled via IPC in Renderer or direct require in Main
+const SentryService = (process.type !== 'renderer') ? require('../../../../main/SentryService') : null
 
-const CrashHandler = require('../../crash-handler')
-const DropinModUtil = require('../../dropinmodutil')
-const ConfigManager = require('../../configmanager')
-const Lang = require('../../langloader')
+const CrashHandler = require('../crash-handler')
+const DropinModUtil = require('../dropinmodutil')
+const ConfigManager = require('../configmanager')
+const Lang = require('../langloader')
 
 const logger = LoggerUtil.getLogger('GameCrashHandler')
 
@@ -195,7 +196,11 @@ class GameCrashHandler {
 
         // Ignore Sentry reports for Game OOM (it's user's machine exhaustion, not our bug)
         if (!sentryMessage.includes('Game Crash: Out of Memory')) {
-            sendToSentry(sentryMessage, sentryType)
+            if (process.type === 'renderer') {
+                HeliosAPI.ipc.send('renderer-error', sentryMessage)
+            } else if (SentryService) {
+                SentryService.captureMessage(sentryMessage, sentryType)
+            }
         }
 
         // Check for Support URL again (in case preloader failed or config desync)

@@ -1,4 +1,4 @@
-const isDev = require('../../isdev')
+const isDev = require('../configmanager')
 
 class SentryWrapper {
     static get Sentry() {

@@ -74,6 +74,7 @@ switchServerButton = "Сменить"
 requiredMods = "Требуемые моды"
 optionalMods = "Необязательные моды"
 dropinMods = "Моды drop-in"
+dropinModsTitle = "Моды drop-in"
 addMods = "Добавить моды"
 dropinRefreshNote = "(F5 для обновления)"
 shaderpacks = "Шейдеры"
@@ -85,8 +86,9 @@ memoryTitle = "Память"
 maxRAM = "Максимум ОЗУ"
 minRAM = "Минимум ОЗУ"
 memoryDesc = "Рекомендуемый минимум ОЗУ — 3 ГБ. Установка одинаковых значений для минимума и максимума может снизить лаги."
-memoryTotalTitle = "Всего"
-memoryAvailableTitle = "Доступно"
+memoryTotalTitle = "Всего ОЗУ"
+memoryAvailableTitle = "Доступно ОЗУ"
+diskAvailableTitle = "Свободно на диске"
 javaExecutableTitle = "Выполняемый файл Java"
 javaExecSelDialogTitle = "Выбрать файл Java"
 javaExecSelButtonText = "Выбрать файл"
@@ -114,6 +116,8 @@ releaseNotes = "Заметки о выпуске"
 changelog = "История изменений"
 noReleaseNotes = "Нет заметок о выпуске"
 viewReleaseNotes = "Просмотреть заметки на GitHub"
+p2pResetTitle = "Сброс всех настроек"
+p2pResetDesc = "Это действие сбросит все настройки игры и лаунчера, а также очистит кэш и аккаунты."
 launcherUpdatesHeaderText = "Обновления лаунчера"
 launcherUpdatesHeaderDesc = "Скачивание, установка и проверка обновлений для лаунчера."
 checkForUpdates = "Проверить обновления"
@@ -136,10 +140,6 @@ waitingText = "Ожидание Microsoft.."
 
 [ejs.welcome]
 continueButton = "ПРОДОЛЖИТЬ"
-
-[js.discord]
-waiting = "Ожидание клиента.."
-state = "Сервер: {shortId}"
 
 [js.index]
 microsoftLoginTitle = "Вход Microsoft"
@@ -305,6 +305,11 @@ failed = "Не удалось выполнить сброс: {error}"
 fatalErrorTitle = "Критическая ошибка: сервера недоступны"
 fatalErrorMessage = "Не удалось установить соединение с нашими серверами.<br><br>Убедись, что есть подключение к интернету, и перезапусти приложение."
 closeButton = "Закрыть"
+
+[js.uibinder.loading]
+loadingConfig = "Загрузка конфигурации.."
+distributionSync = "Синхронизация..."
+checkingJava = "Проверка Java.."
 
 [js.uibinder.validateAccount]
 failedMessageTitle = "Не удалось обновить вход"

@@ -8,12 +8,13 @@ const { validateLocalFile } = require('../common/FileUtils');
 class FullRepair {
     static logger = LoggerUtil.getLogger('FullRepair');
 
-    constructor(commonDirectory, instanceDirectory, launcherDirectory, serverId, devMode) {
+    constructor(commonDirectory, instanceDirectory, launcherDirectory, serverId, devMode, trustedKeys) {
         this.commonDirectory = commonDirectory;
         this.instanceDirectory = instanceDirectory;
         this.launcherDirectory = launcherDirectory;
         this.serverId = serverId;
         this.devMode = devMode;
+        this.trustedKeys = trustedKeys;
         this.processors = [];
         this.assets = [];
         this.distribution = null;
@@ -46,7 +47,8 @@ class FullRepair {
             this.commonDirectory,
             this.instanceDirectory,
             null,
-            this.devMode
+            this.devMode,
+            this.trustedKeys
         );
         this.distribution = await api.getDistributionLocalLoadOnly();
         const server = this.distribution.getServerById(this.serverId);

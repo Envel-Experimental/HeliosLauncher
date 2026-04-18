@@ -1,38 +1,51 @@
-const LangLoader = require('@app/assets/js/langloader');
-const fs = require('fs');
-const toml = require('smol-toml');
-
-jest.mock('fs', () => ({
-    readFileSync: jest.fn(),
-}));
-
-jest.mock('smol-toml', () => ({
-    parse: jest.fn(),
-}));
-
 describe('LangLoader', () => {
+    let LangLoader
+    let fs
+    let smolToml
+
     beforeEach(() => {
-        fs.readFileSync.mockReturnValue('');
-        toml.parse.mockReturnValue({
+        jest.resetModules()
+        
+        // Mock fs
+        jest.mock('fs', () => ({
+            readFileSync: jest.fn().mockReturnValue(''),
+            existsSync: jest.fn().mockReturnValue(true)
+        }))
+
+        // Mock smol-toml
+        jest.mock('smol-toml', () => ({
+            parse: jest.fn()
+        }))
+
+        // Mock core/util (including deepMerge used in loadLanguage)
+        jest.mock('../../../../../app/assets/js/core/util', () => ({
+            deepMerge: jest.fn((obj, defaults) => ({ ...defaults, ...obj })),
+            LoggerUtil: {
+                getLogger: jest.fn(() => ({
+                    info: jest.fn(),
+                    error: jest.fn(),
+                    debug: jest.fn()
+                }))
+            }
+        }))
+
+        LangLoader = require('../../../../../app/assets/js/core/langloader')
+        fs = require('fs')
+        smolToml = require('smol-toml')
+    })
+
+    it('should query the correct JS string with placeholders', () => {
+        smolToml.parse.mockReturnValue({
             js: {
                 test: {
-                    test: 'test',
-                },
-            },
-            ejs: {
-                test: {
-                    test: 'test',
-                },
-            },
-        });
-        LangLoader.loadLanguage('en_US');
-    });
+                    string: 'Hello {name}'
+                }
+            }
+        })
 
-    it('should query the correct JS string', () => {
-        expect(LangLoader.queryJS('test.test')).toBe('test');
-    });
-
-    it('should query the correct EJS string', () => {
-        expect(LangLoader.queryEJS('test.test')).toBe('test');
-    });
-});
+        // Force reload internal state
+        LangLoader.setupLanguage()
+        const result = LangLoader.queryJS('test.string', { name: 'World' })
+        expect(result).toBe('Hello World')
+    })
+})

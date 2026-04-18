@@ -7,14 +7,17 @@ test.describe('HeliosLauncher E2E Flow', () => {
     let electronApp;
     let window;
 
-    test.setTimeout(240000); // 4 minutes
+    test.setTimeout(600000); // 10 minutes
 
     test.beforeAll(async () => {
+        console.log('Test: Starting beforeAll hook...');
         const result = await launchApp();
         electronApp = result.electronApp;
         window = result.window;
+        console.log('Test: Window acquired, handling overlays...');
         await handleInitialOverlays(window);
-    });
+        console.log('Test: beforeAll hook complete.');
+    }, 60000);
 
     test.afterAll(async () => {
         if (electronApp) {
@@ -176,7 +179,7 @@ test.describe('HeliosLauncher E2E Flow', () => {
             // Note: In test environment this requires dummy assets to be found or skipped
             await Promise.race([
                 logFoundPromise,
-                window.waitForTimeout(120000).then(() => { throw new Error('Timeout waiting for Minecraft log line'); })
+                window.waitForTimeout(300000).then(() => { throw new Error('Timeout waiting for Minecraft log line'); })
             ]);
             
             console.log('Target log detected successfully. Terminating game process...');

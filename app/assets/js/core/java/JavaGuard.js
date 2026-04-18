@@ -6,7 +6,8 @@ const semver = require('semver');
 const { LoggerUtil } = require('../util/LoggerUtil');
 const { HashAlgo } = require('../dl/Asset');
 const { extractZip, extractTarGz } = require('../common/FileUtils');
-const { Platform, JdkDistribution } = require('../common/DistributionClasses');
+const { Platform, javaExecFromRoot, ensureJavaDirIsRoot } = require('./JavaUtils');
+const { JdkDistribution } = require('../common/DistributionClasses');
 
 const log = LoggerUtil.getLogger('JavaGuard');
 const execAsync = util.promisify(exec);
@@ -36,6 +37,10 @@ const { MOJANG_MIRRORS } = require('../../../../../network/config');
 let javaMirrorManifestMap = new Map(); // url -> manifest
 
 async function getHotSpotSettings(execPath) {
+    if (!execPath || execPath.trim() === '') {
+        log.warn('getHotSpotSettings called with empty path');
+        return null;
+    }
     const javaExecutable = path.resolve(execPath.includes('javaw.exe') ? execPath.replace('javaw.exe', 'java.exe') : execPath);
     try {
         await fs.access(javaExecutable);
@@ -157,6 +162,9 @@ async function discoverBestJvmInstallation(dataDir, semverRange) {
 }
 
 async function validateSelectedJvm(path, semverRange) {
+    if (!path || path.trim() === '') {
+        return null;
+    }
     try {
         await fs.access(path);
     } catch (e) { return null; }
@@ -215,6 +223,9 @@ async function latestOpenJDK(major, dataDir, distribution) {
                 case JdkDistribution.CORRETTO:
                     result = await latestCorretto(major, dataDir);
                     break;
+                case 'installer':
+                    result = await latestAdoptium(major, dataDir, 'installer');
+                    break;
                 default:
                     const eMsg = `Unknown distribution '${distribution}'`;
                     log.error(eMsg);
@@ -234,19 +245,22 @@ async function latestOpenJDK(major, dataDir, distribution) {
             if (mirror.java_manifest) {
                 const manifest = await loadJavaMirrorManifest(mirror.java_manifest);
                 if (manifest) {
-                    const os = process.platform === 'win32' ? 'windows' : (process.platform === 'darwin' ? 'darwin' : 'linux');
+                    const os = process.platform === Platform.WIN32 ? 'windows' : (process.platform === Platform.DARWIN ? 'darwin' : 'linux');
                     const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
 
-                    if (manifest[os] && manifest[os][arch] && manifest[os][arch][major]) {
-                        const entry = manifest[os][arch][major];
-                        log.info(`Resolved Java ${major} from Mirror: ${entry.url}`);
+                    const field = (distribution === 'installer' && os === 'windows') ? 'installer' : major.toString();
+
+                    if (manifest[os] && manifest[os][arch] && manifest[os][arch][field]) {
+                        const entry = manifest[os][arch][field];
+                        log.info(`Resolved Java ${major} (Type: ${field}) from Mirror: ${entry.url}`);
                         return {
                             url: entry.url,
-                            size: 0,
-                            id: `java-runtime-${major}-${os}-${arch}.zip`,
-                            hash: entry.sha256,
-                            algo: HashAlgo.SHA256,
-                            path: path.join(getLauncherRuntimeDir(dataDir), `java-runtime-${major}-${os}-${arch}.zip`)
+                            size: entry.size,
+                            id: entry.name,
+                            hash: entry.sha1,
+                            algo: HashAlgo.SHA1,
+                            path: path.join(getLauncherRuntimeDir(dataDir), entry.name),
+                            isInstaller: field === 'installer'
                         };
                     }
                 }
@@ -476,31 +490,28 @@ async function extractJdk(archivePath) {
     return javaExecPath;
 }
 
-function javaExecFromRoot(rootDir) {
-    switch (process.platform) {
-        case Platform.WIN32:
-            return path.join(rootDir, 'bin', 'javaw.exe');
-        case Platform.DARWIN:
-            return path.join(rootDir, 'Contents', 'Home', 'bin', 'java');
-        case Platform.LINUX:
-            return path.join(rootDir, 'bin', 'java');
-        default:
-            return rootDir;
-    }
-}
-
-function ensureJavaDirIsRoot(dir) {
-    switch (process.platform) {
-        case Platform.DARWIN: {
-            const index = dir.indexOf('/Contents/Home');
-            return index > -1 ? dir.substring(0, index) : dir;
-        }
-        case Platform.WIN32:
-        case Platform.LINUX:
-        default: {
-            const index = dir.indexOf(path.join('/', 'bin', 'java'));
-            return index > -1 ? dir.substring(0, index) : dir;
-        }
+async function runInstaller(installerPath) {
+    if (process.platform === Platform.WIN32) {
+        log.info(`Running MSI installer: ${installerPath}`);
+        const { exec } = require('child_process');
+        return new Promise((resolve, reject) => {
+            // /i for install, /passive for semi-automated (shows progress but no interaction needed usually)
+            // But user said "запускаем УСТАНОВЩИК", so maybe full UI is better?
+            // Let's use /i and it will be interactive.
+            exec(`msiexec /i "${installerPath}"`, (err) => {
+                if (err) {
+                    log.error('Installer exited with error', err);
+                    reject(err);
+                } else {
+                    log.info('Installer completed successfully.');
+                    resolve();
+                }
+            });
+        });
+    } else {
+        const { shell } = require('electron');
+        log.info(`Opening installer: ${installerPath}`);
+        return await shell.openPath(installerPath);
     }
 }
 

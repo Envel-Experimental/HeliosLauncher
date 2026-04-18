@@ -2,10 +2,10 @@ const { Readable } = require('stream')
 const HashVerifierStream = require('./HashVerifierStream')
 const Config = require('./config')
 const NodeAdapter = require('./NodeAdapter')
-const ConfigManager = require('../app/assets/js/configmanager')
+const ConfigManager = require('../app/assets/js/core/configmanager')
 const TrafficState = require('./TrafficState')
 const path = require('path')
-const isDev = require('../app/assets/js/isdev')
+const isDev = require('../app/assets/js/core/isdev')
 
 class RaceManager {
 

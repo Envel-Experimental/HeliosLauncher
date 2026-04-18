@@ -6,7 +6,7 @@ const { extractZip } = require('../common/FileUtils')
 const { LoggerUtil } = require('../util/LoggerUtil')
 const { getMojangOS, isLibraryCompatible, mcVersionAtLeast } = require('../common/MojangUtils')
 const { Type } = require('../common/DistributionClasses')
-const ConfigManager = require('../../configmanager')
+const ConfigManager = require('../configmanager')
 
 const logger = LoggerUtil.getLogger('LaunchArgumentBuilder')
 

@@ -1,83 +1,60 @@
-const ProcessBuilder = require('@app/assets/js/processbuilder');
-const ConfigManager = require('@app/assets/js/configmanager');
-
-jest.mock('fs', () => {
-    const originalModule = jest.requireActual('fs');
-    return {
-        ...originalModule,
-        mkdirSync: jest.fn(),
-        promises: {
-            ...originalModule.promises,
-            rm: jest.fn()
-        },
-        existsSync: jest.fn(() => true),
-        statSync: jest.fn(() => ({ isDirectory: () => false })),
-    };
-});
-jest.mock('fs/promises', () => ({
-    rm: jest.fn()
-}));
-
-
-jest.mock('@app/assets/js/preloader', () => ({
-    sendToSentry: jest.fn(),
-}));
-
-jest.mock('@app/assets/js/configmanager', () => ({
-    getMinRAM: jest.fn(),
-    getMaxRAM: jest.fn(),
-    getJVMOptions: jest.fn(),
-    getGameWidth: jest.fn(),
-    getGameHeight: jest.fn(),
-    getFullscreen: jest.fn(),
-    getAutoConnect: jest.fn(),
-    getInstanceDirectory: jest.fn(() => 'test-instance-dir'),
-    getCommonDirectory: jest.fn(() => 'test-common-dir'),
-    getTempNativeFolder: jest.fn(() => 'test-native-folder'),
-}));
+const path = require('path')
 
 describe('ProcessBuilder', () => {
-    it('should be a class', () => {
-        expect(typeof ProcessBuilder).toBe('function');
-    });
+    let ProcessBuilder
+    let ConfigManager
+    let fs
 
-    it('should construct JVM arguments', () => {
-        const distroServer = {
-            rawServer: {
-                id: 'test-server',
-                minecraftVersion: '1.12.2',
-            },
-            modules: [],
-        };
-        const vanillaManifest = {
-            id: '1.12.2',
-            libraries: [],
-            mainClass: 'net.minecraft.client.main.Main',
-            minecraftArguments: '',
-        };
-        const modManifest = {
-            id: '1.12.2-forge-14.23.5.2855',
-            mainClass: 'net.minecraft.launchwrapper.Launch',
-            minecraftArguments: '',
-        };
-        const authUser = {
-            displayName: 'test-user',
-            uuid: 'test-uuid',
-            accessToken: 'test-access-token',
-        };
-        const launcherVersion = 'test-launcher-version';
+    beforeEach(() => {
+        jest.resetModules()
+        
+        // Mock fs
+        const mockFs = {
+            mkdirSync: jest.fn(),
+            existsSync: jest.fn(() => true),
+            statSync: jest.fn(() => ({ isDirectory: () => false })),
+            promises: {
+                rm: jest.fn().mockResolvedValue(),
+                mkdir: jest.fn().mockResolvedValue()
+            }
+        }
+        jest.mock('fs', () => mockFs)
+        jest.mock('fs/promises', () => mockFs.promises)
 
-        const processBuilder = new ProcessBuilder(
-            distroServer,
-            vanillaManifest,
-            modManifest,
-            authUser,
-            launcherVersion
-        );
+        jest.mock('../../../../../app/assets/js/preloader', () => ({
+            sendToSentry: jest.fn(),
+        }))
 
-        expect(processBuilder.argBuilder).toBeDefined();
-        // constructJVMArguments is a method of argBuilder, not ProcessBuilder itself. 
-        // We verify that argBuilder is initialized.
-    });
-});
+        // Correct path: tests/unit/app/assets/js/processbuilder.test.js -> core/configmanager
+        jest.mock('../../../../../app/assets/js/core/configmanager', () => ({
+            getMinRAM: jest.fn(),
+            getMaxRAM: jest.fn(),
+            getJVMOptions: jest.fn(),
+            getGameWidth: jest.fn(),
+            getGameHeight: jest.fn(),
+            getFullscreen: jest.fn(),
+            getAutoConnect: jest.fn(),
+            getInstanceDirectorySync: jest.fn(() => '/mock/instances'),
+            getCommonDirectorySync: jest.fn(() => '/mock/common'),
+            fetchWithTimeout: jest.fn()
+        }))
 
+        ProcessBuilder = require('../../../../../app/assets/js/core/processbuilder')
+        ConfigManager = require('../../../../../app/assets/js/core/configmanager')
+        fs = require('fs')
+    })
+
+    test('should build arguments correctly', () => {
+        ConfigManager.getMinRAM.mockReturnValue('1G')
+        ConfigManager.getMaxRAM.mockReturnValue('2G')
+        ConfigManager.getJVMOptions.mockReturnValue([])
+        ConfigManager.getGameWidth.mockReturnValue(800)
+        ConfigManager.getGameHeight.mockReturnValue(600)
+        ConfigManager.getFullscreen.mockReturnValue(false)
+        ConfigManager.getAutoConnect.mockReturnValue(false)
+
+        const builder = new ProcessBuilder({ id: 'test', rawServer: { id: 'test' } }, { id: '1.12.2' }, {}, { displayName: 'Player' }, '1.0.0')
+        expect(builder).toBeDefined()
+        expect(builder.gameDir).toContain('test')
+    })
+})

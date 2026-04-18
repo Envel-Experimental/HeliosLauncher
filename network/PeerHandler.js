@@ -3,7 +3,7 @@
 const b4a = require('b4a')
 const fs = require('fs')
 const path = require('path')
-const ConfigManager = require('../app/assets/js/configmanager')
+const ConfigManager = require('../app/assets/js/core/configmanager')
 const PeerPersistence = require('./PeerPersistence')
 const {
     MSG_REQUEST, MSG_DATA, MSG_ERROR, MSG_END,
@@ -12,7 +12,7 @@ const {
 } = require('./constants')
 
 const TrafficState = require('./TrafficState')
-const isDev = require('../app/assets/js/isdev')
+const isDev = require('../app/assets/js/core/isdev')
 
 class PeerHandler {
     /**
@@ -66,7 +66,7 @@ class PeerHandler {
         // Initialize Real Paths for Security Checks
         try {
             this.dataDirReal = fs.realpathSync(ConfigManager.getDataDirectory().trim())
-            this.commonDirReal = fs.realpathSync(ConfigManager.getCommonDirectory().trim())
+            this.commonDirReal = fs.realpathSync(ConfigManager.getCommonDirectorySync().trim())
         } catch (e) {
             console.error('[PeerHandler] Failed to resolve real paths for security roots:', e)
             this.dataDirReal = null
@@ -453,7 +453,7 @@ class PeerHandler {
         const isLocalUpload = ConfigManager.getLocalOptimization() && this.engine.isLocalIP(remoteIP)
 
         try {
-            const commonDir = ConfigManager.getCommonDirectory().trim()
+            const commonDir = ConfigManager.getCommonDirectorySync().trim()
             const dataDir = ConfigManager.getDataDirectory().trim()
 
             // Candidate Paths (Normalized)
@@ -873,6 +873,7 @@ class PeerHandler {
         try {
             const dataDir = ConfigManager.getDataDirectory().trim()
             const commonDir = ConfigManager.getCommonDirectory().trim()
+            // console.log(`[_isPathSecure] filePath: ${filePath}, dataDir: ${dataDir}, commonDir: ${commonDir}`)
 
             // Check Data Dir
             const relData = path.relative(dataDir, filePath)

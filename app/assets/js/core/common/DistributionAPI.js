@@ -6,7 +6,7 @@ const fs = require('fs/promises');
 const { LoggerUtil } = require('../util/LoggerUtil');
 const { RestResponseStatus, handleFetchError } = require('./RestResponse');
 const { HeliosDistribution } = require('./DistributionClasses');
-const { fetchWithTimeout } = require('../../util');
+const { fetchWithTimeout } = require('../configmanager');
 
 class DistributionAPI {
     static log = LoggerUtil.getLogger('DistributionAPI');
@@ -49,6 +49,7 @@ class DistributionAPI {
             this.rawDistribution = await this.loadDistribution();
             this.distribution = new HeliosDistribution(this.rawDistribution, this.commonDir, this.instanceDir);
         }
+        console.log('[DistributionAPI] getDistribution returning servers:', this.distribution.servers.map(s => s.rawServer.id));
         return this.distribution;
     }
 
@@ -109,6 +110,7 @@ class DistributionAPI {
      * @returns {Promise<DistributionData | null>}
      */
     async _loadDistributionNullable() {
+        console.log('[DistributionAPI] Loading distribution... devMode:', this.devMode);
         /** @type {DistributionData | null} */
         let distro = null;
         if (!this.devMode) {
@@ -147,46 +149,39 @@ class DistributionAPI {
 
                 let signatureValid = true; // Default to true if no keys configured (or logic disabled)
 
-                if (this.trustedKeys && this.trustedKeys.length > 0) {
-                    console.log('[DistributionAPI] Verifying signature...')
+                if (this.trustedKeys && Array.isArray(this.trustedKeys) && this.trustedKeys.length > 0) {
+                    console.log('[DistributionAPI] Verifying signature via Main Process...')
                     signatureValid = false
                     try {
                         const sigRes = await fetchWithTimeout(url + '.sig', { cache: 'no-store' }, 5000)
                         if (sigRes.ok) {
                             const signatureHex = (await sigRes.text()).trim()
-                            const signature = Buffer.from(signatureHex, 'hex')
+                            
+                            const verifyData = {
+                                dataHex: rawBuffer.toString('hex'),
+                                signatureHex: signatureHex,
+                                trustedKeys: this.trustedKeys
+                            }
 
-                            // Use raw buffer for verification to avoid canonicalization issues
-                            const contentBuffer = rawBuffer;
+                            if (process.type === 'renderer') {
+                                // Invoke Main Process to verify the buffer
+                                signatureValid = await window.ipcRenderer.invoke('distribution:verify', verifyData)
+                            } else {
+                                // Direct verification in Main process
+                                const { verifyDistribution } = require('../util/SignatureUtils')
+                                signatureValid = verifyDistribution(verifyData)
+                            }
 
-                            // ASN.1 Header for Ed25519 Public Key (SPKI)
-                            const ED25519_SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex')
-
-                            for (const keyHex of this.trustedKeys) {
-                                try {
-                                    const rawKey = Buffer.from(keyHex, 'hex')
-                                    // Wrap raw key in SPKI format for Node's crypto
-                                    const spkiKey = Buffer.concat([ED25519_SPKI_PREFIX, rawKey])
-                                    const publicKey = crypto.createPublicKey({
-                                        key: spkiKey,
-                                        format: 'der',
-                                        type: 'spki'
-                                    })
-
-                                    if (crypto.verify(null, contentBuffer, publicKey, signature)) {
-                                        signatureValid = true
-                                        console.log('[DistributionAPI] Signature VALID.')
-                                        break
-                                    }
-                                } catch (e) {
-                                    console.warn('[DistributionAPI] Key check failed:', e.message)
-                                }
+                            if (signatureValid) {
+                                console.log('[DistributionAPI] Signature VALID.')
+                            } else {
+                                console.warn('[DistributionAPI] Signature verification failed in Main Process.')
                             }
                         } else {
                             console.warn(`[DistributionAPI] Signature file missing (${sigRes.status})`)
                         }
                     } catch (e) {
-                        DistributionAPI.log.warn('Signature verification error:', e)
+                        DistributionAPI.log.warn('Signature verification call error:', e)
                     }
                 }
 
@@ -248,6 +243,7 @@ class DistributionAPI {
      * @returns {Promise<DistributionData | null>}
      */
     async readDistributionFromFile(path) {
+        console.log('[DistributionAPI] Reading distribution from:', path);
         try {
             await fs.access(path);
             const raw = await fs.readFile(path, 'utf-8');

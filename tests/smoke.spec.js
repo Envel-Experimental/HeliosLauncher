@@ -33,8 +33,12 @@ test.describe('Application Startup Smoke Test', () => {
         const window = await electronApp.firstWindow();
         
         window.on('console', msg => {
-            if (msg.type() === 'error' || msg.text().includes('Overlay')) {
-                console.log(`[App] ${msg.text()}`);
+            const text = msg.text();
+            console.log(`[App ${msg.type()}] ${text}`);
+            
+            // Enterprise Diagnostics: Fail fast on fatal errors
+            if (msg.type() === 'error' && (text.includes('Error') || text.includes('TypeError') || text.includes('ReferenceError'))) {
+                throw new Error(`Smoke Test Failed: Fatal app error detected: ${text}`);
             }
         });
 

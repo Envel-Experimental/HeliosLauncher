@@ -9,7 +9,7 @@ const { mcVersionAtLeast, isLibraryCompatible, getMojangOS } = require('../commo
 const { LoggerUtil } = require('../util/LoggerUtil');
 const { handleFetchError } = require('../common/RestResponse');
 const { MOJANG_MIRRORS } = require('../../../../../network/config');
-require('../../configmanager');
+require('../configmanager');
 const MirrorManager = require('../../../../../network/MirrorManager');
 
 class MojangIndexProcessor extends IndexProcessor {
@@ -297,8 +297,6 @@ class MojangIndexProcessor extends IndexProcessor {
                                 id: libEntry.name,
                                 hash,
                                 algo: HashAlgo.SHA1,
-                                size: artifact.size,
-                                url: artifact.url,
                                 size: artifact.size,
                                 url: artifact.url,
                                 fallbackUrls: MirrorManager.getSortedMirrors().map(m => m.libraries ? artifact.url.replace('https://libraries.minecraft.net', m.libraries) : null).filter(Boolean), // Assuming libraries mirror logic if needed, or strict.

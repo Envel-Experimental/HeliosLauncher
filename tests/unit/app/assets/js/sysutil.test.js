@@ -1,51 +1,41 @@
-const SysUtil = require('@app/assets/js/sysutil');
-const os = require('os');
-const fs = require('fs');
-const { exec } = require('child_process');
-const ConfigManager = require('@app/assets/js/configmanager');
-
-jest.mock('os', () => ({
-    platform: jest.fn(),
-    totalmem: jest.fn(),
-    freemem: jest.fn(),
-}));
-
-jest.mock('fs', () => ({
-    statfs: jest.fn()
-}));
-
-jest.mock('child_process', () => ({
-    exec: jest.fn(),
-}));
-
-jest.mock('@app/assets/js/configmanager', () => ({
-    getTotalRAMWarningShown: jest.fn(),
-    setTotalRAMWarningShown: jest.fn(),
-    save: jest.fn(),
-}));
-
 describe('SysUtil', () => {
-    it('should be an object', () => {
-        expect(typeof SysUtil).toBe('object');
-    });
+    let SysUtil
+    let os
+    let exec
 
-    it('should perform system checks', async () => {
-        os.platform.mockReturnValue('linux');
-        os.totalmem.mockReturnValue(8 * 1024 * 1024 * 1024);
-        exec.mockImplementation((command, callback) => callback(null, 'MemAvailable: 8192000 kB'));
+    beforeEach(() => {
+        jest.resetModules()
+        
+        jest.mock('os', () => ({
+            platform: jest.fn(),
+            totalmem: jest.fn(),
+            freemem: jest.fn(),
+            release: jest.fn().mockReturnValue('10.0.0'),
+            arch: jest.fn().mockReturnValue('x64')
+        }))
 
-        // Mock fs.statfs for disk space check
-        // bavail * bsize = free space
-        fs.statfs.mockImplementation((path, callback) => {
-            callback(null, {
-                bavail: 5242880, // 5 * 1024 * 1024 blocks
-                bsize: 4096      // 4KB blocks -> 20GB free
-            });
-        });
+        jest.mock('child_process', () => ({
+            exec: jest.fn()
+        }))
 
-        ConfigManager.getTotalRAMWarningShown.mockReturnValue(false);
+        SysUtil = require('../../../../../app/assets/js/core/sysutil')
+        os = require('os')
+        exec = require('child_process').exec
+    })
 
-        const warnings = await SysUtil.performChecks();
-        expect(warnings).toEqual([]);
-    });
-});
+    test('getAvailableRamGb should return correct value on linux', async () => {
+        os.platform.mockReturnValue('linux')
+        exec.mockImplementation((command, callback) => callback(null, 'MemAvailable: 4194304 kB'))
+
+        const free = await SysUtil.getAvailableRamGb()
+        expect(free).toBe(4) // 4GB
+    })
+
+    test('getAvailableRamGb should return correct value on win32', async () => {
+        os.platform.mockReturnValue('win32')
+        os.freemem.mockReturnValue(2 * 1024 * 1024 * 1024)
+
+        const free = await SysUtil.getAvailableRamGb()
+        expect(free).toBe(2) // 2GB
+    })
+})

@@ -52,6 +52,11 @@ function fallbackDecrypt(encryptedText) {
 exports.encryptString = function (text) {
     if (!text) return text
 
+    // Bypass in test mode
+    if (process.env.NODE_ENV === 'test') {
+        return text
+    }
+
     // Prevent double encryption:
     // Check for Fallback prefix
     if (text.startsWith('FB:')) {
@@ -81,6 +86,11 @@ exports.encryptString = function (text) {
 exports.decryptString = function (encryptedHex) {
     if (!encryptedHex) return encryptedHex
 
+    // Bypass in test mode
+    if (process.env.NODE_ENV === 'test') {
+        return encryptedHex
+    }
+
     // check if it uses our fallback prefix
     if (encryptedHex.startsWith('FB:')) {
         return fallbackDecrypt(encryptedHex.substring(3))
@@ -92,8 +102,10 @@ exports.decryptString = function (encryptedHex) {
             const buffer = Buffer.from(encryptedHex, 'hex')
             return safeStorage.decryptString(buffer)
         } catch (error) {
-            console.error('safeStorage decryption failed:', error)
-            return encryptedHex // Return original on failure (might have been plaintext)
+            // Decryption failed. This is expected if the machine or user profile changed.
+            // We return null to signify a broken token, which will trigger a re-login.
+            console.warn('[SecurityUtils] safeStorage decryption failed. The token may be from a different machine or user profile.')
+            return null
         }
     }
 

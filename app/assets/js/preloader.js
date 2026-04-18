@@ -1,10 +1,71 @@
-const { ipcRenderer } = require('electron')
+const { contextBridge, ipcRenderer } = require('electron')
 
 // Global error handling for Renderer Process
-// We define these as early as possible to catch startup errors
 window.onerror = (message, source, lineno, colno, error) => {
     const errorMsg = error ? (error.stack || error.message) : message
     ipcRenderer.send('renderer-error', errorMsg)
+}
+
+// Global Error Boundary - Enterprise Diagnostics
+window.addEventListener('error', (event) => {
+    console.error('[Renderer Fatal Error]', event.error);
+    const overlay = document.getElementById('loadingContainer');
+    if (overlay) {
+        overlay.innerHTML = `
+            <div style="color: #ff5555; background: rgba(0,0,0,0.8); padding: 20px; border: 1px solid #ff5555; border-radius: 5px; font-family: sans-serif; max-width: 80%;">
+                <h3 style="margin-top:0">Ошибка инициализации</h3>
+                <p style="font-size: 14px; word-break: break-all;">${event.error ? event.error.stack : event.message}</p>
+                <button onclick="location.reload()" style="background: #ff5555; color: white; border: none; padding: 5px 15px; cursor: pointer; border-radius: 3px;">Перезапустить</button>
+            </div>
+        `;
+        overlay.style.display = 'flex';
+        overlay.style.opacity = '1';
+    }
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+    console.error('[Renderer Async Fatal Error]', event.reason);
+    const errorMsg = event.reason ? (event.reason.stack || event.reason.message || event.reason.toString()) : 'Unhandled Promise Rejection'
+    ipcRenderer.send('renderer-error', errorMsg)
+});
+
+// Forward console logs to Main Process
+const originalConsoleLog = console.log
+const originalConsoleError = console.error
+const originalConsoleWarn = console.warn
+
+console.log = (...args) => {
+    try {
+        const msg = args.map(a => {
+            try {
+                return typeof a === 'object' ? JSON.stringify(a) : String(a)
+            } catch (e) { return '[Complex Object]' }
+        }).join(' ')
+        ipcRenderer.send('renderer-log', msg)
+    } catch (e) {}
+    originalConsoleLog.apply(console, args)
+}
+console.error = (...args) => {
+    try {
+        const msg = args.map(a => {
+            try {
+                return (a instanceof Error) ? a.stack : (typeof a === 'object' ? JSON.stringify(a) : String(a))
+            } catch (e) { return '[Complex Object]' }
+        }).join(' ')
+        ipcRenderer.send('renderer-error', msg)
+    } catch (e) {}
+    originalConsoleError.apply(console, args)
+}
+console.warn = (...args) => {
+    try {
+        const msg = args.map(a => {
+            try {
+                return typeof a === 'object' ? JSON.stringify(a) : String(a)
+            } catch (e) { return '[Complex Object]' }
+        }).join(' ')
+        ipcRenderer.send('renderer-warn', msg)
+    } catch (e) {}
+    originalConsoleWarn.apply(console, args)
 }
 
 window.onunhandledrejection = (event) => {
@@ -12,161 +73,57 @@ window.onunhandledrejection = (event) => {
     ipcRenderer.send('renderer-error', errorMsg)
 }
 
-// Add Node-level error handling for the renderer
-process.on('uncaughtException', (error) => {
-    const errorMsg = error.stack || error.message || error.toString()
-    ipcRenderer.send('renderer-error', errorMsg)
+// Enterprise Bridge API
+contextBridge.exposeInMainWorld('HeliosAPI', {
+    // Window Controls
+    window: {
+        close: () => ipcRenderer.send('window-action', 'close'),
+        minimize: () => ipcRenderer.send('window-action', 'minimize'),
+        maximize: () => ipcRenderer.send('window-action', 'maximize'),
+        unmaximize: () => ipcRenderer.send('window-action', 'unmaximize'),
+        isMaximized: () => ipcRenderer.sendSync('window-action', 'isMaximized'),
+        setProgressBar: (val) => ipcRenderer.send('window-action', 'setProgressBar', val),
+        toggleDevTools: () => ipcRenderer.send('window-action', 'toggleDevTools')
+    },
+    // App Info
+    app: {
+        getVersion: () => ipcRenderer.sendSync('app:getVersionSync'),
+        getName: () => 'FLauncher'
+    },
+    // App & Shell
+    shell: {
+        openExternal: (url) => ipcRenderer.send('app:open-url', url),
+        openPath: (path) => ipcRenderer.invoke('shell:openPath', path),
+        trashItem: (path) => ipcRenderer.invoke('shell:trashItem', path)
+    },
+    // Launcher Logic
+    launcher: {
+        launch: (options) => ipcRenderer.invoke('launcher:launch', options),
+        onLog: (callback) => ipcRenderer.on('launcher:log', (e, data) => callback(data)),
+        onLogError: (callback) => ipcRenderer.on('launcher:log-error', (e, data) => callback(data)),
+        onExit: (callback) => ipcRenderer.on('launcher:exit', (e, code) => callback(code)),
+        terminate: () => ipcRenderer.send('launcher:terminate')
+    },
+    // System & OS Info (Safe versions)
+    system: {
+        getPlatform: () => process.platform,
+        getArch: () => process.arch,
+        getVersions: () => process.versions,
+        getVersion: () => process.version,
+        cwd: () => ipcRenderer.sendSync('system:cwdSync'),
+        getEnv: () => {
+            return { ...(process.env || {}) }
+        },
+        getSystemInfo: () => ipcRenderer.sendSync('system:getSystemInfoSync')
+    },
+    // IPC Utility
+    ipc: {
+        invoke: (channel, ...args) => ipcRenderer.invoke(channel, ...args),
+        send: (channel, ...args) => ipcRenderer.send(channel, ...args),
+        sendSync: (channel, ...args) => ipcRenderer.sendSync(channel, ...args),
+        on: (channel, callback) => ipcRenderer.on(channel, (event, ...args) => callback(event, ...args)),
+        removeListener: (channel, callback) => ipcRenderer.removeListener(channel, callback)
+    }
 })
 
-
-const { app } = require('@electron/remote')
-const os = require('os')
-const path = require('path')
-
-
-const NetworkConfig = require('../../../network/config')
-const ConfigManager = require('./configmanager')
-const { DistroAPI } = require('./distromanager')
-const LangLoader = require('./langloader')
-const { LoggerUtil } = require('./core/util/LoggerUtil')
-const { retry, fetchWithTimeout } = require('./util')
-const isDev = require('./isdev')
-let Sentry
-
-const logger = LoggerUtil.getLogger('Preloader')
-
-async function preloader() {
-    logger.info('Loading..')
-
-    LangLoader.setupLanguage()
-
-    try {
-        if (!isDev) {
-            Sentry = require('@sentry/electron/renderer')
-            let releaseVersion = 'unknown'
-            try {
-                releaseVersion = app.getVersion()
-            } catch (e) {
-                // app might not be ready yet in early preload
-                try {
-                    releaseVersion = require('../../../package.json').version
-                } catch (e2) {
-                    // ignore
-                }
-            }
-
-            Sentry.init({
-                dsn: 'https://f02442d2a0733ac2c810b8d8d7f4a21e@o4508545424359424.ingest.de.sentry.io/4508545432027216',
-                release: 'FLauncher@' + releaseVersion,
-                ignoreErrors: ['EACCES', 'EPERM']
-            })
-
-            const systemInfo = {
-                platform: os.platform(),
-                arch: os.arch(),
-                cpu: os.cpus(),
-                totalMemory: os.totalmem(),
-                freeMemory: os.freemem(),
-                hostname: os.hostname(),
-            }
-
-            Sentry.setContext('system', systemInfo)
-        } else {
-            logger.info('Sentry disabled in development mode.')
-        }
-    } catch (error) {
-        logger.warn('Sentry initialization failed:', error)
-    }
-
-    try {
-        await ConfigManager.load()
-    } catch (err) {
-        logger.error('Error loading config:', err)
-        ipcRenderer.send('distributionIndexDone', false)
-        return
-    }
-
-    // P2P Kill Switch Check (Async/Parallel)
-    checkP2PKillSwitch()
-    checkSupportConfig()
-
-    DistroAPI['commonDir'] = ConfigManager.getCommonDirectory()
-    DistroAPI['instanceDir'] = ConfigManager.getInstanceDirectory()
-
-    LangLoader.setupLanguage()
-
-    try {
-        const heliosDistro = await DistroAPI.getDistribution()
-        logger.info('Loaded distribution index.')
-
-        if (heliosDistro) {
-            if (ConfigManager.getSelectedServer() == null || heliosDistro.getServerById(ConfigManager.getSelectedServer()) == null) {
-                logger.info('Determining default selected server..')
-                ConfigManager.setSelectedServer(heliosDistro.getMainServer().rawServer.id)
-                await ConfigManager.save()
-            }
-            ipcRenderer.send('distributionIndexDone', true)
-        } else {
-            logger.error('Loaded distribution index is null.')
-            ipcRenderer.send('distributionIndexDone', false)
-        }
-
-    } catch (err) {
-        logger.error('Failed to load distribution index, continuing in offline mode.', err)
-        sendToSentry(`Failed to load distribution index: ${err.message}`, 'error')
-        ipcRenderer.send('distributionIndexDone', false)
-    }
-
-    // proceeded without explicit early temp cleanup
-}
-
-// Capture log or error and send to Sentry
-function sendToSentry(message, type = 'info') {
-    if (Sentry && !isDev) {
-        if (type === 'error') {
-            Sentry.captureException(new Error(message))
-        } else {
-            Sentry.captureMessage(message)
-        }
-    }
-}
-
-async function checkP2PKillSwitch() {
-    try {
-        const response = await fetchWithTimeout(NetworkConfig.P2P_KILL_SWITCH_URL, { cache: 'no-store' }, 5000)
-        if (response.ok) {
-            logger.info('P2P Kill Switch activated by remote configuration.')
-            ConfigManager.setLocalOptimization(false)
-            ConfigManager.setGlobalOptimization(false)
-            ConfigManager.setP2PUploadEnabled(false)
-            ConfigManager.setP2POnlyMode(false)
-            await ConfigManager.save()
-        }
-    } catch (err) {
-        // Optional feature, failure is expected if kill switch is not active.
-    }
-}
-
-async function checkSupportConfig() {
-    try {
-        const response = await fetchWithTimeout(NetworkConfig.SUPPORT_CONFIG_URL, { cache: 'no-store' }, 5000)
-        if (response.ok) {
-            const data = await response.json()
-            if (data.url) {
-                logger.info('Support URL loaded:', data.url)
-                ConfigManager.setSupportUrl(data.url)
-                await ConfigManager.save()
-            }
-        }
-    } catch (err) {
-        // Optional feature
-        logger.warn('Failed to load support config:', err)
-    }
-}
-
-module.exports = { sendToSentry }
-
-// Initialize Language Loader immediately to prevent race conditions
-LangLoader.setupLanguage()
-
-preloader()
+console.log('HeliosAPI Bridge Initialized')

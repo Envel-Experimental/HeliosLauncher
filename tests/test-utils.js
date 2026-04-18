@@ -13,8 +13,7 @@ const FOXFORD_DATA_PATH = path.join(TEST_USER_DATA, '.foxford');
 /**
  * Create a dummy config to bypass first-launch screens and provide a test account
  */
-async function setupDummyConfig() {
-    console.log('setupDummyConfig: Creating isolated test environment...');
+async function clearTestData() {
     if (fs.existsSync(TEST_USER_DATA)) {
         try {
             fs.rmSync(TEST_USER_DATA, { recursive: true, force: true });
@@ -22,6 +21,10 @@ async function setupDummyConfig() {
             console.log(`Warning: Could not clear test directory: ${e.message}`);
         }
     }
+}
+
+async function setupDummyConfig() {
+    console.log('setupDummyConfig: Setting up config...');
     if (!fs.existsSync(FOXFORD_DATA_PATH)) {
         fs.mkdirSync(FOXFORD_DATA_PATH, { recursive: true });
     }
@@ -33,7 +36,7 @@ async function setupDummyConfig() {
             p2pPromptShown: true
         },
         clientToken: "test-client-token",
-        selectedServer: "test-server",
+        selectedServer: "Programming-vanilla-1.20.1",
         selectedAccount: "test-uuid",
         authenticationDatabase: {
             "test-uuid": {
@@ -51,7 +54,7 @@ async function setupDummyConfig() {
                 displayName: "SecondaryUser"
             }
         },
-        modConfigurations: [],
+        modConfigurations: {},
         javaConfig: {}
     };
 
@@ -59,10 +62,27 @@ async function setupDummyConfig() {
 }
 
 /**
+ * Write a mock distribution index directly to the local cache.
+ */
+async function setupMockDistro(distroData) {
+    if (!fs.existsSync(FOXFORD_DATA_PATH)) {
+        fs.mkdirSync(FOXFORD_DATA_PATH, { recursive: true });
+    }
+    const distroPath = path.join(FOXFORD_DATA_PATH, 'distribution.json');
+    const distroDevPath = path.join(FOXFORD_DATA_PATH, 'distribution_dev.json');
+    const content = JSON.stringify(distroData, null, 4);
+    fs.writeFileSync(distroPath, content);
+    fs.writeFileSync(distroDevPath, content);
+    console.log(`[TestUtils] Mock distribution written to: ${distroPath} and ${distroDevPath}`);
+}
+
+/**
  * Launch the HeliosLauncher application
  */
-async function launchApp() {
-    await setupDummyConfig();
+async function launchApp(onWindow = null, resetConfig = true) {
+    if (resetConfig) {
+        await setupDummyConfig();
+    }
 
     console.log('launchApp: Launching Electron...');
     const electronApp = await electron.launch({
@@ -79,23 +99,48 @@ async function launchApp() {
         ],
         env: {
             ...process.env,
-            APPDATA: TEST_USER_DATA // Redirect pathutil.js
+            APPDATA: TEST_USER_DATA, // Redirect pathutil.js
+            NODE_ENV: 'test', // Enable SecurityUtils bypass
+            HELIOS_DEV_MODE: 'true' // Use local distribution.json
         },
         timeout: 60000
     });
 
-    console.log('launchApp: Waiting for first window...');
-    const window = await electronApp.firstWindow();
-    console.log('launchApp: Window acquired!');
-    
-    // Redirect app console to test console for easier debugging
-    window.on('console', msg => {
-        const text = msg.text();
-        if (msg.type() === 'error' || text.includes('Error') || text.includes('fatal')) {
-            console.log(`[App] ${msg.type().toUpperCase()}: ${text}`);
-        }
+    console.log('launchApp: Waiting for window...');
+
+    if (onWindow) {
+        electronApp.on('window', async (win) => {
+            await onWindow(win);
+        });
+    }
+
+    // Capture Main Process logs immediately
+    const mainProcess = electronApp.process();
+    mainProcess.stdout.on('data', (data) => {
+        console.log(`[Main] STDOUT: ${data.toString()}`);
+    });
+    mainProcess.stderr.on('data', (data) => {
+        console.log(`[Main] STDERR: ${data.toString()}`);
     });
 
+    electronApp.on('window', async (window) => {
+        window.on('console', msg => {
+            console.log(`[App] ${msg.type().toUpperCase()}: ${msg.text()}`);
+        });
+        window.on('pageerror', exception => {
+            console.log(`[App] PAGE UNCAUGHT ERROR: ${exception.stack || exception}`);
+        });
+        window.on('dialog', async dialog => {
+            console.log(`[App] DIALOG: ${dialog.message()}`);
+            await dialog.dismiss();
+        });
+        window.on('requestfailed', request => {
+            console.log(`[App] REQUEST FAILED: ${request.url()} - ${request.failure()?.errorText}`);
+        });
+    });
+
+    const window = await electronApp.firstWindow();
+    console.log('launchApp: Window acquired!');
     return { electronApp, window };
 }
 
@@ -105,7 +150,7 @@ async function launchApp() {
  */
 async function handleInitialOverlays(window) {
     console.log('Handling initial overlays/screens...');
-    
+
     // Wait for app to initialize
     await window.waitForLoadState('domcontentloaded');
 
@@ -123,7 +168,7 @@ async function handleInitialOverlays(window) {
         if (await overlay.isVisible({ timeout: 2000 }).catch(() => false)) {
             const text = await overlay.innerText();
             console.log(`Overlay detected: ${text.substring(0, 50)}...`);
-            
+
             if (await continueButton.isVisible()) {
                 await continueButton.click();
             }
@@ -136,10 +181,17 @@ async function handleInitialOverlays(window) {
  * Navigate to Settings
  */
 async function openSettings(window) {
+    // Wait for the UI to be ready (splash screen hidden)
+    console.log('openSettings: Waiting for splash screen to disappear...');
+    const loadingOverlay = window.locator('#loadingContainer');
+    await loadingOverlay.waitFor({ state: 'hidden', timeout: 15000 }).catch(() => {
+        console.warn('openSettings: Splash screen did not disappear in time, proceeding anyway.');
+    });
+
     const settingsBtn = window.locator('#settingsMediaButton');
     console.log('openSettings: Waiting for settings button...');
     try {
-        await settingsBtn.waitFor({ state: 'visible', timeout: 10000 });
+        await settingsBtn.waitFor({ state: 'visible', timeout: 30000 });
         await settingsBtn.click();
         await window.waitForSelector('#settingsContainer', { state: 'visible' });
         console.log('openSettings: Settings opened!');
@@ -163,5 +215,9 @@ module.exports = {
     handleInitialOverlays,
     openSettings,
     switchSettingsTab,
-    TEST_USER_DATA
+    setupMockDistro,
+    setupDummyConfig,
+    clearTestData,
+    TEST_USER_DATA,
+    FOXFORD_DATA_PATH
 };
