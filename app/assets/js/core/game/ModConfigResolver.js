@@ -208,7 +208,7 @@ class ModConfigResolver {
 
         // Check for any libraries in our mod list.
         for (let i = 0; i < mods.length; i++) {
-            if (mods.sub_modules != null) {
+            if (mods[i].subModules != null) {
                 const res = this._resolveModuleLibraries(mods[i])
                 libs = { ...libs, ...res }
             }

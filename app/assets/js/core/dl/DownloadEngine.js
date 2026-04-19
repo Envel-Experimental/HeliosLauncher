@@ -347,29 +347,21 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
             }
             // Web Response Body (Standard HTTP)
             else if (response.body) {
-                const reader = response.body.getReader();
-                const nodeStream = new Readable({
-                    async read() {
-                        try {
-                            const { done, value } = await reader.read();
-                            if (done) {
-                                this.push(null);
-                            } else {
-                                loaded += value.length;
-                                const now = Date.now();
-                                if (onProgress && (now - lastProgressTime >= 100 || loaded === total)) {
-                                    onProgress(loaded);
-                                    lastProgressTime = now;
-                                }
-                                this.push(Buffer.from(value));
-                            }
-                        } catch (e) {
-                            this.destroy(e);
+                const nodeStream = Readable.fromWeb(response.body);
+                const progressStream = new Transform({
+                    transform(chunk, encoding, callback) {
+                        loaded += chunk.length;
+                        const now = Date.now();
+                        if (onProgress && (now - lastProgressTime >= 100 || loaded === total)) {
+                            onProgress(loaded);
+                            lastProgressTime = now;
                         }
+                        this.push(chunk);
+                        callback();
                     }
                 });
 
-                await pipeline(nodeStream, fileStream);
+                await pipeline(nodeStream, progressStream, fileStream);
             } else {
                 throw new Error('No body in response');
             }
@@ -393,8 +385,12 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
 
                 // DEBUG: Inspect contents and delete temp
                 try {
-                    const content = await fs.readFile(tempPath);
-                    const preview = content.slice(0, 100).toString('utf-8');
+                    const fd = await fs.open(tempPath, 'r');
+                    const buffer = Buffer.alloc(100);
+                    const { bytesRead } = await fd.read(buffer, 0, 100, 0);
+                    await fd.close();
+                    
+                    const preview = buffer.slice(0, bytesRead).toString('utf-8');
                     console.error(`[DownloadEngine] Failed File Content Preview (First 100 bytes): ${preview}`);
                     await fs.unlink(tempPath);
                 } catch (e) { }

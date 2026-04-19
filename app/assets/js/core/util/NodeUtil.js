@@ -34,4 +34,35 @@ function ensureDecodedPath(path) {
     return path;
 }
 
-module.exports = { sleep, ensureEncodedPath, ensureDecodedPath }
+/**
+ * Simple concurrency limiter to avoid ESM import issues with p-limit package.
+ * 
+ * @param {number} limit Max concurrent tasks.
+ * @returns {<T>(fn: () => Promise<T>) => Promise<T>}
+ */
+function pLimit(limit) {
+    let active = 0;
+    const queue = [];
+    const next = () => {
+        active--;
+        if (queue.length > 0) {
+            const task = queue.shift();
+            if (task) task();
+        }
+    };
+    return (fn) => {
+        return new Promise((resolve, reject) => {
+            const run = () => {
+                active++;
+                fn().then(resolve).catch(reject).finally(next);
+            };
+            if (active < limit) {
+                run();
+            } else {
+                queue.push(run);
+            }
+        });
+    };
+}
+
+module.exports = { sleep, ensureEncodedPath, ensureDecodedPath, pLimit }

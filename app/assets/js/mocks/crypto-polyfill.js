@@ -29,15 +29,20 @@ class Hash {
 
     digest(encoding) {
         const fullData = Buffer.concat(this.data)
-        // Since we can't easily do synchronous hashing with Web Crypto,
-        // and DistributionAPI might need it, we provide a basic implementation
-        // for common algorithms if possible, or just log a warning.
         
-        // For E2E/Launcher purposes, we might just return a mock hash if it's just for verification
-        // that is not strictly enforced, OR we use a small synchronous library.
-        // But let's try to implement a simple SHA-1 / MD5 if we can.
+        // Use the main process for real hashing if available
+        if (typeof window !== 'undefined' && window.HeliosAPI && window.HeliosAPI.ipc) {
+            try {
+                const res = window.HeliosAPI.ipc.sendSync('crypto:hashSync', this.algorithm, fullData)
+                if (res) {
+                    return encoding === 'hex' ? res : Buffer.from(res, 'hex')
+                }
+            } catch (e) {
+                console.error('[CryptoPolyfill] IPC Hash failed:', e)
+            }
+        }
         
-        console.warn(`[CryptoPolyfill] Synchronous digest requested for ${this.algorithm}. This is a stub.`)
+        console.warn(`[CryptoPolyfill] Synchronous digest requested for ${this.algorithm}. Using fallback stub.`)
         
         // Return a dummy hash for now to prevent crashes
         const dummyHash = Buffer.alloc(20, 0)

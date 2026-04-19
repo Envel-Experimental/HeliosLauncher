@@ -9,6 +9,7 @@ const { mcVersionAtLeast, isLibraryCompatible, getMojangOS } = require('../commo
 const { LoggerUtil } = require('../util/LoggerUtil');
 const { handleFetchError } = require('../common/RestResponse');
 const { MOJANG_MIRRORS } = require('../../../../../network/config');
+const { pLimit } = require('../util/NodeUtil');
 require('../configmanager');
 const MirrorManager = require('../../../../../network/MirrorManager');
 
@@ -221,8 +222,6 @@ class MojangIndexProcessor extends IndexProcessor {
 
     async validateAssets(assetIndex) {
         const objectDir = path.join(this.assetPath, 'objects');
-        // Dynamic import for ESM module
-        const { default: pLimit } = await import('p-limit');
         const limit = pLimit(32); // Concurrency limit 32
 
         const tasks = Object.entries(assetIndex.objects).map(([id, meta]) => {
@@ -273,8 +272,6 @@ class MojangIndexProcessor extends IndexProcessor {
 
     async validateLibraries(versionJson) {
         const libDir = getLibraryDir(this.commonDir);
-        // Dynamic import for ESM module
-        const { default: pLimit } = await import('p-limit');
         const limit = pLimit(32);
 
         const tasks = versionJson.libraries.map(libEntry => {

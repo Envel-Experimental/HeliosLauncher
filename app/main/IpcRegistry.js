@@ -22,6 +22,16 @@ class IpcRegistry {
             event.returnValue = app.getVersion()
         })
 
+        ipcMain.on('crypto:hashSync', (event, algorithm, data) => {
+            try {
+                const crypto = require('crypto')
+                event.returnValue = crypto.createHash(algorithm).update(data).digest('hex')
+            } catch (e) {
+                console.error(`[IpcRegistry] Hash failed for ${algorithm}:`, e)
+                event.returnValue = null
+            }
+        })
+
         ipcMain.on('fs:readdirSync', (event, path, opts) => {
             try {
                 const fsSync = require('fs')

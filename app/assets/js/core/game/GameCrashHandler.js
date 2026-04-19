@@ -341,8 +341,9 @@ class GameCrashHandler {
         }
 
         const dataDir = ConfigManager.getDataDirectory()
-        // Simple check: is the java path inside the data directory?
-        const isManaged = javaPath.startsWith(dataDir)
+        // Reliable cross-platform check if path is inside data directory
+        const relativeToData = path.relative(dataDir, javaPath)
+        const isManaged = relativeToData && !relativeToData.startsWith('..') && !path.isAbsolute(relativeToData)
 
         if (isManaged) {
             logger.info(`Detected corrupted managed Java at ${javaPath}. Attempting removal...`)
@@ -350,7 +351,8 @@ class GameCrashHandler {
             try {
                 const runtimeDir = path.join(dataDir, 'runtime')
                 // If the path is definitely inside runtime
-                if (javaPath.startsWith(runtimeDir)) {
+                const relativeToRuntime = path.relative(runtimeDir, javaPath)
+                if (relativeToRuntime && !relativeToRuntime.startsWith('..') && !path.isAbsolute(relativeToRuntime)) {
                     // Standard structure: <dataDir>/runtime/<arch>/<folder>/bin/java...
                     const relative = path.relative(runtimeDir, javaPath)
                     const parts = relative.split(path.sep)

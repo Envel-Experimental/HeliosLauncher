@@ -5,6 +5,7 @@ const { validateLocalFile, getVersionJsonPath, safeEnsureDir, readFileFromZip } 
 const { HashAlgo } = require('./Asset');
 const { Type } = require('../common/DistributionClasses');
 const { mcVersionAtLeast } = require('../common/MojangUtils');
+const { pLimit } = require('../util/NodeUtil');
 const fs = require('fs/promises');
 const path = require('path');
 
@@ -44,30 +45,6 @@ class DistributionIndexProcessor extends IndexProcessor {
     }
 
     async validateModules(modules) {
-        // Concurrency limiter logic to avoid ESM import issues with p-limit
-        const pLimit = (limit) => {
-            let active = 0
-            const queue = []
-            const next = () => {
-                active--
-                if (queue.length > 0) {
-                    queue.shift()()
-                }
-            }
-            return (fn) => {
-                return new Promise((resolve, reject) => {
-                    const run = () => {
-                        active++
-                        fn().then(resolve).catch(reject).finally(next)
-                    }
-                    if (active < limit) {
-                        run()
-                    } else {
-                        queue.push(run)
-                    }
-                })
-            }
-        }
         const limit = pLimit(32);
 
         // Flatten module tree for validation
