@@ -145,8 +145,13 @@ async function extractZip(archivePath, destDir, onEntry) {
         try {
             await runCommand('tar', ['-xf', archivePath, '-C', destDir]);
         } catch (e) {
-            const psArgs = ['-NoProfile', '-Command', `Expand-Archive -LiteralPath '${archivePath}' -DestinationPath '${destDir}' -Force`];
-            await runCommand('powershell', psArgs);
+            const psCmd = `Expand-Archive -LiteralPath '${archivePath.replace(/'/g, "''")}' -DestinationPath '${destDir.replace(/'/g, "''")}' -Force`;
+            const encodedCmd = Buffer.from(psCmd, 'utf16le').toString('base64');
+            try {
+                await runCommand('powershell', ['-NoProfile', '-EncodedCommand', encodedCmd]);
+            } catch (psErr) {
+                throw new Error(`[FileUtils] Failed to extract zip. Both 'tar' and 'powershell' failed or are unavailable. PowerShell Error: ${psErr.message}`);
+            }
         }
     } else {
         await runCommand('unzip', ['-o', archivePath, '-d', destDir]);
@@ -163,10 +168,15 @@ async function extractZip(archivePath, destDir, onEntry) {
                 } catch (e) {
                     const psCmd = `
                         Add-Type -AssemblyName System.IO.Compression.FileSystem;
-                        [System.IO.Compression.ZipFile]::OpenRead('${archivePath}').Entries | Select-Object -ExpandProperty FullName
+                        [System.IO.Compression.ZipFile]::OpenRead('${archivePath.replace(/'/g, "''")}').Entries | Select-Object -ExpandProperty FullName
                      `;
-                    const { stdout } = await runCommand('powershell', ['-NoProfile', '-Command', psCmd]);
-                    entries = stdout.toString().split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+                    const encodedCmd = Buffer.from(psCmd, 'utf16le').toString('base64');
+                    try {
+                        const { stdout } = await runCommand('powershell', ['-NoProfile', '-EncodedCommand', encodedCmd]);
+                        entries = stdout.toString().split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+                    } catch (psErr) {
+                        throw new Error(`[FileUtils] Failed to read zip entries. Both 'tar' and 'powershell' failed or are unavailable. Error: ${psErr.message}`);
+                    }
                 }
             } else {
                 const { stdout } = await runCommand('unzip', ['-Z1', archivePath]);
@@ -208,15 +218,20 @@ async function readFileFromZip(archivePath, entryName) {
         } catch (e) {
             const psCmd = `
                 Add-Type -AssemblyName System.IO.Compression.FileSystem;
-                $zip = [System.IO.Compression.ZipFile]::OpenRead('${archivePath}');
-                $entry = $zip.GetEntry('${entryPath}');
+                $zip = [System.IO.Compression.ZipFile]::OpenRead('${archivePath.replace(/'/g, "''")}');
+                $entry = $zip.GetEntry('${entryPath.replace(/'/g, "''")}');
                 if ($entry) {
                     $reader = [System.IO.StreamReader]::new($entry.Open());
                     $reader.ReadToEnd();
                 }
             `;
-            const { stdout } = await runCommand('powershell', ['-NoProfile', '-Command', psCmd]);
-            return typeof stdout === 'string' ? Buffer.from(stdout, 'utf-8') : stdout;
+            const encodedCmd = Buffer.from(psCmd, 'utf16le').toString('base64');
+            try {
+                const { stdout } = await runCommand('powershell', ['-NoProfile', '-EncodedCommand', encodedCmd]);
+                return typeof stdout === 'string' ? Buffer.from(stdout, 'utf-8') : stdout;
+            } catch (psErr) {
+                throw new Error(`[FileUtils] Failed to read file from zip. Both 'tar' and 'powershell' failed or are unavailable. Error: ${psErr.message}`);
+            }
         }
     } else {
         const { stdout } = await runCommand('unzip', ['-p', archivePath, entryPath]);

@@ -493,12 +493,12 @@ async function extractJdk(archivePath) {
 async function runInstaller(installerPath) {
     if (process.platform === Platform.WIN32) {
         log.info(`Running MSI installer: ${installerPath}`);
-        const { exec } = require('child_process');
+        const { execFile } = require('child_process');
         return new Promise((resolve, reject) => {
             // /i for install, /passive for semi-automated (shows progress but no interaction needed usually)
             // But user said "запускаем УСТАНОВЩИК", so maybe full UI is better?
             // Let's use /i and it will be interactive.
-            exec(`msiexec /i "${installerPath}"`, (err) => {
+            execFile('msiexec', ['/i', installerPath], (err) => {
                 if (err) {
                     log.error('Installer exited with error', err);
                     reject(err);
