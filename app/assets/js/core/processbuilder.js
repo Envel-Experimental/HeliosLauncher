@@ -112,7 +112,11 @@ class ProcessBuilder {
             }
         }
 
-        logger.info('Launch Arguments:', args)
+        const sanitizedArgs = args.map((arg, index, arr) => {
+            if (index > 0 && (arr[index - 1] === '--accessToken' || arr[index - 1] === '--uuid')) return '***'
+            return arg
+        })
+        logger.info('Launch Arguments:', sanitizedArgs)
 
         // 6. Spawn Process
         const javaPath = ConfigManager.getJavaExecutable(this.server.rawServer.id)

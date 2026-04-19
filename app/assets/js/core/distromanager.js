@@ -107,9 +107,21 @@ async function pullRemoteInterceptor() {
                     }, 500)
                 })
 
-                setMiddleButtonHandler(() => {
+                setMiddleButtonHandler(async () => {
                     resetUI()
-                    resolve(result)
+                    const localData = await this.pullLocal()
+                    if (localData != null) {
+                        resolve({
+                            data: localData,
+                            responseStatus: 0, // Success
+                            signatureValid: true
+                        })
+                    } else {
+                        // If no local data, we have to retry
+                        setTimeout(async () => {
+                            resolve(await this.pullRemote())
+                        }, 500)
+                    }
                 })
 
                 setDismissHandler(() => {

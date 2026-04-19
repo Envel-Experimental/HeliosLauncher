@@ -125,6 +125,8 @@ exports.deepMerge = function (obj, defaults) {
 
     const result = { ...defaults }
     for (const key in obj) {
+        if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue
+
         const val = obj[key]
         if (val === undefined) continue
 

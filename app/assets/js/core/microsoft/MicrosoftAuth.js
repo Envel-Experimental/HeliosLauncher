@@ -20,7 +20,8 @@ class MicrosoftAuth {
                 grant_type: refresh ? 'refresh_token' : 'authorization_code'
             });
 
-            console.log('DEBUG: REAL SEND ->', body.toString());
+            // Redact sensitive tokens from debug logs
+            console.log('DEBUG: REAL SEND ->', body.toString().replace(/(code|refresh_token)=[^&]+/g, '$1=***'));
 
             const res = await fetch(this.TOKEN_ENDPOINT, {
                 method: 'POST',

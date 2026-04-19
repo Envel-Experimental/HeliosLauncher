@@ -89,7 +89,7 @@ class ClientBoundPacket {
         do {
             read = this.readByte();
             const value = (read & 0b01111111);
-            result |= (value << (7 * numRead));
+            result += value * Math.pow(2, 7 * numRead);
             numRead++;
             if (numRead > 5) {
                 throw new Error('VarInt is too big');

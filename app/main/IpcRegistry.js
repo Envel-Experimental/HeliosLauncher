@@ -110,6 +110,12 @@ class IpcRegistry {
             return await ConfigManager.getLauncherDirectory()
         })
 
+        ipcMain.handle('launcher:showOpenDialog', async (event, options) => {
+            const { dialog } = require('electron')
+            const win = WindowManager.getMainWindow()
+            return await dialog.showOpenDialog(win, options)
+        })
+
         // General App IPCs
         ipcMain.handle('config:get', () => {
             return ConfigManager.getConfig()

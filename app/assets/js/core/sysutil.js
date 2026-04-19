@@ -1,6 +1,6 @@
 const os = require('os')
 const fs = require('fs')
-const { exec } = require('child_process') // Built-in Node.js module
+const { execFile } = require('child_process')
 
 
 // Configurable thresholds
@@ -21,26 +21,41 @@ function getAvailableRamGb() {
         const platform = os.platform()
 
         if (platform === 'darwin') { // macOS
-            exec('vm_stat', (err, stdout) => {
+            execFile('vm_stat', (err, stdout) => {
                 if (err) return reject(err)
 
-                // On macOS, available RAM is the sum of free and inactive pages.
-                const freePages = parseInt(stdout.match(/Pages free:\s+(\d+)/)[1])
-                const inactivePages = parseInt(stdout.match(/Pages inactive:\s+(\d+)/)[1])
-                const pageSize = 4096 // Page size is typically 4096 bytes.
+                try {
+                    // On macOS, available RAM is the sum of free and inactive pages.
+                    const freeMatch = stdout.match(/Pages free:\s+(\d+)/)
+                    const inactiveMatch = stdout.match(/Pages inactive:\s+(\d+)/)
+                    if (!freeMatch || !inactiveMatch) throw new Error('Failed to parse vm_stat output')
 
-                const availableBytes = (freePages + inactivePages) * pageSize
-                resolve(availableBytes / BYTES_PER_GB)
+                    const freePages = parseInt(freeMatch[1])
+                    const inactivePages = parseInt(inactiveMatch[1])
+                    const pageSize = 4096 // Page size is typically 4096 bytes.
+
+                    const availableBytes = (freePages + inactivePages) * pageSize
+                    resolve(availableBytes / BYTES_PER_GB)
+                } catch (e) {
+                    reject(e)
+                }
             })
         } else if (platform === 'linux') {
             // On Linux, /proc/meminfo provides a direct 'MemAvailable' value.
-            exec('grep MemAvailable /proc/meminfo', (err, stdout) => {
-                if (err || !stdout) {
+            // Using direct file reading is safer and faster than exec('grep').
+            fs.readFile('/proc/meminfo', 'utf-8', (err, data) => {
+                if (err || !data) {
                     // Fallback for older kernels without MemAvailable.
                     return resolve(os.freemem() / BYTES_PER_GB)
                 }
-                const availableKb = parseInt(stdout.split(/\s+/)[1])
-                resolve(availableKb / (1024 * 1024))
+                const match = data.match(/MemAvailable:\s+(\d+)\s+(?:k|K)B/)
+                if (match) {
+                    const availableKb = parseInt(match[1])
+                    const val = availableKb / (1024 * 1024)
+                    resolve(isNaN(val) ? (os.freemem() / BYTES_PER_GB) : val)
+                } else {
+                    resolve(os.freemem() / BYTES_PER_GB)
+                }
             })
         } else { // win32 and other platforms
             // os.freemem() is generally accurate enough on Windows.

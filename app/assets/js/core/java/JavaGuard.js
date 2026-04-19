@@ -350,7 +350,10 @@ async function latestGraalVM_GitHub(major, dataDir) {
 
     try {
         const res = await fetchWithTimeout(url);
-        if (!res.ok) throw new Error(`GitHub API Error ${res.status}`);
+        if (!res.ok) {
+            log.warn(`GitHub API Error ${res.status} while fetching GraalVM. This might be due to rate limits.`);
+            return null;
+        }
         const releases = await res.json();
 
         // Find release for this major version
@@ -635,14 +638,16 @@ async function getLinuxDiscoverers(dataDir) {
 }
 
 async function win32DriveMounts() {
-    try {
-        const { stdout } = await execAsync('gdr -psp FileSystem | select -eXp root | ConvertTo-Json', { shell: 'powershell.exe' });
-        const res = JSON.parse(stdout);
-        return Array.isArray(res) ? res : [res];
+    const drives = [];
+    for (let i = 67; i <= 90; i++) { // From 'C' to 'Z'
+        const drive = String.fromCharCode(i) + ':\\';
+        try {
+            // Fast check if drive exists/accessible
+            await fs.access(drive);
+            drives.push(drive);
+        } catch (e) {}
     }
-    catch (error) {
-        return ['C:\\'];
-    }
+    return drives.length > 0 ? drives : ['C:\\'];
 }
 
 async function getPathsOnAllDrivesWin32(paths) {

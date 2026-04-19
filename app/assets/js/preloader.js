@@ -99,6 +99,7 @@ contextBridge.exposeInMainWorld('HeliosAPI', {
     // Launcher Logic
     launcher: {
         launch: (options) => ipcRenderer.invoke('launcher:launch', options),
+        showOpenDialog: (options) => ipcRenderer.invoke('launcher:showOpenDialog', options),
         onLog: (callback) => ipcRenderer.on('launcher:log', (e, data) => callback(data)),
         onLogError: (callback) => ipcRenderer.on('launcher:log-error', (e, data) => callback(data)),
         onExit: (callback) => ipcRenderer.on('launcher:exit', (e, code) => callback(code)),

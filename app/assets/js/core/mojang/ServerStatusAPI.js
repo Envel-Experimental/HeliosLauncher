@@ -108,9 +108,10 @@ async function getServerStatus(protocol, hostname, port = 25565) {
                 }
                 ++iterations;
                 if (bytesLeft > 0) {
-                    bytesLeft -= nextData.length;
+                    const chunkToProcess = nextData.length > bytesLeft ? nextData.slice(0, bytesLeft) : nextData;
+                    bytesLeft -= chunkToProcess.length;
                     if (doAppend) {
-                        inboundPacket.append(nextData);
+                        inboundPacket.append(chunkToProcess);
                     }
                 }
                 // All bytes read, attempt conversion.

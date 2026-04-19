@@ -81,11 +81,12 @@ exports.addDropinMods = function (files, modsdir) {
 
     for (let f of files) {
         if (f.path && MOD_REGEX.exec(f.name) != null) {
+            const safeName = path.basename(f.name)
             try {
-                fs.renameSync(f.path, path.join(modsdir, f.name))
+                fs.renameSync(f.path, path.join(modsdir, safeName))
             } catch (err) {
                 if (err.code === 'EXDEV') {
-                    fs.cpSync(f.path, path.join(modsdir, f.name), { recursive: true })
+                    fs.cpSync(f.path, path.join(modsdir, safeName), { recursive: true })
                     fs.rmSync(f.path, { recursive: true })
                 } else {
                     throw err
@@ -240,11 +241,12 @@ exports.addShaderpacks = function (files, instanceDir) {
 
     for (let f of files) {
         if (f.path && SHADER_REGEX.exec(f.name) != null) {
+            const safeName = path.basename(f.name)
             try {
-                fs.renameSync(f.path, path.join(p, f.name))
+                fs.renameSync(f.path, path.join(p, safeName))
             } catch (err) {
                 if (err.code === 'EXDEV') {
-                    fs.cpSync(f.path, path.join(p, f.name), { recursive: true })
+                    fs.cpSync(f.path, path.join(p, safeName), { recursive: true })
                     fs.rmSync(f.path, { recursive: true })
                 } else {
                     throw err

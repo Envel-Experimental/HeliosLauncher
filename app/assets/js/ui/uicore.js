@@ -16,15 +16,33 @@ export const Lang = require('@core/langloader')
 export const loggerUICore = LoggerUtil.getLogger('UICore')
 export const loggerAutoUpdater = LoggerUtil.getLogger('AutoUpdater')
 
+if (!window._startupTime) window._startupTime = Date.now()
+let latestLoadingStatus = null
+
 /**
  * Update the loading status text on the splash screen.
+ * Shows only if the loading takes longer than 3 seconds.
  * @param {string} key The translation key or raw text.
  */
 export function setLoadingStatus(key) {
     const el = document.getElementById('loadingStatusText')
-    if (el) {
+    if (!el) return
+
+    latestLoadingStatus = key
+    const elapsed = Date.now() - window._startupTime
+
+    if (elapsed >= 3000) {
         const localized = Lang.queryJS(key) || key
         el.innerHTML = `Загрузка: ${localized}`
+    } else if (!window._loadingTimer) {
+        window._loadingTimer = setTimeout(() => {
+            const elDelayed = document.getElementById('loadingStatusText')
+            if (elDelayed) {
+                const localized = Lang.queryJS(latestLoadingStatus) || latestLoadingStatus
+                elDelayed.innerHTML = `Загрузка: ${localized}`
+            }
+            window._loadingTimer = null
+        }, 3000 - elapsed)
     }
 }
 window.setLoadingStatus = setLoadingStatus

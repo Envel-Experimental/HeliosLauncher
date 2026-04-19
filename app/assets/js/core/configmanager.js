@@ -178,7 +178,11 @@ exports.getInstanceDirectorySync = function () {
  */
 exports.getDataDirectory = function (def = false) {
     if (!config || !config.settings) return DEFAULT_CONFIG.settings.launcher.dataDirectory
-    return !def ? config.settings.launcher.dataDirectory : DEFAULT_CONFIG.settings.launcher.dataDirectory
+    const val = config.settings.launcher.dataDirectory
+    if (!def && (!val || val === '')) {
+        return exports.getLauncherDirectorySync()
+    }
+    return !def ? val : DEFAULT_CONFIG.settings.launcher.dataDirectory
 }
 
 /**
@@ -233,6 +237,12 @@ exports.load = async function () {
         if (!config.settings) {
             console.log('[ConfigManager] Restoring missing settings structure...')
             config.settings = JSON.parse(JSON.stringify(DEFAULT_CONFIG.settings))
+        }
+        if (!config.settings.launcher) {
+            config.settings.launcher = JSON.parse(JSON.stringify(DEFAULT_CONFIG.settings.launcher))
+        }
+        if (!config.settings.launcher.dataDirectory) {
+            config.settings.launcher.dataDirectory = await exports.getLauncherDirectory()
         }
         if (!config.authenticationDatabase) config.authenticationDatabase = {}
         
@@ -503,6 +513,7 @@ exports.setJVMOptions = (id, val) => {
     if (!config.javaConfig[id]) config.javaConfig[id] = {}
     config.javaConfig[id].opts = val
 }
+exports.setDataDirectory = (val) => { if(config) config.settings.launcher.dataDirectory = val }
 exports.setConfig = (newConfig) => { config = newConfig }
 
 exports.ensureJavaConfig = (id, opts, ram) => {
