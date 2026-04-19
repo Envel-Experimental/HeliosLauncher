@@ -7,6 +7,7 @@
     </title>
 
     <script>
+        window._startupTime = Date.now();
         console.log('Inline script in app.ejs executing...');
         console.log('HeliosAPI status:', typeof HeliosAPI !== 'undefined' ? 'EXPOSED' : 'MISSING');
         if (typeof HeliosAPI !== 'undefined') {
@@ -982,7 +983,7 @@
                 <img id="loadCenterImage" src="assets/images/icon.png">
             </div>
             <div id="loadingStatus">
-                <span id="loadingStatusText"></span>
+                <span id="loadingStatusText" style="display: none;"></span>
             </div>
         </div>
     </div>

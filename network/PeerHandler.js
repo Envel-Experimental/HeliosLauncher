@@ -65,10 +65,22 @@ class PeerHandler {
 
         // Initialize Real Paths for Security Checks
         try {
-            this.dataDirReal = fs.realpathSync(ConfigManager.getDataDirectory().trim())
-            this.commonDirReal = fs.realpathSync(ConfigManager.getCommonDirectorySync().trim())
+            const dataDir = ConfigManager.getDataDirectory().trim()
+            const commonDir = ConfigManager.getCommonDirectorySync().trim()
+            
+            if (fs.existsSync(dataDir)) {
+                this.dataDirReal = fs.realpathSync(dataDir)
+            } else {
+                this.dataDirReal = dataDir // Fallback to raw path if it doesn't exist yet
+            }
+
+            if (fs.existsSync(commonDir)) {
+                this.commonDirReal = fs.realpathSync(commonDir)
+            } else {
+                this.commonDirReal = commonDir
+            }
         } catch (e) {
-            console.error('[PeerHandler] Failed to resolve real paths for security roots:', e)
+            if (isDev) console.error('[PeerHandler] Failed to resolve real paths for security roots:', e)
             this.dataDirReal = null
             this.commonDirReal = null
         }
@@ -946,8 +958,20 @@ class PeerHandler {
             if (!this.dataDirReal || !this.commonDirReal) {
                 // Re-attempt resolution if they failed in constructor (unlikely but safe)
                 try {
-                    this.dataDirReal = fs.realpathSync(ConfigManager.getDataDirectory().trim())
-                    this.commonDirReal = fs.realpathSync(ConfigManager.getCommonDirectory().trim())
+                    const dataDir = ConfigManager.getDataDirectory().trim()
+                    const commonDir = ConfigManager.getCommonDirectory().trim()
+                    
+                    if (fs.existsSync(dataDir)) {
+                        this.dataDirReal = fs.realpathSync(dataDir)
+                    } else {
+                        this.dataDirReal = dataDir
+                    }
+
+                    if (fs.existsSync(commonDir)) {
+                        this.commonDirReal = fs.realpathSync(commonDir)
+                    } else {
+                        this.commonDirReal = commonDir
+                    }
                 } catch (e) {
                     return false // Cannot verify security
                 }

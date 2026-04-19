@@ -16,7 +16,6 @@ export const Lang = require('@core/langloader')
 export const loggerUICore = LoggerUtil.getLogger('UICore')
 export const loggerAutoUpdater = LoggerUtil.getLogger('AutoUpdater')
 
-if (!window._startupTime) window._startupTime = Date.now()
 let latestLoadingStatus = null
 
 /**
@@ -29,17 +28,19 @@ export function setLoadingStatus(key) {
     if (!el) return
 
     latestLoadingStatus = key
-    const elapsed = Date.now() - window._startupTime
+    const elapsed = Date.now() - (window._startupTime || Date.now())
 
     if (elapsed >= 3000) {
         const localized = Lang.queryJS(key) || key
         el.innerHTML = `Загрузка: ${localized}`
+        el.style.display = 'block'
     } else if (!window._loadingTimer) {
         window._loadingTimer = setTimeout(() => {
             const elDelayed = document.getElementById('loadingStatusText')
-            if (elDelayed) {
+            if (elDelayed && latestLoadingStatus) {
                 const localized = Lang.queryJS(latestLoadingStatus) || latestLoadingStatus
                 elDelayed.innerHTML = `Загрузка: ${localized}`
+                elDelayed.style.display = 'block'
             }
             window._loadingTimer = null
         }, 3000 - elapsed)

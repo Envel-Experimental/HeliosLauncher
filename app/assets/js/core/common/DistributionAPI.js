@@ -129,6 +129,21 @@ class DistributionAPI {
         }
         else {
             distro = await this.pullLocal();
+            if (distro == null) {
+                console.log('[DistributionAPI] devMode: distribution_dev.json missing, falling back to production distribution.json');
+                distro = await this.readDistributionFromFile(this.distroPath);
+            }
+            if (distro == null) {
+                console.log('[DistributionAPI] devMode: local distribution files missing, falling back to remote...');
+                distro = (await this.pullRemote()).data;
+                if (distro != null) {
+                    try {
+                        await this.writeDistributionToDisk(distro);
+                    } catch (err) {
+                        console.error('[DistributionAPI] Failed to write remote distribution to disk (dev fallback):', err);
+                    }
+                }
+            }
         }
         return distro;
     }

@@ -33,12 +33,16 @@ class Hash {
         // Use the main process for real hashing if available
         if (typeof window !== 'undefined' && window.HeliosAPI && window.HeliosAPI.ipc) {
             try {
-                const res = window.HeliosAPI.ipc.sendSync('crypto:hashSync', this.algorithm, fullData)
+                // Ensure data is a plain Uint8Array for Electron IPC serialization
+                const dataToSend = new Uint8Array(fullData)
+                const res = window.HeliosAPI.ipc.sendSync('crypto:hashSync', this.algorithm, dataToSend)
                 if (res) {
                     return encoding === 'hex' ? res : Buffer.from(res, 'hex')
+                } else {
+                    console.error(`[CryptoPolyfill] IPC Hash returned null for ${this.algorithm}`)
                 }
             } catch (e) {
-                console.error('[CryptoPolyfill] IPC Hash failed:', e)
+                console.error(`[CryptoPolyfill] IPC Hash failed for ${this.algorithm}:`, e)
             }
         }
         

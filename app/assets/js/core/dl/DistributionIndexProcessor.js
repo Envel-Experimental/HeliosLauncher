@@ -62,26 +62,28 @@ class DistributionIndexProcessor extends IndexProcessor {
         const tasks = flatModules.map(module => {
             return limit(async () => {
                 const modulePath = module.getPath();
-                let hash = module.rawModule.artifact.SHA256;
-                let algo = HashAlgo.SHA256;
-
-                if (!hash) {
+                const artifact = module.rawModule.artifact;
+                
+                if (!artifact || !artifact.SHA256) {
                     // No supported hash found (SHA256 required). Skip validation.
                     return null;
                 }
+
+                let hash = artifact.SHA256;
+                let algo = HashAlgo.SHA256;
 
                 // Skip validation for anything in 'instances' - these are user-mutable
                 if (modulePath.replace(/\\/g, '/').includes('/instances/')) {
                     return null;
                 }
 
-                if (!await validateLocalFile(modulePath, algo, hash, module.rawModule.artifact.size)) {
+                if (!await validateLocalFile(modulePath, algo, hash, artifact.size)) {
                     return {
                         id: module.rawModule.id,
                         hash: hash,
                         algo: algo,
-                        size: module.rawModule.artifact.size,
-                        url: module.rawModule.artifact.url,
+                        size: artifact.size,
+                        url: artifact.url,
                         path: modulePath
                     };
                 }

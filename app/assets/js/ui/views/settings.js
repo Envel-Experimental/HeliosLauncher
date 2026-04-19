@@ -867,8 +867,8 @@ export async function fullSettingsSave() {
     await saveSettingsValues()
     saveModConfiguration()
     await ConfigManager.save()
-    saveDropinModConfiguration()
-    saveShaderpackSettings()
+    await saveDropinModConfiguration()
+    await saveShaderpackSettings()
     ipcRenderer.invoke('p2p:configUpdate')
 }
 
@@ -1475,8 +1475,8 @@ export let CACHE_DROPIN_MODS
  */
 async function resolveDropinModsForUI() {
     const serv = (await DistroAPI.getDistribution()).getServerById(ConfigManager.getSelectedServer())
-    CACHE_SETTINGS_MODS_DIR = path.join(ConfigManager.getInstanceDirectory(), serv.rawServer.id, 'mods')
-    CACHE_DROPIN_MODS = DropinModUtil.scanForDropinMods(CACHE_SETTINGS_MODS_DIR, serv.rawServer.minecraftVersion)
+    CACHE_SETTINGS_MODS_DIR = sysPath.join(ConfigManager.getInstanceDirectory(), serv.rawServer.id, 'mods')
+    CACHE_DROPIN_MODS = await DropinModUtil.scanForDropinMods(CACHE_SETTINGS_MODS_DIR, serv.rawServer.minecraftVersion)
 
     let dropinMods = ''
 
@@ -1535,8 +1535,8 @@ export function bindDropinModsRemoveButton() {
  */
 export function bindDropinModFileSystemButton() {
     const fsBtn = document.getElementById('settingsDropinFileSystemButton')
-    fsBtn.onclick = () => {
-        DropinModUtil.validateDir(CACHE_SETTINGS_MODS_DIR)
+    fsBtn.onclick = async () => {
+        await ipcRenderer.invoke('fs:mkdir', CACHE_SETTINGS_MODS_DIR, { recursive: true })
         shell.openPath(CACHE_SETTINGS_MODS_DIR)
     }
     fsBtn.ondragenter = e => {
@@ -1555,7 +1555,7 @@ export function bindDropinModFileSystemButton() {
         fsBtn.removeAttribute('drag')
         e.preventDefault()
 
-        DropinModUtil.addDropinMods(e.dataTransfer.files, CACHE_SETTINGS_MODS_DIR)
+        await DropinModUtil.addDropinMods(e.dataTransfer.files, CACHE_SETTINGS_MODS_DIR)
         await reloadDropinMods()
     }
 }
@@ -1564,14 +1564,16 @@ export function bindDropinModFileSystemButton() {
  * Save drop-in mod states. Enabling and disabling is just a matter
  * of adding/removing the .disabled extension.
  */
-export function saveDropinModConfiguration() {
+export async function saveDropinModConfiguration() {
     if (!CACHE_DROPIN_MODS) return;
-    for (dropin of CACHE_DROPIN_MODS) {
+    for (let dropin of CACHE_DROPIN_MODS) {
         const dropinUI = document.getElementById(dropin.fullName)
         if (dropinUI != null) {
             const dropinUIEnabled = dropinUI.hasAttribute('enabled')
             if (DropinModUtil.isDropinModEnabled(dropin.fullName) != dropinUIEnabled) {
-                DropinModUtil.toggleDropinMod(CACHE_SETTINGS_MODS_DIR, dropin.fullName, dropinUIEnabled).catch(err => {
+                try {
+                    await DropinModUtil.toggleDropinMod(CACHE_SETTINGS_MODS_DIR, dropin.fullName, dropinUIEnabled)
+                } catch (err) {
                     if (!isOverlayVisible()) {
                         setOverlayContent(
                             Lang.queryJS('settings.dropinMods.failedToggleTitle'),
@@ -1581,7 +1583,7 @@ export function saveDropinModConfiguration() {
                         setOverlayHandler(null)
                         toggleOverlay(true)
                     }
-                })
+                }
             }
         }
     }
@@ -1617,9 +1619,9 @@ export let CACHE_SELECTED_SHADERPACK
  */
 async function resolveShaderpacksForUI() {
     const serv = (await DistroAPI.getDistribution()).getServerById(ConfigManager.getSelectedServer())
-    CACHE_SETTINGS_INSTANCE_DIR = path.join(ConfigManager.getInstanceDirectory(), serv.rawServer.id)
-    CACHE_SHADERPACKS = DropinModUtil.scanForShaderpacks(CACHE_SETTINGS_INSTANCE_DIR)
-    CACHE_SELECTED_SHADERPACK = DropinModUtil.getEnabledShaderpack(CACHE_SETTINGS_INSTANCE_DIR)
+    CACHE_SETTINGS_INSTANCE_DIR = sysPath.join(ConfigManager.getInstanceDirectory(), serv.rawServer.id)
+    CACHE_SHADERPACKS = await DropinModUtil.scanForShaderpacks(CACHE_SETTINGS_INSTANCE_DIR)
+    CACHE_SELECTED_SHADERPACK = await DropinModUtil.getEnabledShaderpack(CACHE_SETTINGS_INSTANCE_DIR)
 
     setShadersOptions(CACHE_SHADERPACKS, CACHE_SELECTED_SHADERPACK)
 }
@@ -1647,7 +1649,7 @@ export function setShadersOptions(arr, selected) {
     }
 }
 
-export function saveShaderpackSettings() {
+export async function saveShaderpackSettings() {
     let sel = 'OFF'
     const optionsContainer = document.getElementById('settingsShadersOptions')
     if (optionsContainer) {
@@ -1657,14 +1659,14 @@ export function saveShaderpackSettings() {
             }
         }
     }
-    DropinModUtil.setEnabledShaderpack(CACHE_SETTINGS_INSTANCE_DIR, sel)
+    await DropinModUtil.setEnabledShaderpack(CACHE_SETTINGS_INSTANCE_DIR, sel)
 }
 
 export function bindShaderpackButton() {
     const spBtn = document.getElementById('settingsShaderpackButton')
-    spBtn.onclick = () => {
-        const p = path.join(CACHE_SETTINGS_INSTANCE_DIR, 'shaderpacks')
-        DropinModUtil.validateDir(p)
+    spBtn.onclick = async () => {
+        const p = sysPath.join(CACHE_SETTINGS_INSTANCE_DIR, 'shaderpacks')
+        await ipcRenderer.invoke('fs:mkdir', p, { recursive: true })
         shell.openPath(p)
     }
     spBtn.ondragenter = e => {
@@ -1683,8 +1685,8 @@ export function bindShaderpackButton() {
         spBtn.removeAttribute('drag')
         e.preventDefault()
 
-        DropinModUtil.addShaderpacks(e.dataTransfer.files, CACHE_SETTINGS_INSTANCE_DIR)
-        saveShaderpackSettings()
+        await DropinModUtil.addShaderpacks(e.dataTransfer.files, CACHE_SETTINGS_INSTANCE_DIR)
+        await saveShaderpackSettings()
         await resolveShaderpacksForUI()
     }
 }
@@ -1736,10 +1738,10 @@ Array.from(document.getElementsByClassName('settingsSwitchServerButton')).forEac
 /**
  * Save mod configuration for the current selected server.
  */
-export function saveAllModConfigurations() {
+export async function saveAllModConfigurations() {
     saveModConfiguration()
-    ConfigManager.save()
-    saveDropinModConfiguration()
+    await ConfigManager.save()
+    await saveDropinModConfiguration()
 }
 
 /**

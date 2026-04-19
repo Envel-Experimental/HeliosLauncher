@@ -36,7 +36,10 @@ describe('P2PEngine Unit Tests', () => {
         jest.mock('hyperswarm', () => {
             return jest.fn().mockImplementation(() => {
                 const ee = new (require('events').EventEmitter)()
-                ee.join = jest.fn()
+                ee.join = jest.fn().mockReturnValue({
+                    flushed: jest.fn().mockResolvedValue(),
+                    destroy: jest.fn().mockResolvedValue()
+                })
                 ee.flush = jest.fn().mockResolvedValue()
                 ee.destroy = jest.fn().mockResolvedValue()
                 ee.discovery = {

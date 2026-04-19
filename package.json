@@ -13,7 +13,7 @@
   "main": "index.js",
   "scripts": {
     "start": "electron .",
-    "bundle": "node scripts/esbuild_bundle.js",
+    "bundle": "node esbuild.config.js",
     "postinstall": "patch-package",
     "dist": "electron-builder build",
     "dist:win": "npm run dist -- -w",

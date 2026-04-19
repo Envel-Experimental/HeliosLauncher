@@ -257,7 +257,7 @@ class GameCrashHandler {
      * 
      * @param {Object} crashAnalysis The crash analysis.
      */
-    handleCrashFix(crashAnalysis) {
+    async handleCrashFix(crashAnalysis) {
         if (crashAnalysis.type === 'missing-version-file') {
             const versionPath = path.join(this.commonDir, 'versions', path.basename(crashAnalysis.file, '.json'))
             if (fs.existsSync(versionPath)) {
@@ -268,9 +268,9 @@ class GameCrashHandler {
         } else if (crashAnalysis.type === 'incompatible-mods') {
             const modsDir = path.join(this.gameDir, 'mods')
             try {
-                const dropinMods = DropinModUtil.scanForDropinMods(modsDir, this.server.rawServer.minecraftVersion)
+                const dropinMods = await DropinModUtil.scanForDropinMods(modsDir, this.server.rawServer.minecraftVersion)
                 for (const mod of dropinMods) {
-                    fs.unlinkSync(path.join(modsDir, mod.fullName))
+                    await ipcRenderer.invoke('fs:unlink', path.join(modsDir, mod.fullName))
                 }
             } catch (e) {
                 logger.warn('Failed to delete drop-in mods', e)

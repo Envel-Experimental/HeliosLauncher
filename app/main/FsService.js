@@ -6,23 +6,46 @@ class FsService {
     init() {
 
         ipcMain.handle('fs:readFile', async (event, path, opts) => {
-            return await fs.readFile(path, opts)
+            try {
+                return await fs.readFile(path, opts)
+            } catch (e) {
+                return null
+            }
         })
 
         ipcMain.handle('fs:writeFile', async (event, path, data, opts) => {
-            return await fs.writeFile(path, data, opts)
+            try {
+                await fs.writeFile(path, data, opts)
+                return true
+            } catch (e) {
+                return false
+            }
         })
 
         ipcMain.handle('fs:mkdir', async (event, path, opts) => {
-            return await fs.mkdir(path, opts)
+            try {
+                await fs.mkdir(path, opts)
+                return true
+            } catch (e) {
+                return false
+            }
         })
 
         ipcMain.handle('fs:access', async (event, path, mode) => {
-            return await fs.access(path, mode)
+            try {
+                await fs.access(path, mode)
+                return true
+            } catch (e) {
+                return false
+            }
         })
 
         ipcMain.handle('fs:readdir', async (event, path, opts) => {
-            return await fs.readdir(path, opts)
+            try {
+                return await fs.readdir(path, opts)
+            } catch (e) {
+                return []
+            }
         })
 
         ipcMain.handle('fs:rm', async (event, path, opts) => {
@@ -98,6 +121,36 @@ class FsService {
                 event.returnValue = fsSync.readdirSync(path, opts)
             } catch (e) {
                 event.returnValue = []
+            }
+        })
+
+        ipcMain.on('fs:rmSync', (event, path, opts) => {
+            try {
+                const fsSync = require('fs')
+                fsSync.rmSync(path, opts)
+                event.returnValue = true
+            } catch (e) {
+                event.returnValue = false
+            }
+        })
+
+        ipcMain.on('fs:unlinkSync', (event, path) => {
+            try {
+                const fsSync = require('fs')
+                fsSync.unlinkSync(path)
+                event.returnValue = true
+            } catch (e) {
+                event.returnValue = false
+            }
+        })
+
+        ipcMain.on('fs:renameSync', (event, path, newPath) => {
+            try {
+                const fsSync = require('fs')
+                fsSync.renameSync(path, newPath)
+                event.returnValue = true
+            } catch (e) {
+                event.returnValue = false
             }
         })
     }

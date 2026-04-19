@@ -6,7 +6,9 @@
 const fs = {
     promises: {
         readFile: async (path, encoding) => {
-            return await window.HeliosAPI?.ipc?.invoke('fs:readFile', path, encoding)
+            const res = await window.HeliosAPI?.ipc?.invoke('fs:readFile', path, encoding)
+            if (res === null) throw new Error(`ENOENT: no such file or directory, readFile '${path}'`)
+            return res
         },
         writeFile: async (path, data, encoding) => {
             return await window.HeliosAPI?.ipc?.invoke('fs:writeFile', path, data, encoding)
@@ -15,7 +17,9 @@ const fs = {
             return await window.HeliosAPI?.ipc?.invoke('fs:mkdir', path, options)
         },
         access: async (path, mode) => {
-            return await window.HeliosAPI?.ipc?.invoke('fs:access', path, mode)
+            const res = await window.HeliosAPI?.ipc?.invoke('fs:access', path, mode)
+            if (!res) throw new Error(`ENOENT: no such file or directory, access '${path}'`)
+            return res
         },
         stat: async (path) => {
             return await window.HeliosAPI?.ipc?.invoke('fs:stat', path)
@@ -47,6 +51,15 @@ const fs = {
     },
     statSync: (path) => {
         return window.HeliosAPI?.ipc?.sendSync('fs:statSync', path)
+    },
+    rmSync: (path, options) => {
+        return window.HeliosAPI?.ipc?.sendSync('fs:rmSync', path, options)
+    },
+    unlinkSync: (path) => {
+        return window.HeliosAPI?.ipc?.sendSync('fs:unlinkSync', path)
+    },
+    renameSync: (path, newPath) => {
+        return window.HeliosAPI?.ipc?.sendSync('fs:renameSync', path, newPath)
     }
 }
 

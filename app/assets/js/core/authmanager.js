@@ -53,8 +53,15 @@ function microsoftErrorDisplayable(errorCode) {
 const crypto = require('crypto')
 
 function generateOfflineUUID(username) {
-    const hash = crypto.createHash('md5').update(`OfflinePlayer:${username}`).digest('hex')
-    return `${hash.substr(0, 8)}-${hash.substr(8, 4)}-${hash.substr(12, 4)}-${hash.substr(16, 4)}-${hash.substr(20)}`
+    const hash = crypto.createHash('md5').update(`OfflinePlayer:${username}`).digest()
+    
+    // Set version to 3 (MD5 based)
+    hash[6] = (hash[6] & 0x0f) | 0x30
+    // Set variant to 2 (RFC 4122)
+    hash[8] = (hash[8] & 0x3f) | 0x80
+
+    const hex = hash.toString('hex')
+    return `${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}`
 }
 
 exports.addMojangAccount = async function (username, password) {

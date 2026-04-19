@@ -4,6 +4,7 @@ const AutoUpdaterService = require('./AutoUpdaterService')
 const MicrosoftAuthService = require('./MicrosoftAuthService')
 const LauncherService = require('./LauncherService')
 const FsService = require('./FsService')
+const ModService = require('./ModService')
 const ServerStatusService = require('./ServerStatusService')
 const ConfigManager = require('../assets/js/core/configmanager')
 const { SHELL_OPCODE } = require('../assets/js/core/ipcconstants')
@@ -15,21 +16,13 @@ class IpcRegistry {
         MicrosoftAuthService.init()
         LauncherService.init()
         FsService.init()
+        ModService.init()
         ServerStatusService.init()
+        require('./CryptoService').init()
         require('../assets/js/core/LaunchController').init()
         
         ipcMain.on('app:getVersionSync', (event) => {
             event.returnValue = app.getVersion()
-        })
-
-        ipcMain.on('crypto:hashSync', (event, algorithm, data) => {
-            try {
-                const crypto = require('crypto')
-                event.returnValue = crypto.createHash(algorithm).update(data).digest('hex')
-            } catch (e) {
-                console.error(`[IpcRegistry] Hash failed for ${algorithm}:`, e)
-                event.returnValue = null
-            }
         })
 
         ipcMain.on('fs:readdirSync', (event, path, opts) => {

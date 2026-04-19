@@ -1,7 +1,6 @@
-const fs = require('fs')
-const path = require('path')
 const { ipcRenderer, shell } = require('electron')
-const { SHELL_OPCODE } = require('./configmanager')
+const { SHELL_OPCODE } = require('./ipcconstants')
+const path = require('path')
 
 // Group #1: File Name (without .disabled, if any)
 // Group #2: File Extension (jar, zip, or litemod)
@@ -10,19 +9,6 @@ const MOD_REGEX = /^(.+(jar|zip|litemod))(?:\.(disabled))?$/
 const DISABLED_EXT = '.disabled'
 
 const SHADER_REGEX = /^(.+)\.zip$/
-const SHADER_OPTION = /shaderPack=(.+)/
-const SHADER_DIR = 'shaderpacks'
-const SHADER_CONFIG = 'optionsshaders.txt'
-
-/**
- * Validate that the given directory exists. If not, it is
- * created.
- *
- * @param {string} modsDir The path to the mods directory.
- */
-exports.validateDir = function (dir) {
-    fs.mkdirSync(dir, { recursive: true })
-}
 
 /**
  * Scan for drop-in mods in both the mods folder and version
@@ -31,42 +17,11 @@ exports.validateDir = function (dir) {
  * @param {string} modsDir The path to the mods directory.
  * @param {string} version The minecraft version of the server configuration.
  *
- * @returns {{fullName: string, name: string, ext: string, disabled: boolean}[]}
+ * @returns {Promise<{fullName: string, name: string, ext: string, disabled: boolean}[]>}
  * An array of objects storing metadata about each discovered mod.
  */
-exports.scanForDropinMods = function (modsDir, version) {
-    const modsDiscovered = []
-    if (fs.existsSync(modsDir)) {
-        let modCandidates = fs.readdirSync(modsDir)
-        let verCandidates = []
-        const versionDir = path.join(modsDir, version)
-        if (fs.existsSync(versionDir)) {
-            verCandidates = fs.readdirSync(versionDir)
-        }
-        for (let file of modCandidates) {
-            const match = MOD_REGEX.exec(file)
-            if (match != null) {
-                modsDiscovered.push({
-                    fullName: match[0],
-                    name: match[1],
-                    ext: match[2],
-                    disabled: match[3] != null
-                })
-            }
-        }
-        for (let file of verCandidates) {
-            const match = MOD_REGEX.exec(file)
-            if (match != null) {
-                modsDiscovered.push({
-                    fullName: path.join(version, match[0]),
-                    name: match[1],
-                    ext: match[2],
-                    disabled: match[3] != null
-                })
-            }
-        }
-    }
-    return modsDiscovered
+exports.scanForDropinMods = async function (modsDir, version) {
+    return await ipcRenderer.invoke('mods:scan', modsDir, version)
 }
 
 /**
@@ -75,26 +30,11 @@ exports.scanForDropinMods = function (modsDir, version) {
  * @param {FileList} files The files to add.
  * @param {string} modsDir The path to the mods directory.
  */
-exports.addDropinMods = function (files, modsdir) {
-
-    exports.validateDir(modsdir)
-
-    for (let f of files) {
-        if (f.path && MOD_REGEX.exec(f.name) != null) {
-            const safeName = path.basename(f.name)
-            try {
-                fs.renameSync(f.path, path.join(modsdir, safeName))
-            } catch (err) {
-                if (err.code === 'EXDEV') {
-                    fs.cpSync(f.path, path.join(modsdir, safeName), { recursive: true })
-                    fs.rmSync(f.path, { recursive: true })
-                } else {
-                    throw err
-                }
-            }
-        }
+exports.addDropinMods = async function (files, modsDir) {
+    const paths = Array.from(files).filter(f => f.path && MOD_REGEX.exec(f.name) != null).map(f => f.path)
+    if (paths.length > 0) {
+        return await ipcRenderer.invoke('mods:add', paths, modsDir)
     }
-
 }
 
 /**
@@ -106,7 +46,6 @@ exports.addDropinMods = function (files, modsdir) {
  * @returns {Promise.<boolean>} True if the mod was deleted, otherwise false.
  */
 exports.deleteDropinMod = async function (modsDir, fullName) {
-    /** @type {boolean} */
     const res = await ipcRenderer.invoke(SHELL_OPCODE.TRASH_ITEM, path.join(modsDir, fullName))
 
     if (!res.result) {
@@ -129,19 +68,8 @@ exports.deleteDropinMod = async function (modsDir, fullName) {
  * @returns {Promise.<void>} A promise which resolves when the mod has
  * been toggled. If an IO error occurs the promise will be rejected.
  */
-exports.toggleDropinMod = function (modsDir, fullName, enable) {
-    return new Promise((resolve, reject) => {
-        const oldPath = path.join(modsDir, fullName)
-        const newPath = path.join(modsDir, enable ? fullName.substring(0, fullName.indexOf(DISABLED_EXT)) : fullName + DISABLED_EXT)
-
-        fs.rename(oldPath, newPath, (err) => {
-            if (err) {
-                reject(err)
-            } else {
-                resolve()
-            }
-        })
-    })
+exports.toggleDropinMod = async function (modsDir, fullName, enable) {
+    return await ipcRenderer.invoke('mods:toggle', modsDir, fullName, enable)
 }
 
 /**
@@ -159,28 +87,11 @@ exports.isDropinModEnabled = function (fullName) {
  *
  * @param {string} instanceDir The path to the server instance directory.
  *
- * @returns {{fullName: string, name: string}[]}
+ * @returns {Promise<{fullName: string, name: string}[]>}
  * An array of objects storing metadata about each discovered shaderpack.
  */
-exports.scanForShaderpacks = function (instanceDir) {
-    const shaderDir = path.join(instanceDir, SHADER_DIR)
-    const packsDiscovered = [{
-        fullName: 'OFF',
-        name: 'Off (Default)'
-    }]
-    if (fs.existsSync(shaderDir)) {
-        let modCandidates = fs.readdirSync(shaderDir)
-        for (let file of modCandidates) {
-            const match = SHADER_REGEX.exec(file)
-            if (match != null) {
-                packsDiscovered.push({
-                    fullName: match[0],
-                    name: match[1]
-                })
-            }
-        }
-    }
-    return packsDiscovered
+exports.scanForShaderpacks = async function (instanceDir) {
+    return await ipcRenderer.invoke('shaders:scan', instanceDir)
 }
 
 /**
@@ -189,22 +100,10 @@ exports.scanForShaderpacks = function (instanceDir) {
  *
  * @param {string} instanceDir The path to the server instance directory.
  *
- * @returns {string} The file name of the enabled shaderpack.
+ * @returns {Promise<string>} The file name of the enabled shaderpack.
  */
-exports.getEnabledShaderpack = function (instanceDir) {
-    exports.validateDir(instanceDir)
-
-    const optionsShaders = path.join(instanceDir, SHADER_CONFIG)
-    if (fs.existsSync(optionsShaders)) {
-        const buf = fs.readFileSync(optionsShaders, { encoding: 'utf-8' })
-        const match = SHADER_OPTION.exec(buf)
-        if (match != null) {
-            return match[1]
-        } else {
-            console.warn('WARNING: Shaderpack regex failed.')
-        }
-    }
-    return 'OFF'
+exports.getEnabledShaderpack = async function (instanceDir) {
+    return await ipcRenderer.invoke('shaders:getEnabled', instanceDir)
 }
 
 /**
@@ -213,18 +112,8 @@ exports.getEnabledShaderpack = function (instanceDir) {
  * @param {string} instanceDir The path to the server instance directory.
  * @param {string} pack the file name of the shaderpack.
  */
-exports.setEnabledShaderpack = function (instanceDir, pack) {
-    exports.validateDir(instanceDir)
-
-    const optionsShaders = path.join(instanceDir, SHADER_CONFIG)
-    let buf
-    if (fs.existsSync(optionsShaders)) {
-        buf = fs.readFileSync(optionsShaders, { encoding: 'utf-8' })
-        buf = buf.replace(SHADER_OPTION, `shaderPack=${pack}`)
-    } else {
-        buf = `shaderPack=${pack}`
-    }
-    fs.writeFileSync(optionsShaders, buf, { encoding: 'utf-8' })
+exports.setEnabledShaderpack = async function (instanceDir, pack) {
+    return await ipcRenderer.invoke('shaders:setEnabled', instanceDir, pack)
 }
 
 /**
@@ -233,26 +122,9 @@ exports.setEnabledShaderpack = function (instanceDir, pack) {
  * @param {FileList} files The files to add.
  * @param {string} instanceDir The path to the server instance directory.
  */
-exports.addShaderpacks = function (files, instanceDir) {
-
-    const p = path.join(instanceDir, SHADER_DIR)
-
-    exports.validateDir(p)
-
-    for (let f of files) {
-        if (f.path && SHADER_REGEX.exec(f.name) != null) {
-            const safeName = path.basename(f.name)
-            try {
-                fs.renameSync(f.path, path.join(p, safeName))
-            } catch (err) {
-                if (err.code === 'EXDEV') {
-                    fs.cpSync(f.path, path.join(p, safeName), { recursive: true })
-                    fs.rmSync(f.path, { recursive: true })
-                } else {
-                    throw err
-                }
-            }
-        }
+exports.addShaderpacks = async function (files, instanceDir) {
+    const paths = Array.from(files).filter(f => f.path && SHADER_REGEX.exec(f.name) != null).map(f => f.path)
+    if (paths.length > 0) {
+        return await ipcRenderer.invoke('shaders:add', paths, instanceDir)
     }
-
 }
