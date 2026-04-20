@@ -44,7 +44,8 @@ class ProcessBuilder {
         this.launcherVersion = launcherVersion
 
         // Paths
-        this.gameDir = path.join(ConfigManager.getInstanceDirectorySync(), distroServer.rawServer.id)
+        const sanitizedId = distroServer.rawServer.id.replace(/[<>:"/\\|?*]/g, '_').replace(/\.+/g, '.')
+        this.gameDir = path.join(ConfigManager.getInstanceDirectorySync(), sanitizedId)
         this.commonDir = ConfigManager.getCommonDirectorySync()
         this.libPath = path.join(this.commonDir, 'libraries')
 
@@ -198,7 +199,7 @@ class ProcessBuilder {
                 nativeBasePath = currentSystemTemp
             }
         }
-        return path.join(nativeBasePath, ConfigManager.getTempNativeFolder(), crypto.pseudoRandomBytes(16).toString('hex'))
+        return path.join(nativeBasePath, ConfigManager.getTempNativeFolder(), crypto.randomBytes(16).toString('hex'))
     }
 
     /**

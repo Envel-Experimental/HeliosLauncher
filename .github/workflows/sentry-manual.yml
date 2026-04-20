@@ -12,6 +12,8 @@ on:
 jobs:
   upload_source:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       # 1. Check out the code from the current branch.
       # IMPORTANT: Ensure the code in this branch matches the code in the .exe/.asar exactly.

@@ -312,6 +312,7 @@ function validateKeySet(srcObj, destObj) {
     if (srcObj == null) srcObj = {}
     const keys = Object.keys(srcObj)
     for (const key of keys) {
+        if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue
         if (typeof destObj[key] === 'undefined') {
             destObj[key] = srcObj[key]
         } else if (typeof srcObj[key] === 'object' && srcObj[key] != null && !Array.isArray(srcObj[key])) {

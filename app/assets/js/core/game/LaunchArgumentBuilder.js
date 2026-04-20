@@ -116,7 +116,7 @@ class LaunchArgumentBuilder {
                 args.push(argStr
                     .replaceAll('${library_directory}', this.libPath)
                     .replaceAll('${classpath_separator}', LaunchArgumentBuilder.getClasspathSeparator())
-                    .replaceAll('${version_name}', this.modManifest.id)
+                    .replaceAll('${version_name}', this.modManifest.id.replace(/\.\.+/g, '.'))
                 )
             }
         }
@@ -340,7 +340,8 @@ class LaunchArgumentBuilder {
                 } else {
                     const dlInfo = lib.downloads
                     const artifact = dlInfo.artifact
-                    const to = path.join(this.libPath, artifact.path)
+                    const sanitizedArtifactPath = artifact.path.replace(/\.\.+/g, '.')
+                    const to = path.join(this.libPath, sanitizedArtifactPath)
                     const versionIndependentId = lib.name.substring(0, lib.name.lastIndexOf(':'))
                     libs[versionIndependentId] = to
                 }
@@ -371,7 +372,8 @@ class LaunchArgumentBuilder {
     async _extractNative(lib, tempNativePath) {
         const exclusionArr = lib.extract != null ? lib.extract.exclude : ['META-INF/']
         const artifact = lib.downloads.classifiers[lib.natives[getMojangOS()].replace('${arch}', process.arch.replace('x', ''))]
-        const to = path.join(this.libPath, artifact.path)
+        const sanitizedArtifactPath = artifact.path.replace(/\.\.+/g, '.')
+        const to = path.join(this.libPath, sanitizedArtifactPath)
         await this._unzip(to, tempNativePath)
         return exclusionArr
     }
@@ -383,7 +385,8 @@ class LaunchArgumentBuilder {
 
         const exclusionArr = lib.extract != null ? lib.extract.exclude : ['META-INF/', '.git', '.sha1']
         const artifact = lib.downloads.artifact
-        const to = path.join(this.libPath, artifact.path)
+        const sanitizedArtifactPath = artifact.path.replace(/\.\.+/g, '.')
+        const to = path.join(this.libPath, sanitizedArtifactPath)
 
         await this._unzip(to, tempNativePath)
         return exclusionArr
