@@ -20,7 +20,7 @@ let latestLoadingStatus = null
 
 /**
  * Update the loading status text on the splash screen.
- * Shows only if the loading takes longer than 3 seconds.
+ * Shows only if the loading takes longer than 6 seconds.
  * @param {string} key The translation key or raw text.
  */
 export function setLoadingStatus(key) {
@@ -30,7 +30,7 @@ export function setLoadingStatus(key) {
     latestLoadingStatus = key
     const elapsed = Date.now() - (window._startupTime || Date.now())
 
-    if (elapsed >= 3000) {
+    if (elapsed >= 6000) {
         const localized = Lang.queryJS(key) || key
         el.innerHTML = `Загрузка: ${localized}`
         el.style.display = 'block'
@@ -43,7 +43,7 @@ export function setLoadingStatus(key) {
                 elDelayed.style.display = 'block'
             }
             window._loadingTimer = null
-        }, 3000 - elapsed)
+        }, 6000 - elapsed)
     }
 }
 window.setLoadingStatus = setLoadingStatus
