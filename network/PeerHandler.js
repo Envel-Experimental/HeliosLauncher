@@ -3,6 +3,7 @@
 const b4a = require('b4a')
 const fs = require('fs')
 const path = require('path')
+const crypto = require('crypto')
 const ConfigManager = require('../app/assets/js/core/configmanager')
 const PeerPersistence = require('./PeerPersistence')
 const {
@@ -528,6 +529,21 @@ class PeerHandler {
 
 
             if (foundPath) {
+                // VULNERABILITY FIX: Mandatory Hash Verification
+                // Ensure the file content actually matches the requested hash
+                try {
+                    const actualHash = await this._calculateFileHash(foundPath, hash.length === 64 ? 'sha256' : 'sha1')
+                    if (actualHash.toLowerCase() !== hash.toLowerCase()) {
+                        if (isDev) console.warn(`[P2P Security] Hash mismatch for ${foundPath}. Requested: ${hash}, Actual: ${actualHash}`)
+                        this.sendError(reqId, 'Integrity Error (Hash Mismatch)')
+                        return
+                    }
+                } catch (e) {
+                    if (isDev) console.error(`[P2P Security] Failed to verify hash for ${foundPath}:`, e.message)
+                    this.sendError(reqId, 'Verification Failed')
+                    return
+                }
+
                 // Get File Size for Credits
                 const stat = fs.statSync(foundPath)
                 const sizeMB = stat.size / 1024 / 1024
@@ -926,15 +942,13 @@ class PeerHandler {
             // mods - mods (code, heavy)
             // common - shared files
             // objects - hashed assets
-            // config - mod configurations
             // shaderpacks / resourcepacks - client aesthetics
             // scripts / kubejs - custom scripting
             // defaultconfigs - modpack defaults
-            // realms - mod-specific resources (e.g., this user)
             const whitelist = [
                 'assets', 'libraries', 'versions', 'common', 'icons', 'objects',
-                'mods', 'minecraft', 'config', 'shaderpacks', 'resourcepacks',
-                'scripts', 'kubejs', 'defaultconfigs', 'fancymenu_data', 'realms'
+                'mods', 'minecraft', 'shaderpacks', 'resourcepacks',
+                'scripts', 'kubejs', 'defaultconfigs', 'fancymenu_data'
             ]
 
             const isWhitelisted = whitelist.includes(firstPart)
@@ -990,6 +1004,22 @@ class PeerHandler {
             console.error('[P2P Security] RealPath check failed:', e)
             return false
         }
+    }
+
+    /**
+     * Efficiently calculate file hash using streams
+     * @param {string} filePath 
+     * @param {'sha1' | 'sha256'} algo 
+     * @returns {Promise<string>}
+     */
+    _calculateFileHash(filePath, algo) {
+        return new Promise((resolve, reject) => {
+            const hash = crypto.createHash(algo)
+            const stream = fs.createReadStream(filePath)
+            stream.on('data', (data) => hash.update(data))
+            stream.on('end', () => resolve(hash.digest('hex')))
+            stream.on('error', (err) => reject(err))
+        })
     }
 }
 
