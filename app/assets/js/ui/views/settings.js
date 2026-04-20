@@ -2,6 +2,7 @@ export const os = require('os')
 export const semver = require('semver')
 export const fs = require('fs').promises
 export const sysPath = require('path')
+const { ipcRenderer, shell } = require('electron')
 
 export const DropinModUtil = require('@core/dropinmodutil')
 
@@ -2097,8 +2098,14 @@ export function isPrerelease(version) {
  * @param {Element} checkElement The check mark element.
  */
 export function populateVersionInformation(version, valueElement, titleElement, checkElement) {
-    version = version || appVersion || '0.0.1'
-    valueElement.innerHTML = version
+    console.log('[Settings] populateVersionInformation:', version)
+    version = version || window.appVersion || (window.HeliosAPI?.app?.getVersion ? window.HeliosAPI.app.getVersion() : '0.0.1')
+    if (valueElement) {
+        console.log('[Settings] Updating valueElement.innerHTML to:', version)
+        valueElement.innerHTML = version
+    } else {
+        console.warn('[Settings] valueElement is null for version information!')
+    }
     if (isPrerelease(version)) {
         titleElement.innerHTML = Lang.queryJS('settings.about.preReleaseTitle')
         titleElement.style.color = '#ff886d'
@@ -2114,7 +2121,8 @@ export function populateVersionInformation(version, valueElement, titleElement, 
  * Retrieve the version information and display it on the UI.
  */
 export function populateAboutVersionInformation() {
-    populateVersionInformation(appVersion, document.getElementById('settingsAboutCurrentVersionValue'), document.getElementById('settingsAboutCurrentVersionTitle'), document.getElementById('settingsAboutCurrentVersionCheck'))
+    const version = window.appVersion || (window.HeliosAPI?.app?.getVersion ? window.HeliosAPI.app.getVersion() : '0.0.1')
+    populateVersionInformation(version, document.getElementById('settingsAboutCurrentVersionValue'), document.getElementById('settingsAboutCurrentVersionTitle'), document.getElementById('settingsAboutCurrentVersionCheck'))
 }
 
 /**
@@ -2125,7 +2133,7 @@ export function populateReleaseNotes() {
     fetch('https://github.com/Envel-Experimental/HeliosLauncher/releases.atom')
         .then(response => response.text())
         .then(data => {
-            const version = 'v' + appVersion
+            const version = 'v' + (window.appVersion || '0.0.1')
             const parser = new DOMParser()
             const xmlDoc = parser.parseFromString(data, 'text/xml')
             const entries = xmlDoc.getElementsByTagName('entry')
@@ -2195,8 +2203,12 @@ export function getUpdateTabElements() {
  */
 export function settingsUpdateButtonStatus(text, disabled = false, handler = null) {
     const els = getUpdateTabElements()
-    if (!els || !els.settingsUpdateActionButton) return
+    if (!els || !els.settingsUpdateActionButton) {
+        console.warn('[Settings] settingsUpdateButtonStatus: elements not found!', !!els, !!els?.settingsUpdateActionButton)
+        return
+    }
 
+    console.log('[Settings] settingsUpdateButtonStatus updating button text to:', text, 'disabled:', disabled, 'hasHandler:', !!handler)
     els.settingsUpdateActionButton.innerHTML = text
     els.settingsUpdateActionButton.disabled = disabled
     if (handler != null) {
@@ -2225,11 +2237,16 @@ export function populateSettingsUpdateInformation(data) {
     } else {
         els.settingsUpdateTitle.innerHTML = Lang.queryJS('settings.updates.latestVersionTitle')
         els.settingsUpdateChangelogCont.style.display = 'none'
-        populateVersionInformation(appVersion, els.settingsUpdateVersionValue, els.settingsUpdateVersionTitle, els.settingsUpdateVersionCheck)
+        populateVersionInformation(window.appVersion, els.settingsUpdateVersionValue, els.settingsUpdateVersionTitle, els.settingsUpdateVersionCheck)
         settingsUpdateButtonStatus(Lang.queryJS('settings.updates.checkForUpdatesButton'), false, () => {
-            if (!isDev) {
+            const _isDev = window.isDev || false
+            if (!_isDev) {
                 ipcRenderer.send('autoUpdateAction', 'checkForUpdate')
                 settingsUpdateButtonStatus(Lang.queryJS('settings.updates.checkingForUpdatesButton'), true)
+            } else {
+                console.log('Update check skipped in dev mode.')
+                settingsUpdateButtonStatus('Dev Mode: No Updates', true)
+                setTimeout(() => settingsUpdateButtonStatus(Lang.queryJS('settings.updates.checkForUpdatesButton'), false), 2000)
             }
         })
     }
@@ -2254,18 +2271,27 @@ export function prepareUpdateTab(data = null) {
   * @param {boolean} first Whether or not it is the first load.
   */
 export async function prepareSettings(first = false) {
-    if (first) {
-        setupSettingsTabs()
-        initSettingsValidators()
-        prepareUpdateTab()
+    console.log('[Settings] prepareSettings starting (first:', first, ')')
+    try {
+        if (first) {
+            console.log('[Settings] First load: setup tabs, validators, and update tab.')
+            try { setupSettingsTabs() } catch (e) { console.error('Failed to setup settings tabs:', e) }
+            try { initSettingsValidators() } catch (e) { console.error('Failed to init settings validators:', e) }
+            try { prepareUpdateTab() } catch (e) { console.error('Failed to prepare update tab:', e) }
+        }
+        
+        console.log('[Settings] Preparing tabs...')
+        try { await prepareModsTab() } catch (e) { console.error('Failed to prepare mods tab:', e) }
+        try { await initSettingsValues() } catch (e) { console.error('Failed to init settings values:', e) }
+        try { prepareAccountsTab() } catch (e) { console.error('Failed to prepare accounts tab:', e) }
+        try { await prepareJavaTab() } catch (e) { console.error('Failed to prepare java tab:', e) }
+        try { prepareAboutTab() } catch (e) { console.error('Failed to prepare about tab:', e) }
+        try { bindP2PInfoButton() } catch (e) { console.error('Failed to bind P2P info button:', e) }
+        
+        console.log('[Settings] prepareSettings complete.')
+    } catch (err) {
+        console.error('[Settings] Critical error in prepareSettings:', err)
     }
-    
-    await prepareModsTab()
-    await initSettingsValues()
-    prepareAccountsTab()
-    await prepareJavaTab()
-    prepareAboutTab()
-    bindP2PInfoButton()
 }
 
 /**

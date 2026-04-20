@@ -41,7 +41,7 @@ window.VIEWS = VIEWS
 window.switchView = switchView
 window.getCurrentView = () => currentView
 window.fatalStartupError = fatalStartupError
-window.prepareSettings = prepareSettings
+// window.prepareSettings is handled in settings.js
 // Note: currentView update is handled in switchView function below
 
 /**
@@ -705,50 +705,7 @@ export function checkAndShowP2PPrompt() {
  * Prepare the settings UI.
  * @param {boolean} first Whether this is the first load.
  */
-export async function prepareSettings(first = false) {
-    if (first) {
-        if (typeof setupSettingsTabs === 'function') {
-            setupSettingsTabs()
-        }
-        if (typeof initSettingsValidators === 'function') {
-            initSettingsValidators()
-        }
-    }
-
-    const container = document.getElementById('settingsContainer')
-    if (container) {
-        const sEls = container.querySelectorAll('[cValue]')
-        Array.from(sEls).map((v) => {
-            const cVal = v.getAttribute('cValue')
-            const serverDependent = v.hasAttribute('serverDependent')
-            const gFn = ConfigManager['get' + cVal]
-            const gFnOpts = []
-            if (serverDependent) {
-                gFnOpts.push(ConfigManager.getSelectedServer())
-            }
-            if (typeof gFn === 'function') {
-                const value = gFn.apply(null, gFnOpts)
-                if (v.tagName === 'INPUT') {
-                    if (v.type === 'checkbox') {
-                        v.checked = value
-                    } else {
-                        v.value = value
-                    }
-                } else if (v.tagName === 'DIV' && v.classList.contains('rangeSlider')) {
-                    v.setAttribute('value', value)
-                    if (typeof updateRangedSlider === 'function') {
-                        updateRangedSlider(v, value)
-                    }
-                }
-            }
-        })
-    }
-
-    // FIX: Ensure accounts tab is prepared if the function exists (it's in settings.js)
-    if (typeof prepareAccountsTab === 'function') {
-        prepareAccountsTab()
-    }
-}
+// prepareSettings logic has been moved to settings.js to avoid conflicts and centralization.
 // Expose functions to global scope for other modules
 window.validateSelectedAccount = validateSelectedAccount
 window.setSelectedAccount = setSelectedAccount

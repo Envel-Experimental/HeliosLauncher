@@ -15,7 +15,7 @@ console.log(`Renderer Platform Stabilized: ${platform}`)
 
 // 1.1 Polyfill process immediately (Essential for libraries and env detection)
 if (typeof process === 'undefined') {
-    window.process = { 
+    window.process = {
         platform,
         type: 'renderer',
         env: { HELIOS_DEV_MODE: window.isDev || false },
@@ -105,7 +105,7 @@ try {
 console.log('Renderer Bootstrap Phase 2: Loading Configuration...')
 ConfigManager.load().then(async () => {
     console.log('Renderer Configuration Eagerly Loaded.')
-    
+
     // Polyfill EJS functionality
     try {
         i18n.applyTranslations()
@@ -116,20 +116,20 @@ ConfigManager.load().then(async () => {
     // Set platform attribute
     const platform = window.HeliosAPI?.system?.getPlatform() || process.platform || 'win32'
     document.body.setAttribute('data-platform', platform)
-    
+
     // process polyfill moved to top stage zero
 
     const bkid = Math.floor(Math.random() * 5) // roughly 5 backgrounds in assets
     document.body.setAttribute('bkid', bkid.toString())
     console.log(`Renderer Background Set: ${bkid}`)
-    
+
     // Detect OS and set attribute for CSS targeting
     document.body.setAttribute('data-platform', platform)
-    
+
     // Hardened window frame visibility based on platform
     const frameDarwin = document.getElementById('frameContentDarwin')
     const frameWin = document.getElementById('frameContentWin')
-    
+
     if (platform === 'darwin') {
         if (frameDarwin) frameDarwin.style.display = 'flex'
         if (frameWin) frameWin.style.display = 'none'
@@ -140,7 +140,7 @@ ConfigManager.load().then(async () => {
 
     // Expose DistroAPI and isDev for legacy compatibility
     window.DistroAPI = DistroAPI
-    window.isDev = isDev
+    window.isDev = window.isDev || false
 
     // Initialize Distribution API
     try {
@@ -150,7 +150,7 @@ ConfigManager.load().then(async () => {
     } catch (e) {
         console.error('Failed to initialize DistroAPI:', e)
     }
-    
+
     // Signal readiness
     ipcRenderer.send('renderer-ready')
 })
