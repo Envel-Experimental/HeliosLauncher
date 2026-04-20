@@ -267,14 +267,25 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
 
         // Strict Blocking: If P2P Only Mode is enabled, BLOCK all official Mojang/Minecraft domains
         // But ALLOW mirrors (which are not mojang.com/minecraft.net)
-        if (ConfigManager.getP2POnlyMode()) {
+        // Strict Blocking: Handle "No Servers" (P2P Only) and "No Mojang" modes
+        const noServers = ConfigManager.getNoServers() || ConfigManager.getP2POnlyMode() // Support legacy key
+        const noMojang = ConfigManager.getNoMojang()
+
+        if (noServers || noMojang) {
             try {
-                const urlObj = new URL(currentUrl);
-                const hostname = urlObj.hostname.toLowerCase();
-                if (hostname === 'mojang.com' || hostname.endsWith('.mojang.com') ||
-                    hostname === 'minecraft.net' || hostname.endsWith('.minecraft.net')) {
-                    // log.debug(`[DownloadEngine] Blocking official URL in P2P Only Mode: ${currentUrl}`);
-                    continue;
+                const urlObj = new URL(currentUrl)
+                const hostname = urlObj.hostname.toLowerCase()
+                const isMojang = hostname === 'mojang.com' || hostname.endsWith('.mojang.com') ||
+                                hostname === 'minecraft.net' || hostname.endsWith('.minecraft.net')
+
+                if (noServers) {
+                    // Block ALL official/primary HTTP sources if "No Servers" is enabled
+                    // (Allowing only P2P or local mirrors if they were somehow explicitly allowed)
+                    // log.debug(`[DownloadEngine] Blocking HTTP URL in "No Servers" Mode: ${currentUrl}`)
+                    continue
+                } else if (noMojang && isMojang) {
+                    // log.debug(`[DownloadEngine] Blocking official URL in "No Mojang" Mode: ${currentUrl}`)
+                    continue
                 }
             } catch (e) { }
         }

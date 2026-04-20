@@ -34,6 +34,8 @@ const isRenderer = process.type === 'renderer'
  * @property {boolean} p2pUploadEnabled
  * @property {number} p2pUploadLimit
  * @property {boolean} p2pOnlyMode
+ * @property {boolean} noMojang
+ * @property {boolean} noServers
  */
 
 /**
@@ -94,7 +96,9 @@ const DEFAULT_CONFIG = {
             globalOptimization: false,
             p2pUploadEnabled: false,
             p2pUploadLimit: 5,
-            p2pOnlyMode: false
+            p2pOnlyMode: false,
+            noMojang: false,
+            noServers: false
         },
         p2pPromptShown: false
     },
@@ -240,6 +244,9 @@ exports.load = async function () {
         }
         if (!config.settings.launcher) {
             config.settings.launcher = JSON.parse(JSON.stringify(DEFAULT_CONFIG.settings.launcher))
+        }
+        if (!config.settings.deliveryOptimization) {
+            config.settings.deliveryOptimization = JSON.parse(JSON.stringify(DEFAULT_CONFIG.settings.deliveryOptimization))
         }
         if (!config.settings.launcher.dataDirectory) {
             config.settings.launcher.dataDirectory = await exports.getLauncherDirectory()
@@ -422,6 +429,8 @@ exports.getGlobalOptimization = () => config?.settings?.deliveryOptimization?.gl
 exports.getP2PUploadEnabled = () => config?.settings?.deliveryOptimization?.p2pUploadEnabled || false
 exports.getP2PUploadLimit = () => config?.settings?.deliveryOptimization?.p2pUploadLimit || 5
 exports.getP2POnlyMode = () => config?.settings?.deliveryOptimization?.p2pOnlyMode || false
+exports.getNoMojang = () => config?.settings?.deliveryOptimization?.noMojang || false
+exports.getNoServers = () => config?.settings?.deliveryOptimization?.noServers || false
 exports.getAllowPrerelease = () => config?.settings?.launcher?.allowPrerelease || false
 exports.getSupportUrl = () => config?.supportUrl || DEFAULT_CONFIG.supportUrl
 exports.getP2PPromptShown = () => config?.settings?.p2pPromptShown || false
@@ -497,9 +506,12 @@ exports.setSelectedServer = (id) => { if(config) config.selectedServer = id }
 exports.setSelectedAccount = (uuid) => { if(config) config.selectedAccount = uuid }
 exports.setClientToken = (token) => { if(config) config.clientToken = token }
 exports.setModConfigurations = (configs) => { if(config) config.modConfigurations = configs }
-exports.setLocalOptimization = (val) => { if(config) config.settings.deliveryOptimization.localOptimization = val }
-exports.setGlobalOptimization = (val) => { if(config) config.settings.deliveryOptimization.globalOptimization = val }
-exports.setP2PUploadEnabled = (val) => { if(config) config.settings.deliveryOptimization.p2pUploadEnabled = val }
+exports.setLocalOptimization = (val) => { if(config) { if(!config.settings.deliveryOptimization) config.settings.deliveryOptimization = {}; config.settings.deliveryOptimization.localOptimization = val } }
+exports.setGlobalOptimization = (val) => { if(config) { if(!config.settings.deliveryOptimization) config.settings.deliveryOptimization = {}; config.settings.deliveryOptimization.globalOptimization = val } }
+exports.setP2PUploadEnabled = (val) => { if(config) { if(!config.settings.deliveryOptimization) config.settings.deliveryOptimization = {}; config.settings.deliveryOptimization.p2pUploadEnabled = val } }
+exports.setP2POnlyMode = (val) => { if(config) { if(!config.settings.deliveryOptimization) config.settings.deliveryOptimization = {}; config.settings.deliveryOptimization.p2pOnlyMode = val } }
+exports.setNoMojang = (val) => { if(config) { if(!config.settings.deliveryOptimization) config.settings.deliveryOptimization = {}; config.settings.deliveryOptimization.noMojang = val } }
+exports.setNoServers = (val) => { if(config) { if(!config.settings.deliveryOptimization) config.settings.deliveryOptimization = {}; config.settings.deliveryOptimization.noServers = val } }
 exports.setP2PPromptShown = (val) => { if(config) config.settings.p2pPromptShown = val }
 exports.setGameWidth = (val) => { if(config) config.settings.game.resWidth = Number(val) }
 exports.setGameHeight = (val) => { if(config) config.settings.game.resHeight = Number(val) }

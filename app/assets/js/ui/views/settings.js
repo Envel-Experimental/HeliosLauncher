@@ -593,6 +593,97 @@ export function bindP2PInfoButton() {
 }
 
 /**
+ * Bind the P2P statistics button to open the global stats overlay.
+ */
+function bindP2PStatsButton() {
+    const btn = document.getElementById('settingsP2PStatsButton')
+    if (btn) {
+        if (btn.hasAttribute('bound')) return
+        btn.setAttribute('bound', 'true')
+
+        btn.addEventListener('click', async () => {
+            console.log('[Settings] P2P Stats button clicked')
+            try {
+                // 10s timeout for IPC
+                const statsPromise = ipcRenderer.invoke('p2p:getStats')
+                const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('IPC Timeout')), 10000))
+                
+                const stats = await Promise.race([statsPromise, timeoutPromise])
+                console.log('[Settings] Stats received:', stats)
+                
+                setOverlayContent(
+                    'Общая статистика P2P',
+                    '',
+                    'Закрыть'
+                )
+                
+                document.getElementById('overlayDesc').innerHTML = getP2PGlobalStatsMarkup(stats)
+                
+                const filter = document.getElementById('p2pStatsFilter')
+                if (filter) {
+                    filter.onchange = (e) => {
+                        const period = e.target.value
+                        document.getElementById('p2pStatsContent').innerHTML = getP2PStatsPeriodContent(stats, period)
+                    }
+                }
+
+                setOverlayHandler(() => toggleOverlay(false))
+                setDismissHandler(() => toggleOverlay(false))
+                toggleOverlay(true)
+
+            } catch (err) {
+                console.error('[Settings] Failed to load P2P stats:', err)
+                setOverlayContent('Ошибка', 'Не удалось загрузить статистику P2P: ' + err.message, 'Закрыть')
+                setOverlayHandler(() => toggleOverlay(false))
+                toggleOverlay(true)
+            }
+        })
+    }
+}
+
+function getP2PGlobalStatsMarkup(stats) {
+    return `
+        <div id="p2pGlobalStats" style="text-align: left; padding: 10px;">
+            <div style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between;">
+                <span style="color: #ccc;">Период статистики:</span>
+                <select id="p2pStatsFilter" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 5px; border-radius: 4px;">
+                    <option value="all" style="background: #2a2a2a; color: white;">За все время</option>
+                    <option value="month" style="background: #2a2a2a; color: white;">За месяц</option>
+                    <option value="week" style="background: #2a2a2a; color: white;">За неделю</option>
+                </select>
+            </div>
+            <div id="p2pStatsContent">
+                ${getP2PStatsPeriodContent(stats, 'all')}
+            </div>
+        </div>
+    `
+}
+
+function getP2PStatsPeriodContent(stats, period) {
+    const data = stats[period] || { up: 0, down: 0 }
+    
+    // Calculate total as a sum if it's not present (should be present but for safety)
+    const up = data.up || 0
+    const down = data.down || 0
+    
+    return `
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 10px;">
+            <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; border-left: 4px solid #7dbb00;">
+                <div style="font-size: 12px; color: #888; margin-bottom: 5px;">ОТДАНО ВСЕГО</div>
+                <div style="font-size: 24px; font-weight: bold; color: #7dbb00;">${(up / 1073741824).toFixed(2)} GB</div>
+            </div>
+            <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; border-left: 4px solid #00aaff;">
+                <div style="font-size: 12px; color: #888; margin-bottom: 5px;">ПОЛУЧЕНО ВСЕГО</div>
+                <div style="font-size: 24px; font-weight: bold; color: #00aaff;">${(down / 1073741824).toFixed(2)} GB</div>
+            </div>
+        </div>
+        <div style="margin-top: 20px; font-size: 12px; color: #666; text-align: center;">
+            Статистика обновляется каждые 2 секунды во время активной сессии.
+        </div>
+    `
+}
+
+/**
  * Save the settings values.
  */
 async function saveSettingsValues() {
@@ -817,6 +908,7 @@ export function settingsNavItemListener(ele, fade = true) {
     if (selectedSettingsTab === 'settingsTabDelivery') {
         populateMirrorStatus()
         populateBootstrapStatus()
+        updateConnectivityStatus()
     } else if (selectedSettingsTab === 'settingsTabAccount') {
         prepareAccountsTab()
     }
@@ -1476,6 +1568,10 @@ export let CACHE_DROPIN_MODS
  */
 async function resolveDropinModsForUI() {
     const serv = (await DistroAPI.getDistribution()).getServerById(ConfigManager.getSelectedServer())
+    if (!serv) {
+        console.warn('[Settings] resolveDropinModsForUI: No server selected.')
+        return
+    }
     CACHE_SETTINGS_MODS_DIR = sysPath.join(ConfigManager.getInstanceDirectory(), serv.rawServer.id, 'mods')
     CACHE_DROPIN_MODS = await DropinModUtil.scanForDropinMods(CACHE_SETTINGS_MODS_DIR, serv.rawServer.minecraftVersion)
 
@@ -2035,27 +2131,42 @@ export function populateJvmOptsLink(server) {
 }
 
 export function bindMinMaxRam(server) {
+    if (!server || !server.rawServer) {
+        console.warn('[Settings] bindMinMaxRam: server or rawServer is null')
+        return
+    }
     // Store maximum memory values.
     const SETTINGS_MAX_MEMORY = ConfigManager.getAbsoluteMaxRAM(server.rawServer.javaOptions?.ram)
     const SETTINGS_MIN_MEMORY = ConfigManager.getAbsoluteMinRAM(server.rawServer.javaOptions?.ram)
 
     // Set the max and min values for the ranged sliders.
-    settingsMaxRAMRange.setAttribute('max', SETTINGS_MAX_MEMORY)
-    settingsMaxRAMRange.setAttribute('min', SETTINGS_MIN_MEMORY)
-    settingsMinRAMRange.setAttribute('max', SETTINGS_MAX_MEMORY)
-    settingsMinRAMRange.setAttribute('min', SETTINGS_MIN_MEMORY)
+    if (typeof settingsMaxRAMRange !== 'undefined' && settingsMaxRAMRange) {
+        settingsMaxRAMRange.setAttribute('max', SETTINGS_MAX_MEMORY)
+        settingsMaxRAMRange.setAttribute('min', SETTINGS_MIN_MEMORY)
+    }
+    if (typeof settingsMinRAMRange !== 'undefined' && settingsMinRAMRange) {
+        settingsMinRAMRange.setAttribute('max', SETTINGS_MAX_MEMORY)
+        settingsMinRAMRange.setAttribute('min', SETTINGS_MIN_MEMORY)
+    }
 }
 
 /**
  * Prepare the Java tab for display.
  */
 async function prepareJavaTab() {
-    const server = (await DistroAPI.getDistribution()).getServerById(ConfigManager.getSelectedServer())
-    bindMinMaxRam(server)
-    bindRangeSlider(server)
-    populateMemoryStatus()
-    populateJavaReqDesc(server)
-    populateJvmOptsLink(server)
+    const serverId = ConfigManager.getSelectedServer()
+    const distro = await DistroAPI.getDistribution()
+    const server = distro.getServerById(serverId)
+    
+    if (server != null) {
+        bindMinMaxRam(server)
+        bindRangeSlider(server)
+        populateMemoryStatus()
+        populateJavaReqDesc(server)
+        populateJvmOptsLink(server)
+    } else {
+        console.warn('[Settings] prepareJavaTab: Server not found for ID:', serverId)
+    }
 }
 
 /**
@@ -2164,11 +2275,64 @@ export function populateReleaseNotes() {
 export function prepareAboutTab() {
     populateAboutVersionInformation()
     populateReleaseNotes()
+    updateConnectivityStatus()
 
     const supportBtn = document.getElementById('settingsAboutSupportButton')
     if (supportBtn) {
         supportBtn.onclick = () => {
-            HeliosAPI.window.openExternal(ConfigManager.getSupportUrl())
+            const hAPI = window.HeliosAPI || {}
+            if (hAPI.window) {
+                hAPI.window.openExternal(ConfigManager.getSupportUrl())
+            } else {
+                shell.openExternal(ConfigManager.getSupportUrl())
+            }
+        }
+    }
+}
+
+/**
+ * Check and update connectivity status for GitHub and Mojang.
+ */
+async function updateConnectivityStatus() {
+    console.log('[Settings] Starting connectivity check...')
+    const pairs = [
+        { status: 'deliveryStatusGitHub', indicator: 'deliveryIndicatorGitHub' },
+        { status: 'deliveryStatusMojang', indicator: 'deliveryIndicatorMojang' }
+    ]
+
+    try {
+        const invokePromise = ipcRenderer.invoke('connectivity:check')
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('IPC Timeout')), 10000))
+        
+        const results = await Promise.race([invokePromise, timeoutPromise])
+        console.log('[Settings] Connectivity check results:', results)
+        
+        for (const pair of pairs) {
+            const statusEl = document.getElementById(pair.status)
+            const indicatorEl = document.getElementById(pair.indicator)
+            if (!statusEl || !indicatorEl) continue
+
+            const isGitHub = pair.status.toLowerCase().includes('github')
+            const isOk = isGitHub ? results.github : results.mojang
+
+            if (isOk) {
+                statusEl.innerHTML = 'Подключено'
+                statusEl.style.color = '#7dbb00'
+                indicatorEl.style.background = '#7dbb00'
+            } else {
+                statusEl.innerHTML = 'Ошибка'
+                statusEl.style.color = '#ff3300'
+                indicatorEl.style.background = '#ff3300'
+            }
+        }
+    } catch (e) {
+        console.error('[Settings] Connectivity check failed:', e)
+        for (const pair of pairs) {
+            const statusEl = document.getElementById(pair.status)
+            if (statusEl) {
+                statusEl.innerHTML = 'Ошибка: ' + e.message
+                statusEl.style.color = '#ff3300'
+            }
         }
     }
 }
@@ -2287,6 +2451,7 @@ export async function prepareSettings(first = false) {
         try { await prepareJavaTab() } catch (e) { console.error('Failed to prepare java tab:', e) }
         try { prepareAboutTab() } catch (e) { console.error('Failed to prepare about tab:', e) }
         try { bindP2PInfoButton() } catch (e) { console.error('Failed to bind P2P info button:', e) }
+        try { bindP2PStatsButton() } catch (e) { console.error('Failed to bind P2P stats button:', e) }
         
         console.log('[Settings] prepareSettings complete.')
     } catch (err) {
@@ -2327,7 +2492,6 @@ async function factoryReset() {
     const dataDir = ConfigManager.getDataDirectory()
 
     // Whitelist of files/folders to KEEP.
-    // Everything else will be deleted.
     const whitelist = [
         'options.txt',
         'optionsof.txt',
@@ -2361,7 +2525,16 @@ async function factoryReset() {
 
             const fullPath = sysPath.join(dataDir, file)
             try {
-                await fs.rm(fullPath, { recursive: true, force: true })
+                const stat = await fs.stat(fullPath)
+                if (stat.isDirectory()) {
+                    if (typeof fs.rm === 'function') {
+                        await fs.rm(fullPath, { recursive: true, force: true })
+                    } else {
+                        await fs.rmdir(fullPath, { recursive: true })
+                    }
+                } else {
+                    await fs.unlink(fullPath)
+                }
                 console.log('Factory Reset: Deleted', fullPath)
             } catch (err) {
                 console.warn('Factory Reset: Failed to delete', fullPath, err)
@@ -2372,16 +2545,12 @@ async function factoryReset() {
         setOverlayContent(
             Lang.query('ejs.settings.factoryReset.title'),
             Lang.query('ejs.settings.factoryReset.success'),
-            Lang.queryJS('uicore.update.updateButton') // Reuse 'Update' button style/text or simple OK
+            Lang.queryJS('uicore.update.updateButton')
         )
-        // Force restart without timeout, more reliably
-        const app = window.HeliosAPI.app || remoteApp
-        const options = {
-            args: process.argv.slice(1).filter(arg => !arg.includes('--enable-logging') && !arg.includes('--remote-debugging-port')),
-            execPath: process.execPath
-        }
-        app.relaunch(options)
-        app.quit()
+        
+        setOverlayHandler(() => {
+            ipcRenderer.send('app:restart')
+        })
 
     } catch (err) {
         console.error('Factory Reset Error', err)
@@ -2401,6 +2570,9 @@ async function factoryReset() {
 
 // FIX: Ensure accounts are populated if settings.js loads after uibinder's init
 if (document.readyState === 'interactive' || document.readyState === 'complete') {
+    bindSettingsSelect()
+    bindFileSelectors()
+    bindFactoryReset()
     if (typeof prepareAccountsTab === 'function') {
         prepareAccountsTab()
     }

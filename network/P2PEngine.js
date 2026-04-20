@@ -12,6 +12,7 @@ const ConfigManager = require('../app/assets/js/core/configmanager')
 const PeerHandler = require('./PeerHandler')
 const TrafficState = require('./TrafficState')
 const PeerPersistence = require('./PeerPersistence')
+const StatsManager = require('./StatsManager')
 
 // Fixed topic for the "Zombie" network
 const { SWARM_TOPIC_SEED } = require('./constants')
@@ -243,6 +244,14 @@ class P2PEngine extends EventEmitter {
                 this.lastHealthCheck = now
             }
 
+            // Record Stats to Persistent Storage
+            if (this.uploadBytesGlobal > 0 || this.downloadBytesGlobal > 0 || this.uploadBytesLocal > 0 || this.downloadBytesLocal > 0) {
+                StatsManager.record(
+                    this.uploadBytesGlobal + this.uploadBytesLocal,
+                    this.downloadBytesGlobal + this.downloadBytesLocal
+                )
+            }
+
         }, 2000)
     }
 
@@ -397,6 +406,10 @@ class P2PEngine extends EventEmitter {
 
     async init() {
         try {
+            // Initialize Stats Manager
+            const launcherDir = ConfigManager.getLauncherDirectorySync()
+            StatsManager.init(launcherDir)
+
             if (Config.BOOTSTRAP_URL) {
                 try {
                     const res = await fetch(Config.BOOTSTRAP_URL)

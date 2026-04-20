@@ -383,6 +383,18 @@ async function asyncSystemScan(effectiveJavaOptions, launchAfter = true) {
     })
 
     if (jvmDetails == null) {
+        if (!window.hasAttemptedJavaDownload) {
+            window.hasAttemptedJavaDownload = true
+            setLaunchDetails(Lang.queryJS('landing.systemScan.javaDownloadPrepare'))
+            try {
+                downloadJava(effectiveJavaOptions, launchAfter)
+            } catch (err) {
+                loggerLanding.error('Unhandled error in auto Java Download', err)
+                showLaunchFailure(Lang.queryJS('landing.systemScan.javaDownloadFailureTitle'), Lang.queryJS('landing.systemScan.javaDownloadFailureText'))
+            }
+            return
+        }
+
         // If the result is null, no valid Java installation was found.
         // Show this information to the user.
         setOverlayContent(

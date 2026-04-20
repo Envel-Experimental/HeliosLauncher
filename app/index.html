@@ -705,53 +705,76 @@
                         </div>
                     </div>
 
-                    <div style="margin-top: 10px;">
+                    <div style="margin-top: 10px; display: flex; gap: 10px;">
                         <button id="settingsP2PInfoButton"
                             style="background: rgba(255,255,255,0.1); border: none; color: white; padding: 8px 16px; border-radius: 4px; cursor: pointer; transition: 0.2s;"><span
                                 data-lang="settings.p2pNetworkInfoButton"></span></button>
+                        <button id="settingsP2PStatsButton"
+                            style="background: rgba(255,255,255,0.1); border: none; color: white; padding: 8px 16px; border-radius: 4px; cursor: pointer; transition: 0.2s;">Общая статистика P2P</button>
                     </div>
 
                     <div style="width: 100%; height: 1px; background: rgba(255,255,255,0.1); margin: 20px 0;"></div>
 
-                    <!-- Mirror Status Section -->
-                    <div class="settingsFieldContainer"
-                        style="margin-top: 20px; flex-direction: column; align-items: flex-start; padding-top: 5px;">
+                    <div class="settingsFieldContainer" style="flex-direction: column; align-items: flex-start; gap: 15px;">
                         <div class="settingsFieldLeft">
                             <span class="settingsFieldTitle">Состояние зеркал загрузки</span>
-                            <span class="settingsFieldDesc">Текущий статус и качество соединения с зеркалами
-                                обновлений.</span>
+                            <span class="settingsFieldDesc">Текущий статус и задержка официальных зеркал.</span>
                         </div>
-                        <div id="settingsMirrorStatusContainer"
-                            style="width: 100%; margin-top: 15px; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px; min-height: 50px;">
-                            <div style="text-align: center; color: #888; font-size: 14px; padding: 10px;">Загрузка
-                                данных о зеркалах...</div>
+                        <div id="settingsMirrorStatusContainer" style="width: 100%; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 5px; border: 1px solid rgba(255,255,255,0.05);">
+                            <div style="text-align: center; color: #888; font-size: 11px; padding: 10px;">Загрузка...</div>
                         </div>
                     </div>
 
-                    <!-- Bootstrap Nodes Status Section -->
-                    <div class="settingsFieldContainer"
-                        style="margin-top: 20px; flex-direction: column; align-items: flex-start; padding-top: 5px;">
+                    <div class="settingsFieldContainer" style="flex-direction: column; align-items: flex-start; gap: 15px;">
                         <div class="settingsFieldLeft">
-                            <span class="settingsFieldTitle">Состояние Bootstrap узлов</span>
-                            <span class="settingsFieldDesc">Статус подключения к управляющим узлам P2P сети.</span>
+                            <span class="settingsFieldTitle">Состояние P2P узлов (Bootstrap)</span>
+                            <span class="settingsFieldDesc">Статус подключения к распределенной сети.</span>
                         </div>
-                        <div id="settingsBootstrapStatusContainer"
-                            style="width: 100%; margin-top: 15px; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px; min-height: 50px;">
-                            <div style="text-align: center; color: #888; font-size: 14px; padding: 10px;">Проверка
-                                соединения...</div>
+                        <div id="settingsBootstrapStatusContainer" style="width: 100%; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 5px; border: 1px solid rgba(255,255,255,0.05);">
+                            <div style="text-align: center; color: #888; font-size: 11px; padding: 10px;">Загрузка...</div>
+                        </div>
+                    </div>
+
+                    <div class="settingsFieldContainer" style="flex-direction: column; align-items: flex-start; gap: 15px;">
+                        <div class="settingsFieldLeft">
+                            <span class="settingsFieldTitle">Доступность сервисов</span>
+                            <span class="settingsFieldDesc">Проверка связи с основными API.</span>
+                        </div>
+                        <div style="display: flex; gap: 20px; width: 100%; background: rgba(0,0,0,0.15); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div id="deliveryIndicatorGitHub" style="width: 8px; height: 8px; border-radius: 50%; background: #555;"></div>
+                                <span style="font-size: 13px; color: #ccc;">GitHub: <span id="deliveryStatusGitHub" style="color: #888;">Проверка...</span></span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div id="deliveryIndicatorMojang" style="width: 8px; height: 8px; border-radius: 50%; background: #555;"></div>
+                                <span style="font-size: 13px; color: #ccc;">Mojang: <span id="deliveryStatusMojang" style="color: #888;">Проверка...</span></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="width: 100%; height: 1px; background: rgba(255,255,255,0.1); margin: 20px 0;"></div>
+
+                    <div class="settingsFieldContainer">
+                        <div class="settingsFieldLeft">
+                            <span class="settingsFieldTitle" style="color: #ffcc00;">БЕЗ MOJANG</span>
+                            <span class="settingsFieldDesc" style="color: #aaa;">Блокирует загрузку с официальных серверов Mojang. <br><b style="color: #ff3300;">(Только для разработчиков, не включать!)</b></span>
+                        </div>
+                        <div class="settingsFieldRight">
+                            <label class="toggleSwitch">
+                                <input type="checkbox" cValue="NoMojang">
+                                <span class="toggleSwitchSlider"></span>
+                            </label>
                         </div>
                     </div>
 
                     <div class="settingsFieldContainer">
                         <div class="settingsFieldLeft">
-                            <span class="settingsFieldTitle" style="color: #ffcc00;"><span
-                                    data-lang="settings.p2pOnlyModeTitle"></span></span>
-                            <span class="settingsFieldDesc" style="color: #aaa;"><span
-                                    data-lang="settings.p2pOnlyModeDesc"></span></span>
+                            <span class="settingsFieldTitle" style="color: #ff3300;">БЕЗ СЕРВЕРОВ (P2P ONLY)</span>
+                            <span class="settingsFieldDesc" style="color: #aaa;">Блокирует ВСЕ внешние HTTP сервера. <br><b style="color: #ff3300;">(Только для разработчиков, не включать!)</b></span>
                         </div>
                         <div class="settingsFieldRight">
                             <label class="toggleSwitch">
-                                <input type="checkbox" cValue="P2POnlyMode">
+                                <input type="checkbox" cValue="NoServers">
                                 <span class="toggleSwitchSlider"></span>
                             </label>
                         </div>

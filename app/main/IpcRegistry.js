@@ -168,6 +168,37 @@ class IpcRegistry {
 
         ipcMain.handle('mirrors:getStatus', () => MirrorManager.getMirrorStatus())
         ipcMain.handle('p2p:getInfo', () => P2PEngine.getNetworkInfo())
+        
+        ipcMain.handle('p2p:getStats', async () => {
+            try {
+                const StatsManager = require('../../network/StatsManager')
+                return StatsManager.getFullStats()
+            } catch (err) {
+                console.error('[Main] Failed to get P2P stats:', err)
+                return { all: { uploaded: 0, downloaded: 0 }, month: { uploaded: 0, downloaded: 0 }, week: { uploaded: 0, downloaded: 0 } }
+            }
+        })
+
+        ipcMain.handle('connectivity:check', async () => {
+            const check = async (url) => {
+                try {
+                    const controller = new AbortController()
+                    const id = setTimeout(() => controller.abort(), 5000)
+                    // We just need a simple GET or HEAD to see if it's reachable.
+                    // Using fetch as a simple ping.
+                    const res = await fetch(url, { method: 'HEAD', signal: controller.signal })
+                    clearTimeout(id)
+                    return res.ok
+                } catch (e) {
+                    return false
+                }
+            }
+            const results = await Promise.all([
+                check('https://github.com'),
+                check('https://minecraft.net')
+            ])
+            return { github: results[0], mojang: results[1] }
+        })
 
         ipcMain.handle('p2p:getBootstrapStatus', async () => {
             const results = []

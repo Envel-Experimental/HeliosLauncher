@@ -388,7 +388,8 @@ async function latestGraalVM_GitHub(major, dataDir) {
     }
 }
 
-async function latestAdoptium(major, dataDir) {
+async function latestAdoptium(major, dataDir, distribution = null) {
+    const isInstaller = distribution === 'installer';
     const sanitizedOS = process.platform === Platform.WIN32 ? 'windows' : (process.platform === Platform.DARWIN ? 'mac' : process.platform);
     const arch = process.arch === 'arm64' ? 'aarch64' : 'x64';
     const url = `https://api.adoptium.net/v3/assets/latest/${major}/hotspot?vendor=eclipse`;
@@ -399,10 +400,15 @@ async function latestAdoptium(major, dataDir) {
 
         if (body.length > 0) {
             const targetBinary = body.find(entry => {
+                let pkgMatch = true;
+                if (process.platform === Platform.WIN32) {
+                    pkgMatch = isInstaller ? entry.binary.package.name.endsWith('.msi') : entry.binary.package.name.endsWith('.zip');
+                }
                 return entry.version.major === major
                     && entry.binary.os === sanitizedOS
                     && entry.binary.image_type === 'jdk'
-                    && entry.binary.architecture === arch;
+                    && entry.binary.architecture === arch
+                    && pkgMatch;
             });
             if (targetBinary != null) {
                 return {
@@ -411,11 +417,12 @@ async function latestAdoptium(major, dataDir) {
                     id: targetBinary.binary.package.name,
                     hash: targetBinary.binary.package.checksum,
                     algo: HashAlgo.SHA256,
-                    path: path.join(getLauncherRuntimeDir(dataDir), targetBinary.binary.package.name)
+                    path: path.join(getLauncherRuntimeDir(dataDir), targetBinary.binary.package.name),
+                    isInstaller: isInstaller
                 };
             }
         }
-        log.error(`Failed to find a suitable Adoptium binary for JDK ${major} (${sanitizedOS} ${arch}).`);
+        log.error(`Failed to find a suitable Adoptium binary for JDK ${major} (${sanitizedOS} ${arch}, installer: ${isInstaller}).`);
         return null;
     }
     catch (err) {
