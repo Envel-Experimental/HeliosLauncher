@@ -134,18 +134,23 @@ export async function toggleServerSelection(toggleState) {
  * @param {string} dismiss Dismiss button text.
  */
 export function setOverlayContent(title, description, acknowledge, acknowledge_mid, dismiss = Lang.queryJS('overlay.dismiss')) {
-    document.getElementById('overlayTitle').textContent = title
-    document.getElementById('overlayDesc').innerHTML = description
+    const titleEl = document.getElementById('overlayTitle')
+    const descEl = document.getElementById('overlayDesc')
+
+    const sanitize = (text) => text
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;")
-        .replace(/&lt;br&gt;/g, "<br>") // Restore intended line breaks
-        .replace(/&lt;b&gt;/g, "<b>").replace(/&lt;\/b&gt;/g, "</b>") // Restore intended bold tags
-        .replace(/&lt;strong&gt;/g, "<strong>").replace(/&lt;\/strong&gt;/g, "</strong>") // Restore intended strong tags
-        .replace(/&lt;em&gt;/g, "<em>").replace(/&lt;\/em&gt;/g, "</em>") // Restore intended em tags
+        .replace(/&lt;br&gt;/g, "<br>")
+        .replace(/&lt;b&gt;/g, "<b>").replace(/&lt;\/b&gt;/g, "</b>")
+        .replace(/&lt;strong&gt;/g, "<strong>").replace(/&lt;\/strong&gt;/g, "</strong>")
+        .replace(/&lt;em&gt;/g, "<em>").replace(/&lt;\/em&gt;/g, "</em>")
         .replace(/&lt;span style=&quot;color: #aaa; font-size: 12px;&quot;&gt;/g, '<span style="color: #aaa; font-size: 12px;">').replace(/&lt;\/span&gt;/g, "</span>")
+
+    titleEl.innerHTML = sanitize(title)
+    descEl.innerHTML = sanitize(description)
 
     document.getElementById('overlayAcknowledge').textContent = acknowledge
 

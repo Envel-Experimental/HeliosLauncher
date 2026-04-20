@@ -77,7 +77,7 @@ class LaunchController {
             );
 
             if (!asset) {
-                throw new Error(`No suitable Java ${javaVersion} found.`);
+                throw new Error(`No suitable Java ${javaVersion} found. Checked local mirrors and official Adoptium/GraalVM APIs.`);
             }
 
             // 2. Download

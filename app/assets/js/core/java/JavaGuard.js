@@ -199,7 +199,41 @@ async function loadJavaMirrorManifest(mirrorUrl) {
 async function latestOpenJDK(major, dataDir, distribution) {
     let result = null;
 
-    // 1. Try Official Sources
+    // 1. Try Configured Mirrors ("Our Servers")
+    log.info('Attempting to resolve Java from configured mirrors...');
+    if (MOJANG_MIRRORS && MOJANG_MIRRORS.length > 0) {
+        for (const mirror of MOJANG_MIRRORS) {
+            if (mirror.java_manifest) {
+                try {
+                    const manifest = await loadJavaMirrorManifest(mirror.java_manifest);
+                    if (manifest) {
+                        const os = process.platform === Platform.WIN32 ? 'windows' : (process.platform === Platform.DARWIN ? 'darwin' : 'linux');
+                        const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+
+                        const field = (distribution === 'installer' && os === 'windows') ? 'installer' : major.toString();
+
+                        if (manifest[os] && manifest[os][arch] && manifest[os][arch][field]) {
+                            const entry = manifest[os][arch][field];
+                            log.info(`Resolved Java ${major} (Type: ${field}) from Mirror: ${entry.url}`);
+                            return {
+                                url: entry.url,
+                                size: entry.size,
+                                id: entry.name,
+                                hash: entry.sha1,
+                                algo: HashAlgo.SHA1,
+                                path: path.join(getLauncherRuntimeDir(dataDir), entry.name),
+                                isInstaller: field === 'installer'
+                            };
+                        }
+                    }
+                } catch (e) {
+                    log.warn(`Mirror ${mirror.name} failed to resolve Java ${major}`, e);
+                }
+            }
+        }
+    }
+
+    // 2. Fallback to Official Sources
     try {
         if (distribution == null) {
             if (major >= 17) {
@@ -218,6 +252,7 @@ async function latestOpenJDK(major, dataDir, distribution) {
                     result = await latestGraalVM(major, dataDir);
                     break;
                 case JdkDistribution.TEMURIN:
+                case 'temurin': // Support both enum and string
                     result = await latestAdoptium(major, dataDir);
                     break;
                 case JdkDistribution.CORRETTO:
@@ -236,39 +271,7 @@ async function latestOpenJDK(major, dataDir, distribution) {
         log.warn(`Failed to resolve Java ${major} from official sources.`, err);
     }
 
-    if (result) return result;
-
-    // 2. Fallback to Mirror
-    log.info('Attempting to resolve Java from configured mirrors...');
-    if (MOJANG_MIRRORS && MOJANG_MIRRORS.length > 0) {
-        for (const mirror of MOJANG_MIRRORS) {
-            if (mirror.java_manifest) {
-                const manifest = await loadJavaMirrorManifest(mirror.java_manifest);
-                if (manifest) {
-                    const os = process.platform === Platform.WIN32 ? 'windows' : (process.platform === Platform.DARWIN ? 'darwin' : 'linux');
-                    const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
-
-                    const field = (distribution === 'installer' && os === 'windows') ? 'installer' : major.toString();
-
-                    if (manifest[os] && manifest[os][arch] && manifest[os][arch][field]) {
-                        const entry = manifest[os][arch][field];
-                        log.info(`Resolved Java ${major} (Type: ${field}) from Mirror: ${entry.url}`);
-                        return {
-                            url: entry.url,
-                            size: entry.size,
-                            id: entry.name,
-                            hash: entry.sha1,
-                            algo: HashAlgo.SHA1,
-                            path: path.join(getLauncherRuntimeDir(dataDir), entry.name),
-                            isInstaller: field === 'installer'
-                        };
-                    }
-                }
-            }
-        }
-    }
-
-    return null;
+    return result;
 }
 
 async function latestGraalVM(major, dataDir) {
