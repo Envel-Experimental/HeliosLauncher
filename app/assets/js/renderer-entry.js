@@ -19,6 +19,21 @@ const { LoggerUtil } = require('./core/util/LoggerUtil')
 const Lang = require('./core/langloader')
 const ConfigManager = require('./core/configmanager')
 const uiUtil = require('./ui/views/ui-util')
+
+// Global error handling for Renderer Process
+window.addEventListener('error', (event) => {
+    console.error('[Renderer ERROR]', event.error || event.message)
+    if (window.HeliosAPI?.ipc) {
+        window.HeliosAPI.ipc.send('renderer-error', (event.error ? event.error.stack : event.message))
+    }
+})
+
+window.addEventListener('unhandledrejection', (event) => {
+    console.error('[Renderer ASYNC ERROR]', event.reason)
+    if (window.HeliosAPI?.ipc) {
+        window.HeliosAPI.ipc.send('renderer-error', (event.reason ? event.reason.stack : event.reason.toString()))
+    }
+})
 const DistroAPI = require('./core/distromanager')
 const i18n = require('./ui/i18n.js')
 
@@ -84,13 +99,23 @@ ConfigManager.load().then(async () => {
     } catch (e) {
         console.warn('Failed to apply initial translations:', e)
     }
+
+    // Set platform attribute
+    const platform = window.HeliosAPI?.system?.getPlatform() || process.platform || 'win32'
+    document.body.setAttribute('data-platform', platform)
     
+    // Polyfill process if needed (for libraries that expect it)
+    if (typeof process === 'undefined') {
+        window.process = { platform }
+    } else if (!process.platform) {
+        process.platform = platform
+    }
+
     const bkid = Math.floor(Math.random() * 5) // roughly 5 backgrounds in assets
     document.body.setAttribute('bkid', bkid.toString())
     console.log(`Renderer Background Set: ${bkid}`)
     
     // Detect OS and set attribute for CSS targeting
-    const platform = HeliosAPI.system.getPlatform()
     document.body.setAttribute('data-platform', platform)
     
     // Hardened window frame visibility based on platform

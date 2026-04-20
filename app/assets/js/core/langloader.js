@@ -9,15 +9,23 @@ let lang
 exports.loadLanguage = function (id) {
     let langPath
     if (process.type === 'renderer') {
-        const base = window.HeliosAPI?.system?.cwd() || ''
+        const base = window.HeliosAPI?.app?.getAppPath() || window.HeliosAPI?.system?.cwd() || ''
         langPath = path.join(base, 'app', 'assets', 'lang', `${id}.toml`)
     } else {
-        langPath = path.join(__dirname, '..', '..', 'lang', `${id}.toml`)
+        const { app } = require('electron')
+        langPath = path.join(app.getAppPath(), 'app', 'assets', 'lang', `${id}.toml`)
     }
     const fileContent = fs.readFileSync(langPath, 'utf-8')
+    if (!fileContent) {
+        console.warn(`[LangLoader] Language file not found or empty: ${langPath}`)
+        return
+    }
     // Load and merge strings
-
-    lang = deepMerge(toml.parse(fileContent) || {}, lang || {})
+    try {
+        lang = deepMerge(toml.parse(fileContent) || {}, lang || {})
+    } catch (e) {
+        console.error(`[LangLoader] Failed to parse TOML at ${langPath}:`, e)
+    }
 }
 
 exports.query = function (id, placeHolders) {

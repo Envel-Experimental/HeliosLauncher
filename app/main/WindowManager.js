@@ -2,6 +2,7 @@ const { BrowserWindow, app, Menu, shell } = require('electron')
 const path = require('path')
 const { pathToFileURL } = require('url')
 const fs = require('fs')
+const isDev = require('../assets/js/core/isdev')
 
 class WindowManager {
     constructor() {
@@ -80,9 +81,9 @@ class WindowManager {
         const errorMsg = err.stack || err.message || err.toString()
         const ConfigManager = require('../assets/js/core/configmanager')
         const supportUrl = ConfigManager.getSupportUrl()
-        
-        this.errorWin.loadURL(pathToFileURL(path.join(__dirname, '..', '..', 'app', 'error.html')).toString() + 
-            '?error=' + encodeURIComponent(errorMsg) + 
+
+        this.errorWin.loadURL(pathToFileURL(path.join(__dirname, '..', '..', 'app', 'error.html')).toString() +
+            '?error=' + encodeURIComponent(errorMsg) +
             (supportUrl ? '&supportUrl=' + encodeURIComponent(supportUrl) : ''))
 
         this.errorWin.webContents.setWindowOpenHandler(({ url }) => {

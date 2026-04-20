@@ -88,6 +88,7 @@ contextBridge.exposeInMainWorld('HeliosAPI', {
     // App Info
     app: {
         getVersion: () => ipcRenderer.sendSync('app:getVersionSync'),
+        getAppPath: () => ipcRenderer.sendSync('app:getAppPath'),
         getName: () => 'FLauncher'
     },
     // App & Shell

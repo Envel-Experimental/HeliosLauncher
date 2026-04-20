@@ -200,6 +200,14 @@ export async function showMainUI(data) {
                 if (landingEl) {
                     show(landingEl)
                     console.log('[UIBinder] Landing container shown.')
+                    const distro = await DistroAPI.getDistribution()
+                    if (distro) {
+                        console.log('[UIBinder] Distribution loaded, initializing landing...')
+                        onDistroRefresh(distro)
+                    } else {
+                        console.warn('[UIBinder] Distribution failed to load, showing landing in limited mode.')
+                    }
+                    toggleLaunchArea(false)
                     checkAndShowP2PPrompt()
                     
                     // Final safety visibility check

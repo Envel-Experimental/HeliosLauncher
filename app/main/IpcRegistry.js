@@ -25,6 +25,10 @@ class IpcRegistry {
             event.returnValue = app.getVersion()
         })
 
+        ipcMain.on('app:getAppPath', (event) => {
+            event.returnValue = app.getAppPath()
+        })
+
         ipcMain.on('fs:readdirSync', (event, path, opts) => {
             try {
                 const fsSync = require('fs')
@@ -117,6 +121,10 @@ class IpcRegistry {
         ipcMain.on('renderer-ready', (event) => {
             console.log('[Main] Renderer is ready, sending distribution index signal.')
             event.sender.send('distributionIndexDone', true)
+        })
+
+        ipcMain.on('app:getAppPath', (event) => {
+            event.returnValue = app.getAppPath()
         })
 
         ipcMain.on('distributionIndexDone', (event, res) => {

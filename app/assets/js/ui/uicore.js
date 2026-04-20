@@ -277,10 +277,10 @@ document.addEventListener('readystatechange', function () {
         //const targetWidth2 = document.getElementById("server_selection").getBoundingClientRect().width
         //const targetWidth3 = document.getElementById("launch_button").getBoundingClientRect().width
 
-        document.getElementById('launch_details').style.maxWidth = 266.01
-        document.getElementById('launch_progress').style.width = 170.8
-        document.getElementById('launch_details_right').style.maxWidth = 170.8
-        document.getElementById('launch_progress_label').style.width = 53.21
+        document.getElementById('launch_details').style.maxWidth = '266.01px'
+        document.getElementById('launch_progress').style.width = '170.8px'
+        document.getElementById('launch_details_right').style.maxWidth = '170.8px'
+        document.getElementById('launch_progress_label').style.width = '53.21px'
 
     }
 
