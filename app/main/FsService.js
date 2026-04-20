@@ -1,6 +1,7 @@
 const { ipcMain } = require('electron')
 const fs = require('fs/promises')
 const { constants } = require('fs')
+const { retry } = require('../assets/js/core/util')
 
 class FsService {
     init() {
@@ -49,11 +50,15 @@ class FsService {
         })
 
         ipcMain.handle('fs:rm', async (event, path, opts) => {
-            return await fs.rm(path, opts)
+            return await retry(async () => {
+                return await fs.rm(path, opts)
+            }, 5, 100, (err) => err.code === 'EPERM' || err.code === 'EBUSY')
         })
 
         ipcMain.handle('fs:rename', async (event, path, newPath) => {
-            return await fs.rename(path, newPath)
+            return await retry(async () => {
+                return await fs.rename(path, newPath)
+            }, 5, 100, (err) => err.code === 'EPERM' || err.code === 'EBUSY')
         })
 
         ipcMain.handle('fs:stat', async (event, path) => {

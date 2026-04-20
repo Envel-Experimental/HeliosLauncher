@@ -55,6 +55,9 @@ class WindowManager {
     }
 
     showCriticalError(err) {
+        const SentryService = require('./SentryService')
+        SentryService.captureException(err)
+
         if (this.errorWin && !this.errorWin.isDestroyed()) {
             return
         }

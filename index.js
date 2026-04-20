@@ -1,3 +1,7 @@
+// 1. SENTRY INITIALIZATION (Must be first)
+const SentryService = require('./app/main/SentryService')
+SentryService.init()
+
 console.log('[Main] Application entry point reached (index.js)')
 const { app, protocol, session, powerMonitor } = require('electron')
 const WindowManager = require('./app/main/WindowManager')

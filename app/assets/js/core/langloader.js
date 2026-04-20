@@ -45,6 +45,7 @@ exports.loadLanguage = function (id) {
 }
 
 exports.query = function (id, placeHolders) {
+    if (!lang) return ''
     let query = id.split('.')
     let res = lang
     for (let q of query) {
@@ -55,8 +56,11 @@ exports.query = function (id, placeHolders) {
             break
         }
     }
-    let text = res === lang ? '' : res
-    if (placeHolders) {
+    
+    // If res is still lang (id was empty) or undefined (key not found), return empty string
+    let text = (res === lang || res === undefined) ? '' : res
+    
+    if (typeof text === 'string' && placeHolders) {
         Object.entries(placeHolders).forEach(([key, value]) => {
             text = text.replace(`{${key}}`, value)
         })

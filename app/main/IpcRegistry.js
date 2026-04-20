@@ -8,9 +8,13 @@ const ModService = require('./ModService')
 const ServerStatusService = require('./ServerStatusService')
 const ConfigManager = require('../assets/js/core/configmanager')
 const { SHELL_OPCODE } = require('../assets/js/core/ipcconstants')
+const SentryService = require('./SentryService')
 
 class IpcRegistry {
     init() {
+        if (this.initialized) return
+        this.initialized = true
+
         // Initialize sub-services
         AutoUpdaterService.init()
         MicrosoftAuthService.init()
@@ -23,6 +27,11 @@ class IpcRegistry {
         
         ipcMain.on('app:getVersionSync', (event) => {
             event.returnValue = app.getVersion()
+        })
+
+        ipcMain.on('renderer-error', (event, error) => {
+            console.error('[Renderer ERROR]', error)
+            SentryService.captureException(error)
         })
 
         ipcMain.on('app:getAppPath', (event) => {
@@ -71,9 +80,6 @@ class IpcRegistry {
             }
         })
 
-        ipcMain.on('renderer-error', (event, error) => {
-            console.error('[Renderer ERROR]', error)
-        })
 
         ipcMain.on('renderer-log', (event, msg) => {
             console.log('[Renderer Log]', msg)
