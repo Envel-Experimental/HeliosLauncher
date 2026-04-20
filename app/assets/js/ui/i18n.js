@@ -39,7 +39,9 @@ export function applyTranslations() {
                 }
                 el.innerHTML = translated
             } else {
-                console.warn(`[i18n] Translation NOT FOUND for key: ${key}`);
+                if (key !== 'ejs.app.title' && key !== 'app.title') {
+                    console.warn(`[i18n] Translation NOT FOUND for key: ${key}`);
+                }
             }
         }
     })

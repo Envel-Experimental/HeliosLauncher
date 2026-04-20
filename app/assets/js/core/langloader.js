@@ -8,23 +8,36 @@ let lang
 
 exports.loadLanguage = function (id) {
     let langPath
-    if (process.type === 'renderer') {
-        const base = window.HeliosAPI?.app?.getAppPath() || window.HeliosAPI?.system?.cwd() || ''
-        langPath = path.join(base, 'app', 'assets', 'lang', `${id}.toml`)
-    } else {
-        const { app } = require('electron')
-        langPath = path.join(app.getAppPath(), 'app', 'assets', 'lang', `${id}.toml`)
-    }
-    const fileContent = fs.readFileSync(langPath, 'utf-8')
-    if (!fileContent) {
-        console.warn(`[LangLoader] Language file not found or empty: ${langPath}`)
-        return
-    }
-    // Load and merge strings
     try {
-        lang = deepMerge(toml.parse(fileContent) || {}, lang || {})
-    } catch (e) {
-        console.error(`[LangLoader] Failed to parse TOML at ${langPath}:`, e)
+        if (process.type === 'renderer') {
+            const base = window.HeliosAPI?.app?.getAppPath() || window.HeliosAPI?.system?.cwd() || ''
+            langPath = path.join(base, 'app', 'assets', 'lang', `${id}.toml`)
+        } else {
+            const { app } = require('electron')
+            langPath = path.join(app.getAppPath(), 'app', 'assets', 'lang', `${id}.toml`)
+        }
+
+        if (typeof fs.existsSync === 'function' && !fs.existsSync(langPath)) {
+            console.warn(`[LangLoader] Language file does not exist: ${langPath}`)
+            return
+        }
+
+        let fileContent = fs.readFileSync(langPath, 'utf-8')
+        if (!fileContent) {
+            console.warn(`[LangLoader] Language file is empty or missing: ${langPath}`)
+            return
+        }
+
+        // Strip BOM
+        if (typeof fileContent === 'string') {
+            fileContent = fileContent.replace(/^\uFEFF/, '')
+        }
+
+        const parsed = toml.parse(fileContent)
+        lang = deepMerge(parsed || {}, lang || {})
+    } catch (err) {
+        console.error(`[LangLoader] Failed to load language file ${id}:`, err)
+        if (err.stack) console.error(err.stack)
     }
 }
 
