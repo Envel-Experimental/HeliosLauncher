@@ -27,7 +27,6 @@ const PROFILES = {
 class NodeAdapter {
     constructor() {
         this.profile = this.detectProfile()
-        console.log(`[NodeAdapter] System Profile Detected: ${this.profile.name}`)
     }
 
     detectProfile() {

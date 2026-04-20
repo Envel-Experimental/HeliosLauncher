@@ -193,10 +193,10 @@ exports.getDataDirectory = function (def = false) {
  * Load the configuration.
  */
 exports.load = async function () {
-    console.log(`[ConfigManager] Load called (isRenderer: ${isRenderer})`)
+
     if (isRenderer) {
         try {
-            console.log('[ConfigManager] Proxied load starting...')
+
             config = await window.HeliosAPI.ipc.invoke('config:load')
             if (!config) config = DEFAULT_CONFIG
             logger.info('Configuration successfully proxied from Main Process')

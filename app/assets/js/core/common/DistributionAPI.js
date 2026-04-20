@@ -26,8 +26,8 @@ class DistributionAPI {
         this.remoteUrls = Array.isArray(remoteUrls) ? remoteUrls : [remoteUrls];
         this.devMode = devMode;
         this.trustedKeys = trustedKeys;
-        console.log('[DistributionAPI] Initialized with trusted keys:', this.trustedKeys);
         this.DISTRO_FILE = 'distribution.json';
+
         this.DISTRO_FILE_DEV = 'distribution_dev.json';
         this.distroPath = resolve(launcherDirectory, this.DISTRO_FILE);
         this.distroDevPath = resolve(launcherDirectory, this.DISTRO_FILE_DEV);
@@ -49,8 +49,8 @@ class DistributionAPI {
             this.rawDistribution = await this.loadDistribution();
             this.distribution = new HeliosDistribution(this.rawDistribution, this.commonDir, this.instanceDir);
         }
-        console.log('[DistributionAPI] getDistribution returning servers:', this.distribution.servers.map(s => s.rawServer.id));
         return this.distribution;
+
     }
 
     /**
@@ -110,8 +110,8 @@ class DistributionAPI {
      * @returns {Promise<DistributionData | null>}
      */
     async _loadDistributionNullable() {
-        console.log('[DistributionAPI] Loading distribution... devMode:', this.devMode);
         /** @type {DistributionData | null} */
+
         let distro = null;
         if (!this.devMode) {
             distro = (await this.pullRemote()).data;
@@ -153,8 +153,8 @@ class DistributionAPI {
 
         for (const url of this.remoteUrls) {
             try {
-                console.log(`[DistributionAPI] Pulling remote distribution from: ${url}`);
                 const res = await fetchWithTimeout(url, { cache: 'no-store' }, 8000);
+
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
                 // Get buffer first to preserve exact bytes for verification
@@ -200,7 +200,6 @@ class DistributionAPI {
                     }
                 }
 
-                console.log('[DistributionAPI] Final signatureValid state:', signatureValid);
 
                 if (!signatureValid && this.trustedKeys && this.trustedKeys.length > 0) {
                     /** @type {Error & { dataPackage?: any }} */
@@ -258,8 +257,8 @@ class DistributionAPI {
      * @returns {Promise<DistributionData | null>}
      */
     async readDistributionFromFile(path) {
-        console.log('[DistributionAPI] Reading distribution from:', path);
         try {
+
             await fs.access(path);
             const raw = await fs.readFile(path, 'utf-8');
             try {

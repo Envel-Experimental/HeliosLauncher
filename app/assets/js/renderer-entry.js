@@ -6,12 +6,12 @@
 
 // 1. STAGE ZERO: Global polyfills
 window.global = window
-console.log('Renderer Script Execution Started')
+
 
 // Platform Detection (Immediate stabilization)
 const platform = (window.HeliosAPI && window.HeliosAPI.system) ? window.HeliosAPI.system.getPlatform() : 'win32'
 document.body.setAttribute('data-platform', platform)
-console.log(`Renderer Platform Stabilized: ${platform}`)
+
 
 // 1.1 Polyfill process immediately (Essential for libraries and env detection)
 if (typeof process === 'undefined') {
@@ -88,7 +88,6 @@ window.setOverlayHandler = overlay.setOverlayHandler
 window.setMiddleButtonHandler = overlay.setMiddleButtonHandler
 window.setDismissHandler = overlay.setDismissHandler
 
-console.log('Renderer Bootstrap Phase 1 Complete (Structural Reorg)')
 
 // Initialize Languages immediately before config load
 try {
@@ -96,15 +95,13 @@ try {
     if (window.setLoadingStatus) {
         window.setLoadingStatus('js.uibinder.loading.loadingConfig')
     }
-    console.log('Renderer Language Engine Initialized.')
 } catch (e) {
     console.error('Failed to initialize language engine:', e)
     if (e.stack) console.error(e.stack)
 }
 
-console.log('Renderer Bootstrap Phase 2: Loading Configuration...')
 ConfigManager.load().then(async () => {
-    console.log('Renderer Configuration Eagerly Loaded.')
+
 
     // Polyfill EJS functionality
     try {
@@ -121,7 +118,7 @@ ConfigManager.load().then(async () => {
 
     const bkid = Math.floor(Math.random() * 5) // roughly 5 backgrounds in assets
     document.body.setAttribute('bkid', bkid.toString())
-    console.log(`Renderer Background Set: ${bkid}`)
+
 
     // Detect OS and set attribute for CSS targeting
     document.body.setAttribute('data-platform', platform)
@@ -144,9 +141,7 @@ ConfigManager.load().then(async () => {
 
     // Initialize Distribution API
     try {
-        console.log('Renderer Bootstrap Phase 3: Initializing DistroAPI...')
         await DistroAPI.init() // This is DistroManager.init basically
-        console.log('DistroAPI initialized.')
     } catch (e) {
         console.error('Failed to initialize DistroAPI:', e)
     }
