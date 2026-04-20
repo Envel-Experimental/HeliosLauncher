@@ -8,13 +8,20 @@ describe('LangLoader', () => {
         
         // Mock fs
         jest.mock('fs', () => ({
-            readFileSync: jest.fn().mockReturnValue(''),
+            readFileSync: jest.fn().mockReturnValue('dummy content'),
             existsSync: jest.fn().mockReturnValue(true)
         }))
 
         // Mock smol-toml
         jest.mock('smol-toml', () => ({
             parse: jest.fn()
+        }))
+
+        // Mock electron
+        jest.mock('electron', () => ({
+            app: {
+                getAppPath: jest.fn().mockReturnValue('')
+            }
         }))
 
         // Mock core/util (including deepMerge used in loadLanguage)

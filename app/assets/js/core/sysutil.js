@@ -1,5 +1,6 @@
 const os = require('os')
 const fs = require('fs')
+const path = require('path')
 const { execFile } = require('child_process')
 
 
@@ -70,16 +71,29 @@ function getAvailableRamGb() {
  */
 function getFreeDiskSpaceGb() {
     return new Promise((resolve, reject) => {
-        const targetPath = os.platform() === 'win32' ? 'C:\\' : '/'
+        const ConfigManager = require('./configmanager')
+        const targetPath = ConfigManager.getDataDirectory() || (os.platform() === 'win32' ? 'C:\\' : '/')
 
         // Check if fs.statfs exists (Node 19.6.0+)
         if (typeof fs.statfs === 'function') {
             fs.statfs(targetPath, (err, stats) => {
-                if (err) return reject(err)
-                // bavail = free blocks available to unprivileged users
-                // bsize = block size
-                const freeBytes = stats.bavail * stats.bsize
-                resolve(freeBytes / BYTES_PER_GB)
+                if (err) {
+                    // If the path doesn't exist yet, check the parent directory
+                    if (err.code === 'ENOENT') {
+                        fs.statfs(path.dirname(targetPath), (err2, stats2) => {
+                            if (err2) return reject(err2)
+                            const freeBytes = stats2.bavail * stats2.bsize
+                            resolve(freeBytes / BYTES_PER_GB)
+                        })
+                    } else {
+                        return reject(err)
+                    }
+                } else {
+                    // bavail = free blocks available to unprivileged users
+                    // bsize = block size
+                    const freeBytes = stats.bavail * stats.bsize
+                    resolve(freeBytes / BYTES_PER_GB)
+                }
             })
         } else {
             // Fallback or skip if strictly older Node, but 'wmic' is broken anyway.
@@ -98,6 +112,12 @@ exports.getAvailableRamGb = getAvailableRamGb
 exports.getFreeDiskSpaceGb = getFreeDiskSpaceGb
 exports.performChecks = async function () {
     const warnings = []
+
+    // 1. Total RAM Check (once, or every launch if not cached)
+    const totalRamGb = os.totalmem() / BYTES_PER_GB
+    if (totalRamGb < TOTAL_RAM_THRESHOLD_GB) {
+        warnings.push('lowTotalRAM')
+    }
 
     try {
         // 2. Available RAM Check (every launch)
@@ -126,3 +146,4 @@ exports.performChecks = async function () {
 
     return warnings
 }
+

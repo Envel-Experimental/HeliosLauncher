@@ -29,15 +29,6 @@ class IpcRegistry {
             event.returnValue = app.getAppPath()
         })
 
-        ipcMain.on('fs:readdirSync', (event, path, opts) => {
-            try {
-                const fsSync = require('fs')
-                event.returnValue = fsSync.readdirSync(path, opts)
-            } catch (e) {
-                event.returnValue = []
-            }
-        })
-
         ipcMain.on('fs:statSync', (event, path) => {
             try {
                 const fsSync = require('fs')
@@ -118,13 +109,21 @@ class IpcRegistry {
             return ConfigManager.getConfig()
         })
 
-        ipcMain.on('renderer-ready', (event) => {
+        ipcMain.on('renderer-ready', async (event) => {
             console.log('[Main] Renderer is ready, sending distribution index signal.')
             event.sender.send('distributionIndexDone', true)
-        })
 
-        ipcMain.on('app:getAppPath', (event) => {
-            event.returnValue = app.getAppPath()
+            // Perform system checks and send warnings
+            try {
+                const sysutil = require('../assets/js/core/sysutil')
+                const warnings = await sysutil.performChecks()
+                if (warnings.length > 0) {
+                    console.log(`[Main] Sending ${warnings.length} system warnings to renderer.`)
+                    event.sender.send('system-warnings', warnings)
+                }
+            } catch (err) {
+                console.error('[Main] Failed to perform system checks:', err)
+            }
         })
 
         ipcMain.on('distributionIndexDone', (event, res) => {
