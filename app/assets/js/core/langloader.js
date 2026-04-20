@@ -9,19 +9,24 @@ let lang
 exports.loadLanguage = function (id) {
     let langPath
     try {
-        if (process.type === 'renderer') {
+        console.log('[LangLoader] Trace 1: id=', id)
+        const isRenderer = (process.type === 'renderer' || typeof window !== 'undefined')
+        
+        if (isRenderer) {
             const base = window.HeliosAPI?.app?.getAppPath() || window.HeliosAPI?.system?.cwd() || ''
             langPath = path.join(base, 'app', 'assets', 'lang', `${id}.toml`)
         } else {
             const { app } = require('electron')
             langPath = path.join(app.getAppPath(), 'app', 'assets', 'lang', `${id}.toml`)
         }
+        console.log('[LangLoader] Trace 2: langPath=', langPath)
 
         if (typeof fs.existsSync === 'function' && !fs.existsSync(langPath)) {
             console.warn(`[LangLoader] Language file does not exist: ${langPath}`)
             return
         }
 
+        console.log('[LangLoader] Trace 3: Reading file...')
         let fileContent = fs.readFileSync(langPath, 'utf-8')
         if (!fileContent) {
             console.warn(`[LangLoader] Language file is empty or missing: ${langPath}`)
@@ -32,12 +37,17 @@ exports.loadLanguage = function (id) {
         if (typeof fileContent === 'string') {
             fileContent = fileContent.replace(/^\uFEFF/, '')
         }
+        console.log('[LangLoader] Trace 4: Content length=', fileContent?.length)
 
+        console.log('[LangLoader] Trace 5: Parsing TOML...')
         const parsed = toml.parse(fileContent)
+        console.log('[LangLoader] Trace 6: Parsed keys=', parsed ? Object.keys(parsed).length : 'null')
+        
         lang = deepMerge(parsed || {}, lang || {})
+        console.log('[LangLoader] Trace 7: Merge complete')
     } catch (err) {
         console.error(`[LangLoader] Failed to load language file ${id}:`, err)
-        if (err.stack) console.error(err.stack)
+        console.error(err.stack || 'No stack trace available')
     }
 }
 

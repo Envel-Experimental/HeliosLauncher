@@ -9,10 +9,22 @@ window.global = window
 console.log('Renderer Script Execution Started')
 
 // Platform Detection (Immediate stabilization)
-if (window.HeliosAPI && window.HeliosAPI.system) {
-    const platform = window.HeliosAPI.system.getPlatform()
-    document.body.setAttribute('data-platform', platform)
-    console.log(`Renderer Platform Stabilized: ${platform}`)
+const platform = (window.HeliosAPI && window.HeliosAPI.system) ? window.HeliosAPI.system.getPlatform() : 'win32'
+document.body.setAttribute('data-platform', platform)
+console.log(`Renderer Platform Stabilized: ${platform}`)
+
+// 1.1 Polyfill process immediately (Essential for libraries and env detection)
+if (typeof process === 'undefined') {
+    window.process = { 
+        platform,
+        type: 'renderer',
+        env: { HELIOS_DEV_MODE: window.isDev || false },
+        nextTick: (fn) => setTimeout(fn, 0)
+    }
+} else {
+    if (!process.platform) process.platform = platform
+    if (!process.type) process.type = 'renderer'
+    if (!process.nextTick) process.nextTick = (fn) => setTimeout(fn, 0)
 }
 
 const { LoggerUtil } = require('./core/util/LoggerUtil')
@@ -87,6 +99,7 @@ try {
     console.log('Renderer Language Engine Initialized.')
 } catch (e) {
     console.error('Failed to initialize language engine:', e)
+    if (e.stack) console.error(e.stack)
 }
 
 console.log('Renderer Bootstrap Phase 2: Loading Configuration...')
@@ -104,12 +117,7 @@ ConfigManager.load().then(async () => {
     const platform = window.HeliosAPI?.system?.getPlatform() || process.platform || 'win32'
     document.body.setAttribute('data-platform', platform)
     
-    // Polyfill process if needed (for libraries that expect it)
-    if (typeof process === 'undefined') {
-        window.process = { platform }
-    } else if (!process.platform) {
-        process.platform = platform
-    }
+    // process polyfill moved to top stage zero
 
     const bkid = Math.floor(Math.random() * 5) // roughly 5 backgrounds in assets
     document.body.setAttribute('bkid', bkid.toString())

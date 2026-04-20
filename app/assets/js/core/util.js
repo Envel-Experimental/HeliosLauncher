@@ -124,16 +124,18 @@ exports.deepMerge = function (obj, defaults) {
     }
 
     const result = { ...defaults }
-    for (const key in obj) {
-        if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue
+    if (obj && typeof obj === 'object') {
+        for (const key in obj) {
+            if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue
 
-        const val = obj[key]
-        if (val === undefined) continue
+            const val = obj[key]
+            if (val === undefined) continue
 
-        if (Object.prototype.hasOwnProperty.call(result, key) && typeof val === 'object' && val !== null) {
-            result[key] = exports.deepMerge(val, result[key])
-        } else {
-            result[key] = val
+            if (result && Object.prototype.hasOwnProperty.call(result, key) && val !== null && typeof val === 'object' && !Array.isArray(val)) {
+                result[key] = exports.deepMerge(val, result[key])
+            } else {
+                result[key] = val
+            }
         }
     }
     return result

@@ -169,7 +169,7 @@ export async function showMainUI(data) {
     if (data.rawDistribution.supportUrl) {
         ConfigManager.setSupportUrl(data.rawDistribution.supportUrl)
     }
-    setTimeout(() => {
+    setTimeout(async () => {
         console.log('[UIBinder] Showing main container...')
         document.getElementById('frameBar').style.backgroundColor = 'rgba(0, 0, 0, 0.5)'
         document.body.style.backgroundImage = `url('assets/images/backgrounds/${document.body.getAttribute('bkid')}.jpg')`
