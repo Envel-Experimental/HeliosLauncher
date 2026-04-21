@@ -25,6 +25,10 @@ const log = LoggerUtil.getLogger('DownloadEngine');
 const MAX_HTTP_CONCURRENCY = 10;
 let activeHttpRequests = 0;
 
+// Global Write Throttling (I/O)
+const MAX_CONCURRENT_WRITES = 16; // Balanced limit to prevent HDD head thrashing while maintaining SSD throughput
+let activeWrites = 0;
+
 // Cleaning Task State
 let lastCleanup = 0;
 const CLEANUP_INTERVAL = 1000 * 60 * 60; // Run at most once per hour
@@ -336,7 +340,20 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
             if (!response.ok) throw new Error(`RaceManager failed: ${response.status}`);
 
             const tempPath = decodedPath + '.tmp';
-            const fileStream = fsSync.createWriteStream(tempPath, { flags: startOffset > 0 ? 'a' : 'w' });
+            
+            // Wait for a write slot (I/O throttling)
+            while (activeWrites >= MAX_CONCURRENT_WRITES) {
+                await sleep(4);
+            }
+            activeWrites++;
+
+            let fileStream;
+            try {
+                fileStream = fsSync.createWriteStream(tempPath, { flags: startOffset > 0 ? 'a' : 'w' });
+            } catch (e) {
+                activeWrites--;
+                throw e;
+            }
 
             // Progress tracking wrapper
             let loaded = startOffset;
@@ -377,14 +394,17 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
 
                 await pipeline(nodeStream, progressStream, fileStream);
             } else {
+                activeWrites--;
                 throw new Error('No body in response');
             }
+
+            activeWrites--;
 
             // Validate Atomic Write (RCE Guard)
             const isP2P = !!response.p2pStream;
             if (await validateLocalFile(tempPath, algo, currentHash, asset.size, isP2P)) {
-                // Success! Atomic rename to final path
-                await fs.rename(tempPath, decodedPath);
+                // Success! Atomic rename to final path with retries for Windows (Antivirus guard)
+                await safeRename(tempPath, decodedPath);
 
                 // Report Success to MirrorManager
                 MirrorManager.reportSuccess(currentUrl, Date.now() - downloadStartTime, loaded);
@@ -461,5 +481,30 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
 }
 
 
+
+/**
+ * Safely renames a file with retries to handle temporary locks from Antivirus/OS (Windows).
+ * 
+ * @param {string} oldPath 
+ * @param {string} newPath 
+ * @param {number} [retries=5] 
+ */
+async function safeRename(oldPath, newPath, retries = 5) {
+    for (let i = 0; i < retries; i++) {
+        try {
+            await fs.rename(oldPath, newPath);
+            return;
+        } catch (err) {
+            const isLocked = err.code === 'EPERM' || err.code === 'EBUSY';
+            if (isLocked && i < retries - 1) {
+                const delay = 100 * (i + 1);
+                log.debug(`[DownloadEngine] File locked during rename (${err.code}). Retry ${i + 1}/${retries} in ${delay}ms...`);
+                await sleep(delay);
+                continue;
+            }
+            throw err;
+        }
+    }
+}
 
 module.exports = { downloadQueue, downloadFile, cleanupStaleTempFiles }

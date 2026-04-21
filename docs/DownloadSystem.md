@@ -110,10 +110,20 @@ The root `distribution.json` must be signed by the administrator.
     1.  Downloads `distribution.json`.
     2.  Downloads `distribution.json.sig`.
     3.  Wraps its local Public Key in **SPKI DER** format.
-    4.  Verifies the signature. If it fails, an **Interactive Overlay** prevents launch unless overridden.
+    4.  **Verifies the signature**. If it fails, an **Interactive Overlay** prevents launch unless overridden.
+    5.  **Anti-Replay Check**: The launcher extracts the `timestamp` field. If `remote.timestamp < local.timestamp`, the update is rejected as a **Replay Attack** (downgrade attempt).
+    6.  **P2P Size Guard**: For security and resource fairness, any file larger than **200 MB** is automatically excluded from the P2P network and downloaded via HTTP only.
 
-### 3.2 File Validation Chain
-Once the distribution index is trusted, every file is protected:
+### 3.2 Main-Renderer IPC Separation
+To prevent application-wide lag and "bus clogging":
+*   **Main Process Exclusive Writing**: The Main process handles all network requests (HTTP/P2P) and direct file system operations.
+*   **Progress-Only Events**: The Renderer never receives raw binary data or download chunks. It only receives high-level events (e.g., `5% downloaded`, `Speed: 10 MB/s`) to update the UI. This ensures zero serialization overhead for large assets.
+
+### 3.3 Atomic Write & OS Resilience
+HeliosLauncher uses a hardened commit flow to handle OS-level interference (like Antivirus locks):
+1.  **Stage to `.tmp`**: Files are downloaded and verified in a temporary file.
+2.  **Validation**: Post-download hash verification ensures integrity.
+3.  **Resilient Commit**: If the file is valid, the launcher uses an **Atomic Rename** with a built-in retry mechanism (exponential backoff) to bypass transient `EPERM` or `EBUSY` errors caused by real-time scanners (common on Windows).
 1.  **Immutable Identity**: Files are identified by their SHA1/SHA256 hash.
 2.  **Streaming Verification**: The `DownloadEngine` pipes every download through a native crypto hasher.
 3.  **Mandatory Seeder Check**: Before seeding a file to others, the launcher recalculates the hash from disk to prevent poisoning.
@@ -225,6 +235,12 @@ A Sybil attack occurs when one person creates thousands of fake peers to control
     *   Peers violating protocol rules receive a "Strike".
     *   **3 Strikes = Blacklist**: The ID is banned for 10 minutes.
 *   **Global Circuit Breaker (Panic Mode)**: If the system detects a massive, coordinated attack (e.g., 5+ security violations in 1 minute), it triggers a global "Panic Mode," disabling P2P functionality entirely to protect the user's infrastructure.
+
+### 7.4 Anti-Replay Protection (Timestamp Guard)
+To prevent attackers from serving old, signed but vulnerable configurations:
+*   **Mandatory Timestamps**: `distribution.json` includes a cryptographic-bound `timestamp`.
+*   **Monotonic Enforcement**: The launcher stores the last seen timestamp. Any new distribution must have a timestamp **greater than or equal to** the stored one.
+*   **Downgrade Prevention**: This prevents an attacker from reverting the launcher to an old state where security patches (e.g. library hashes) were not yet applied.
 
 ### The Security Chain Diagram
 
@@ -347,6 +363,11 @@ A virtual economy ensures fairness and prevents "Leeching" (downloading without 
     *   **Passive Input**: Just staying online regenerates credits.
     *   **Active Input**: Uploading to others regenerates credits faster (1:1 ratio).
 *   **Bankruptcy**: If credits hit 0, the peer is deprioritized or "soft-banned" until they regenerate enough credits to prove they are good citizens.
+
+### 9.8 I/O Throttling (Hardware Protection)
+To prevent the launcher from locking up systems with slow mechanical drives (HDD):
+*   **Write Slot Limit**: While the launcher may open up to 32 network connections, it strictly limits concurrent disk write operations (e.g., `MAX_CONCURRENT_WRITES = 16`).
+*   **Backpressure**: When the write limit is reached, the `DownloadEngine` pauses new network requests until existing buffers are flushed to disk, preventing OS-level I/O queue congestion.
 
 ---
 

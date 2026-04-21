@@ -16,6 +16,7 @@ class RaceManager {
         this.failureHistory = new Set()
         this.successBuffer = []
         this.successFlushTimer = null
+        this.discoveryPromise = null
     }
 
     logSuccess(hash) {
@@ -132,12 +133,15 @@ class RaceManager {
         const algo = hash ? (hash.length === 64 ? 'sha256' : 'sha1') : 'none'
         const abortController = new AbortController()
 
-        // Check for Skip P2P Header (Resilience)
+        // Check for Skip P2P Header or Size Limit (Security)
         let skipP2P = false
+        const MAX_P2P_FILE_SIZE = 200 * 1024 * 1024 // 200 MB
         try {
             if (request.headers.get('X-Skip-P2P')) {
                 skipP2P = true
-                // console.log('[RaceManager] Skipping P2P for this request (Force HTTP)')
+            } else if (expectedSize > MAX_P2P_FILE_SIZE) {
+                if (isDev) console.log(`[RaceManager] File too large for P2P (${(expectedSize / 1024 / 1024).toFixed(2)} MB > 200 MB). Forcing HTTP.`)
+                skipP2P = true
             }
         } catch (e) { }
 
@@ -190,7 +194,7 @@ class RaceManager {
 
         // 2. Global P2P Task (Hyperswarm)
         let globalP2PStream = null
-        const globalP2PTask = new Promise((resolve, reject) => {
+        const globalP2PTask = new Promise(async (resolve, reject) => {
             if (skipP2P) {
                 reject(new Error('P2P Skipped'))
                 return
@@ -205,22 +209,30 @@ class RaceManager {
                 return
             }
 
-            let p2pDiscoveryTimeout = null
-            const onPeerAdded = () => {
-                if (p2pDiscoveryTimeout) {
-                    clearTimeout(p2pDiscoveryTimeout)
-                    p2pDiscoveryTimeout = null
-                }
-            }
-
             if (P2PEngine.peers.length === 0 && !ConfigManager.getP2POnlyMode()) {
-                p2pDiscoveryTimeout = setTimeout(() => {
-                    P2PEngine.off('peer_added', onPeerAdded)
+                if (!this.discoveryPromise) {
+                    if (isDev) console.log('[RaceManager] No peers found. Starting shared discovery grace period (5s)...')
+                    this.discoveryPromise = new Promise((resolve) => {
+                        const timeout = setTimeout(() => {
+                            P2PEngine.off('peer_added', onPeerFound)
+                            this.discoveryPromise = null
+                            resolve(false)
+                        }, 5000)
+                        const onPeerFound = () => {
+                            clearTimeout(timeout)
+                            this.discoveryPromise = null
+                            resolve(true)
+                        }
+                        P2PEngine.once('peer_added', onPeerFound)
+                    })
+                }
+
+                const found = await this.discoveryPromise
+                if (!found) {
                     if (globalP2PStream) globalP2PStream.destroy()
                     reject(new Error('P2P No Peers (Discovery Timeout)'))
-                }, 5000)
-                
-                P2PEngine.once('peer_added', onPeerAdded)
+                    return
+                }
             }
 
             globalP2PStream = P2PEngine.requestFile(hash, expectedSize, relPath, fileId)
@@ -248,7 +260,6 @@ class RaceManager {
                 reject(err)
             }
             const cleanup = () => {
-                P2PEngine.off('peer_added', onPeerAdded)
                 globalP2PStream.off('readable', onReadable);
                 globalP2PStream.off('error', onError)
                 // CRITICAL: Add no-op error listener to prevent crash if 

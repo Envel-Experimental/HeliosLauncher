@@ -114,9 +114,14 @@ class DistributionAPI {
 
         let distro = null;
         if (!this.devMode) {
-            distro = (await this.pullRemote()).data;
+            const localDistro = await this.pullLocal();
+            const localTimestamp = localDistro?.timestamp ? new Date(localDistro.timestamp).getTime() : 0;
+
+            const pullRes = await this.pullRemote(localTimestamp);
+            distro = pullRes.data;
+
             if (distro == null) {
-                distro = await this.pullLocal();
+                distro = localDistro;
             }
             else {
                 try {
@@ -148,7 +153,10 @@ class DistributionAPI {
         return distro;
     }
 
-    async pullRemote() {
+    /**
+     * @param {number} [localTimestamp] 
+     */
+    async pullRemote(localTimestamp = 0) {
         let lastError = null;
 
         for (const url of this.remoteUrls) {
@@ -171,7 +179,7 @@ class DistributionAPI {
                         const sigRes = await fetchWithTimeout(url + '.sig', { cache: 'no-store' }, 5000)
                         if (sigRes.ok) {
                             const signatureHex = (await sigRes.text()).trim()
-                            
+
                             const verifyData = {
                                 dataHex: rawBuffer.toString('hex'),
                                 signatureHex: signatureHex,
@@ -197,6 +205,26 @@ class DistributionAPI {
                         }
                     } catch (e) {
                         DistributionAPI.log.warn('Signature verification call error:', e)
+                    }
+                }
+
+                // ANTI-REPLAY CHECK
+                if (signatureValid && this.trustedKeys && this.trustedKeys.length > 0) {
+                    const remoteTimestampStr = data.timestamp || data.rss // Fallback to rss if used as a timestamp proxy, though explicit timestamp is better
+                    const remoteTimestamp = remoteTimestampStr ? new Date(remoteTimestampStr).getTime() : 0
+
+                    if (localTimestamp > 0 && remoteTimestamp < localTimestamp) {
+                        console.warn(`[DistributionAPI] Replay Attack Detected! Remote timestamp (${remoteTimestampStr}) is older than local (${new Date(localTimestamp).toISOString()}).`);
+                        signatureValid = false;
+                        /** @type {Error & { dataPackage?: any }} */
+                        const err = new Error('Distribution replay attack detected (downgrade attempt).');
+                        err.dataPackage = {
+                            data: data,
+                            responseStatus: RestResponseStatus.SUCCESS,
+                            signatureValid: false,
+                            replayDetected: true
+                        }
+                        throw err;
                     }
                 }
 

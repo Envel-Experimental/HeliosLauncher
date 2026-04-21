@@ -5,6 +5,7 @@
 interface DistributionData {
     version: string;
     rss: string;
+    timestamp?: string;
     servers: ServerData[];
 }
 
