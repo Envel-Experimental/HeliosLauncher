@@ -54,7 +54,8 @@ exports.analyzeLog = function (logContent) {
         return {
             type: 'corrupted-config',
             file: path.basename(match[1]),
-            description: `Ошибка загрузки конфига: ${path.basename(match[1])}`
+            descriptionKey: 'corrupted-config',
+            descriptionArgs: { file: path.basename(match[1]) }
         };
     }
 
@@ -77,7 +78,8 @@ exports.analyzeLog = function (logContent) {
                 return {
                     type: 'corrupted-config',
                     file: path.basename(culpritFile),
-                    description: `Файл ${path.basename(culpritFile)} поврежден (ошибка кодировки/парсинга).`
+                    descriptionKey: 'corrupted-config-parsing',
+                    descriptionArgs: { file: path.basename(culpritFile) }
                 };
             }
         }
@@ -92,7 +94,8 @@ exports.analyzeLog = function (logContent) {
         return {
             type: 'corrupted-config',
             file: path.basename(match[1]),
-            description: `Файл конфигурации ${path.basename(match[1])} поврежден (ошибка синтаксиса).`
+            descriptionKey: 'corrupted-config-syntax',
+            descriptionArgs: { file: path.basename(match[1]) }
         };
     }
 
@@ -103,7 +106,8 @@ exports.analyzeLog = function (logContent) {
         return {
             type: 'corrupted-config',
             file: path.basename(match[1]),
-            description: `Файл конфигурации ${path.basename(match[1])} поврежден.`
+            descriptionKey: 'corrupted-config-generic',
+            descriptionArgs: { file: path.basename(match[1]) }
         };
     }
 
@@ -114,7 +118,7 @@ exports.analyzeLog = function (logContent) {
         return {
             type: 'missing-version-file',
             file: match[1] + '.json',
-            description: "Файл версии поврежден. Нажми 'Исправить' для восстановления."
+            descriptionKey: 'missing-version-file'
         };
     }
 
@@ -127,7 +131,7 @@ exports.analyzeLog = function (logContent) {
         return {
             type: 'incompatible-mods',
             file: 'mods', // Условное имя, так как проблема во всей папке
-            description: "Несовместимые моды. Нажми 'Исправить', чтобы сбросить настройки модов."
+            descriptionKey: 'incompatible-mods'
         };
     }
 
@@ -136,7 +140,7 @@ exports.analyzeLog = function (logContent) {
         return {
             type: 'gpu-driver-outdated',
             file: 'NVIDIA Driver',
-            description: "Установлен устаревший драйвер NVIDIA. Обнови драйверы видеокарты."
+            descriptionKey: 'gpu-driver-outdated'
         };
     }
 
@@ -149,7 +153,7 @@ exports.analyzeLog = function (logContent) {
         return {
             type: 'java-oom',
             file: 'Memory',
-            description: "Недостаточно оперативной памяти."
+            descriptionKey: 'java-oom'
         };
     }
 
@@ -159,7 +163,7 @@ exports.analyzeLog = function (logContent) {
         return {
             type: 'gpu-oom',
             file: 'GPU Memory',
-            description: "Нехватка видеопамяти (VRAM). Попробуй снизить настройки графики или закрыть другие приложения."
+            descriptionKey: 'gpu-oom'
         };
     }
 
@@ -168,7 +172,7 @@ exports.analyzeLog = function (logContent) {
         return {
             type: 'gpu-gl-on-12',
             file: 'OpenGLOn12.dll',
-            description: "Сбой в драйвере OpenCL/OpenGL. Попробуй обновить драйверы видеокарты или перезапустить лаунчер."
+            descriptionKey: 'gpu-gl-on-12'
         };
     }
 
@@ -183,7 +187,7 @@ exports.analyzeLog = function (logContent) {
         return {
             type: 'java-corruption',
             file: 'Java Runtime',
-            description: "Критическая ошибка Java: файлы повреждены. Требуется переустановка Java."
+            descriptionKey: 'java-corruption'
         };
     }
 
@@ -198,7 +202,7 @@ exports.analyzeLog = function (logContent) {
         return {
             type: 'java-corruption',
             file: 'Java Natives',
-            description: "Критическая ошибка Java: повреждены нативные библиотеки. Требуется переустановка Java."
+            descriptionKey: 'java-corruption-natives'
         };
     }
 

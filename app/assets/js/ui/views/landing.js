@@ -360,7 +360,7 @@ async function showOfflineWarning() {
 let proc
 // Joined server regex
 // Change this if your server uses something different.
-const GAME_LAUNCH_REGEX = /^\[.+\]: (?:MinecraftForge .+ Initialized|ModLauncher .+ starting: .+|Loading Minecraft .+ with Fabric Loader .+)$/
+const GAME_LAUNCH_REGEX = /^\[.+\]: (?:MinecraftForge .+ Initialized|ModLauncher .+ starting: .+|Loading Minecraft .+ with Fabric Loader .+|.+ \/.+\]: .+|.+LWJGL.+)$/
 const MIN_LINGER = 5000
 
 /* System (Java) Scan */
@@ -683,8 +683,9 @@ async function dlAsync(login = true) {
         window.HeliosAPI.launcher.onLog(tempListener)
         window.HeliosAPI.launcher.onLogError(gameErrorListener)
         window.HeliosAPI.launcher.onExit((code) => {
-            if (launch_details.style.display !== 'none') {
-                loggerLaunchSuite.warn(`Game exited early with code ${code}. Resetting UI.`)
+            const lDetails = document.getElementById('launch_details')
+            if (lDetails && lDetails.style.display !== 'none') {
+                loggerLaunchSuite.warn(`Game exited with code ${code}. Resetting UI.`)
                 toggleLaunchArea(false)
             }
         })

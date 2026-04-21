@@ -624,9 +624,6 @@ ipcRenderer.on('distributionIndexDone', async (event, res) => {
     }
 })
 
-// Signal main process that we are ready to receive the distribution index.
-// Redundant: Moved to renderer-entry.js after full boot.
-
 /**
  * Handle system power resume
  */
@@ -639,7 +636,67 @@ ipcRenderer.on('power-resume', async () => {
     }
 })
 
-// Util for development
+// IPC Listener for cross-process UI calls
+ipcRenderer.on('ui:call', (event, { fn, args }) => {
+    console.log(`[UIBinder] Received cross-process UI call: ${fn}`, args)
+
+    // Resolve string-based handlers for actions (IPC cannot send functions)
+    const processedArgs = args.map(arg => {
+        if (typeof arg === 'string' && arg.startsWith('ui:')) {
+            const action = arg.substring(3)
+            console.log(`[UIBinder] Resolving UI action: ${action}`)
+
+            if (action === 'crash-fix-action') {
+                return async () => {
+                    console.log('[UIBinder] Executing crash-fix-action')
+                    if (typeof window.toggleOverlay === 'function') {
+                        window.toggleOverlay(false)
+                    } else {
+                        console.warn('[UIBinder] window.toggleOverlay is not a function!')
+                    }
+                    ipcRenderer.send('ui:action', 'crash-fix')
+                }
+            }
+            if (action === 'crash-support-action') {
+                return () => {
+                    console.log('[UIBinder] Executing crash-support-action')
+                    ipcRenderer.send('ui:action', 'crash-support')
+                }
+            }
+            if (action === 'close-overlay') {
+                return () => {
+                    console.log('[UIBinder] Executing close-overlay action')
+                    if (typeof window.toggleOverlay === 'function') {
+                        window.toggleOverlay(false)
+                    } else {
+                        console.warn('[UIBinder] window.toggleOverlay is not a function!')
+                    }
+                }
+            }
+        }
+        return arg
+    })
+
+    if (typeof window[fn] === 'function') {
+        window[fn](...processedArgs)
+    } else if (typeof exports[fn] === 'function') {
+        exports[fn](...processedArgs)
+    } else {
+        console.warn(`[UIBinder] Received ui:call for unknown function: ${fn}`)
+    }
+})
+
+// IPC Listener for clicking elements
+ipcRenderer.on('ui:clickElement', (event, id) => {
+    const el = document.getElementById(id)
+    if (el) {
+        console.log(`[UIBinder] Simulating click on element: ${id}`)
+        el.click()
+    } else {
+        console.warn(`[UIBinder] Cannot click element: ${id} (not found)`)
+    }
+})
+
 async function devModeToggle() {
     await DistroManager.toggleDevMode(true)
     const data = await DistroManager.getDistribution()

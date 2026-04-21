@@ -14,6 +14,9 @@ const Lang = require('../langloader')
 
 const logger = LoggerUtil.getLogger('GameCrashHandler')
 
+// Dynamically import Electron components based on process type
+const { ipcMain, BrowserWindow } = (process.type !== 'renderer') ? require('electron') : { ipcMain: null, BrowserWindow: null }
+
 /* global setOverlayContent, setOverlayHandler, setDismissHandler, toggleOverlay, setMiddleButtonHandler */
 
 /**
@@ -26,6 +29,8 @@ const logger = LoggerUtil.getLogger('GameCrashHandler')
  * 4. Executing fix actions (e.g., deleting corrupted files, opening external help links).
  */
 class GameCrashHandler {
+    static lastActiveHandler = null
+    static lastCrashAnalysis = null
 
     /**
      * @param {string} gameDir Absolute path to the game directory.
@@ -52,15 +57,52 @@ class GameCrashHandler {
         const isCrash = code !== 0 && code !== 130 && code !== 137 && code !== 143 && code !== 255
 
         if (isCrash) {
+            GameCrashHandler.lastActiveHandler = this // Store for IPC-triggered fixes
             const crashAnalysis = await this.analyzeCrash()
+            GameCrashHandler.lastCrashAnalysis = crashAnalysis // Store analysis for fix logic
+            logger.info('Crash analysis result:', crashAnalysis)
 
             if (crashAnalysis) {
                 if (crashAnalysis.type === 'java-oom') {
                     this.enrichOOMAnalysis(crashAnalysis)
                 }
-                this.showSpecificCrashOverlay(crashAnalysis)
+                logger.info('Showing specific crash overlay...')
+                await this.showSpecificCrashOverlay(crashAnalysis)
             } else {
+                logger.info('Showing generic crash overlay...')
                 await this.showGenericCrashOverlay(code)
+            }
+        } else {
+            logger.info('Exit was not a crash, skipping overlay.')
+        }
+    }
+
+    /**
+     * Helper to call UI functions (overlays) regardless of process type.
+     * 
+     * @param {string} fn Name of the function to call on the Renderer's window object.
+     * @param  {...any} args Arguments for the function.
+     * @private
+     */
+    async _callUI(fn, ...args) {
+        logger.info(`Attempting to call UI function: ${fn}`, args)
+        if (process.type === 'renderer') {
+            logger.info('In Renderer process, calling window directly.')
+            if (typeof window !== 'undefined' && window[fn]) {
+                window[fn](...args)
+            } else {
+                logger.warn(`UI function ${fn} not found in Renderer.`)
+            }
+        } else {
+            // Main Process: Send IPC to the main window
+            logger.info('In Main process, sending IPC to Renderer.')
+            const WindowManager = require('../../../../main/WindowManager')
+            const win = WindowManager.getMainWindow()
+            if (win && !win.isDestroyed()) {
+                logger.info('Main window found, sending ui:call.')
+                win.webContents.send('ui:call', { fn, args })
+            } else {
+                logger.warn(`Cannot call UI function ${fn}: Main window is not available or destroyed.`)
             }
         }
     }
@@ -128,33 +170,63 @@ class GameCrashHandler {
      * 
      * @param {Object} crashAnalysis The analysis result from CrashHandler using logs.
      */
-    showSpecificCrashOverlay(crashAnalysis) {
+    async showSpecificCrashOverlay(crashAnalysis) {
+        const description = crashAnalysis.descriptionKey 
+            ? Lang.queryJS(`crash.${crashAnalysis.descriptionKey}`, crashAnalysis.descriptionArgs)
+            : (crashAnalysis.description || 'Unknown crash')
+
         if (ConfigManager.getSupportUrl()) {
-            setOverlayContent(
+            await this._callUI('setOverlayContent',
                 Lang.queryJS('processbuilder.crash.title'),
-                Lang.queryJS('processbuilder.crash.body', { description: crashAnalysis.description }),
+                Lang.queryJS('processbuilder.crash.body', { description }),
                 Lang.queryJS('processbuilder.crash.fix'),
                 'Поддержка', // Button 2
                 Lang.queryJS('processbuilder.crash.close') // Button 3 (Dismiss)
             )
-            setOverlayHandler(() => this.handleCrashFix(crashAnalysis))
-            setMiddleButtonHandler(() => {
-                shell.openExternal(ConfigManager.getSupportUrl())
-                toggleOverlay(false)
-            })
-            setDismissHandler(() => toggleOverlay(false))
-            toggleOverlay(true, true)
+            
+            // Set handlers. In Main process, these are registered via IPC listeners in the Renderer.
+            if (process.type === 'renderer') {
+                window.setOverlayHandler(() => this.handleCrashFix(crashAnalysis))
+                window.setMiddleButtonHandler(() => {
+                    shell.openExternal(ConfigManager.getSupportUrl())
+                    window.toggleOverlay(false)
+                })
+                window.setDismissHandler(() => window.toggleOverlay(false))
+            } else {
+                // Main Process: The Renderer's uibinder/overlay should listen for 'ui:crash-fix' etc.
+                // Or we can register one-time IPC handlers.
+                const { ipcMain } = require('electron')
+                ipcMain.once('ui:crash-fix-action', () => this.handleCrashFix(crashAnalysis))
+                ipcMain.once('ui:crash-support-action', () => {
+                    shell.openExternal(ConfigManager.getSupportUrl())
+                    this._callUI('toggleOverlay', false)
+                })
+                // Tell renderer which handlers to bind
+                await this._callUI('setOverlayHandler', 'ui:crash-fix-action')
+                await this._callUI('setMiddleButtonHandler', 'ui:crash-support-action')
+                await this._callUI('setDismissHandler', null)
+            }
+            await this._callUI('toggleOverlay', true, true)
         } else {
-            setOverlayContent(
+            await this._callUI('setOverlayContent',
                 Lang.queryJS('processbuilder.crash.title'),
-                Lang.queryJS('processbuilder.crash.body', { description: crashAnalysis.description }),
+                Lang.queryJS('processbuilder.crash.body', { description }),
                 Lang.queryJS('processbuilder.crash.fix'),
                 Lang.queryJS('processbuilder.crash.close') // Button 2
             )
-            setOverlayHandler(() => this.handleCrashFix(crashAnalysis))
-            setMiddleButtonHandler(() => toggleOverlay(false))
-            setDismissHandler(null)
-            toggleOverlay(true)
+            
+            if (process.type === 'renderer') {
+                window.setOverlayHandler(() => this.handleCrashFix(crashAnalysis))
+                window.setMiddleButtonHandler(() => window.toggleOverlay(false))
+                window.setDismissHandler(null)
+            } else {
+                const { ipcMain } = require('electron')
+                ipcMain.once('ui:crash-fix-action', () => this.handleCrashFix(crashAnalysis))
+                await this._callUI('setOverlayHandler', 'ui:crash-fix-action')
+                await this._callUI('setMiddleButtonHandler', 'ui:close-overlay') // Predefined or generic
+                await this._callUI('setDismissHandler', null)
+            }
+            await this._callUI('toggleOverlay', true)
         }
     }
 
@@ -224,31 +296,54 @@ class GameCrashHandler {
         }
 
         if (supportUrl) {
-            setOverlayContent(
+            await this._callUI('setOverlayContent',
                 Lang.queryJS('processbuilder.exit.crash.title'),
                 Lang.queryJS('processbuilder.exit.crash.body', { exitCode: code }),
                 'Поддержка', // Button 1
                 Lang.queryJS('processbuilder.exit.crash.disable'), // Button 2
                 Lang.queryJS('processbuilder.exit.crash.close') // Button 3
             )
-            setOverlayHandler(() => {
-                shell.openExternal(supportUrl)
-                toggleOverlay(false)
-            })
-            setMiddleButtonHandler(() => this.disableOptionalMods())
-            setDismissHandler(() => toggleOverlay(false))
-            toggleOverlay(true, true)
+
+            if (process.type === 'renderer') {
+                window.setOverlayHandler(() => {
+                    shell.openExternal(supportUrl)
+                    window.toggleOverlay(false)
+                })
+                window.setMiddleButtonHandler(() => this.disableOptionalMods())
+                window.setDismissHandler(() => window.toggleOverlay(false))
+            } else {
+                const { ipcMain } = require('electron')
+                ipcMain.once('ui:crash-support-action', () => {
+                    shell.openExternal(supportUrl)
+                    this._callUI('toggleOverlay', false)
+                })
+                ipcMain.once('ui:crash-disable-mods-action', () => this.disableOptionalMods())
+                
+                await this._callUI('setOverlayHandler', 'ui:crash-support-action')
+                await this._callUI('setMiddleButtonHandler', 'ui:crash-disable-mods-action')
+                await this._callUI('setDismissHandler', null)
+            }
+            await this._callUI('toggleOverlay', true, true)
         } else {
-            setOverlayContent(
+            await this._callUI('setOverlayContent',
                 Lang.queryJS('processbuilder.exit.crash.title'),
                 Lang.queryJS('processbuilder.exit.crash.body', { exitCode: code }),
                 Lang.queryJS('processbuilder.exit.crash.close'), // Button 1
                 Lang.queryJS('processbuilder.exit.crash.disable') // Button 2
             )
-            setOverlayHandler(() => toggleOverlay(false))
-            setMiddleButtonHandler(() => this.disableOptionalMods())
-            setDismissHandler(null)
-            toggleOverlay(true)
+            
+            if (process.type === 'renderer') {
+                window.setOverlayHandler(() => window.toggleOverlay(false))
+                window.setMiddleButtonHandler(() => this.disableOptionalMods())
+                window.setDismissHandler(null)
+            } else {
+                const { ipcMain } = require('electron')
+                ipcMain.once('ui:crash-disable-mods-action', () => this.disableOptionalMods())
+                await this._callUI('setOverlayHandler', 'ui:close-overlay')
+                await this._callUI('setMiddleButtonHandler', 'ui:crash-disable-mods-action')
+                await this._callUI('setDismissHandler', null)
+            }
+            await this._callUI('toggleOverlay', true)
         }
     }
 
@@ -263,7 +358,7 @@ class GameCrashHandler {
             if (fs.existsSync(versionPath)) {
                 fs.rmSync(versionPath, { recursive: true, force: true })
             }
-            toggleOverlay(false)
+            await this._callUI('toggleOverlay', false)
 
         } else if (crashAnalysis.type === 'incompatible-mods') {
             const modsDir = path.join(this.gameDir, 'mods')
@@ -318,13 +413,19 @@ class GameCrashHandler {
         ConfigManager.setModConfiguration(this.server.rawServer.id, modCfg)
         ConfigManager.save()
 
-        setOverlayContent(
+        this._callUI('setOverlayContent',
             Lang.queryJS('processbuilder.exit.disabled.title'),
             Lang.queryJS('processbuilder.exit.disabled.body'),
             Lang.queryJS('processbuilder.exit.disabled.close')
         )
-        setOverlayHandler(() => toggleOverlay(false))
-        setMiddleButtonHandler(null)
+        
+        if (process.type === 'renderer') {
+            window.setOverlayHandler(() => window.toggleOverlay(false))
+            window.setMiddleButtonHandler(null)
+        } else {
+            this._callUI('setOverlayHandler', 'ui:close-overlay')
+            this._callUI('setMiddleButtonHandler', null)
+        }
     }
 
     /**
@@ -384,12 +485,17 @@ class GameCrashHandler {
     /**
      * Attempt to automatically restart the game.
      */
-    restartGame() {
-        toggleOverlay(false)
-        setTimeout(() => {
-            const launchBtn = document.getElementById('launch_button')
-            if (launchBtn) launchBtn.click()
-        }, 1000)
+    async restartGame() {
+        await this._callUI('toggleOverlay', false)
+        if (process.type === 'renderer') {
+            setTimeout(() => {
+                const launchBtn = document.getElementById('launch_button')
+                if (launchBtn) launchBtn.click()
+            }, 1000)
+        } else {
+            // Main Process: Tell renderer to click the button or just trigger launch via IPC
+            await this._callUI('clickElement', 'launch_button')
+        }
     }
 
     /**
@@ -410,6 +516,56 @@ class GameCrashHandler {
         }
 
         analysis.description = `Игра закрылась из-за нехватки памяти.\n\n${advice}\n\n(Свободно: ${freeMem.toFixed(1)} GB, Всего: ${totalMem.toFixed(1)} GB)`
+    }
+
+    /**
+     * Public method to perform the fix, usually called via IPC.
+     */
+    async performFix() {
+        logger.info('Performing crash fix...')
+        const analysis = GameCrashHandler.lastCrashAnalysis
+        
+        try {
+            if (analysis) {
+                logger.info(`Handling fix for crash type: ${analysis.type}`)
+                
+                if (analysis.type === 'incompatible-mods') {
+                    const modsDir = path.join(this.gameDir, 'mods')
+                    if (fs.existsSync(modsDir)) {
+                        logger.info(`Deleting mods directory: ${modsDir}`)
+                        // Use fs.rmSync or similar to delete directory
+                        fs.rmSync(modsDir, { recursive: true, force: true })
+                    }
+                } else if (analysis.type === 'corrupted-config') {
+                    if (analysis.file) {
+                        const configFile = path.join(this.gameDir, analysis.file)
+                        if (fs.existsSync(configFile)) {
+                            logger.info(`Deleting corrupted config: ${configFile}`)
+                            fs.unlinkSync(configFile)
+                        }
+                    }
+                }
+                // Add more fix types as needed
+            }
+
+            // Relaunch the launcher
+            logger.info('Fix complete, requesting launcher restart.')
+            const { ipcMain } = require('electron')
+            ipcMain.emit('app:restart')
+        } catch (err) {
+            logger.error('Failed to perform crash fix:', err)
+        }
+    }
+
+    /**
+     * Static helper to perform fix on the last active handler.
+     */
+    static async performLastFix() {
+        if (GameCrashHandler.lastActiveHandler) {
+            await GameCrashHandler.lastActiveHandler.performFix()
+        } else {
+            logger.warn('No active crash handler to perform fix.')
+        }
     }
 }
 

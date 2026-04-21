@@ -165,6 +165,22 @@ class IpcRegistry {
             }
         })
 
+        // UI Action dispatcher (from Renderer)
+        ipcMain.on('ui:action', async (event, action) => {
+            console.log(`[Main] Received UI action: ${action}`)
+            if (action === 'crash-fix') {
+                const GameCrashHandler = require('../assets/js/core/game/GameCrashHandler')
+                await GameCrashHandler.performLastFix()
+            }
+            if (action === 'crash-support') {
+                const ConfigManager = require('../assets/js/core/configmanager')
+                const url = ConfigManager.getSupportUrl()
+                if (url) {
+                    shell.openExternal(url).catch(err => console.error('Failed to open support URL:', err))
+                }
+            }
+        })
+
         // Mirror & P2P IPCs (can be moved later if needed)
         const MirrorManager = require('../../network/MirrorManager')
         const P2PEngine = require('../../network/P2PEngine')

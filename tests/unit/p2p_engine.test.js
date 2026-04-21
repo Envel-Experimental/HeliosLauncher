@@ -5,6 +5,12 @@ describe('P2PEngine Unit Tests', () => {
     let Hyperswarm;
     let HyperDHT;
 
+    jest.useFakeTimers()
+    global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue([])
+    })
+
     beforeEach(() => {
         jest.resetModules()
 

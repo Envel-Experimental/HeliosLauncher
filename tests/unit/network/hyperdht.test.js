@@ -9,7 +9,14 @@ jest.mock('hyperswarm', () => {
         destroy: jest.fn().mockResolvedValue(true)
     }))
 })
-jest.mock('hyperdht')
+jest.mock('hyperdht', () => {
+    return jest.fn().mockImplementation(() => ({
+        on: jest.fn(),
+        destroy: jest.fn().mockResolvedValue(true),
+        bootstrapped: true,
+        _getRoutingTableSize: jest.fn().mockReturnValue(0)
+    }))
+})
 jest.mock('b4a', () => ({
     from: jest.fn(v => Buffer.from(v)),
     isBuffer: jest.fn(v => Buffer.isBuffer(v)),
@@ -33,10 +40,16 @@ jest.mock('sodium-native', () => ({
         pk.fill(0)
         sk.fill(0)
     }),
-    randombytes_buf: jest.fn(),
+    randombytes_buf: jest.fn((buf) => buf.fill(0)),
     crypto_generichash: jest.fn(),
     crypto_generichash_batch: jest.fn()
 }))
+
+// Mock Global Fetch to prevent network timeouts
+global.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    json: jest.fn().mockResolvedValue([])
+})
 
 // Mock ConfigManager
 jest.mock('../../../app/assets/js/core/configmanager', () => ({
@@ -74,17 +87,15 @@ const Hyperswarm = require('hyperswarm')
 const HyperDHT = require('hyperdht')
 const ConfigManager = require('../../../app/assets/js/core/configmanager')
 const crypto = require('crypto')
+const { SWARM_TOPIC_SEED } = require('../../../network/constants')
+
+jest.useFakeTimers()
 
 describe('P2PEngine HyperDHT Integration', () => {
     let engine
 
     beforeEach(() => {
         jest.clearAllMocks()
-        
-        // Mock HyperDHT constructor and methods
-        HyperDHT.prototype.on = jest.fn()
-        HyperDHT.prototype.destroy = jest.fn().mockResolvedValue(true)
-        HyperDHT.prototype._getRoutingTableSize = jest.fn().mockReturnValue(0)
         
         // Require fresh instance
         jest.isolateModules(() => {

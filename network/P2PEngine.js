@@ -167,7 +167,8 @@ class P2PEngine extends EventEmitter {
                     // We just clear the strike counter periodically to save memory
                     this.peerStrikes.delete(ip)
                 }
-            }, 300000).unref() // Every 5 minutes
+            }, 300000);
+            if (this.memoryCleanupInterval.unref) this.memoryCleanupInterval.unref();
         }
 
         // Dynamic Bandwidth Management
@@ -250,7 +251,8 @@ class P2PEngine extends EventEmitter {
                         this.downloadBytesGlobal + this.downloadBytesLocal
                     )
                 }
-            }, 2000).unref()
+            }, 2000)
+            if (this.speedMonitorInterval.unref) this.speedMonitorInterval.unref()
         }
     }
 
@@ -370,6 +372,25 @@ class P2PEngine extends EventEmitter {
             } catch (e) { }
             this.dht = null
         }
+        if (this.memoryCleanupInterval) {
+            const ResourceMonitor = require('./ResourceMonitor')
+            ResourceMonitor.stop()
+            clearInterval(this.memoryCleanupInterval);
+            this.memoryCleanupInterval = null;
+        }
+        if (this.speedMonitorInterval) {
+            clearInterval(this.speedMonitorInterval);
+            this.speedMonitorInterval = null;
+        }
+        if (this._dhtReadyTimeout) {
+            clearTimeout(this._dhtReadyTimeout);
+            this._dhtReadyTimeout = null;
+        }
+        if (this._restartTimeout) {
+            clearTimeout(this._restartTimeout);
+            this._restartTimeout = null;
+        }
+
         this.stopping = false
     }
 
