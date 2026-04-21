@@ -239,13 +239,13 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
 
     await safeEnsureDir(path.dirname(decodedPath));
 
+    const maxAttempts = 10;
     let lastError = null;
     const attemptHistory = [];
-
-    // Retry Loop (Resilience)
     const candidates = [asset.url, ...(asset.fallbackUrls || [])].filter(Boolean);
 
-    for (let attempt = 0; attempt < 5; attempt++) {
+    // Retry Loop (Resilience)
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
         // RESUMPTION LOGIC
         let startOffset = 0
         const tempPath = decodedPath + '.tmp';
@@ -303,7 +303,9 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
 
         try {
             if (attempt > 0) {
-                await sleep(attempt * 1000);
+                const backoff = Math.min(10000, Math.pow(2, attempt - 1) * 1000); // Exponential backoff up to 10s
+                if (isDev) log.debug(`[DownloadEngine] Attempt ${attempt + 1} for ${asset.id}. Waiting ${backoff}ms...`);
+                await sleep(backoff);
                 if (candidates.length > 1 && attempt % candidates.length !== 0) {
                     if (isDev) log.debug(`[DownloadEngine] Primary failed, trying fallback: ${currentUrl}`);
                 }
@@ -465,8 +467,9 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
     }
 
     // If we're here, all retries failed
-    log.error(`Failed to download ${asset.id} after 5 attempts: ${lastError ? lastError.message : 'Unknown error'}`);
-    const finalError = Object.assign(lastError || new Error('Download failed after multiple attempts'), {
+    const errorMsg = lastError ? (lastError.message || lastError.toString()) : 'Network timeout or no peers found';
+    log.error(`Failed to download ${asset.id} after ${maxAttempts} attempts: ${errorMsg}`);
+    const finalError = Object.assign(lastError || new Error(errorMsg), {
         history: attemptHistory
     });
     throw finalError;

@@ -394,8 +394,13 @@ class PeerHandler {
 
         // Sanitize hash to prevent directory traversal
         // Support SHA1 (40 chars) and MD5 (32 chars)
-        if (!/^([a-f0-9]{64}|[a-f0-9]{40})$/i.test(hash)) {
-            this.sendError(reqId, 'Invalid hash (Only SHA-1 and SHA-256 allowed)')
+        if (hash) {
+            if (!/^([a-f0-9]{64}|[a-f0-9]{40})$/i.test(hash)) {
+                this.sendError(reqId, 'Invalid hash (Only SHA-1 and SHA-256 allowed)')
+                return
+            }
+        } else if (!fileId && !relPath) {
+            this.sendError(reqId, 'Missing Identification (Hash or FileId required)')
             return
         }
 
@@ -421,7 +426,8 @@ class PeerHandler {
 
         if (isDev) {
             // console.log(`%c[P2PEngine] Connection Established with ${remoteIP}`, 'color: #00ff00; font-weight: bold')
-            // console.debug(`[P2P Debug] Received Request ${reqId} for hash ${hash.substring(0, 8)}... (ID: ${fileId || 'n/a'})`)
+            const identifier = hash ? hash.substring(0, 8) : (fileId || 'n/a');
+            // console.debug(`[P2P Debug] Received Request ${reqId} for ${identifier}...`)
         }
 
         const isGlobalUpload = ConfigManager.getP2PUploadEnabled()
@@ -530,18 +536,20 @@ class PeerHandler {
 
             if (foundPath) {
                 // VULNERABILITY FIX: Mandatory Hash Verification
-                // Ensure the file content actually matches the requested hash
-                try {
-                    const actualHash = await this._calculateFileHash(foundPath, hash.length === 64 ? 'sha256' : 'sha1')
-                    if (actualHash.toLowerCase() !== hash.toLowerCase()) {
-                        if (isDev) console.warn(`[P2P Security] Hash mismatch for ${foundPath}. Requested: ${hash}, Actual: ${actualHash}`)
-                        this.sendError(reqId, 'Integrity Error (Hash Mismatch)')
+                // Ensure the file content actually matches the requested hash (if provided)
+                if (hash) {
+                    try {
+                        const actualHash = await this._calculateFileHash(foundPath, hash.length === 64 ? 'sha256' : 'sha1')
+                        if (actualHash.toLowerCase() !== hash.toLowerCase()) {
+                            if (isDev) console.warn(`[P2P Security] Hash mismatch for ${foundPath}. Requested: ${hash}, Actual: ${actualHash}`)
+                            this.sendError(reqId, 'Integrity Error (Hash Mismatch)')
+                            return
+                        }
+                    } catch (e) {
+                        if (isDev) console.error(`[P2P Security] Failed to verify hash for ${foundPath}:`, e.message)
+                        this.sendError(reqId, 'Verification Failed')
                         return
                     }
-                } catch (e) {
-                    if (isDev) console.error(`[P2P Security] Failed to verify hash for ${foundPath}:`, e.message)
-                    this.sendError(reqId, 'Verification Failed')
-                    return
                 }
 
                 // Get File Size for Credits

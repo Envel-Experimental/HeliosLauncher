@@ -108,15 +108,10 @@ class RaceManager {
             if (idHeader) fileId = idHeader;
         } catch (e) { }
 
-        // Attempt to extract hash from URL (SHA1 or SHA256)
-        let hash = null
-        const match = url.match(/([a-f0-9]{64}|[a-f0-9]{40})/i)
-        if (match) hash = match[1]
+        // If no hash found and no identification, fallback to direct HTTP
+        if (!hash && !fileId && !relPath) return fetch(url)
 
-        // If no hash found, fallback to direct HTTP
-        if (!hash) return fetch(url)
-
-        const algo = hash.length === 64 ? 'sha256' : 'sha1'
+        const algo = hash ? (hash.length === 64 ? 'sha256' : 'sha1') : 'none'
         const abortController = new AbortController()
 
         // Check for Skip P2P Header (Resilience)

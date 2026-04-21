@@ -675,7 +675,8 @@ class P2PEngine extends EventEmitter {
                 }
 
                 if (isDev && !err.message.includes('Timeout') && !err.message.includes('Not Found')) {
-                    console.warn(`[P2PEngine] Peer ${bestPeer.getIP()} failed for ${hash.substring(0, 8)}. Trying next... (${err.message})`)
+                    const identifier = hash ? hash.substring(0, 8) : (fileId || relPath || 'unknown');
+                    console.warn(`[P2PEngine] Peer ${bestPeer.getIP()} failed for ${identifier}. Trying next... (${err.message})`)
                 }
 
                 // If it was a "Not Found" or "Busy", we just continue the loop to the next peer.
