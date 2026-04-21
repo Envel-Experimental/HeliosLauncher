@@ -12,14 +12,18 @@ The HDS is a multi-layered system that prioritizes decentralized delivery while 
 *   **DownloadEngine**: The high-level orchestrator. Manages the queue, retries, and file system atomicity.
 *   **RaceManager**: The "Racing" logic. It simultaneously attempts to fetch data via P2P and HTTP, picking the fastest winner.
 *   **P2PEngine**: The P2P backbone. Powered by **Hyperswarm** and **HyperDHT**, it manages the sovereign peer network.
+*   **MirrorManager**: Handles ranking and health checks for configured HTTP mirrors based on latency and reliability.
+*   **StatsManager**: Records session and global transfer statistics to persistent storage.
 *   **DistributionAPI**: Handles the root of trust, verifying the `distribution.json` index via **Ed25519 signatures**.
 
-### The Racing Philosophy
 Instead of "P2P or HTTP", HDS uses both. When a file request starts, two tasks are born:
-1.  **HTTP Task**: Fetches from Primary or Mirror.
-2.  **P2P Task**: Seeks the hash in the swarm.
+1.  **HTTP Task**: Fetches from the highest-ranked mirror according to `MirrorManager`.
+2.  **P2P Task**: Seeks the hash in the swarm via `P2PEngine`.
 
-The first task to verify the first few kilobytes of data wins. The loser is immediately aborted to save bandwidth.
+The first task to verify the first few kilobytes of data (the "first chunk") wins. The loser is immediately aborted to save bandwidth.
+
+### Fail-Fast Logic
+The `RaceManager` employs a fail-fast mechanism. If one leg (e.g., P2P) fails immediately (e.g., no peers found), it doesn't wait for a timeout and instead allows the other leg to proceed as the primary source. If both legs fail, the request is moved to the **Deferred Queue**.
 
 ```mermaid
 graph TD
@@ -71,9 +75,22 @@ Every packet starts with a **9-byte header**:
 | 3 | 0x03 | `MSG_ERROR` | UTF-8 Error Message |
 | 4 | 0x04 | `MSG_END` | Null (Signals EOF) |
 | 5 | 0x05 | `MSG_HELLO` | Internal Handshake data |
-| 8 | 0x08 | `MSG_BATCH` | Array of RequestIDs and Hashes |
+| 6 | 0x06 | `MSG_PING` | Null (Keep-alive) |
+| 7 | 0x07 | `MSG_PONG` | Null (Keep-alive Response) |
+| 8 | 0x08 | `MSG_BATCH` | Array of `[ReqID, Hash]` |
 
-### 2.3 Discovery Hub (Hyperswarm)
+### 2.3 Traffic Segmentation (LAN vs WAN)
+The system distinguishes between **Local (LAN)** and **Global (WAN)** peers via IP range analysis.
+- **LAN Peers**: Bypass most rate limits and quotas for maximum internal speed.
+- **WAN Peers**: Subject to strict AIMD rate limiting and Fair Usage credit tracking.
+
+### 2.4 Hardware Profiles
+P2P performance is governed by the user's selected hardware profile:
+- **LOW**: Seeding (upload) is disabled to save resources.
+- **MID**: Upload limit is capped at 5 Mbps.
+- **HIGH**: Full adaptive bandwidth allowed (up to user settings).
+
+### 2.5 Discovery Hub (Hyperswarm)
 The system joins a **Sovereign Swarm** topic derived from a secret seed (`SWARM_TOPIC_SEED`).
 - **DHT (Distributed Hash Table)**: Used for global peer discovery across the internet.
 - **MDNS**: Used for zero-latency local discovery in LAN environments.
@@ -99,7 +116,9 @@ The root `distribution.json` must be signed by the administrator.
 Once the distribution index is trusted, every file is protected:
 1.  **Immutable Identity**: Files are identified by their SHA1/SHA256 hash.
 2.  **Streaming Verification**: The `DownloadEngine` pipes every download through a native crypto hasher.
-3.  **Atomic Rename**: Files are written as `.tmp`. If the final hash check fails, the `.tmp` is destroyed. The file system only sees valid completions.
+3.  **Mandatory Seeder Check**: Before seeding a file to others, the launcher recalculates the hash from disk to prevent poisoning.
+4.  **Symlink Traversal Protection**: All paths are resolved to their `realpath` to prevent symlinks from pointing outside the whitelisted directories.
+5.  **Atomic Rename**: Files are written as `.tmp`. If the final hash check fails, the `.tmp` is destroyed.
 
 ```mermaid
 sequenceDiagram
@@ -148,15 +167,6 @@ Mirroring is robust. If a primary asset URL is blocked, the `MojangIndexProcesso
 
 ---
 
-## 6. Key Files for Reference
-
-| File | Role |
-| :--- | :--- |
-| `DownloadEngine.js` | Main entry point, queue management, validation. |
-| `RaceManager.js` | HTTP vs P2P racing logic. |
-| `P2PEngine.js` | Hyperswarm/DHT lifecycle and peer management. |
-| `PeerHandler.js` | P2P Binary protocol implementation and packet parsing. |
-| `MojangIndexProcessor.js` | Mojang metadata resolution (Versions/Assets/Index). |
 | `DistributionAPI.js` | HTTP API for distribution index and Ed25519 verification. |
 | `config.js` | Infrastructure settings (Bootstrap nodes, PubKeys). |
 
@@ -183,6 +193,7 @@ To prevent peers from crashing the launcher, strict resource limits are applied:
 #### C. Request Masking & Spoofing Prevention
 *   **ReqID Randomization**: Instead of sequential IDs, every request uses a cryptographically random **4-byte ID**.
 *   **Peer-Binding**: Responses are only accepted if the `RequestID` matches an active request **and** the sender matches the originally queried peer. This prevents "blind injection" attacks.
+*   **Credit Reservation**: To prevent "Race to Drain" attacks where a peer requests a massive amount of data before their credits are checked, credits are **reserved** at the start of the request and only refunded if the request fails early.
 
 ### 7.2 File System & RCE Protection
 
@@ -252,11 +263,27 @@ graph LR
 
 ---
 
-## 8. Bandwidth & Fairness Mechanisms
+## 8. Resilience & Self-Healing
+
+The HDS is designed to survive network instability and malicious interference automatically.
+
+### 8.1 The "Consensus of Failure" (The Doctor)
+If the launcher is uploading to multiple peers and **all** of them report extremely low speeds (<125 KB/s), the launcher assumes it is the bottleneck (e.g., local ISP throttling or CPU exhaustion).
+- **Action**: The launcher enters **Passive Mode** for 1 hour, stopping its own announcements as a seeder to preserve system resources and prevent "poisoning" the swarm with a slow source.
+
+### 8.2 Network Interface Monitor
+The `P2PEngine` continuously monitors the OS network interfaces. If an IP change or a new interface is detected (e.g., VPN toggle), the entire P2P swarm is gracefully restarted to bind to the new correct network path.
+
+### 8.3 Circuit Breaker (Panic Mode)
+If more than 5 security violations (e.g., bad hashes, path traversal attempts) are detected within 1 minute, a global **Panic Mode** is triggered. P2P is disabled entirely for 5 minutes, forcing the launcher to use trusted HTTP mirrors only.
+
+---
+
+## 9. Bandwidth & Fairness Mechanisms
 
 The Helios Launcher employs a sophisticated traffic shaping system to ensure the P2P network remains healthy and does not impact the user's primary internet activities.
 
-### 8.1 Dynamic Upload Limits
+### 9.1 Dynamic Upload Limits
 The system automatically adjusts upload bandwidth based on the user's network capacity and system load.
 
 | Mode | Limit | Activation Criteria |
@@ -265,7 +292,18 @@ The system automatically adjusts upload bandwidth based on the user's network ca
 | **Boost Mode** | **15 Mbps** | Activated ONLY if: <br>1. Download speed > **10 MB/s** <br>2. CPU Load < 80% <br>3. Hardware Profile is `MID` or `HIGH` |
 | **LAN Mode** | **Unlimited** | No limits are applied to local network peers (detected via IP range). |
 
-### 8.2 Peer Quality Requirements (The "Strike" System)
+### 9.2 Adaptive Bandwidth (AIMD & Slow Start)
+The upload rate is managed by an **AIMD (Additive Increase, Multiplicative Decrease)** algorithm:
+- **Slow Start**: When starting, the limit doubles every 10 seconds until the first sign of congestion.
+- **Additive Increase**: After the first congestion, the limit increases by **1 Mbps** every 30 seconds.
+- **Multiplicative Decrease**: If congestion is detected, the limit is instantly cut by **50%**.
+
+### 9.3 Congestion Detection (Median RTT)
+Congestion is detected by monitoring the **Round Trip Time (RTT)** of all WAN peers.
+- **Metric**: The system calculates the **Median Delta** between the current RTT and the baseline (minimum) RTT.
+- **Threshold**: If the Median Delta exceeds **150ms**, the network is considered congested, and a "Backoff" is triggered.
+
+### 9.4 Peer Quality Requirements (The "Strike" System)
 To maintain high swarm velocity, "dead weight" peers are aggressively pruned.
 
 *   **Minimum Speed Threshold**: **125 KB/s** (128,000 bytes/s).
@@ -277,7 +315,7 @@ To maintain high swarm velocity, "dead weight" peers are aggressively pruned.
 *   **Inactivity Check**: **45 seconds**.
     *   *Defense*: Cleans up "zombie" connections that are technically open but stalling.
 
-### 8.3 Seeder Health Consensus (Self-Healing)
+### 9.5 Seeder Health Consensus (Self-Healing)
 The system distinguishes between "Bad Peers" and "Bad Self". If the launcher detects it is the bottleneck, it self-isolates to protect the swarm's health score.
 
 *   **Consensus Check**: Every 30s, the engine evaluates all active upload peers (min 3 witnesses).
@@ -287,7 +325,7 @@ The system distinguishes between "Bad Peers" and "Bad Self". If the launcher det
     2.  **3 Self-Strikes**: Triggers **Passive Mode** (Self-Isolation).
     3.  **Duration**: 1 Hour. During this time, the launcher stops announcing itself as a seeder.
 
-### 8.4 Global Concurrency Scaling
+### 9.6 Global Concurrency Scaling
 The `DownloadEngine` scales the number of parallel download threads based on CPU pressure to prevent UI freezing.
 
 *   **Baseline**: 8 Threads.
@@ -298,7 +336,7 @@ The `DownloadEngine` scales the number of parallel download threads based on CPU
     *   `CPU > 70%` -> **16 Threads**
     *   `CPU > 90%` -> **8 Threads** (Critical fallback)
 
-### 8.5 Credit System (Token Bucket)
+### 9.7 Credit System (Token Bucket)
 A virtual economy ensures fairness and prevents "Leeching" (downloading without sharing).
 
 *   **Model**: Token Bucket Algorithm.
@@ -312,7 +350,7 @@ A virtual economy ensures fairness and prevents "Leeching" (downloading without 
 
 ---
 
-## 9. Key Files for Reference
+## 10. Key Files for Reference
 
 | File | Role |
 | :--- | :--- |
