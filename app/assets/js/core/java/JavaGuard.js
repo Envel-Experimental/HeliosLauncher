@@ -557,9 +557,6 @@ async function runInstaller(installerPath) {
         log.info(`Running MSI installer: ${installerPath}`);
         const { execFile } = require('child_process');
         return new Promise((resolve, reject) => {
-            // /i for install, /passive for semi-automated (shows progress but no interaction needed usually)
-            // But user said "запускаем УСТАНОВЩИК", so maybe full UI is better?
-            // Let's use /i and it will be interactive.
             execFile('msiexec', ['/i', installerPath], (err) => {
                 if (err) {
                     log.error('Installer exited with error', err);
@@ -701,7 +698,6 @@ async function win32DriveMounts() {
     for (let i = 67; i <= 90; i++) { // From 'C' to 'Z'
         const drive = String.fromCharCode(i) + ':\\';
         try {
-            // Fast check if drive exists/accessible
             await fs.access(drive);
             drives.push(drive);
         } catch (e) {}
@@ -793,29 +789,23 @@ class EnvironmentBasedJavaDiscoverer {
 class Win32RegistryJavaDiscoverer {
     async discover() {
         if (process.platform !== 'win32') return [];
-
         const regKeys = [
             '\\SOFTWARE\\JavaSoft\\Java Runtime Environment',
             '\\SOFTWARE\\JavaSoft\\Java Development Kit',
             '\\SOFTWARE\\JavaSoft\\JRE',
             '\\SOFTWARE\\JavaSoft\\JDK'
         ];
-
         const candidates = new Set();
-
         for (const keyPath of regKeys) {
             try {
                 const { stdout } = await execFileAsync('reg', ['query', 'HKLM' + keyPath]);
                 if (!stdout) continue;
-
                 const lines = stdout.split('\n');
                 const subkeys = lines.filter(line => line.trim().startsWith('HKEY_LOCAL_MACHINE'));
-
                 for (const subkey of subkeys) {
                     try {
                         const { stdout: valStdout } = await execFileAsync('reg', ['query', subkey.trim(), '/v', 'JavaHome']);
                         if (!valStdout) continue;
-
                         const match = valStdout.match(/\sJavaHome\s+REG_SZ\s+(.*)/i);
                         if (match && match[1]) {
                             const javaHome = match[1].trim();
@@ -823,11 +813,9 @@ class Win32RegistryJavaDiscoverer {
                                 candidates.add(javaHome);
                             }
                         }
-                    } catch (e) {
-                    }
+                    } catch (e) {}
                 }
-            } catch (e) {
-            }
+            } catch (e) {}
         }
         return [...candidates];
     }
@@ -839,5 +827,6 @@ module.exports = {
     javaExecFromRoot,
     discoverBestJvmInstallation,
     latestOpenJDK,
-    extractJdk
+    extractJdk,
+    runInstaller
 }

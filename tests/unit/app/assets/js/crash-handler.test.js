@@ -26,7 +26,8 @@ describe('CrashHandler', () => {
             expect(result).toEqual({
                 type: 'corrupted-config',
                 file: 'example.toml',
-                description: 'Ошибка загрузки конфига: example.toml'
+                descriptionKey: 'corrupted-config',
+                descriptionArgs: { file: 'example.toml' }
             });
         });
 
@@ -36,7 +37,7 @@ describe('CrashHandler', () => {
             expect(result).toEqual({
                 type: 'missing-version-file',
                 file: '1.20.1-fabric-0.16.10.json',
-                description: "Файл версии поврежден. Нажми 'Исправить' для восстановления."
+                descriptionKey: 'missing-version-file'
             });
         });
     });
@@ -75,7 +76,8 @@ describe('CrashHandler', () => {
             expect(result).toEqual({
                 type: 'corrupted-config',
                 file: 'corrupted.toml',
-                description: 'Ошибка загрузки конфига: corrupted.toml'
+                descriptionKey: 'corrupted-config',
+                descriptionArgs: { file: 'corrupted.toml' }
             });
         });
     });

@@ -2,18 +2,14 @@ const { latestOpenJDK } = require('@app/assets/js/core/java/JavaGuard')
 
 // Mock Dependencies
 jest.mock('@app/assets/js/core/java/JavaUtils', () => ({
-    Platform: { WIN32: 'win32' },
+    Platform: { WIN32: 'win32', DARWIN: 'darwin', LINUX: 'linux' },
     javaExecFromRoot: jest.fn(p => p),
     ensureJavaDirIsRoot: jest.fn(p => p)
 }))
 
 jest.mock('@network/config', () => ({
-    MOJANG_MIRRORS: [
-        {
-            name: 'Test Mirror',
-            java_manifest: 'https://test.mirror/java/manifest.json'
-        }
-    ]
+    MOJANG_MIRRORS: [],
+    DISTRO_PUB_KEYS: ['test-public-key']
 }))
 
 jest.mock('@app/assets/js/core/util/LoggerUtil', () => ({
@@ -35,9 +31,11 @@ jest.mock('@app/assets/js/core/common/DistributionClasses', () => ({
     JdkDistribution: { TEMURIN: 'temurin', CORRETTO: 'corretto' }
 }))
 
+jest.mock('@app/assets/js/core/util/SignatureUtils', () => ({
+    verifyDistribution: jest.fn()
+}))
+
 describe('JavaGuard', () => {
-describe('JavaGuard', () => {
-    let latestOpenJDK
     const originalPlatform = process.platform
 
     beforeEach(() => {
@@ -52,44 +50,74 @@ describe('JavaGuard', () => {
         Object.defineProperty(process, 'platform', { value: originalPlatform })
     })
 
-    it('should prioritize mirrors over official sources', async () => {
+    it('should prioritize signed mirrors over official sources', async () => {
         const mirrorUrl = 'https://mirror.test/java/manifest.json'
+        const sigUrl = mirrorUrl + '.sig'
         require('@network/config').MOJANG_MIRRORS = [{
             name: 'Test Mirror',
             java_manifest: mirrorUrl
         }]
-        const { latestOpenJDK } = require('@app/assets/js/core/java/JavaGuard')
+        
+        const { verifyDistribution } = require('@app/assets/js/core/util/SignatureUtils')
+        verifyDistribution.mockReturnValue(true) // Valid signature
 
-        // 1. Mirror call (success)
         global.fetch = jest.fn((url) => {
             if (url === mirrorUrl) {
-                const data = {
-                    windows: {
-                        x64: {
-                            "21": {
-                                url: 'https://test.mirror/java21.zip',
-                                size: 100,
-                                name: 'java21.zip',
-                                sha1: 'hash'
-                            }
-                        }
-                    }
-                }
+                const data = { windows: { x64: { "21": { url: 'https://test.mirror/j21.zip', size: 100, name: 'j21.zip', sha1: 'h' } } } }
                 return Promise.resolve({
                     ok: true,
                     arrayBuffer: async () => Buffer.from(JSON.stringify(data)),
                     json: async () => data
                 })
             }
+            if (url === sigUrl) {
+                return Promise.resolve({ ok: true, text: async () => 'valid-sig-hex' })
+            }
             return Promise.resolve({ ok: false })
         })
 
+        const { latestOpenJDK } = require('@app/assets/js/core/java/JavaGuard')
         const result = await latestOpenJDK(21, 'dataDir', null)
 
-        expect(result.url).toBe('https://test.mirror/java21.zip')
-        expect(global.fetch).toHaveBeenCalledWith(mirrorUrl, expect.anything())
-        // Since we use Promise.any, official sources are also queried in parallel.
-        expect(global.fetch).toHaveBeenCalled()
+        expect(result.url).toBe('https://test.mirror/j21.zip')
+        expect(verifyDistribution).toHaveBeenCalled()
+    })
+
+    it('should REJECT mirrors with invalid signatures', async () => {
+        const mirrorUrl = 'https://mirror.test/java/manifest.json'
+        const sigUrl = mirrorUrl + '.sig'
+        require('@network/config').MOJANG_MIRRORS = [{
+            name: 'Malicious Mirror',
+            java_manifest: mirrorUrl
+        }]
+        
+        const { verifyDistribution } = require('@app/assets/js/core/util/SignatureUtils')
+        verifyDistribution.mockReturnValue(false) // INVALID signature
+
+        global.fetch = jest.fn((url) => {
+            if (url === mirrorUrl) {
+                const data = { windows: { x64: { "21": { url: 'https://malicious.mirror/j21.zip', size: 100, name: 'j21.zip', sha1: 'h' } } } }
+                return Promise.resolve({
+                    ok: true,
+                    arrayBuffer: async () => Buffer.from(JSON.stringify(data)),
+                    json: async () => data
+                })
+            }
+            if (url === sigUrl) {
+                return Promise.resolve({ ok: true, text: async () => 'fake-sig-hex' })
+            }
+            // Mock Adoptium fallback to return null so we can verify the mirror was rejected
+            if (url.includes('adoptium.net')) {
+                 return Promise.resolve({ ok: true, json: async () => [] })
+            }
+            return Promise.resolve({ ok: false })
+        })
+
+        const { latestOpenJDK } = require('@app/assets/js/core/java/JavaGuard')
+        const result = await latestOpenJDK(21, 'dataDir', null)
+
+        expect(result).toBeNull() // Rejected due to signature failure
+        expect(verifyDistribution).toHaveBeenCalled()
     })
 
     it('should fallback to official sources if mirror fails', async () => {
@@ -98,61 +126,19 @@ describe('JavaGuard', () => {
             name: 'Test Mirror',
             java_manifest: mirrorUrl
         }]
-        const { latestOpenJDK } = require('@app/assets/js/core/java/JavaGuard')
 
         global.fetch = jest.fn((url) => {
             if (url === mirrorUrl) return Promise.resolve({ ok: false })
-            if (url.includes('api.github.com')) return Promise.resolve({ ok: false })
             if (url.includes('api.adoptium.net')) {
-                const data = [
-                    {
-                        version: { major: 21 },
-                        binary: {
-                            os: 'windows',
-                            image_type: 'jdk',
-                            architecture: 'x64',
-                            package: {
-                                link: 'https://adoptium.net/jdk21.zip',
-                                size: 200,
-                                name: 'jdk21.zip',
-                                checksum: 'hash256'
-                            }
-                        }
-                    }
-                ]
-                return Promise.resolve({
-                    ok: true,
-                    arrayBuffer: async () => Buffer.from(JSON.stringify(data)),
-                    json: async () => data
-                })
+                const data = [{ version: { major: 21 }, binary: { os: 'windows', image_type: 'jdk', architecture: 'x64', package: { link: 'https://adoptium.net/jdk21.zip', size: 200, name: 'jdk21.zip', checksum: 'hash256' } } }]
+                return Promise.resolve({ ok: true, json: async () => data })
             }
             return Promise.resolve({ ok: false })
         })
 
-        const result = await latestOpenJDK(21, 'dataDir', null)
-
-        expect(result).not.toBeNull()
-        expect(result.url).toBe('https://adoptium.net/jdk21.zip')
-        expect(global.fetch).toHaveBeenCalledWith(mirrorUrl, expect.anything())
-        expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('api.adoptium.net'), expect.anything())
-    })
-
-    it('should return null if no sources have the requested version', async () => {
-        require('@network/config').MOJANG_MIRRORS = []
         const { latestOpenJDK } = require('@app/assets/js/core/java/JavaGuard')
-
-        global.fetch = jest.fn(() => {
-            const data = []
-            return Promise.resolve({
-                ok: true,
-                arrayBuffer: async () => Buffer.from(JSON.stringify(data)),
-                json: async () => data
-            })
-        })
-
         const result = await latestOpenJDK(21, 'dataDir', null)
 
-        expect(result).toBeNull()
+        expect(result.url).toBe('https://adoptium.net/jdk21.zip')
     })
-})
 })

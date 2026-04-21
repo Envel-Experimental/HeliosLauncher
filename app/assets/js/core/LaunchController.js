@@ -51,72 +51,7 @@ class LaunchController {
         });
 
         ipcMain.handle('dl:downloadJava', async (event, options) => {
-            const { major, distribution } = options;
-            const JavaGuard = require('./java/JavaGuard');
-            const { downloadFile, cleanupStaleTempFiles } = require('./dl/DownloadEngine');
-
-            // 1. Resolve Asset
-            // Default to 8 if not provided (safe fallback)
-            const javaVersion = major || 8;
-            
-            // Check for path stability
-            const { isPathValid } = require('./pathutil');
-            const isDirtyPath = !isPathValid(ConfigManager.getDataDirectory());
-            
-            // If path is dirty, we prefer an installer (Adoptium MSI) to ensure Java is registered globally
-            const effectiveDistro = (isDirtyPath && process.platform === 'win32') ? 'installer' : (distribution || null);
-
-            if (isDirtyPath) {
-                log.warn('Dirty path detected! Switching to installer-based Java deployment.');
-            }
-
-            const asset = await JavaGuard.latestOpenJDK(
-                javaVersion,
-                ConfigManager.getDataDirectory(),
-                effectiveDistro
-            );
-
-            if (!asset) {
-                throw new Error(`No suitable Java ${javaVersion} found. Checked local mirrors and official Adoptium/GraalVM APIs.`);
-            }
-
-            // 2. Download
-            // Send progress to renderer
-            const onProgress = (transferred) => {
-                if (this.mainWindow) {
-                    const percent = (transferred / asset.size) * 100;
-                    this.mainWindow.webContents.send('dl:progress', {
-                        type: 'download', // Re-use 'download' type or generic
-                        progress: percent,
-                        total: asset.size,
-                        transferred
-                    });
-                }
-            };
-
-            await downloadFile(asset, onProgress);
-
-            // 3. Extract
-            if (this.mainWindow) {
-                this.mainWindow.webContents.send('dl:progress', { type: 'extract', progress: 0 });
-            }
-
-            if (asset.isInstaller) {
-                if (this.mainWindow) {
-                    this.mainWindow.webContents.send('dl:progress', { type: 'extract', progress: 50 }); // Progress marker
-                }
-                log.info('Running Java installer...');
-                await JavaGuard.runInstaller(asset.path);
-                
-                // After installer, we still need to find where it was installed
-                // Or just return null and let the next scan find it
-                return null;
-            }
-
-            const javaPath = await JavaGuard.extractJdk(asset.path);
-
-            // 4. Return
-            return javaPath;
+            return await this.downloadJava(options);
         });
 
         // Ensure P2P Engine is started in Main
@@ -176,6 +111,79 @@ class LaunchController {
             // Must return specific error info if possible
             throw err;
         }
+    }
+
+    /**
+     * @param {Object} options
+     * @returns {Promise<string | null>}
+     */
+    async downloadJava(options) {
+        const { major, distribution } = options;
+        const JavaGuard = require('./java/JavaGuard');
+        const { downloadFile } = require('./dl/DownloadEngine');
+
+        // 1. Resolve Asset
+        // Default to 8 if not provided (safe fallback)
+        const javaVersion = major || 8;
+        
+        // Check for path stability
+        const { isPathValid } = require('./pathutil');
+        const isDirtyPath = !isPathValid(ConfigManager.getDataDirectory());
+        
+        // If path is dirty, we prefer an installer (Adoptium MSI) to ensure Java is registered globally
+        const effectiveDistro = (isDirtyPath && process.platform === 'win32') ? 'installer' : (distribution || null);
+
+        if (isDirtyPath) {
+            log.warn('Dirty path detected! Switching to installer-based Java deployment.');
+        }
+
+        const asset = await JavaGuard.latestOpenJDK(
+            javaVersion,
+            ConfigManager.getDataDirectory(),
+            effectiveDistro
+        );
+
+        if (!asset) {
+            throw new Error(`No suitable Java ${javaVersion} found. Checked local mirrors and official Adoptium/GraalVM APIs.`);
+        }
+
+        // 2. Download
+        // Send progress to renderer
+        const onProgress = (transferred) => {
+            if (this.mainWindow) {
+                const percent = (transferred / asset.size) * 100;
+                this.mainWindow.webContents.send('dl:progress', {
+                    type: 'download', // Re-use 'download' type or generic
+                    progress: percent,
+                    total: asset.size,
+                    transferred
+                });
+            }
+        };
+
+        await downloadFile(asset, onProgress);
+
+        // 3. Extract
+        if (this.mainWindow) {
+            this.mainWindow.webContents.send('dl:progress', { type: 'extract', progress: 0 });
+        }
+
+        if (asset.isInstaller) {
+            if (this.mainWindow) {
+                this.mainWindow.webContents.send('dl:progress', { type: 'extract', progress: 50 }); // Progress marker
+            }
+            log.info('Running Java installer...');
+            await JavaGuard.runInstaller(asset.path);
+            
+            // After installer, we still need to find where it was installed
+            // Or just return null and let the next scan find it
+            return null;
+        }
+
+        const javaPath = await JavaGuard.extractJdk(asset.path);
+
+        // 4. Return
+        return javaPath;
     }
 }
 
