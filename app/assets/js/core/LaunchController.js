@@ -5,6 +5,7 @@ const { FullRepair } = require('./dl/FullRepair');
 const ConfigManager = require('./configmanager');
 const P2PEngine = require('../../../../network/P2PEngine');
 const { LoggerUtil } = require('./util/LoggerUtil');
+const path = require('path');
 
 /**
  * @typedef {import('electron').BrowserWindow} BrowserWindow
@@ -126,7 +127,7 @@ class LaunchController {
         // Default to 8 if not provided (safe fallback)
         const javaVersion = major || 8;
         
-        // Check for path stability
+        // Check for path stability (Cyrillic, spaces, etc.)
         const { isPathValid } = require('./pathutil');
         const isDirtyPath = !isPathValid(ConfigManager.getDataDirectory());
         
@@ -134,7 +135,7 @@ class LaunchController {
         const effectiveDistro = (isDirtyPath && process.platform === 'win32') ? 'installer' : (distribution || null);
 
         if (isDirtyPath) {
-            log.warn('Dirty path detected! Switching to installer-based Java deployment.');
+            log.warn('Dirty path detected! Switching to installer-based Java deployment to ensure stability.');
         }
 
         const asset = await JavaGuard.latestOpenJDK(
@@ -143,9 +144,12 @@ class LaunchController {
             effectiveDistro
         );
 
-        if (!asset) {
-            throw new Error(`No suitable Java ${javaVersion} found. Checked local mirrors and official Adoptium/GraalVM APIs.`);
+        if (asset == null) {
+            throw new Error(`Failed to resolve Java ${javaVersion} from any source.`);
         }
+
+        log.info(`Java asset resolved: ${asset.url} (isInstaller: ${asset.isInstaller})`);
+        log.info(`Downloading Java to: ${asset.path}`);
 
         // 2. Download
         // Send progress to renderer
@@ -153,7 +157,7 @@ class LaunchController {
             if (this.mainWindow) {
                 const percent = (transferred / asset.size) * 100;
                 this.mainWindow.webContents.send('dl:progress', {
-                    type: 'download', // Re-use 'download' type or generic
+                    type: 'download', 
                     progress: percent,
                     total: asset.size,
                     transferred
@@ -163,23 +167,22 @@ class LaunchController {
 
         await downloadFile(asset, onProgress);
 
-        // 3. Extract
-        if (this.mainWindow) {
-            this.mainWindow.webContents.send('dl:progress', { type: 'extract', progress: 0 });
-        }
-
+        // 3. Extract/Install
         if (asset.isInstaller) {
             if (this.mainWindow) {
-                this.mainWindow.webContents.send('dl:progress', { type: 'extract', progress: 50 }); // Progress marker
+                this.mainWindow.webContents.send('dl:progress', { type: 'install', progress: 0 });
             }
-            log.info('Running Java installer...');
+            log.info(`Running Java MSI installer: ${asset.path}`);
+            if (this.mainWindow) {
+                this.mainWindow.webContents.send('dl:progress', { type: 'install', progress: 50 });
+            }
             await JavaGuard.runInstaller(asset.path);
-            
-            // After installer, we still need to find where it was installed
-            // Or just return null and let the next scan find it
             return null;
         }
 
+        if (this.mainWindow) {
+            this.mainWindow.webContents.send('dl:progress', { type: 'extract', progress: 0 });
+        }
         const javaPath = await JavaGuard.extractJdk(asset.path);
 
         // 4. Return

@@ -484,33 +484,42 @@ async function downloadJava(effectiveJavaOptions, launchAfter = true) {
             setLaunchDetails(Lang.queryJS('landing.dlAsync.downloadingFiles')) // Reuse "Downloading Files"
             setDownloadPercentage(status.progress)
         } else if (status.type === 'extract') {
-            setLaunchDetails('Extracting Java...') // Hardcoded or new Lang key
+            setLaunchDetails('Extracting Java...') 
             setLaunchPercentage(100)
+        } else if (status.type === 'install') {
+            setLaunchDetails('Installing Java...') // Accurate feedback for MSI
+            setLaunchPercentage(status.progress || 100)
         }
     }
     ipcRenderer.on('dl:progress', progressListener)
 
     try {
         // Invoke Main
-        /** @type {string} */
+        /** @type {string | null} */
         const javaPath = await ipcRenderer.invoke('dl:downloadJava', {
             major: effectiveJavaOptions.majorVersion || effectiveJavaOptions.suggestedMajor || 8,
             distribution: effectiveJavaOptions.distribution || null
         })
 
-        // Success
-        ConfigManager.setJavaExecutable(ConfigManager.getSelectedServer(), javaPath)
-        ConfigManager.save()
-
-        if (document.getElementById('settingsJavaExecVal')) {
-            document.getElementById('settingsJavaExecVal').value = javaPath
-            await populateJavaExecDetails(javaPath)
-        }
-
         ipcRenderer.removeListener('dl:progress', progressListener)
 
-        if (launchAfter) {
-            await dlAsync()
+        if (javaPath != null) {
+            // Success (ZIP/direct path)
+            ConfigManager.setJavaExecutable(ConfigManager.getSelectedServer(), javaPath)
+            ConfigManager.save()
+
+            if (document.getElementById('settingsJavaExecVal')) {
+                document.getElementById('settingsJavaExecVal').value = javaPath
+                await populateJavaExecDetails(javaPath)
+            }
+
+            if (launchAfter) {
+                await dlAsync()
+            }
+        } else {
+            // MSI installer finished. We don't have a path yet.
+            // Trigger a re-scan to find where it was installed.
+            await asyncSystemScan(effectiveJavaOptions, launchAfter)
         }
 
     } catch (err) {

@@ -557,7 +557,7 @@ async function runInstaller(installerPath) {
         log.info(`Running MSI installer: ${installerPath}`);
         const { execFile } = require('child_process');
         return new Promise((resolve, reject) => {
-            execFile('msiexec', ['/i', installerPath], (err) => {
+            execFile('msiexec', ['/i', installerPath, '/passive'], (err) => {
                 if (err) {
                     log.error('Installer exited with error', err);
                     reject(err);
