@@ -16,7 +16,7 @@ const isDev = require('../isdev');
 const MirrorManager = require('../../../../../network/MirrorManager');
 
 /**
- * @typedef {import('../../../../../types').HeliosDistributionData} HeliosDistributionData
+ * @typedef {import('../../../../../types').DistributionData} DistributionData
  */
 
 const log = LoggerUtil.getLogger('DownloadEngine');
@@ -304,11 +304,9 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
         try {
             if (attempt > 0) {
                 const backoff = Math.min(10000, Math.pow(2, attempt - 1) * 1000); // Exponential backoff up to 10s
-                if (isDev) log.debug(`[DownloadEngine] Attempt ${attempt + 1} for ${asset.id}. Waiting ${backoff}ms...`);
+                // Only log attempts if we are really struggling (3+ attempts)
+                if (isDev && attempt >= 2) log.debug(`[DownloadEngine] Attempt ${attempt + 1} for ${asset.id}. Waiting ${backoff}ms...`);
                 await sleep(backoff);
-                if (candidates.length > 1 && attempt % candidates.length !== 0) {
-                    if (isDev) log.debug(`[DownloadEngine] Primary failed, trying fallback: ${currentUrl}`);
-                }
             }
 
             // RaceManager Strategy
@@ -322,20 +320,12 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
                 headers.append('X-File-Path', relPath);
             }
             if (asset.id) headers.append('X-File-Id', asset.id);
+            if (hash) headers.append('X-File-Hash', hash);
 
             // Force HTTP after 2 failed attempts or if explicitly requested (deferral)
             // But NOT if we are in P2P Only Mode (where HTTP is blocked anyway)
             if ((attempt >= 2 || forceHTTP) && !ConfigManager.getP2POnlyMode()) {
                 headers.append('X-Skip-P2P', 'true');
-            }
-
-            // SMART DEFERRAL: If we are in "Only P2P" mode and have no peers yet, 
-            // don't waste time waiting for timeouts - defer to the end of the queue.
-            if (instantDefer && P2PEngine.peers.length === 0 && !forceHTTP) {
-                // Let the first few files try (to trigger discovery), but defer the rest
-                if (Math.random() > 0.1) {
-                    throw new Error('DEFER: No peers available (Waiting for discovery)');
-                }
             }
 
             // Use RaceManager
@@ -451,17 +441,12 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
                     error: err.message
                 });
 
+                if (isDev) log.error(`[DownloadEngine] Critical failure for ${asset.id}:`, err);
+                
                 // Report Failure to MirrorManager (network or validation error)
-                MirrorManager.reportFailure(currentUrl);
+                MirrorManager.reportFailure(currentUrl, err.status);
             }
 
-            if (instantDefer) {
-                // Return immediate failure to defer the file
-                const deferError = Object.assign(new Error(err.message), {
-                    history: attemptHistory
-                });
-                throw deferError;
-            }
             // Continue to next attempt
         }
     }

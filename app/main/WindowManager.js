@@ -38,6 +38,22 @@ class WindowManager {
 
         this.win.loadFile(path.join(__dirname, '..', '..', 'app', 'index.html'))
 
+        // Safe CORS Bypass: Intercept mirror responses and inject CORS headers
+        this.win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+            const corsHeaders = {
+                'Access-Control-Allow-Origin': ['*'],
+                'Access-Control-Allow-Methods': ['GET', 'POST', 'OPTIONS', 'RANGE'],
+                'Access-Control-Allow-Headers': ['Content-Type', 'Range', 'X-File-Hash', 'X-File-Id', 'X-File-Path']
+            };
+
+            callback({
+                responseHeaders: {
+                    ...details.responseHeaders,
+                    ...corsHeaders
+                }
+            });
+        });
+
         this.win.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
             console.error(`[Main] Window failed to load: ${errorDescription} (${errorCode}) at ${validatedURL}`)
         })

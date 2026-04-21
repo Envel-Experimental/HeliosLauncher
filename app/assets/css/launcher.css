@@ -2676,6 +2676,95 @@ input:checked+.toggleSwitchSlider:before {
     line-height: 1;
 }
 
+/* Premium Changelog Container */
+.settingsChangelogContainer {
+    margin-top: 24px;
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 20px 24px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    width: 100%;
+    max-width: 800px;
+}
+
+.settingsChangelogContainer::before {
+    content: 'HAL9007';
+    position: absolute;
+    bottom: 8px;
+    right: 12px;
+    font-size: 9px;
+    font-family: 'JetBrains Mono', monospace;
+    color: rgba(255, 255, 255, 0.1);
+    letter-spacing: 2px;
+    pointer-events: none;
+}
+
+.settingsChangelogHeadline {
+    margin-bottom: 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding-bottom: 12px;
+}
+
+.settingsChangelogLabel {
+    font-size: 10px;
+    font-weight: 800;
+    color: #f68a33;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 4px;
+}
+
+.settingsChangelogTitle {
+    font-size: 16px;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.settingsChangelogText {
+    font-size: 13px;
+    line-height: 1.6;
+    color: rgba(255, 255, 255, 0.8);
+    max-height: 200px;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+.settingsChangelogText::-webkit-scrollbar {
+    width: 4px;
+}
+
+.settingsChangelogText::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+}
+
+.settingsChangelogActions {
+    margin-top: 16px;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.settingsChangelogButton {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 11px;
+    color: #ffffff;
+    text-decoration: none;
+    transition: 0.2s ease;
+}
+
+.settingsChangelogButton:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
 #settingsUpdateCardRight,
 #settingsFactoryResetRight {
     width: 200px !important;

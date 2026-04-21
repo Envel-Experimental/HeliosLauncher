@@ -1,4 +1,5 @@
 const { LoggerUtil } = require('../app/assets/js/core/util/LoggerUtil')
+const isDev = require('../app/assets/js/core/isdev')
 
 const log = LoggerUtil.getLogger('MirrorManager')
 
@@ -59,29 +60,44 @@ class MirrorManager {
         }
 
         const start = Date.now()
+        mirrorEntry.lastChecked = start // Always update last checked
         try {
-            const controller = new AbortController()
-            const id = setTimeout(() => controller.abort(), 5000) // 5s timeout
+            let result;
+            if (process.type === 'renderer') {
+                const { ipcRenderer } = require('electron')
+                result = await ipcRenderer.invoke('mirrors:fetchHealth', url)
+            } else {
+                const controller = new AbortController()
+                const id = setTimeout(() => controller.abort(), 8000) // 8s timeout
 
-            const response = await fetch(url, {
-                method: 'HEAD',
-                signal: controller.signal
-            })
-            clearTimeout(id)
+                const response = await fetch(url, {
+                    method: 'GET',
+                    signal: controller.signal,
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 HeliosLauncher/1.0',
+                        'Range': 'bytes=0-0'
+                    }
+                })
+                clearTimeout(id)
+                result = {
+                    ok: response.ok || response.status === 206,
+                    status: response.status,
+                    latency: Date.now() - start
+                }
+            }
 
-            if (response.ok) {
-                const latency = Date.now() - start
-                mirrorEntry.latency = latency
-                mirrorEntry.status = latency < 300 ? 'active' : 'slow'
-                mirrorEntry.lastChecked = Date.now()
-                // Reset consecutive failures on success
+            if (result.ok) {
+                mirrorEntry.latency = result.latency
+                mirrorEntry.status = result.latency < 400 ? 'active' : 'slow'
                 mirrorEntry.failures = 0
             } else {
+                if (isDev) console.warn(`[MirrorManager] Health check failed for ${url}: ${result.status || result.error}`);
                 mirrorEntry.latency = 9999
                 mirrorEntry.status = 'down'
                 mirrorEntry.failures++
             }
         } catch (err) {
+            if (isDev && err.name !== 'AbortError') console.warn(`[MirrorManager] Health check error for ${url}:`, err.message);
             mirrorEntry.latency = 9999
             mirrorEntry.status = 'down'
             mirrorEntry.failures++
@@ -122,9 +138,13 @@ class MirrorManager {
      * @returns {Array<Object>} Array of mirror config objects
      */
     getSortedMirrors() {
-        // Filter out completely dead mirrors if we have alternatives,
-        // but always return at least one if possible (even if slow)
-        // actually, just return the sorted list of configs
+        // Trigger background re-test for DOWN mirrors if 5 minutes passed
+        const now = Date.now()
+        this.mirrors.forEach(m => {
+            if (m.status === 'down' && (now - m.lastChecked > 300000)) { // 5 mins
+                this._measureLatency(m) // Async background check
+            }
+        })
         return this.mirrors.map(m => m.config)
     }
 
@@ -164,25 +184,48 @@ class MirrorManager {
     _findMirrorByUrl(url) {
         if (!url) return null
         return this.mirrors.find(m => {
-            // Check if the URL starts with any of the mirror's configured base URLs
-            return (m.config.base_url && url.startsWith(m.config.base_url)) ||
-                (m.config.version_manifest && url.startsWith(m.config.version_manifest.substring(0, m.config.version_manifest.lastIndexOf('/') + 1))) ||
-                (m.config.assets && url.startsWith(m.config.assets.substring(0, m.config.assets.lastIndexOf('/') + 1))) ||
-                (m.config.libraries && url.startsWith(m.config.libraries.substring(0, m.config.libraries.lastIndexOf('/') + 1)))
+            const configs = [
+                m.config.base_url,
+                m.config.version_manifest,
+                m.config.assets,
+                m.config.libraries,
+                m.config.client,
+                m.config.java_manifest,
+                m.config.distribution
+            ].filter(Boolean)
+
+            return configs.some(c => {
+                const base = c.includes('?') ? c.split('?')[0] : c
+                const dir = base.substring(0, base.lastIndexOf('/') + 1)
+                return url.startsWith(dir) || url.startsWith(base)
+            })
         })
     }
 
     /**
      * Report a failed download from a mirror.
      * @param {string} mirrorUrl The base URL or full URL used.
+     * @param {number} [statusCode] HTTP status code if available.
      */
-    reportFailure(mirrorUrl) {
+    reportFailure(mirrorUrl, statusCode = 0) {
         const entry = this._findMirrorByUrl(mirrorUrl)
         if (entry) {
+            // If it's a 404, don't treat it as a critical failure for the mirror status.
+            // Some mirrors are partial or out of sync.
+            if (statusCode === 404) {
+                // if (isDev) log.debug(`Mirror ${entry.config.name} missing asset (404). Not counting as failure.`)
+                return
+            }
+
             entry.failures++
-            if (entry.failures >= 3) {
+            if (entry.failures >= 15) { // Increased to 15
                 if (entry.status !== 'down') {
-                    log.warn(`Mirror ${entry.config.name} marked as DOWN due to consecutive failures.`)
+                    const now = Date.now()
+                    // Throttle the warning log to once per minute per mirror
+                    if (!entry.lastWarned || (now - entry.lastWarned > 60000)) {
+                        log.warn(`Mirror ${entry.config.name} marked as DOWN due to consecutive critical failures. (Status: ${statusCode || 'Network Error'})`)
+                        entry.lastWarned = now
+                    }
                     entry.status = 'down'
                     entry.latency = 9999
                     this._sortMirrors() // Re-rank immediately

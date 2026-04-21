@@ -269,6 +269,31 @@ class IpcRegistry {
                 return { result: false, error: e.message }
             }
         })
+
+        ipcMain.handle('mirrors:fetchHealth', async (event, url) => {
+            const start = Date.now()
+            try {
+                const controller = new AbortController()
+                const id = setTimeout(() => controller.abort(), 8000)
+
+                const response = await fetch(url, {
+                    method: 'GET',
+                    signal: controller.signal,
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 HeliosLauncher/1.0',
+                        'Range': 'bytes=0-0'
+                    }
+                })
+                clearTimeout(id)
+                return {
+                    ok: response.ok || response.status === 206,
+                    status: response.status,
+                    latency: Date.now() - start
+                }
+            } catch (err) {
+                return { ok: false, error: err.message, latency: 9999 }
+            }
+        })
     }
 
     async checkNodeStatus(node, index) {

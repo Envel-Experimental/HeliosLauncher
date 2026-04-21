@@ -100,16 +100,34 @@ class RaceManager {
         // Retrieve X-File-Path header passed by DownloadEngine
         let relPath = null;
         let fileId = null;
+        let hash = null;
         try {
             const pathHeader = request.headers.get('X-File-Path');
             if (pathHeader) relPath = pathHeader;
 
             const idHeader = request.headers.get('X-File-Id');
             if (idHeader) fileId = idHeader;
+
+            const hashHeader = request.headers.get('X-File-Hash');
+            if (hashHeader) hash = hashHeader;
         } catch (e) { }
 
+        // Attempt to extract hash from URL if not provided in header (legacy/standard pattern)
+        if (!hash) {
+            const hashMatch = url.match(/\/([a-f0-9]{40}|[a-f0-9]{64})(\/|$)/i)
+            if (hashMatch) {
+                hash = hashMatch[1]
+            }
+        }
+
         // If no hash found and no identification, fallback to direct HTTP
-        if (!hash && !fileId && !relPath) return fetch(url)
+        if (!hash && !fileId && !relPath) {
+            return fetch(url, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 HeliosLauncher/1.0'
+                }
+            })
+        }
 
         const algo = hash ? (hash.length === 64 ? 'sha256' : 'sha1') : 'none'
         const abortController = new AbortController()
@@ -140,22 +158,40 @@ class RaceManager {
                 }
             }
 
-            fetch(url, { signal: abortController.signal })
+            const httpTimeout = setTimeout(() => {
+                abortController.abort();
+                reject(new Error('HTTP Timeout'));
+            }, 30000); // 30s timeout for HTTP
+
+            fetch(url, { 
+                signal: abortController.signal,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 HeliosLauncher/1.0'
+                }
+            })
                 .then(res => {
-                    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-                    if (!res.body) throw new Error('HTTP No Body')
-                    resolve({ type: 'http', result: res })
+                    clearTimeout(httpTimeout);
+                    if (!res.ok) {
+                        const err = new Error(`HTTP ${res.status} (${res.statusText}) for ${url}`);
+                        err.status = res.status;
+                        throw err;
+                    }
+                    if (!res.body) throw new Error('HTTP No Body');
+                    resolve({ type: 'http', result: res });
                 })
-                .catch(reject)
+                .catch(err => {
+                    clearTimeout(httpTimeout);
+                    if (isDev) {
+                        console.error(`[RaceManager] HTTP Leg Failed for ${url}:`, err.message);
+                    }
+                    reject(err);
+                })
         })
 
         // 2. Global P2P Task (Hyperswarm)
         let globalP2PStream = null
         const globalP2PTask = new Promise((resolve, reject) => {
             if (skipP2P) {
-                // Return a never-resolving promise or just reject immediately with a special code?
-                // Rejecting is better so Promise.any doesn't wait for it if HTTP also fails?
-                // Actually Promise.any waits for first fulfillment. If we reject, it ignores it unless all reject.
                 reject(new Error('P2P Skipped'))
                 return
             }
@@ -167,6 +203,24 @@ class RaceManager {
             if (loadStatus === 'overloaded') {
                 reject(new Error('P2P Overloaded'))
                 return
+            }
+
+            let p2pDiscoveryTimeout = null
+            const onPeerAdded = () => {
+                if (p2pDiscoveryTimeout) {
+                    clearTimeout(p2pDiscoveryTimeout)
+                    p2pDiscoveryTimeout = null
+                }
+            }
+
+            if (P2PEngine.peers.length === 0 && !ConfigManager.getP2POnlyMode()) {
+                p2pDiscoveryTimeout = setTimeout(() => {
+                    P2PEngine.off('peer_added', onPeerAdded)
+                    if (globalP2PStream) globalP2PStream.destroy()
+                    reject(new Error('P2P No Peers (Discovery Timeout)'))
+                }, 5000)
+                
+                P2PEngine.once('peer_added', onPeerAdded)
             }
 
             globalP2PStream = P2PEngine.requestFile(hash, expectedSize, relPath, fileId)
@@ -194,6 +248,7 @@ class RaceManager {
                 reject(err)
             }
             const cleanup = () => {
+                P2PEngine.off('peer_added', onPeerAdded)
                 globalP2PStream.off('readable', onReadable);
                 globalP2PStream.off('error', onError)
                 // CRITICAL: Add no-op error listener to prevent crash if 
@@ -236,14 +291,18 @@ class RaceManager {
             // All failed? Should not happen if HTTP is valid.
             if (globalP2PStream) globalP2PStream.destroy()
             abortController.abort()
+
+            if (err.name === 'AggregateError') {
+                if (isDev) {
+                    console.error(`[RaceManager] Both legs failed for ${url}:`, err.errors.map(e => e.message).join(' | '));
+                }
+            }
+
             if (ConfigManager.getP2POnlyMode()) {
                 this.logFailure(hash, fileId || relPath, 'P2P Only Mode Active')
             } else {
                 this.logFailure(hash, fileId || relPath, 'Retrying...')
             }
-
-            // Retry with Mirrors defined in Config
-
 
             throw err
         }
