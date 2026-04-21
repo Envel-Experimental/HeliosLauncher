@@ -64,7 +64,12 @@ app.on('ready', async () => {
         console.log('[Main] UI Window created.')
 
         console.log('[Main] Starting network services...')
-        MirrorManager.init(MOJANG_MIRRORS)
+        console.log('[Main] MirrorManager initializing with mirrors:', MOJANG_MIRRORS.map(m => m.name))
+        MirrorManager.init(MOJANG_MIRRORS).then(() => {
+            console.log('[Main] MirrorManager initialization complete.')
+        }).catch(err => {
+            console.error('[Main] MirrorManager failed to initialize:', err)
+        })
         P2PEngine.start()
         console.log('[Main] Network services initialized.')
 

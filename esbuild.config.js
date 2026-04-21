@@ -27,7 +27,7 @@ esbuild.build({
         path.join(__dirname, 'app', 'assets', 'js')
     ],
     define: {
-        'process.env.NODE_ENV': '"production"',
+        'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
         'process.type': '"renderer"',
         'global': 'window',
         'Buffer': 'window.Buffer'

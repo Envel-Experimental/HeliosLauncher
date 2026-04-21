@@ -2571,7 +2571,7 @@ input:checked+.toggleSwitchSlider:before {
 * * */
 
 #settingsTabUpdate {
-    padding: 30px 40px !important;
+    padding: 30px !important;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -2598,7 +2598,7 @@ input:checked+.toggleSwitchSlider:before {
     margin-top: 20px;
 }
 
-#settingsUpdateCardMain, 
+#settingsUpdateCardMain,
 #settingsFactoryResetMain {
     display: flex !important;
     align-items: center !important;

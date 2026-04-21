@@ -172,6 +172,10 @@ class IpcRegistry {
         const { execFile } = require('child_process')
 
         ipcMain.handle('mirrors:getStatus', () => MirrorManager.getMirrorStatus())
+        ipcMain.handle('mirrors:refresh', async () => {
+            await MirrorManager.measureAllLatencies()
+            return MirrorManager.getMirrorStatus()
+        })
         ipcMain.handle('p2p:getInfo', () => P2PEngine.getNetworkInfo())
         
         ipcMain.handle('p2p:getStats', async () => {
@@ -276,17 +280,18 @@ class IpcRegistry {
                 const controller = new AbortController()
                 const id = setTimeout(() => controller.abort(), 8000)
 
-                const response = await fetch(url, {
+                const testUrl = url + (url.includes('?') ? '&' : '?') + 't=' + Date.now()
+                const response = await fetch(testUrl, {
                     method: 'GET',
                     signal: controller.signal,
                     headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 HeliosLauncher/1.0',
-                        'Range': 'bytes=0-0'
-                    }
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 HeliosLauncher/1.0'
+                    },
+                    cache: 'no-store'
                 })
                 clearTimeout(id)
                 return {
-                    ok: response.ok || response.status === 206,
+                    ok: response.ok,
                     status: response.status,
                     latency: Date.now() - start
                 }

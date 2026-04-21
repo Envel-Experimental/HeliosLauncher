@@ -34,6 +34,7 @@ async function fetchWithTimeout(url, options = {}, timeout = 10000) {
 
 const { MOJANG_MIRRORS, DISTRO_PUB_KEYS } = require('../../../../../network/config');
 const { verifyDistribution } = require('../util/SignatureUtils');
+const MirrorManager = require('../../../../../network/MirrorManager');
 
 let javaMirrorManifestMap = new Map(); // url -> manifest
 
@@ -209,9 +210,8 @@ async function loadJavaMirrorManifest(mirrorUrl) {
                         }
                         log.info(`Java manifest signature VALID for ${mirrorUrl}`);
                     } else {
-                        log.warn(`Java manifest signature missing for mirror: ${mirrorUrl} (Status: ${sigRes.status})`);
-                        // Should we reject if missing? User said "проверять если МОЕГО сервера".
-                        // In production, mirrors SHOULD be signed.
+                        log.error(`CRITICAL: Java manifest signature MISSING for ${mirrorUrl}. Mandatory for custom mirrors.`);
+                        return null;
                     }
                 } catch (sigErr) {
                     log.error(`Failed to verify Java manifest signature for ${mirrorUrl}`, sigErr);
@@ -229,81 +229,88 @@ async function loadJavaMirrorManifest(mirrorUrl) {
 }
 
 async function latestOpenJDK(major, dataDir, distribution) {
-    let result = null;
+    const mirrors = (MirrorManager.initialized ? MirrorManager.getSortedMirrors() : MOJANG_MIRRORS).filter(m => m.java_manifest)
+    
+    /** @type {Promise<{ source: string, data: any, latency: number }>[]} */
+    const tasks = []
 
-    // 1. Try Configured Mirrors ("Our Servers")
-    log.info('Attempting to resolve Java from configured mirrors...');
-    if (MOJANG_MIRRORS && MOJANG_MIRRORS.length > 0) {
-        for (const mirror of MOJANG_MIRRORS) {
-            if (mirror.java_manifest) {
-                try {
-                    const manifest = await loadJavaMirrorManifest(mirror.java_manifest);
-                    if (manifest) {
-                        const os = process.platform === Platform.WIN32 ? 'windows' : (process.platform === Platform.DARWIN ? 'darwin' : 'linux');
-                        const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+    // 1. Create Mirror Tasks
+    for (const mirror of mirrors) {
+        tasks.push((async () => {
+            const start = Date.now()
+            const manifest = await loadJavaMirrorManifest(mirror.java_manifest)
+            if (manifest) {
+                const os = process.platform === Platform.WIN32 ? 'windows' : (process.platform === Platform.DARWIN ? 'darwin' : 'linux')
+                const arch = process.arch === 'arm64' ? 'arm64' : 'x64'
+                const field = (distribution === 'installer' && os === 'windows') ? 'installer' : major.toString()
 
-                        const field = (distribution === 'installer' && os === 'windows') ? 'installer' : major.toString();
-
-                        if (manifest[os] && manifest[os][arch] && manifest[os][arch][field]) {
-                            const entry = manifest[os][arch][field];
-                            log.info(`Resolved Java ${major} (Type: ${field}) from Mirror: ${entry.url}`);
-                            return {
-                                url: entry.url,
-                                size: entry.size,
-                                id: entry.name,
-                                hash: entry.sha1,
-                                algo: HashAlgo.SHA1,
-                                path: path.join(getLauncherRuntimeDir(dataDir), entry.name),
-                                isInstaller: field === 'installer'
-                            };
+                if (manifest[os] && manifest[os][arch] && manifest[os][arch][field]) {
+                    const entry = manifest[os][arch][field]
+                    return {
+                        source: `Mirror (${mirror.name})`,
+                        latency: Date.now() - start,
+                        data: {
+                            url: entry.url,
+                            size: entry.size,
+                            id: entry.name,
+                            hash: entry.sha1,
+                            algo: HashAlgo.SHA1,
+                            path: path.join(getLauncherRuntimeDir(dataDir), entry.name),
+                            isInstaller: field === 'installer'
                         }
                     }
-                } catch (e) {
-                    log.warn(`Mirror ${mirror.name} failed to resolve Java ${major}`, e);
                 }
             }
-        }
+            throw new Error(`Mirror ${mirror.name} did not provide Java ${major}`)
+        })())
     }
 
-    // 2. Fallback to Official Sources
-    try {
-        if (distribution == null) {
-            if (major >= 17) {
-                const graal = await latestGraalVM(major, dataDir);
-                if (graal) result = graal;
-                else {
-                    log.warn(`GraalVM not found for Java ${major}, falling back to Adoptium.`);
-                    result = await latestAdoptium(major, dataDir);
+    // 2. Create Official Task
+    tasks.push((async () => {
+        const start = Date.now()
+        let result = null
+        try {
+            if (distribution == null) {
+                if (major >= 17) {
+                    const graal = await latestGraalVM(major, dataDir)
+                    if (graal) result = graal
+                    else result = await latestAdoptium(major, dataDir)
+                } else {
+                    result = await latestAdoptium(major, dataDir)
                 }
             } else {
-                result = await latestAdoptium(major, dataDir);
+                switch (distribution) {
+                    case 'graalvm': result = await latestGraalVM(major, dataDir); break
+                    case JdkDistribution.TEMURIN:
+                    case 'temurin': result = await latestAdoptium(major, dataDir); break
+                    case JdkDistribution.CORRETTO: result = await latestCorretto(major, dataDir); break
+                    case 'installer': result = await latestAdoptium(major, dataDir, 'installer'); break
+                    default: throw new Error(`Unknown distribution '${distribution}'`)
+                }
             }
-        } else {
-            switch (distribution) {
-                case 'graalvm':
-                    result = await latestGraalVM(major, dataDir);
-                    break;
-                case JdkDistribution.TEMURIN:
-                case 'temurin': // Support both enum and string
-                    result = await latestAdoptium(major, dataDir);
-                    break;
-                case JdkDistribution.CORRETTO:
-                    result = await latestCorretto(major, dataDir);
-                    break;
-                case 'installer':
-                    result = await latestAdoptium(major, dataDir, 'installer');
-                    break;
-                default:
-                    const eMsg = `Unknown distribution '${distribution}'`;
-                    log.error(eMsg);
-                    throw new Error(eMsg);
+        } catch (e) {
+            throw new Error(`Official resolution failed: ${e.message}`)
+        }
+        
+        if (result) {
+            return {
+                source: 'Official (Adoptium/GitHub)',
+                latency: Date.now() - start,
+                data: result
             }
         }
-    } catch (err) {
-        log.warn(`Failed to resolve Java ${major} from official sources.`, err);
-    }
+        throw new Error('No Java found from official sources')
+    })())
 
-    return result;
+    // RACE!
+    try {
+        const fastest = await Promise.any(tasks)
+        log.info(`Java ${major} resolved from ${fastest.source} in ${fastest.latency}ms`)
+        return fastest.data
+    } catch (e) {
+        log.error(`Failed to resolve Java ${major} from any source.`, e)
+        return null
+    }
 }
 
 async function latestGraalVM(major, dataDir) {

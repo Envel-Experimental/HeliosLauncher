@@ -759,13 +759,22 @@ async function saveSettingsValues() {
 
 export let selectedSettingsTab = 'settingsTabAccount'
 
-async function populateMirrorStatus() {
+async function populateMirrorStatus(refresh = false) {
+    console.log('[Settings] populateMirrorStatus called (refresh:', refresh, ')')
     const container = document.getElementById('settingsMirrorStatusContainer')
     if (!container) return
 
+    const btn = document.getElementById('settingsMirrorStatusRefresh')
+    if (refresh && btn) btn.classList.add('spinning')
+
+    if (refresh) {
+        container.innerHTML = '<div style="text-align: center; color: #aaa; padding: 10px;">Обновление статуса...</div>'
+    }
+
     try {
         /** @type {any[]} */
-        const mirrors = await ipcRenderer.invoke('mirrors:getStatus')
+        const mirrors = await ipcRenderer.invoke(refresh ? 'mirrors:refresh' : 'mirrors:getStatus')
+        console.log('[Settings] Mirror status received:', mirrors)
         if (!mirrors || mirrors.length === 0) {
             container.innerHTML = '<div style="text-align: center; color: #888; padding: 10px;">Зеркала не настроены или отключены.</div>'
             return
@@ -778,12 +787,13 @@ async function populateMirrorStatus() {
             if (m.status === 'active') { statusColor = '#7dbb00'; statusText = 'Активно' }
             else if (m.status === 'slow') { statusColor = '#ffbb00'; statusText = 'Медленно' }
             else if (m.status === 'down') { statusColor = '#ff4444'; statusText = 'Недоступно' }
+            else if (m.status === 'invalid') { statusColor = '#ff4444'; statusText = 'Ошибка конф.' }
 
             html += `
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">
                 <div style="font-weight: 600; color: #eee;">${m.name}</div>
                 <div style="display: flex; gap: 15px; align-items: center;">
-                    <span style="color: #aaa; font-size: 13px;">${m.latency >= 0 ? m.latency + ' ms' : '--'}</span>
+                    <span style="color: #aaa; font-size: 13px;">${m.latency >= 0 && m.latency < 9999 ? m.latency + ' ms' : '--'}</span>
                     <span style="color: ${statusColor}; font-size: 13px; font-weight: bold;">${statusText}</span>
                 </div>
             </div>`
@@ -792,16 +802,23 @@ async function populateMirrorStatus() {
     } catch (e) {
         console.error('Failed to load mirror status', e)
         container.innerHTML = '<div style="text-align: center; color: #ff4444; padding: 10px;">Ошибка загрузки статуса зеркал.</div>'
+    } finally {
+        if (refresh && btn) btn.classList.remove('spinning')
     }
 }
 
-async function populateBootstrapStatus() {
+async function populateBootstrapStatus(refresh = false) {
+    console.log('[Settings] populateBootstrapStatus called (refresh:', refresh, ')')
     const container = document.getElementById('settingsBootstrapStatusContainer')
     if (!container) return
+
+    const btn = document.getElementById('settingsBootstrapStatusRefresh')
+    if (refresh && btn) btn.classList.add('spinning')
 
     try {
         /** @type {any[]} */
         const nodes = await ipcRenderer.invoke('p2p:getBootstrapStatus')
+        console.log('[Settings] Bootstrap status received:', nodes)
         if (!nodes || nodes.length === 0) {
             container.innerHTML = '<div style="text-align: center; color: #888; padding: 10px;">Bootstrap узлы не найдены.</div>'
             return
@@ -841,6 +858,63 @@ async function populateBootstrapStatus() {
     } catch (e) {
         console.error('Failed to load bootstrap status', e)
         container.innerHTML = '<div style="text-align: center; color: #ff4444; padding: 10px;">Ошибка загрузки статуса Bootstrap узлов.</div>'
+    } finally {
+        if (refresh && btn) btn.classList.remove('spinning')
+    }
+}
+
+async function updateConnectivityStatus(refresh = false) {
+    console.log('[Settings] updateConnectivityStatus called (refresh:', refresh, ')')
+    const btn = document.getElementById('settingsConnectivityRefresh')
+    if (refresh && btn) btn.classList.add('spinning')
+
+    try {
+        const res = await ipcRenderer.invoke('connectivity:check')
+        console.log('[Settings] Connectivity check results:', res)
+        const ghInd = document.getElementById('deliveryIndicatorGitHub')
+        const ghStat = document.getElementById('deliveryStatusGitHub')
+        const mjInd = document.getElementById('deliveryIndicatorMojang')
+        const mjStat = document.getElementById('deliveryStatusMojang')
+
+        if (ghInd && ghStat) {
+            ghInd.style.background = res.github ? '#7dbb00' : '#ff4444'
+            ghStat.innerHTML = res.github ? 'Онлайн' : 'Оффлайн'
+            ghStat.style.color = res.github ? '#7dbb00' : '#ff4444'
+        }
+        if (mjInd && mjStat) {
+            mjInd.style.background = res.mojang ? '#7dbb00' : '#ff4444'
+            mjStat.innerHTML = res.mojang ? 'Онлайн' : 'Оффлайн'
+            mjStat.style.color = res.mojang ? '#7dbb00' : '#ff4444'
+        }
+    } catch (e) {
+        console.error('Connectivity check failed', e)
+    } finally {
+        if (refresh && btn) btn.classList.remove('spinning')
+    }
+}
+
+export function bindRefreshButtons() {
+    console.log('[Settings] Binding refresh buttons...')
+    const mirrorBtn = document.getElementById('settingsMirrorStatusRefresh')
+    if (mirrorBtn) {
+        mirrorBtn.onclick = () => {
+            console.log('[Settings] Mirror refresh clicked')
+            populateMirrorStatus(true)
+        }
+    }
+    const bootstrapBtn = document.getElementById('settingsBootstrapStatusRefresh')
+    if (bootstrapBtn) {
+        bootstrapBtn.onclick = () => {
+            console.log('[Settings] Bootstrap refresh clicked')
+            populateBootstrapStatus(true)
+        }
+    }
+    const connectivityBtn = document.getElementById('settingsConnectivityRefresh')
+    if (connectivityBtn) {
+        connectivityBtn.onclick = () => {
+            console.log('[Settings] Connectivity refresh clicked')
+            updateConnectivityStatus(true)
+        }
     }
 }
 
@@ -2301,52 +2375,6 @@ export function prepareAboutTab() {
     }
 }
 
-/**
- * Check and update connectivity status for GitHub and Mojang.
- */
-async function updateConnectivityStatus() {
-    console.log('[Settings] Starting connectivity check...')
-    const pairs = [
-        { status: 'deliveryStatusGitHub', indicator: 'deliveryIndicatorGitHub' },
-        { status: 'deliveryStatusMojang', indicator: 'deliveryIndicatorMojang' }
-    ]
-
-    try {
-        const invokePromise = ipcRenderer.invoke('connectivity:check')
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('IPC Timeout')), 10000))
-        
-        const results = await Promise.race([invokePromise, timeoutPromise])
-        console.log('[Settings] Connectivity check results:', results)
-        
-        for (const pair of pairs) {
-            const statusEl = document.getElementById(pair.status)
-            const indicatorEl = document.getElementById(pair.indicator)
-            if (!statusEl || !indicatorEl) continue
-
-            const isGitHub = pair.status.toLowerCase().includes('github')
-            const isOk = isGitHub ? results.github : results.mojang
-
-            if (isOk) {
-                statusEl.innerHTML = 'Подключено'
-                statusEl.style.color = '#7dbb00'
-                indicatorEl.style.background = '#7dbb00'
-            } else {
-                statusEl.innerHTML = 'Ошибка'
-                statusEl.style.color = '#ff3300'
-                indicatorEl.style.background = '#ff3300'
-            }
-        }
-    } catch (e) {
-        console.error('[Settings] Connectivity check failed:', e)
-        for (const pair of pairs) {
-            const statusEl = document.getElementById(pair.status)
-            if (statusEl) {
-                statusEl.innerHTML = 'Ошибка: ' + e.message
-                statusEl.style.color = '#ff3300'
-            }
-        }
-    }
-}
 
 /**
  * Update Tab
@@ -2418,6 +2446,16 @@ export function populateSettingsUpdateInformation(data) {
             if (!_isDev) {
                 ipcRenderer.send('autoUpdateAction', 'checkForUpdate')
                 settingsUpdateButtonStatus(Lang.queryJS('settings.updates.checkingForUpdatesButton'), true)
+                
+                // Safety timeout: reset button if no response within 15 seconds
+                if (window._updateCheckTimeout) clearTimeout(window._updateCheckTimeout)
+                window._updateCheckTimeout = setTimeout(() => {
+                    const els = getUpdateTabElements()
+                    if (els && els.settingsUpdateActionButton && els.settingsUpdateActionButton.innerHTML === Lang.queryJS('settings.updates.checkingForUpdatesButton')) {
+                        console.warn('[Settings] Update check timed out.')
+                        settingsUpdateButtonStatus(Lang.queryJS('settings.updates.checkForUpdatesButton'), false)
+                    }
+                }, 15000)
             } else {
                 console.log('Update check skipped in dev mode.')
                 settingsUpdateButtonStatus('Dev Mode: No Updates', true)
@@ -2463,6 +2501,7 @@ export async function prepareSettings(first = false) {
         try { prepareAboutTab() } catch (e) { console.error('Failed to prepare about tab:', e) }
         try { bindP2PInfoButton() } catch (e) { console.error('Failed to bind P2P info button:', e) }
         try { bindP2PStatsButton() } catch (e) { console.error('Failed to bind P2P stats button:', e) }
+        try { bindRefreshButtons() } catch (e) { console.error('Failed to bind Refresh buttons:', e) }
         
         console.log('[Settings] prepareSettings complete.')
     } catch (err) {

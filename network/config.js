@@ -27,6 +27,17 @@ module.exports = {
             "launcher_meta": "https://f-launcher.ru/fox/new/mirror/metadata",
             "java_manifest": "https://f-launcher.ru/fox/new/mirror/java/manifest.json",
             "distribution": "https://f-launcher.ru/fox/new/distribution.json"
+        },
+        {
+            "name": "Ext 1 Mirror",
+            "assets": "https://mirror.nikita.best/assets/objects",
+            "libraries": "https://mirror.nikita.best/libraries",
+            "client": "https://mirror.nikita.best/client",
+            "version_manifest": "https://mirror.nikita.best/metadata/version_manifest_v2.json",
+            "piston_meta": "https://mirror.nikita.best/metadata",
+            "launcher_meta": "https://mirror.nikita.best/metadata",
+            "java_manifest": "https://mirror.nikita.best/java/manifest.json",
+            "distribution": "https://mirror.nikita.best/distribution.json"
         }
         // {
         //     name: "Example Mirror",

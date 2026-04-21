@@ -12,6 +12,12 @@ const path = require('path')
 const isDev = require('../assets/js/core/isdev')
 const semver = require('semver')
 
+const { DISTRO_PUB_KEYS } = require('../../network/config')
+const { verifyDistribution } = require('../assets/js/core/util/SignatureUtils')
+const ConfigManager = require('../assets/js/core/configmanager')
+
+const CUSTOM_UPDATE_URL = 'https://f-launcher.ru/fox/new/updates'
+
 class AutoUpdaterService {
     constructor() {
         this.event = null
@@ -33,9 +39,44 @@ class AutoUpdaterService {
                 }
                 break
             case 'checkForUpdate':
-                getAutoUpdater().checkForUpdates().catch(err => {
+                console.log('[AutoUpdater] Received checkForUpdate request.')
+                try {
+                    const autoUpdater = getAutoUpdater()
+                    autoUpdater.checkForUpdates().then((result) => {
+                        console.log('[AutoUpdater] Update check completed (Primary).', result ? 'Update available: ' + !!result.updateInfo : 'No result')
+                    }).catch(async (err) => {
+                        console.warn('[AutoUpdater] Primary update check failed, attempting fallback to custom server...', err.message)
+                        
+                        try {
+                            // Switch to Custom Server
+                            autoUpdater.setFeedURL({
+                                provider: 'generic',
+                                url: CUSTOM_UPDATE_URL
+                            })
+
+                            // Verify signature of latest.yml
+                            const isSigned = await this.verifyMetadataSignature(CUSTOM_UPDATE_URL)
+                            if (isSigned) {
+                                console.log('[AutoUpdater] Custom server manifest signature verified. Checking for updates...')
+                                autoUpdater.checkForUpdates().then((res) => {
+                                    console.log('[AutoUpdater] Fallback update check completed.', res ? 'Update available: ' + !!res.updateInfo : 'No result')
+                                }).catch(fallbackErr => {
+                                    console.error('[AutoUpdater] Fallback update check failed:', fallbackErr)
+                                    this.sendError(event.sender, fallbackErr)
+                                })
+                            } else {
+                                console.error('[AutoUpdater] Custom server manifest signature INVALID or missing. Aborting.')
+                                this.sendError(event.sender, new Error('Update verification failed (Signature Invalid)'))
+                            }
+                        } catch (fallbackEx) {
+                            console.error('[AutoUpdater] Error during fallback initialization:', fallbackEx)
+                            this.sendError(event.sender, fallbackEx)
+                        }
+                    })
+                } catch (err) {
+                    console.error('[AutoUpdater] Synchronous error during checkForUpdates:', err)
                     this.sendError(event.sender, err)
-                })
+                }
                 break
             case 'allowPrereleaseChange':
                 this.handlePrereleaseChange(data)
@@ -89,6 +130,34 @@ class AutoUpdaterService {
             getAutoUpdater().allowPrerelease = (preRelComp != null && preRelComp.length > 0)
         } else {
             getAutoUpdater().allowPrerelease = data
+        }
+    }
+
+    async verifyMetadataSignature(url) {
+        const yamlName = process.platform === 'darwin' ? 'latest-mac.yml' : 'latest.yml'
+        const yamlUrl = `${url}/${yamlName}`
+        const sigUrl = `${yamlUrl}.sig`
+
+        try {
+            console.log(`[AutoUpdater] Verifying signature for ${yamlName}...`)
+            const yamlRes = await ConfigManager.fetchWithTimeout(yamlUrl, { cache: 'no-store' }, 8000)
+            if (!yamlRes.ok) throw new Error(`YAML fetch failed: ${yamlRes.status}`)
+            
+            const yamlBuffer = Buffer.from(await yamlRes.arrayBuffer())
+
+            const sigRes = await ConfigManager.fetchWithTimeout(sigUrl, { cache: 'no-store' }, 5000)
+            if (!sigRes.ok) throw new Error(`SIG fetch failed: ${sigRes.status}`)
+            
+            const signatureHex = (await sigRes.text()).trim()
+
+            return verifyDistribution({
+                dataHex: yamlBuffer.toString('hex'),
+                signatureHex: signatureHex,
+                trustedKeys: DISTRO_PUB_KEYS
+            })
+        } catch (e) {
+            console.error('[AutoUpdater] Signature verification error:', e.message)
+            return false
         }
     }
 

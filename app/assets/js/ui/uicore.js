@@ -93,6 +93,10 @@ export let updateCheckListener
  * @param {any} info
  */
 ipcRenderer.on('autoUpdateNotification', (event, arg, info) => {
+    if (window._updateCheckTimeout) {
+        clearTimeout(window._updateCheckTimeout)
+        window._updateCheckTimeout = null
+    }
     switch (arg) {
         case 'checking-for-update':
             loggerAutoUpdater.info('Checking for update..')
