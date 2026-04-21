@@ -246,8 +246,6 @@
                             <button class="settingsNavItem" rSc="settingsTabDelivery"
                                 data-lang="settings.navDelivery"></button>
                             <div class="settingsNavSpacer"></div>
-                            <button class="settingsNavItem" rSc="settingsTabAbout"
-                                data-lang="settings.navAbout"></button>
                             <button class="settingsNavItem" rSc="settingsTabUpdate" id="settingsNavUpdate"
                                 data-lang="settings.navUpdates"></button>
                             <div id="settingsNavContentBottom">
@@ -710,44 +708,57 @@
                             style="background: rgba(255,255,255,0.1); border: none; color: white; padding: 8px 16px; border-radius: 4px; cursor: pointer; transition: 0.2s;"><span
                                 data-lang="settings.p2pNetworkInfoButton"></span></button>
                         <button id="settingsP2PStatsButton"
-                            style="background: rgba(255,255,255,0.1); border: none; color: white; padding: 8px 16px; border-radius: 4px; cursor: pointer; transition: 0.2s;">Общая статистика P2P</button>
+                            style="background: rgba(255,255,255,0.1); border: none; color: white; padding: 8px 16px; border-radius: 4px; cursor: pointer; transition: 0.2s;">Общая
+                            статистика P2P</button>
                     </div>
 
                     <div style="width: 100%; height: 1px; background: rgba(255,255,255,0.1); margin: 20px 0;"></div>
 
-                    <div class="settingsFieldContainer" style="flex-direction: column; align-items: flex-start; gap: 15px;">
+                    <div class="settingsFieldContainer"
+                        style="flex-direction: column; align-items: flex-start; gap: 15px;">
                         <div class="settingsFieldLeft">
                             <span class="settingsFieldTitle">Состояние зеркал загрузки</span>
                             <span class="settingsFieldDesc">Текущий статус и задержка официальных зеркал.</span>
                         </div>
-                        <div id="settingsMirrorStatusContainer" style="width: 100%; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 5px; border: 1px solid rgba(255,255,255,0.05);">
-                            <div style="text-align: center; color: #888; font-size: 11px; padding: 10px;">Загрузка...</div>
+                        <div id="settingsMirrorStatusContainer"
+                            style="width: 100%; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 5px; border: 1px solid rgba(255,255,255,0.05);">
+                            <div style="text-align: center; color: #888; font-size: 11px; padding: 10px;">Загрузка...
+                            </div>
                         </div>
                     </div>
 
-                    <div class="settingsFieldContainer" style="flex-direction: column; align-items: flex-start; gap: 15px;">
+                    <div class="settingsFieldContainer"
+                        style="flex-direction: column; align-items: flex-start; gap: 15px;">
                         <div class="settingsFieldLeft">
                             <span class="settingsFieldTitle">Состояние P2P узлов (Bootstrap)</span>
                             <span class="settingsFieldDesc">Статус подключения к распределенной сети.</span>
                         </div>
-                        <div id="settingsBootstrapStatusContainer" style="width: 100%; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 5px; border: 1px solid rgba(255,255,255,0.05);">
-                            <div style="text-align: center; color: #888; font-size: 11px; padding: 10px;">Загрузка...</div>
+                        <div id="settingsBootstrapStatusContainer"
+                            style="width: 100%; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 5px; border: 1px solid rgba(255,255,255,0.05);">
+                            <div style="text-align: center; color: #888; font-size: 11px; padding: 10px;">Загрузка...
+                            </div>
                         </div>
                     </div>
 
-                    <div class="settingsFieldContainer" style="flex-direction: column; align-items: flex-start; gap: 15px;">
+                    <div class="settingsFieldContainer"
+                        style="flex-direction: column; align-items: flex-start; gap: 15px;">
                         <div class="settingsFieldLeft">
                             <span class="settingsFieldTitle">Доступность сервисов</span>
                             <span class="settingsFieldDesc">Проверка связи с основными API.</span>
                         </div>
-                        <div style="display: flex; gap: 20px; width: 100%; background: rgba(0,0,0,0.15); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                        <div
+                            style="display: flex; gap: 20px; width: 100%; background: rgba(0,0,0,0.15); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
                             <div style="display: flex; align-items: center; gap: 10px;">
-                                <div id="deliveryIndicatorGitHub" style="width: 8px; height: 8px; border-radius: 50%; background: #555;"></div>
-                                <span style="font-size: 13px; color: #ccc;">GitHub: <span id="deliveryStatusGitHub" style="color: #888;">Проверка...</span></span>
+                                <div id="deliveryIndicatorGitHub"
+                                    style="width: 8px; height: 8px; border-radius: 50%; background: #555;"></div>
+                                <span style="font-size: 13px; color: #ccc;">GitHub: <span id="deliveryStatusGitHub"
+                                        style="color: #888;">Проверка...</span></span>
                             </div>
                             <div style="display: flex; align-items: center; gap: 10px;">
-                                <div id="deliveryIndicatorMojang" style="width: 8px; height: 8px; border-radius: 50%; background: #555;"></div>
-                                <span style="font-size: 13px; color: #ccc;">Mojang: <span id="deliveryStatusMojang" style="color: #888;">Проверка...</span></span>
+                                <div id="deliveryIndicatorMojang"
+                                    style="width: 8px; height: 8px; border-radius: 50%; background: #555;"></div>
+                                <span style="font-size: 13px; color: #ccc;">Mojang: <span id="deliveryStatusMojang"
+                                        style="color: #888;">Проверка...</span></span>
                             </div>
                         </div>
                     </div>
@@ -757,7 +768,9 @@
                     <div class="settingsFieldContainer">
                         <div class="settingsFieldLeft">
                             <span class="settingsFieldTitle" style="color: #ffcc00;">БЕЗ MOJANG</span>
-                            <span class="settingsFieldDesc" style="color: #aaa;">Блокирует загрузку с официальных серверов Mojang. <br><b style="color: #ff3300;">(Только для разработчиков, не включать!)</b></span>
+                            <span class="settingsFieldDesc" style="color: #aaa;">Блокирует загрузку с официальных
+                                серверов Mojang. <br><b style="color: #ff3300;">(Только для разработчиков, не
+                                    включать!)</b></span>
                         </div>
                         <div class="settingsFieldRight">
                             <label class="toggleSwitch">
@@ -770,7 +783,8 @@
                     <div class="settingsFieldContainer">
                         <div class="settingsFieldLeft">
                             <span class="settingsFieldTitle" style="color: #ff3300;">БЕЗ СЕРВЕРОВ (P2P ONLY)</span>
-                            <span class="settingsFieldDesc" style="color: #aaa;">Блокирует ВСЕ внешние HTTP сервера. <br><b style="color: #ff3300;">(Только для разработчиков, не включать!)</b></span>
+                            <span class="settingsFieldDesc" style="color: #aaa;">Блокирует ВСЕ внешние HTTP сервера.
+                                <br><b style="color: #ff3300;">(Только для разработчиков, не включать!)</b></span>
                         </div>
                         <div class="settingsFieldRight">
                             <label class="toggleSwitch">
@@ -780,37 +794,44 @@
                         </div>
                     </div>
                 </div>
-                <div id="settingsTabAbout" class="settingsTab" style="display: none;">
-                    <div class="settingsTabHeader">
-                        <span class="settingsTabHeaderText"><span data-lang="settings.aboutTabHeaderText"></span></span>
-                        <span class="settingsTabHeaderDesc"><span data-lang="settings.aboutTabHeaderDesc"></span></span>
-                    </div>
-                    <div id="settingsAboutCurrentContainer">
-                        <div id="settingsAboutCurrentContent">
-                            <div id="settingsAboutCurrentHeadline">
+                <div id="settingsTabUpdate" class="settingsTab" style="display: none;">
+                    <!-- Unified Update & Status Card -->
+                    <div id="settingsUpdateCard">
+                        <div id="settingsUpdateCardMain">
+                            <div id="settingsUpdateCardLeft">
                                 <img id="settingsAboutLogo" src="./assets/images/icon.png">
-                                <span id="settingsAboutTitle"><span data-lang="settings.aboutTitle"></span></span>
                             </div>
-                            <div id="settingsAboutCurrentVersion">
-                                <div id="settingsAboutCurrentVersionCheck">&#10003;</div>
-                                <div id="settingsAboutCurrentVersionDetails">
+                            <div id="settingsUpdateCardMiddle">
+                                <div id="settingsUpdateVersionGroup">
                                     <span id="settingsAboutCurrentVersionTitle"><span
                                             data-lang="settings.stableRelease"></span></span>
                                     <div id="settingsAboutCurrentVersionLine">
-                                        <span id="settingsAboutCurrentVersionText"><span
-                                                data-lang="settings.versionText"></span></span>
                                         <span id="settingsAboutCurrentVersionValue">Loading...</span>
                                     </div>
                                 </div>
+                                <div id="settingsUpdateStatusGroup">
+                                    <div id="settingsAboutCurrentVersionCheck"><i class="fas fa-check"></i></div>
+                                    <span id="settingsUpdateTitle"></span>
+                                </div>
+                            </div>
+                            <div id="settingsUpdateCardRight">
+                                <button id="settingsUpdateActionButton"><span
+                                        data-lang="settings.checkForUpdates"></span></button>
                             </div>
                         </div>
-                        <div id="settingsAboutButtons">
-                            <a href="#" id="settingsAboutSupportButton" class="settingsAboutButton"><span
-                                    data-lang="settings.support"></span></a>
-                            <a href="#" id="settingsAboutDevToolsButton" class="settingsAboutButton"><span
-                                    data-lang="settings.devToolsConsole"></span></a>
+                        <div id="settingsUpdateCardFooter">
+                            <div id="settingsAboutButtons">
+                                <a href="#" id="settingsAboutSupportButton" class="settingsAboutButton"><span
+                                        data-lang="settings.support"></span></a>
+                                <div class="settingsAboutLinkDivider"></div>
+                                <a href="#" id="settingsAboutDevToolsButton" class="settingsAboutButton"><span
+                                        data-lang="settings.devToolsConsole"></span></a>
+                            </div>
                         </div>
                     </div>
+
+
+                    <!-- Consolidated Changelog -->
                     <div class="settingsChangelogContainer">
                         <div class="settingsChangelogContent">
                             <div class="settingsChangelogHeadline">
@@ -827,60 +848,15 @@
                                     data-lang="settings.viewReleaseNotes"></span></a>
                         </div>
                     </div>
-                </div>
-                <div id="settingsTabUpdate" class="settingsTab" style="display: none;">
-                    <div class="settingsTabHeader">
-                        <span class="settingsTabHeaderText"><span
-                                data-lang="settings.launcherUpdatesHeaderText"></span></span>
-                        <span class="settingsTabHeaderDesc"><span
-                                data-lang="settings.launcherUpdatesHeaderDesc"></span></span>
-                    </div>
-                    <div id="settingsUpdateStatusContainer">
-                        <div id="settingsUpdateStatusContent">
-                            <div id="settingsUpdateStatusHeadline">
-                                <span id="settingsUpdateTitle"><!-- You Are Running the Latest Version --></span>
-                            </div>
-                            <div id="settingsUpdateVersion">
-                                <div id="settingsUpdateVersionCheck">&#10003;</div>
-                                <div id="settingsUpdateVersionDetails">
-                                    <span id="settingsUpdateVersionTitle"><span
-                                            data-lang="settings.stableRelease"></span></span>
-                                    <div id="settingsUpdateVersionLine">
-                                        <span id="settingsUpdateVersionText"><span
-                                                data-lang="settings.versionText"></span> </span>
-                                        <span id="settingsUpdateVersionValue">Loading...</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div id="settingsUpdateActionContainer">
-                                <button id="settingsUpdateActionButton"><span
-                                        data-lang="settings.checkForUpdates"></span></button>
-                            </div>
-                        </div>
-                    </div>
 
-                    <div class="settingsChangelogContainer">
-                        <div class="settingsChangelogContent">
-                            <div class="settingsChangelogHeadline">
-                                <div class="settingsChangelogLabel"><span data-lang="settings.whatsNew"></span></div>
-                                <div class="settingsChangelogTitle"><span
-                                        data-lang="settings.updateReleaseNotes"></span></div>
+                    <!-- Unified Factory Reset Card -->
+                    <div id="settingsFactoryResetContainer">
+                        <div id="settingsFactoryResetMain">
+                            <div id="settingsFactoryResetMiddle">
+                                <span class="settingsFieldTitle"><span data-lang="settings.p2pResetTitle"></span></span>
+                                <span class="settingsFieldDesc"><span data-lang="settings.p2pResetDesc"></span></span>
                             </div>
-                            <div class="settingsChangelogText">
-                                <span data-lang="settings.noReleaseNotes"></span>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="settingsFactoryResetContainer" style="margin-top: 20px;">
-                        <div class="settingsFieldContainer"
-                            style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
-                            <div class="settingsFieldLeft">
-                                <span class="settingsFieldTitle" style="color: #ff4444;"><span
-                                        data-lang="settings.p2pResetTitle"></span></span>
-                                <span class="settingsFieldDesc" style="color: #aaa;"><span
-                                        data-lang="settings.p2pResetDesc"></span></span>
-                            </div>
-                            <div class="settingsFieldRight">
+                            <div id="settingsFactoryResetRight">
                                 <button id="settingsFactoryResetButton" class="settingsFactoryResetButton">
                                     <span data-lang="settings.factoryReset.button"></span>
                                 </button>

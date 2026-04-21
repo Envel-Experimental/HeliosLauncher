@@ -60,8 +60,7 @@ function generateOfflineUUID(username) {
     // Set variant to 2 (RFC 4122)
     hash[8] = (hash[8] & 0x3f) | 0x80
 
-    const hex = hash.toString('hex')
-    return `${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}`
+    return hash.toString('hex')
 }
 
 exports.addMojangAccount = async function (username, password) {
@@ -136,7 +135,7 @@ async function fullMicrosoftAuthFlow(entryCode, authMode) {
                 } catch (e) {
                     // Ignore extraction errors
                 }
-                const uuidHex = generateOfflineUUID(username).replace(/-/g, '')
+                const uuidHex = generateOfflineUUID(username)
                 mcProfileResponse = {
                     responseStatus: RestResponseStatus.SUCCESS,
                     data: {

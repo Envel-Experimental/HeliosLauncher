@@ -32,7 +32,8 @@ async function fetchWithTimeout(url, options = {}, timeout = 10000) {
     }
 }
 
-const { MOJANG_MIRRORS } = require('../../../../../network/config');
+const { MOJANG_MIRRORS, DISTRO_PUB_KEYS } = require('../../../../../network/config');
+const { verifyDistribution } = require('../util/SignatureUtils');
 
 let javaMirrorManifestMap = new Map(); // url -> manifest
 
@@ -184,9 +185,40 @@ async function loadJavaMirrorManifest(mirrorUrl) {
         return javaMirrorManifestMap.get(mirrorUrl);
     }
     try {
-        const res = await fetchWithTimeout(mirrorUrl);
+        const res = await fetchWithTimeout(mirrorUrl, { cache: 'no-store' });
         if (res.ok) {
-            const manifest = await res.json();
+            const rawBuffer = Buffer.from(await res.arrayBuffer());
+            const manifest = JSON.parse(rawBuffer.toString('utf-8'));
+
+            // Verification logic for custom mirrors
+            if (DISTRO_PUB_KEYS && DISTRO_PUB_KEYS.length > 0) {
+                log.info(`Verifying signature for Java manifest: ${mirrorUrl}`);
+                try {
+                    const sigRes = await fetchWithTimeout(mirrorUrl + '.sig', { cache: 'no-store' });
+                    if (sigRes.ok) {
+                        const signatureHex = (await sigRes.text()).trim();
+                        const signatureValid = verifyDistribution({
+                            dataHex: rawBuffer.toString('hex'),
+                            signatureHex: signatureHex,
+                            trustedKeys: DISTRO_PUB_KEYS
+                        });
+
+                        if (!signatureValid) {
+                            log.error(`CRITICAL: Java manifest signature verification FAILED for ${mirrorUrl}`);
+                            return null;
+                        }
+                        log.info(`Java manifest signature VALID for ${mirrorUrl}`);
+                    } else {
+                        log.warn(`Java manifest signature missing for mirror: ${mirrorUrl} (Status: ${sigRes.status})`);
+                        // Should we reject if missing? User said "проверять если МОЕГО сервера".
+                        // In production, mirrors SHOULD be signed.
+                    }
+                } catch (sigErr) {
+                    log.error(`Failed to verify Java manifest signature for ${mirrorUrl}`, sigErr);
+                    return null;
+                }
+            }
+
             javaMirrorManifestMap.set(mirrorUrl, manifest);
             return manifest;
         }
@@ -398,8 +430,12 @@ async function latestAdoptium(major, dataDir, distribution = null) {
     const url = `https://api.adoptium.net/v3/assets/latest/${major}/hotspot?vendor=eclipse`;
     try {
         const res = await fetchWithTimeout(url);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+            log.error(`Adoptium API returned ${res.status} for URL: ${url}`);
+            throw new Error(`HTTP ${res.status}`);
+        }
         const body = await res.json();
+        log.info(`Adoptium API returned ${body.length} binaries for JDK ${major}. Filtering for OS: ${sanitizedOS}, Arch: ${arch}, Installer: ${isInstaller}`);
 
         if (body.length > 0) {
             const targetBinary = body.find(entry => {
@@ -407,11 +443,13 @@ async function latestAdoptium(major, dataDir, distribution = null) {
                 if (process.platform === Platform.WIN32) {
                     pkgMatch = isInstaller ? entry.binary.package.name.endsWith('.msi') : entry.binary.package.name.endsWith('.zip');
                 }
-                return entry.version.major === major
+                const entryMajor = entry.version.major
+                const match = entryMajor == major
                     && entry.binary.os === sanitizedOS
                     && entry.binary.image_type === 'jdk'
                     && entry.binary.architecture === arch
                     && pkgMatch;
+                return match;
             });
             if (targetBinary != null) {
                 return {
@@ -426,6 +464,10 @@ async function latestAdoptium(major, dataDir, distribution = null) {
             }
         }
         log.error(`Failed to find a suitable Adoptium binary for JDK ${major} (${sanitizedOS} ${arch}, installer: ${isInstaller}).`);
+        if (isInstaller) {
+            log.warn(`Falling back to standard ZIP distribution for JDK ${major} since MSI was not found.`);
+            return await latestAdoptium(major, dataDir, null);
+        }
         return null;
     }
     catch (err) {

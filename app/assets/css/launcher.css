@@ -78,7 +78,8 @@ button {
     -webkit-user-select: none;
 }
 
-#frameContentDarwin, #frameContentWin {
+#frameContentDarwin,
+#frameContentWin {
     display: none;
     width: 100%;
 }
@@ -2558,148 +2559,194 @@ input:checked+.toggleSwitchSlider:before {
 }
 
 /* * *
-* Settings View (Updates Tab)
+* Settings View (Updates Tab) - Unified Premium Card
 * * */
 
-/* Main about content container. */
-#settingsUpdateStatusContainer {
+/* * *
+* Settings View (Updates Tab) - Unified Premium Card
+* * */
+
+/* * *
+* Settings View (Updates Tab) - Unified Premium Card
+* * */
+
+#settingsTabUpdate {
+    padding: 30px 40px !important;
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
-    background: rgba(0, 0, 0, 0.25);
-    border: 1px solid rgba(126, 126, 126, 0.57);
-    border-radius: 3px;
-    width: 75%;
-    margin-bottom: 20px;
+    align-items: flex-start;
 }
 
-/* Update content. */
-#settingsUpdateStatusContent {
+#settingsUpdateCard,
+#settingsUpdateCard,
+#settingsFactoryResetContainer {
     display: flex;
     flex-direction: column;
-    padding: 15px;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    width: 100%;
+    max-width: 800px;
+    margin: 0;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
 }
 
-/* Update header elements. */
-#settingsUpdateStatusHeadline {
+#settingsFactoryResetContainer {
+    margin-top: 20px;
+}
+
+#settingsUpdateCardMain, 
+#settingsFactoryResetMain {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 24px 28px !important;
+    gap: 24px !important;
+}
+
+#settingsUpdateCardLeft {
+    width: 70px;
+    flex-shrink: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#settingsUpdateCardLeft #settingsAboutLogo {
+    width: 64px;
+    height: 64px;
+}
+
+#settingsUpdateCardMiddle,
+#settingsFactoryResetMiddle {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+#settingsUpdateStatusGroup {
     display: flex;
     align-items: center;
-    padding-bottom: 5px;
-    border-bottom: 1px solid rgba(126, 126, 126, 0.57);
+    gap: 10px;
+    padding: 6px 0;
 }
 
-#settingsUpdateTitle {
-    font-size: 16px;
-    padding-left: 10px;
-    font-weight: bold;
-}
-
-/* Update version container. */
-#settingsUpdateVersion {
-    display: flex;
+#settingsAboutCurrentVersionCheck {
+    display: flex !important;
     align-items: center;
-    padding: 10px 0px;
-    border-bottom: 1px solid rgba(126, 126, 126, 0.57);
-}
-
-/* Checkmark next to the version information. */
-#settingsUpdateVersionCheck {
+    justify-content: center;
+    background: #f68a33;
+    color: #ffffff;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
-    background: #23aa23;
-    text-align: center;
-    font-weight: bold;
-    margin: 11px 12px;
-    color: white;
-    height: 15px;
-    width: 15px;
-    font-size: 12px;
-    line-height: 17px;
-}
-
-/* Update version details container. */
-#settingsUpdateVersionDetails {
-    margin-left: 10px;
-}
-
-/* Release type text. */
-#settingsUpdateVersionTitle {
-    font-size: 12px;
-    font-family: "Roboto", serif;
-    font-weight: 500;
-    font-style: normal;
-    color: #23aa23;
-    font-weight: bold;
-}
-
-/* Current version text. */
-#settingsUpdateVersionLine {
     font-size: 10px;
-    color: grey;
-    font-weight: bold;
+    flex-shrink: 0;
+    box-shadow: 0 2px 5px rgba(246, 138, 51, 0.3);
 }
 
-/* Update action container. */
-#settingsUpdateActionContainer {
-    padding-top: 10px;
-    font-size: 14px;
-    font-weight: bold;
+#settingsAboutCurrentVersionCheck i {
+    transform: translateY(0.5px); /* Fine-tune FontAwesome offset */
 }
 
-/* Update action button styles. */
-#settingsUpdateActionButton {
+
+#settingsAboutCurrentVersionTitle {
+    font-size: 11px;
+    font-weight: 800;
+    color: #f68a33;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+}
+
+#settingsAboutCurrentVersionValue {
+    font-size: 28px;
+    font-weight: 900;
+    color: #ffffff;
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1;
+}
+
+#settingsUpdateCardRight,
+#settingsFactoryResetRight {
+    width: 200px !important;
+    min-width: 200px !important;
+    flex-shrink: 0;
     display: flex;
-    flex-direction: column;
-    padding-left: 10px;
-    background: none;
-    border: none;
-    font-size: 14px;
-    font-weight: bold;
-    cursor: pointer;
-    outline: none;
-    text-align: left;
-    transition: 0.25s ease;
+    justify-content: flex-end;
 }
 
-#settingsUpdateActionButton:hover,
-#settingsUpdateActionButton:focus {
-    text-shadow: 0px 0px 20px white, 0px 0px 20px white, 0px 0px 20px white;
-}
-
-#settingsUpdateActionButton:active {
-    text-shadow: 0px 0px 20px #c7c7c7, 0px 0px 20px #c7c7c7, 0px 0px 20px #c7c7c7;
-    color: #c7c7c7;
-}
-
-#settingsUpdateActionButton:disabled {
-    pointer-events: none;
-}
-
-.settingsFactoryResetButton {
-    background: rgba(255, 68, 68, 0.1);
-    border: 1px solid rgba(255, 68, 68, 0.3);
-    color: #ffcccc;
-    padding: 8px 20px;
-    border-radius: 4px;
-    cursor: pointer;
+#settingsUpdateActionButton,
+#settingsFactoryResetButton {
+    width: 100%;
+    padding: 12px 0;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    color: #ffffff;
     font-size: 13px;
-    font-weight: bold;
-    transition: all 0.25s ease;
-    outline: none;
-    font-family: "Roboto", serif;
+    font-weight: 700;
+    cursor: pointer;
+    transition: 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    text-align: center;
 }
 
-.settingsFactoryResetButton:hover,
-.settingsFactoryResetButton:focus {
-    background: rgba(255, 68, 68, 0.25);
-    border-color: rgba(255, 68, 68, 0.6);
-    box-shadow: 0px 0px 15px rgba(255, 68, 68, 0.4);
-    text-shadow: 0px 0px 10px #ffcccc;
+#settingsUpdateActionButton:hover {
+    background: rgba(246, 138, 51, 0.2);
+    border-color: rgba(246, 138, 51, 0.4);
 }
 
-.settingsFactoryResetButton:active {
-    background: rgba(255, 68, 68, 0.35);
-    transform: translateY(1px);
-    box-shadow: 0px 0px 8px rgba(255, 68, 68, 0.3);
+#settingsFactoryResetButton:hover {
+    background: rgba(255, 68, 68, 0.2);
+    border-color: rgba(255, 68, 68, 0.4);
 }
+
+#settingsUpdateCardFooter {
+    padding: 14px 28px;
+    background: rgba(0, 0, 0, 0.15);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+#settingsAboutButtons {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+}
+
+.settingsAboutLinkDivider {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.settingsAboutButton {
+    font-size: 12px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.5);
+    text-decoration: none;
+    transition: 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.settingsAboutButton:hover {
+    color: #ffffff;
+}
+
+
+.settingsFactoryResetButton:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(255, 94, 98, 0.6);
+    filter: brightness(1.1);
+}
+
 
 /*******************************************************************************
  *                                                                             *

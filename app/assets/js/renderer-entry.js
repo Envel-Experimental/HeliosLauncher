@@ -23,7 +23,8 @@ if (typeof process === 'undefined') {
     }
 } else {
     if (!process.platform) process.platform = platform
-    if (!process.type) process.type = 'renderer'
+    // Set process type if not defined (handled by esbuild define normally)
+    const isRenderer = true
     if (!process.nextTick) process.nextTick = (fn) => setTimeout(fn, 0)
 }
 

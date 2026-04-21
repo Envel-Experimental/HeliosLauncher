@@ -153,7 +153,14 @@ async function downloadQueue(assets, onProgress) {
         }
     };
 
-    // 1. Main Pass (Fast pass: try only once and defer failures)
+    // 1. Discovery Pass (Wait for P2P if enabled and no peers found yet)
+    // This gives HyperDHT time to find peers before we start deferring everything.
+    if (P2PEngine.peers.length === 0) {
+        log.info('[DownloadEngine] Waiting 1.5s for P2P discovery...');
+        await sleep(1500);
+    }
+
+    // 2. Main Pass (Fast pass: try only once and defer failures)
     const workers = [];
     for (let i = 0; i < limit; i++) workers.push(worker(false, true));
     await Promise.all(workers);
@@ -172,9 +179,13 @@ async function downloadQueue(assets, onProgress) {
 
     // 3. Last Check
     if (deferredQueue.length > 0) {
-        const names = deferredQueue.map(a => a.id).join(', ');
-        const fileWord = deferredQueue.length === 1 ? 'file' : 'files';
-        const errorMsg = `Failed to download ${deferredQueue.length} ${fileWord}: ${names}. Please check your internet connection and try again.`;
+        const MAX_REPORT_NAMES = 5;
+        let names = deferredQueue.slice(0, MAX_REPORT_NAMES).map(a => a.id).join(', ');
+        if (deferredQueue.length > MAX_REPORT_NAMES) {
+            names += ` ... и еще ${deferredQueue.length - MAX_REPORT_NAMES} файл(ов)`;
+        }
+        const fileWord = deferredQueue.length === 1 ? 'файл' : 'файлов';
+        const errorMsg = `Не удалось скачать ${deferredQueue.length} ${fileWord}: ${names}. Пожалуйста, проверьте интернет-соединение и попробуйте снова.`;
         const criticalError = Object.assign(new Error(errorMsg), {
             failedFiles: deferredQueue.map(a => ({
                 id: a.id,

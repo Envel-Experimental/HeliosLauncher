@@ -1296,7 +1296,7 @@ export function populateAuthAccounts() {
                     </div>
                     <div class="settingsAuthAccountDetailPane">
                         <div class="settingsAuthAccountDetailTitle">${Lang.queryJS('settings.authAccountPopulate.uuid')}</div>
-                        <div class="settingsAuthAccountDetailValue">${acc.uuid}</div>
+                        <div class="settingsAuthAccountDetailValue">${acc.uuid.replace(/-/g, '')}</div>
                     </div>
                 </div>
                 <div class="settingsAuthAccountActions">
@@ -2173,10 +2173,20 @@ async function prepareJavaTab() {
  * About Tab
  */
 
-export const settingsTabAbout = document.getElementById('settingsTabAbout')
-export const settingsAboutChangelogTitle = settingsTabAbout.getElementsByClassName('settingsChangelogTitle')[0]
-export const settingsAboutChangelogText = settingsTabAbout.getElementsByClassName('settingsChangelogText')[0]
-export const settingsAboutChangelogButton = settingsTabAbout.getElementsByClassName('settingsChangelogButton')[0]
+// About & Updates consolidated tab elements (Initialized lazily)
+export let settingsTabAbout = null
+export let settingsAboutChangelogTitle = null
+export let settingsAboutChangelogText = null
+export let settingsAboutChangelogButton = null
+
+function initAboutTabElements() {
+    settingsTabAbout = document.getElementById('settingsTabUpdate')
+    if (settingsTabAbout) {
+        settingsAboutChangelogTitle = settingsTabAbout.getElementsByClassName('settingsChangelogTitle')[0]
+        settingsAboutChangelogText = settingsTabAbout.getElementsByClassName('settingsChangelogText')[0]
+        settingsAboutChangelogButton = settingsTabAbout.getElementsByClassName('settingsChangelogButton')[0]
+    }
+}
 
 // Bind the devtools toggle button.
 if (typeof safeSetOnClick === 'function') {
@@ -2273,6 +2283,7 @@ export function populateReleaseNotes() {
  * Prepare account tab for display.
  */
 export function prepareAboutTab() {
+    initAboutTabElements()
     populateAboutVersionInformation()
     populateReleaseNotes()
     updateConnectivityStatus()
@@ -2281,8 +2292,8 @@ export function prepareAboutTab() {
     if (supportBtn) {
         supportBtn.onclick = () => {
             const hAPI = window.HeliosAPI || {}
-            if (hAPI.window) {
-                hAPI.window.openExternal(ConfigManager.getSupportUrl())
+            if (hAPI.shell) {
+                hAPI.shell.openExternal(ConfigManager.getSupportUrl())
             } else {
                 shell.openExternal(ConfigManager.getSupportUrl())
             }
@@ -2348,9 +2359,9 @@ export function getUpdateTabElements() {
     return {
         settingsTabUpdate,
         settingsUpdateTitle: document.getElementById('settingsUpdateTitle'),
-        settingsUpdateVersionCheck: document.getElementById('settingsUpdateVersionCheck'),
-        settingsUpdateVersionTitle: document.getElementById('settingsUpdateVersionTitle'),
-        settingsUpdateVersionValue: document.getElementById('settingsUpdateVersionValue'),
+        settingsUpdateVersionCheck: document.getElementById('settingsAboutCurrentVersionCheck'),
+        settingsUpdateVersionTitle: document.getElementById('settingsAboutCurrentVersionTitle'),
+        settingsUpdateVersionValue: document.getElementById('settingsAboutCurrentVersionValue'),
         settingsUpdateChangelogTitle: settingsTabUpdate.getElementsByClassName('settingsChangelogTitle')[0],
         settingsUpdateChangelogText: settingsTabUpdate.getElementsByClassName('settingsChangelogText')[0],
         settingsUpdateChangelogCont: settingsTabUpdate.getElementsByClassName('settingsChangelogContainer')[0],
