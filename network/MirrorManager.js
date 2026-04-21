@@ -3,7 +3,11 @@ const url = require('url')
 const isDev = require('../app/assets/js/core/isdev')
 
 function logMain(msg) {
-    process.stdout.write(`>>> [MirrorManager] ${msg}\n`)
+    if (process && process.stdout && typeof process.stdout.write === 'function') {
+        process.stdout.write(`>>> [MirrorManager] ${msg}\n`)
+    } else {
+        console.log(`[MirrorManager] ${msg}`)
+    }
 }
 
 class MirrorManager {
@@ -65,7 +69,11 @@ class MirrorManager {
                 method: 'GET',
                 timeout: 8000,
                 headers: {
-                    'User-Agent': 'Mozilla/5.0 HeliosLauncher/1.0'
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 HeliosLauncher/1.0',
+                    'Referer': 'https://minecraft.net/',
+                    'Origin': 'https://minecraft.net',
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache'
                 }
             }
 

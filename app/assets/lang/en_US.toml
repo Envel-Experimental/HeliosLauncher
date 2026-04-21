@@ -28,7 +28,7 @@ loginButtonText = "ВХОД"
 loginNeedAccountLink = "https://minecraft.net/store/minecraft-java-edition/"
 loginNeedAccountText = "Нужен аккаунт?"
 loginPasswordDisclaimer1 = "Имя пользователя должно состоять из английских букв и может содержать цифры и нижнее подчеркивание. От 4 до 16 символов."
-loginPasswordDisclaimer2 = "{appName} не связан с Mojang AB."
+loginPasswordDisclaimer2 = "Флаунчер не связан с Mojang AB."
 
 [ejs.loginOptions]
 loginOptionsTitle = "Опции входа"

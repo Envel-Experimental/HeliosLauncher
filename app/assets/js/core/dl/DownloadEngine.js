@@ -8,8 +8,15 @@ const fs = require('fs/promises');
 const fsSync = require('fs');
 const { pipeline } = require('stream/promises');
 const { Readable, Transform } = require('stream');
-const P2PEngine = require('../../../../../network/P2PEngine');
-const RaceManager = require('../../../../../network/RaceManager');
+let P2PEngine = require('../../../../../network/P2PEngine');
+let RaceManager = require('../../../../../network/RaceManager');
+
+// Test Hook for robust mocking in complex environments
+if (process.env.JEST_WORKER_ID) {
+    if (global.__P2P_MOCK__) P2PEngine = global.__P2P_MOCK__;
+    if (global.__RACE_MOCK__) RaceManager = global.__RACE_MOCK__;
+}
+
 const { MAX_PARALLEL_DOWNLOADS } = require('../../../../../network/constants');
 const ConfigManager = require('../configmanager');
 const isDev = require('../isdev');
@@ -404,7 +411,11 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
             const isP2P = !!response.p2pStream;
             if (await validateLocalFile(tempPath, algo, currentHash, asset.size, isP2P)) {
                 // Success! Atomic rename to final path with retries for Windows (Antivirus guard)
-                await safeRename(tempPath, decodedPath);
+                if (fsSync.existsSync(tempPath)) {
+                    await safeRename(tempPath, decodedPath);
+                } else {
+                    throw new Error(`Temp file disappeared before rename: ${tempPath}`);
+                }
 
                 // Report Success to MirrorManager
                 MirrorManager.reportSuccess(currentUrl, Date.now() - downloadStartTime, loaded);
@@ -461,7 +472,7 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
                     error: err.message
                 });
 
-                if (isDev) log.error(`[DownloadEngine] Critical failure for ${asset.id}:`, err);
+                if (isDev) log.debug(`[DownloadEngine] Attempt ${attempt + 1} failed for ${asset.id}: ${err.message}`);
                 
                 // Report Failure to MirrorManager (network or validation error)
                 MirrorManager.reportFailure(currentUrl, err.status);

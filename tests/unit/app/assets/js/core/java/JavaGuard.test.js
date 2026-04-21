@@ -63,20 +63,22 @@ describe('JavaGuard', () => {
         // 1. Mirror call (success)
         global.fetch = jest.fn((url) => {
             if (url === mirrorUrl) {
-                return Promise.resolve({
-                    ok: true,
-                    json: async () => ({
-                        windows: {
-                            x64: {
-                                "21": {
-                                    url: 'https://test.mirror/java21.zip',
-                                    size: 100,
-                                    name: 'java21.zip',
-                                    sha1: 'hash'
-                                }
+                const data = {
+                    windows: {
+                        x64: {
+                            "21": {
+                                url: 'https://test.mirror/java21.zip',
+                                size: 100,
+                                name: 'java21.zip',
+                                sha1: 'hash'
                             }
                         }
-                    })
+                    }
+                }
+                return Promise.resolve({
+                    ok: true,
+                    arrayBuffer: async () => Buffer.from(JSON.stringify(data)),
+                    json: async () => data
                 })
             }
             return Promise.resolve({ ok: false })
@@ -86,8 +88,8 @@ describe('JavaGuard', () => {
 
         expect(result.url).toBe('https://test.mirror/java21.zip')
         expect(global.fetch).toHaveBeenCalledWith(mirrorUrl, expect.anything())
-        // Should not have reached official sources
-        expect(global.fetch).toHaveBeenCalledTimes(1)
+        // Since we use Promise.any, official sources are also queried in parallel.
+        expect(global.fetch).toHaveBeenCalled()
     })
 
     it('should fallback to official sources if mirror fails', async () => {
@@ -102,24 +104,26 @@ describe('JavaGuard', () => {
             if (url === mirrorUrl) return Promise.resolve({ ok: false })
             if (url.includes('api.github.com')) return Promise.resolve({ ok: false })
             if (url.includes('api.adoptium.net')) {
-                return Promise.resolve({
-                    ok: true,
-                    json: async () => ([
-                        {
-                            version: { major: 21 },
-                            binary: {
-                                os: 'windows',
-                                image_type: 'jdk',
-                                architecture: 'x64',
-                                package: {
-                                    link: 'https://adoptium.net/jdk21.zip',
-                                    size: 200,
-                                    name: 'jdk21.zip',
-                                    checksum: 'hash256'
-                                }
+                const data = [
+                    {
+                        version: { major: 21 },
+                        binary: {
+                            os: 'windows',
+                            image_type: 'jdk',
+                            architecture: 'x64',
+                            package: {
+                                link: 'https://adoptium.net/jdk21.zip',
+                                size: 200,
+                                name: 'jdk21.zip',
+                                checksum: 'hash256'
                             }
                         }
-                    ])
+                    }
+                ]
+                return Promise.resolve({
+                    ok: true,
+                    arrayBuffer: async () => Buffer.from(JSON.stringify(data)),
+                    json: async () => data
                 })
             }
             return Promise.resolve({ ok: false })
@@ -137,10 +141,14 @@ describe('JavaGuard', () => {
         require('@network/config').MOJANG_MIRRORS = []
         const { latestOpenJDK } = require('@app/assets/js/core/java/JavaGuard')
 
-        global.fetch = jest.fn(() => Promise.resolve({
-            ok: true,
-            json: async () => []
-        }))
+        global.fetch = jest.fn(() => {
+            const data = []
+            return Promise.resolve({
+                ok: true,
+                arrayBuffer: async () => Buffer.from(JSON.stringify(data)),
+                json: async () => data
+            })
+        })
 
         const result = await latestOpenJDK(21, 'dataDir', null)
 

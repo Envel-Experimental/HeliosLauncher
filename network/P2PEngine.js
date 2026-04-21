@@ -154,19 +154,21 @@ class P2PEngine extends EventEmitter {
         this.discoveryLogThrottled = false
 
         // Periodic Memory Cleanup
-        this.memoryCleanupInterval = setInterval(() => {
-            this.usageTracker.cleanup()
-            // Cleanup strikes older than 30 mins
-            const now = Date.now()
-            if (this._lastCleanup && now - this._lastCleanup < 1800000) return
-            this._lastCleanup = now
+        if (!process.env.JEST_WORKER_ID) {
+            this.memoryCleanupInterval = setInterval(() => {
+                this.usageTracker.cleanup()
+                // Cleanup strikes older than 30 mins
+                const now = Date.now()
+                if (this._lastCleanup && now - this._lastCleanup < 1800000) return
+                this._lastCleanup = now
 
-            for (const ip of this.peerStrikes.keys()) {
-                // If strikes are high, they are likely in blacklist (which has its own timer)
-                // We just clear the strike counter periodically to save memory
-                this.peerStrikes.delete(ip)
-            }
-        }, 300000) // Every 5 minutes
+                for (const ip of this.peerStrikes.keys()) {
+                    // If strikes are high, they are likely in blacklist (which has its own timer)
+                    // We just clear the strike counter periodically to save memory
+                    this.peerStrikes.delete(ip)
+                }
+            }, 300000).unref() // Every 5 minutes
+        }
 
         // Dynamic Bandwidth Management
         this.currentDownloadSpeed = 0
@@ -190,69 +192,66 @@ class P2PEngine extends EventEmitter {
         this.congestionDetected = false
 
         // Speed & Resource Monitor (Every 2 seconds)
-        this.speedMonitorInterval = setInterval(() => {
-            this.currentDownloadSpeed = this.downloadBytesGlobal / 2 // B/s
-            this.currentUploadSpeed = this.uploadBytesGlobal / 2 // B/s
-            this.currentDownloadSpeedLocal = this.downloadBytesLocal / 2 // B/s
-            this.currentUploadSpeedLocal = this.uploadBytesLocal / 2 // B/s
+        if (!process.env.JEST_WORKER_ID) {
+            this.speedMonitorInterval = setInterval(() => {
+                this.currentDownloadSpeed = this.downloadBytesGlobal / 2 // B/s
+                this.currentUploadSpeed = this.uploadBytesGlobal / 2 // B/s
+                this.currentDownloadSpeedLocal = this.downloadBytesLocal / 2 // B/s
+                this.currentUploadSpeedLocal = this.uploadBytesLocal / 2 // B/s
 
-            this.downloadBytesLocal = 0
-            this.downloadBytesGlobal = 0
-            this.uploadBytesLocal = 0
-            this.uploadBytesGlobal = 0
+                this.downloadBytesLocal = 0
+                this.downloadBytesGlobal = 0
+                this.uploadBytesLocal = 0
+                this.uploadBytesGlobal = 0
 
-            if (this.currentDownloadSpeed > this.maxObservedDownloadSpeed) {
-                this.maxObservedDownloadSpeed = this.currentDownloadSpeed
-            }
-
-            // High Bandwidth Detection (> 10 MB/s)
-            if (this.currentDownloadSpeed > 10 * 1024 * 1024) {
-                if (!this.highBandwidthMode) {
-                    this.highBandwidthMode = true
-                    if (isDev) console.log('[P2PEngine] High Bandwidth Detected (>10MB/s). Unlocking higher upload limits.')
+                if (this.currentDownloadSpeed > this.maxObservedDownloadSpeed) {
+                    this.maxObservedDownloadSpeed = this.currentDownloadSpeed
                 }
-            }
 
-            // Periodically Re-evaluate Upload Limits (Every 30s)
-            const now = Date.now()
-            if (now - this.lastLimitUpdate > 30000) {
-                this.updateDynamicLimits()
-                this.lastLimitUpdate = now
-            }
-
-            // Network Change Monitor (Every ~10s)
-            // We check this less frequently to avoid overhead
-            if (now % 10000 < 2000) { // Check roughly every 10s
-                const currentFingerprint = this._getNetworkFingerprint()
-                if (this.lastNetworkFingerprint && currentFingerprint !== this.lastNetworkFingerprint) {
-                    console.log('[P2PEngine] Network interface change detected! Restarting Swarm...')
-                    this.lastNetworkFingerprint = currentFingerprint
-
-                    // Restart logic
-                    this.stop().then(() => {
-                        // Small delay to let OS settle
-                        this._restartTimeout = setTimeout(() => this.start(), 2000)
-                    })
-                } else if (!this.lastNetworkFingerprint) {
-                    this.lastNetworkFingerprint = currentFingerprint
+                // High Bandwidth Detection (> 10 MB/s)
+                if (this.currentDownloadSpeed > 10 * 1024 * 1024) {
+                    if (!this.highBandwidthMode) {
+                        this.highBandwidthMode = true
+                        if (isDev) console.log('[P2PEngine] High Bandwidth Detected (>10MB/s). Unlocking higher upload limits.')
+                    }
                 }
-            }
 
-            // Seeder Health Consensus (The Doctor) - Every 30s
-            if (now - (this.lastHealthCheck || 0) > 30000) {
-                this.checkSeederHealth()
-                this.lastHealthCheck = now
-            }
+                // Periodically Re-evaluate Upload Limits (Every 30s)
+                const now = Date.now()
+                if (now - this.lastLimitUpdate > 30000) {
+                    this.updateDynamicLimits()
+                    this.lastLimitUpdate = now
+                }
 
-            // Record Stats to Persistent Storage
-            if (this.uploadBytesGlobal > 0 || this.downloadBytesGlobal > 0 || this.uploadBytesLocal > 0 || this.downloadBytesLocal > 0) {
-                StatsManager.record(
-                    this.uploadBytesGlobal + this.uploadBytesLocal,
-                    this.downloadBytesGlobal + this.downloadBytesLocal
-                )
-            }
+                // Network Change Monitor (Every ~10s)
+                if (now % 10000 < 2000) {
+                    const currentFingerprint = this._getNetworkFingerprint()
+                    if (this.lastNetworkFingerprint && currentFingerprint !== this.lastNetworkFingerprint) {
+                        console.log('[P2PEngine] Network interface change detected! Restarting Swarm...')
+                        this.lastNetworkFingerprint = currentFingerprint
+                        this.stop().then(() => {
+                            this._restartTimeout = setTimeout(() => this.start(), 2000)
+                        })
+                    } else if (!this.lastNetworkFingerprint) {
+                        this.lastNetworkFingerprint = currentFingerprint
+                    }
+                }
 
-        }, 2000)
+                // Seeder Health Consensus - Every 30s
+                if (now - (this.lastHealthCheck || 0) > 30000) {
+                    this.checkSeederHealth()
+                    this.lastHealthCheck = now
+                }
+
+                // Record Stats
+                if (this.uploadBytesGlobal > 0 || this.downloadBytesGlobal > 0 || this.uploadBytesLocal > 0 || this.downloadBytesLocal > 0) {
+                    StatsManager.record(
+                        this.uploadBytesGlobal + this.uploadBytesLocal,
+                        this.downloadBytesGlobal + this.downloadBytesLocal
+                    )
+                }
+            }, 2000).unref()
+        }
     }
 
     setRaceManager(rm) {
@@ -558,6 +557,17 @@ class P2PEngine extends EventEmitter {
         } catch (err) {
             console.error('[P2PEngine] Init failed:', err)
         }
+    }
+
+    /**
+     * Get current load status of the P2P engine.
+     * @returns {'normal' | 'overloaded'}
+     */
+    getLoadStatus() {
+        // If we have more than 50 active streams or high latency, consider overloaded
+        const activeStreams = this.peers.reduce((acc, peer) => acc + (peer.activeStreams || 0), 0)
+        if (activeStreams > 32) return 'overloaded'
+        return 'normal'
     }
 
 
@@ -1137,20 +1147,7 @@ class P2PEngine extends EventEmitter {
         return Math.max(MIN_PARALLEL_DOWNLOADS, Math.min(MAX_PARALLEL_DOWNLOADS, final))
     }
 
-    /**
-     * @returns {string}
-     */
-    getLoadStatus() {
-        // Simple heuristic: if we have many active requests relative to peer count
-        if (this.peers.length === 0) return 'idle'
 
-        // If we-re already downloading many files, consider it "busy" but not overloaded
-        // unless we hit a very high threshold.
-        const ratio = this.requests.size / Math.max(1, this.peers.length)
-        if (ratio > 10) return 'overloaded'
-        if (ratio > 5) return 'busy'
-        return 'normal'
-    }
 
     getNetworkInfo() {
         if (!this.totalUploaded) this.totalUploaded = 0

@@ -1,13 +1,16 @@
 const Sentry = require('@sentry/electron/main')
-const SentryService = require('../../../../app/main/SentryService')
-const { app } = require('electron')
 
 jest.mock('@sentry/electron/main')
 jest.mock('electron', () => ({
     app: {
-        isPackaged: false
+        isPackaged: false,
+        isReady: jest.fn().mockReturnValue(false)
     }
 }))
+
+// Require service AFTER mock
+const SentryService = require('../../../../app/main/SentryService')
+const { app } = require('electron')
 
 describe('SentryService', () => {
     beforeEach(() => {
