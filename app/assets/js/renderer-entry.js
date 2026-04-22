@@ -10,6 +10,7 @@ window.global = window
 
 // Platform Detection (Immediate stabilization)
 const platform = (window.HeliosAPI && window.HeliosAPI.system) ? window.HeliosAPI.system.getPlatform() : 'win32'
+window.isDev = (window.HeliosAPI && window.HeliosAPI.app) ? window.HeliosAPI.app.isDev() : false
 document.body.setAttribute('data-platform', platform)
 
 
@@ -18,11 +19,12 @@ if (typeof process === 'undefined') {
     window.process = {
         platform,
         type: 'renderer',
-        env: { HELIOS_DEV_MODE: window.isDev || false },
+        env: { HELIOS_DEV_MODE: window.isDev },
         nextTick: (fn) => setTimeout(fn, 0)
     }
 } else {
     if (!process.platform) process.platform = platform
+    if (process.env) process.env.HELIOS_DEV_MODE = window.isDev
     // Set process type if not defined (handled by esbuild define normally)
     const isRenderer = true
     if (!process.nextTick) process.nextTick = (fn) => setTimeout(fn, 0)

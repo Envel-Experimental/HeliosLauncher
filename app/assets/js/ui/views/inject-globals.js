@@ -80,6 +80,12 @@ const baseProcess = {
 const processHandler = {
     get: (target, prop) => {
         if (prop in target) return target[prop]
+        
+        // Data properties that should be falsy if missing
+        if (typeof prop === 'string' && (prop === 'defaultApp' || prop === 'electron')) {
+            return undefined
+        }
+
         // Return a no-op function for missing methods to avoid "is not a function" errors
         return (...args) => {
             console.debug(`[Process Polyfill] Stubbed method called: process.${String(prop)}`)

@@ -29,6 +29,10 @@ class IpcRegistry {
             event.returnValue = app.getVersion()
         })
 
+        ipcMain.on('app:isDev', (event) => {
+            event.returnValue = !app.isPackaged
+        })
+
         ipcMain.on('renderer-error', (event, error) => {
             console.error('[Renderer ERROR]', error)
             SentryService.captureException(error)
