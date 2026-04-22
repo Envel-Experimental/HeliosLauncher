@@ -1,5 +1,13 @@
 const esbuild = require('esbuild')
 const path = require('path')
+const { execSync } = require('child_process')
+
+let buildHash = 'unknown'
+try {
+    buildHash = execSync('git rev-parse --short HEAD').toString().trim()
+} catch (e) {
+    console.warn('Failed to get build hash:', e.message)
+}
 
 esbuild.build({
     entryPoints: [
@@ -28,6 +36,7 @@ esbuild.build({
     ],
     define: {
         'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
+        'process.env.BUILD_HASH': JSON.stringify(buildHash),
         'process.type': '"renderer"',
         'global': 'window',
         'Buffer': 'window.Buffer'

@@ -2295,12 +2295,17 @@ export function isPrerelease(version) {
 export function populateVersionInformation(version, valueElement, titleElement, checkElement) {
     console.log('[Settings] populateVersionInformation:', version)
     version = version || window.appVersion || (window.HeliosAPI?.app?.getVersion ? window.HeliosAPI.app.getVersion() : '0.0.1')
+    
     if (valueElement) {
-        console.log('[Settings] Updating valueElement.innerHTML to:', version)
-        valueElement.innerHTML = version
-    } else {
-        console.warn('[Settings] valueElement is null for version information!')
+        const semverEl = valueElement.querySelector('#settingsAboutCurrentVersionValueSemver') || valueElement
+        const hashEl = valueElement.querySelector('#settingsAboutBuildHash')
+        
+        semverEl.innerHTML = version
+        if (hashEl) {
+            hashEl.innerHTML = process.env.BUILD_HASH ? `@${process.env.BUILD_HASH}` : ''
+        }
     }
+
     if (isPrerelease(version)) {
         titleElement.innerHTML = Lang.queryJS('settings.about.preReleaseTitle')
         titleElement.style.color = '#ff886d'

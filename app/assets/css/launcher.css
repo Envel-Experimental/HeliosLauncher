@@ -2605,11 +2605,12 @@ input:checked+.toggleSwitchSlider:before {
 * * */
 
 #settingsTabUpdate {
-    padding: 30px !important;
+    padding: 0 40px;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
+    align-items: center;
+    overflow-x: hidden;
 }
 
 #settingsUpdateCard,
@@ -2623,7 +2624,7 @@ input:checked+.toggleSwitchSlider:before {
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 12px;
     width: 100%;
-    max-width: 800px;
+    max-width: 760px;
     margin: 0;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
 }
@@ -2708,6 +2709,16 @@ input:checked+.toggleSwitchSlider:before {
     color: #ffffff;
     font-family: 'JetBrains Mono', monospace;
     line-height: 1;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.settingsBuildHash {
+    font-size: 14px;
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.3);
+    font-family: 'JetBrains Mono', monospace;
 }
 
 /* Premium Changelog Container */
@@ -2801,8 +2812,8 @@ input:checked+.toggleSwitchSlider:before {
 
 #settingsUpdateCardRight,
 #settingsFactoryResetRight {
-    width: 200px !important;
-    min-width: 200px !important;
+    width: 180px !important;
+    min-width: 180px !important;
     flex-shrink: 0;
     display: flex;
     justify-content: flex-end;
@@ -2811,12 +2822,12 @@ input:checked+.toggleSwitchSlider:before {
 #settingsUpdateActionButton,
 #settingsFactoryResetButton {
     width: 100%;
-    padding: 12px 0;
+    padding: 10px 0;
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 8px;
     color: #ffffff;
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 700;
     cursor: pointer;
     transition: 0.2s ease;

@@ -837,6 +837,13 @@
                     </div>
                 </div>
                 <div id="settingsTabUpdate" class="settingsTab" style="display: none;">
+                    <div class="settingsTabHeader">
+                        <span class="settingsTabHeaderText"><span
+                                data-lang="settings.navUpdates"></span></span>
+                        <span class="settingsTabHeaderDesc"><span
+                                data-lang="settings.launcherUpdatesHeaderDesc"></span></span>
+                    </div>
+
                     <!-- Unified Update & Status Card -->
                     <div id="settingsUpdateCard">
                         <div id="settingsUpdateCardMain">
@@ -848,7 +855,10 @@
                                     <span id="settingsAboutCurrentVersionTitle"><span
                                             data-lang="settings.stableRelease"></span></span>
                                     <div id="settingsAboutCurrentVersionLine">
-                                        <span id="settingsAboutCurrentVersionValue">Loading...</span>
+                                        <div id="settingsAboutCurrentVersionValue">
+                                            <span id="settingsAboutCurrentVersionValueSemver">Loading...</span>
+                                            <span id="settingsAboutBuildHash" class="settingsBuildHash"></span>
+                                        </div>
                                     </div>
                                 </div>
                                 <div id="settingsUpdateStatusGroup">
