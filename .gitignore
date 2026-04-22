@@ -44,3 +44,13 @@ blob-report/
 /scratch/
 file.json
 test_render.html
+
+# Game/Instance Data
+# Matches folders like "Programming-1.16.5" or other instance folders
+/*-1.*/
+/instances/
+
+# Runtime data
+/libraries/java/
+/runtime/
+/java/

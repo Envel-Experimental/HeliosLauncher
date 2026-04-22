@@ -149,6 +149,8 @@ class P2PEngine extends EventEmitter {
         // Circuit Breaker (Panic Mode)
         this.panicMode = false
         this.attackCounter = 0
+        this.stressScore = 0
+        this.passiveReason = null
 
         this.raceManager = null
         this.discoveryLogThrottled = false
@@ -250,6 +252,26 @@ class P2PEngine extends EventEmitter {
                         this.uploadBytesGlobal + this.uploadBytesLocal,
                         this.downloadBytesGlobal + this.downloadBytesLocal
                     )
+                }
+
+                // System Stress Monitor (v3.3)
+                const load = os.loadavg()
+                const cpus = os.cpus().length
+                const isStressed = load[0] > (cpus * 0.8)
+
+                if (isStressed) {
+                    this.stressScore++
+                    if (this.stressScore >= 5) { // 5 * 2s = 10s
+                        if (!this.healthCheckPassive) {
+                            console.error('[P2PEngine] SYSTEM STRESS DETECTED (>80% Load for 10s). Switching to Passive Mode to save resources.')
+                            this.healthCheckPassive = true
+                            this.healthCheckPassiveStart = Date.now()
+                            this.passiveReason = 'stress'
+                            this.reconfigureSwarm()
+                        }
+                    }
+                } else {
+                    this.stressScore = Math.max(0, this.stressScore - 1)
                 }
             }, 2000)
             if (this.speedMonitorInterval.unref) this.speedMonitorInterval.unref()
@@ -390,6 +412,8 @@ class P2PEngine extends EventEmitter {
             this._restartTimeout = null;
         }
 
+        this.stressScore = 0
+        this.passiveReason = null
         this.stopping = false
     }
 
@@ -1355,10 +1379,12 @@ class P2PEngine extends EventEmitter {
 
     checkSeederHealth() {
         if (this.healthCheckPassive) {
-            if (Date.now() - this.healthCheckPassiveStart > 3600000) { // 1 Hour
-                console.log('[P2PEngine] Health Check: Probation period ended. Re-enabling active mode.')
+            const timeout = this.passiveReason === 'stress' ? 600000 : 3600000 // 10 mins vs 1 hour
+            if (Date.now() - this.healthCheckPassiveStart > timeout) {
+                console.log(`[P2PEngine] Health Check: Probation period ended (${this.passiveReason}). Re-enabling active mode.`)
                 this.healthCheckPassive = false
                 this.selfStrikes = 0
+                this.passiveReason = null
                 this.reconfigureSwarm()
             }
             return
@@ -1387,6 +1413,7 @@ class P2PEngine extends EventEmitter {
                 console.error(`[P2PEngine] Health Check: CONSENSUS OF FAILURE (3 Strikes). Self-isolating to protect Swarm.`)
                 this.healthCheckPassive = true
                 this.healthCheckPassiveStart = Date.now()
+                this.passiveReason = 'health'
                 this.reconfigureSwarm()
             }
         } else {
