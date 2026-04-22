@@ -2609,7 +2609,7 @@ input:checked+.toggleSwitchSlider:before {
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: flex-start;
     overflow-x: hidden;
 }
 
@@ -2627,6 +2627,7 @@ input:checked+.toggleSwitchSlider:before {
     max-width: 760px;
     margin: 0;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    align-self: center;
 }
 
 #settingsFactoryResetContainer {
@@ -2734,7 +2735,8 @@ input:checked+.toggleSwitchSlider:before {
     overflow: hidden;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
     width: 100%;
-    max-width: 800px;
+    max-width: 760px;
+    align-self: center;
 }
 
 .settingsChangelogContainer::before {
