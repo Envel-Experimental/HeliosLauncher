@@ -348,9 +348,8 @@ class P2PEngine extends EventEmitter {
             for (const t of this.blacklistTimeouts.values()) clearTimeout(t)
             this.blacklistTimeouts.clear()
         }
-        // Clear all request timeouts
-        for (const req of this.requests.values()) {
-            if (req.timeoutId) clearTimeout(req.timeoutId)
+        // Clear all requests and their timeouts
+        for (const req of Array.from(this.requests.values())) {
             req.reject(new Error('P2P Engine stopped'))
         }
         this.requests.clear()
@@ -744,46 +743,57 @@ class P2PEngine extends EventEmitter {
                 reqId = crypto.randomBytes(4).readUInt32BE(0)
             } while (this.requests.has(reqId) || reqId === 0)
 
-            const onSocketError = (err) => {
-                if (this.requests.has(reqId)) {
-                    const req = this.requests.get(reqId)
-                    this.requests.delete(reqId)
-                    const error = new Error(`Peer socket closed/errored: ${err ? err.message : 'Unknown error'}`)
-                    Object.assign(error, { bytesReceived: req.bytesReceived })
-                    req.reject(error)
-                }
-            }
-
-            peer.socket.once('error', onSocketError)
-            peer.socket.once('close', onSocketError)
+            let timeoutId = null
+            let isFinalized = false
 
             const cleanup = () => {
                 peer.socket.off('error', onSocketError)
                 peer.socket.off('close', onSocketError)
+                stream.off('close', onStreamAbort)
+                stream.off('error', onStreamAbort)
+                if (timeoutId) {
+                    clearTimeout(timeoutId)
+                    timeoutId = null
+                }
             }
+
+            const finalize = (action, value) => {
+                if (isFinalized) return
+                isFinalized = true
+                cleanup()
+                this.requests.delete(reqId)
+                action(value)
+            }
+
+            const customResolve = (v) => finalize(resolve, v)
+            const customReject = (e) => finalize(reject, e)
+
+            const onSocketError = (err) => {
+                const req = this.requests.get(reqId)
+                const error = new Error(`Peer socket closed/errored: ${err ? err.message : 'Unknown error'}`)
+                if (req) Object.assign(error, { bytesReceived: req.bytesReceived })
+                customReject(error)
+            }
+
+            const onStreamAbort = () => {
+                const req = this.requests.get(reqId)
+                const error = new Error('P2P Request aborted (stream closed)')
+                if (req) Object.assign(error, { bytesReceived: req.bytesReceived })
+                customReject(error)
+            }
+
+            peer.socket.once('error', onSocketError)
+            peer.socket.once('close', onSocketError)
+            stream.once('close', onStreamAbort)
+            stream.once('error', onStreamAbort)
 
             // Register Request
-            const timeoutId = setTimeout(() => {
-                if (this.requests.has(reqId)) {
-                    const req = this.requests.get(reqId)
-                    this.requests.delete(reqId)
-                    const err = new Error('P2P Timeout')
-                    Object.assign(err, { bytesReceived: req.bytesReceived })
-                    req.reject(err)
-                }
+            timeoutId = setTimeout(() => {
+                const req = this.requests.get(reqId)
+                const err = new Error('P2P Timeout')
+                if (req) Object.assign(err, { bytesReceived: req.bytesReceived })
+                customReject(err)
             }, Config.PROTOCOL.TIMEOUT)
-
-            const customResolve = (...args) => {
-                cleanup()
-                clearTimeout(timeoutId)
-                resolve(...args)
-            }
-
-            const customReject = (err) => {
-                cleanup()
-                clearTimeout(timeoutId)
-                reject(err)
-            }
 
             this.requests.set(reqId, {
                 stream,
@@ -815,12 +825,7 @@ class P2PEngine extends EventEmitter {
                 try {
                     peer.sendRequest(reqId, hash, relPath, fileId, startOffset)
                 } catch (e) {
-                    if (this.requests.has(reqId)) {
-                        this.requests.delete(reqId)
-                        clearTimeout(timeoutId)
-                        cleanup()
-                        reject(e)
-                    }
+                    customReject(e)
                     return
                 }
             }
@@ -880,7 +885,6 @@ class P2PEngine extends EventEmitter {
                 const err = new Error(`Incomplete transfer: Received ${req.bytesReceived} of ${req.expectedSize}`)
                 err.bytesReceived = req.bytesReceived
                 req.reject(err)
-                this.requests.delete(reqId)
                 return
             }
 
@@ -893,8 +897,6 @@ class P2PEngine extends EventEmitter {
                 // @ts-ignore
                 req.peer.lastTransferSpeed = speed
             }
-
-            this.requests.delete(reqId)
         }
     }
 
@@ -908,7 +910,6 @@ class P2PEngine extends EventEmitter {
             const err = new Error(`Peer error: ${msg}`)
             err.bytesReceived = req.bytesReceived
             req.reject(err)
-            this.requests.delete(reqId)
         }
     }
 
