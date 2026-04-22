@@ -2,9 +2,7 @@
 
 <head>
     <meta charset="utf-8" />
-    <title>
-        <span data-lang="app.title"></span>
-    </title>
+    <title>ФЛАУНЧЕР</title>
 
     <script>
         window._startupTime = Date.now();
@@ -50,19 +48,28 @@
             transition: color 0.2s, transform 0.2s;
             border-radius: 4px;
         }
+
         .refresh-btn-icon:hover {
             color: #fff;
             background: rgba(255, 255, 255, 0.1);
         }
+
         .refresh-btn-icon:active {
             transform: scale(0.9);
         }
+
         .refresh-btn-icon.spinning svg {
             animation: refresh-spin 1s linear infinite;
         }
+
         @keyframes refresh-spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
         }
     </style>
 </head>
@@ -744,13 +751,21 @@
                     <div class="settingsFieldContainer"
                         style="flex-direction: column; align-items: flex-start; gap: 15px;">
                         <div class="settingsFieldLeft" style="text-align: left; align-items: flex-start;">
-                            <span class="settingsFieldTitle" style="display: flex; align-items: center; gap: 10px; justify-content: flex-start;">
+                            <span class="settingsFieldTitle"
+                                style="display: flex; align-items: center; gap: 10px; justify-content: flex-start;">
                                 Состояние зеркал загрузки
                                 <button id="settingsMirrorStatusRefresh" class="refresh-btn-icon" title="Обновить">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="23 4 23 10 17 10"></polyline>
+                                        <polyline points="1 20 1 14 7 14"></polyline>
+                                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15">
+                                        </path>
+                                    </svg>
                                 </button>
                             </span>
-                            <span class="settingsFieldDesc" style="text-align: left;">Текущий статус и задержка официальных зеркал.</span>
+                            <span class="settingsFieldDesc" style="text-align: left;">Текущий статус и задержка
+                                официальных зеркал.</span>
                         </div>
                         <div id="settingsMirrorStatusContainer"
                             style="width: 100%; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 5px; border: 1px solid rgba(255,255,255,0.05);">
@@ -762,13 +777,21 @@
                     <div class="settingsFieldContainer"
                         style="flex-direction: column; align-items: flex-start; gap: 15px;">
                         <div class="settingsFieldLeft" style="text-align: left; align-items: flex-start;">
-                            <span class="settingsFieldTitle" style="display: flex; align-items: center; gap: 10px; justify-content: flex-start;">
+                            <span class="settingsFieldTitle"
+                                style="display: flex; align-items: center; gap: 10px; justify-content: flex-start;">
                                 Состояние P2P узлов (Bootstrap)
                                 <button id="settingsBootstrapStatusRefresh" class="refresh-btn-icon" title="Обновить">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="23 4 23 10 17 10"></polyline>
+                                        <polyline points="1 20 1 14 7 14"></polyline>
+                                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15">
+                                        </path>
+                                    </svg>
                                 </button>
                             </span>
-                            <span class="settingsFieldDesc" style="text-align: left;">Статус подключения к распределенной сети.</span>
+                            <span class="settingsFieldDesc" style="text-align: left;">Статус подключения к
+                                распределенной сети.</span>
                         </div>
                         <div id="settingsBootstrapStatusContainer"
                             style="width: 100%; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 5px; border: 1px solid rgba(255,255,255,0.05);">
@@ -780,10 +803,17 @@
                     <div class="settingsFieldContainer"
                         style="flex-direction: column; align-items: flex-start; gap: 15px;">
                         <div class="settingsFieldLeft">
-                            <span class="settingsFieldTitle" style="display: flex; align-items: center; gap: 10px; justify-content: flex-start;">
+                            <span class="settingsFieldTitle"
+                                style="display: flex; align-items: center; gap: 10px; justify-content: flex-start;">
                                 Доступность сервисов
                                 <button id="settingsConnectivityRefresh" class="refresh-btn-icon" title="Обновить">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="23 4 23 10 17 10"></polyline>
+                                        <polyline points="1 20 1 14 7 14"></polyline>
+                                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15">
+                                        </path>
+                                    </svg>
                                 </button>
                             </span>
                             <span class="settingsFieldDesc">Проверка связи с основными API.</span>
@@ -838,8 +868,7 @@
                 </div>
                 <div id="settingsTabUpdate" class="settingsTab" style="display: none;">
                     <div class="settingsTabHeader">
-                        <span class="settingsTabHeaderText"><span
-                                data-lang="settings.navUpdates"></span></span>
+                        <span class="settingsTabHeaderText"><span data-lang="settings.navUpdates"></span></span>
                         <span class="settingsTabHeaderDesc"><span
                                 data-lang="settings.launcherUpdatesHeaderDesc"></span></span>
                     </div>

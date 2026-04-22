@@ -9,7 +9,7 @@ export function applyTranslations() {
         const key = el.getAttribute('data-lang')
         if (key) {
             let translated = Lang.queryJS(key)
-            
+
             if (typeof translated !== 'string' || translated === '') {
                 translated = Lang.query('ejs.' + key)
             }
@@ -20,18 +20,18 @@ export function applyTranslations() {
                     if (typeof appName !== 'string') {
                         appName = Lang.query('ejs.app.title')
                     }
-                    if (typeof appName !== 'string') {
-                        appName = 'Helios'
+                    if (typeof appName !== 'string' || appName === '') {
+                        appName = 'FLauncher'
                     }
                     translated = translated.replace(/{appName}/g, appName)
-                    
+
                     // Handle pathSuffix for Java path
                     if (translated.includes('{pathSuffix}')) {
                         const isWin = process.platform === 'win32'
                         const suffix = isWin ? 'bin\\javaw.exe' : 'bin/java'
                         translated = translated.replace(/{pathSuffix}/g, suffix)
                     }
-                    
+
                     // Handle major for Java version
                     if (translated.includes('{major}')) {
                         translated = translated.replace(/{major}/g, '8') // Default fallback
