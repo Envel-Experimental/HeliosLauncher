@@ -14,6 +14,17 @@ jest.mock('electron', () => ({
   shell: {
     openExternal: jest.fn(),
   },
+  ipcMain: {
+    on: jest.fn(),
+    handle: jest.fn(),
+    emit: jest.fn(),
+    removeListener: jest.fn(),
+  },
+  safeStorage: {
+    isEncryptionAvailable: jest.fn().mockReturnValue(true),
+    encryptString: jest.fn((s) => Buffer.from(s, 'utf8')),
+    decryptString: jest.fn((b) => b.toString('utf8')),
+  },
 }));
 
 jest.mock('@electron/remote', () => ({
@@ -37,6 +48,7 @@ jest.mock('@sentry/node', () => ({
 }), { virtual: true });
 
 jest.mock('os', () => ({
+  hostname: () => 'test-hostname',
   userInfo: () => ({ username: 'test-user' }),
   totalmem: () => 16 * 1024 * 1024 * 1024,
   freemem: () => 8 * 1024 * 1024 * 1024,

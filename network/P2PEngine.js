@@ -156,7 +156,7 @@ class P2PEngine extends EventEmitter {
         this.discoveryLogThrottled = false
 
         // Periodic Memory Cleanup
-        if (!process.env.JEST_WORKER_ID) {
+        if (process.env.NODE_ENV !== 'test') {
             this.memoryCleanupInterval = setInterval(() => {
                 this.usageTracker.cleanup()
                 // Cleanup strikes older than 30 mins
@@ -195,7 +195,7 @@ class P2PEngine extends EventEmitter {
         this.congestionDetected = false
 
         // Speed & Resource Monitor (Every 2 seconds)
-        if (!process.env.JEST_WORKER_ID) {
+        if (process.env.NODE_ENV !== 'test') {
             this.speedMonitorInterval = setInterval(() => {
                 this.currentDownloadSpeed = this.downloadBytesGlobal / 2 // B/s
                 this.currentUploadSpeed = this.uploadBytesGlobal / 2 // B/s
@@ -234,6 +234,7 @@ class P2PEngine extends EventEmitter {
                         this.lastNetworkFingerprint = currentFingerprint
                         this.stop().then(() => {
                             this._restartTimeout = setTimeout(() => this.start(), 2000)
+                            if (this._restartTimeout.unref) this._restartTimeout.unref()
                         })
                     } else if (!this.lastNetworkFingerprint) {
                         this.lastNetworkFingerprint = currentFingerprint
@@ -387,17 +388,15 @@ class P2PEngine extends EventEmitter {
                 // Ignore errors during destroy
             }
         }
+
+        const ResourceMonitor = require('./ResourceMonitor')
+        ResourceMonitor.stop()
+
         if (this.dht) {
             try {
                 await this.dht.destroy()
             } catch (e) { }
             this.dht = null
-        }
-        if (this.memoryCleanupInterval) {
-            const ResourceMonitor = require('./ResourceMonitor')
-            ResourceMonitor.stop()
-            clearInterval(this.memoryCleanupInterval);
-            this.memoryCleanupInterval = null;
         }
         if (this.speedMonitorInterval) {
             clearInterval(this.speedMonitorInterval);
@@ -410,6 +409,10 @@ class P2PEngine extends EventEmitter {
         if (this._restartTimeout) {
             clearTimeout(this._restartTimeout);
             this._restartTimeout = null;
+        }
+        if (this.memoryCleanupInterval) {
+            clearInterval(this.memoryCleanupInterval);
+            this.memoryCleanupInterval = null;
         }
 
         this.stressScore = 0
@@ -521,6 +524,7 @@ class P2PEngine extends EventEmitter {
                         console.warn(`[P2PEngine] [WARNING] No DHT connections established after 5s.`)
                     }
                 }, 5000)
+                if (this._dhtReadyTimeout.unref) this._dhtReadyTimeout.unref()
             })
 
             this.swarm = new Hyperswarm({

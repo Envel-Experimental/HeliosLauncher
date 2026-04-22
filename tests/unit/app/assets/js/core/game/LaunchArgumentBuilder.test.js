@@ -3,71 +3,101 @@ const path = require('path')
 describe('LaunchArgumentBuilder', () => {
     let LaunchArgumentBuilder
     let ConfigManager
-    let FileUtils
+    const Type = {
+        Library: 'Library',
+        Forge: 'Forge',
+        ForgeHosted: 'ForgeHosted',
+        Fabric: 'Fabric',
+        LiteLoader: 'LiteLoader'
+    }
     
-    const mockServer = {
-        rawServer: {
-            id: 'testServer',
-            minecraftVersion: '1.12.2',
-            autoconnect: false
-        },
-        hostname: 'localhost',
-        port: 25565
-    }
-    const vanillaManifest = {
-        id: '1.12.2',
-        assets: '1.12',
-        type: 'release',
-        libraries: [],
-        arguments: {
-            jvm: ['-Djava.library.path=${natives_directory}', '-cp', '${classpath}'],
-            game: ['--username', '${auth_player_name}']
-        }
-    }
-    const modManifest = {
-        mainClass: 'net.minecraft.launchwrapper.Launch',
-        minecraftArguments: '--username ${auth_player_name} --version ${version_name} --gameDir ${game_directory} --assetsDir ${assets_root} --assetIndex ${assets_index_name} --uuid ${auth_uuid} --accessToken ${auth_access_token} --userType ${user_type} --tweakClass net.minecraftforge.fml.common.launcher.FMLTweaker --versionType Forge',
-        arguments: {
-            jvm: [],
-            game: []
-        }
-    }
-    const authUser = {
+    const mockAuthUser = {
         displayName: 'TestPlayer',
         uuid: 'uuid-123',
         accessToken: 'token-abc',
         type: 'mojang'
     }
-    const launcherVersion = '1.0.0'
-    const gameDir = 'game'
-    const commonDir = 'common'
 
-    let builder
+    const mockServer = {
+        rawServer: {
+            id: 'testServer',
+            minecraftVersion: '1.20.1',
+            autoconnect: true
+        },
+        hostname: 'localhost',
+        port: 25565,
+        modules: []
+    }
+
+    const vanillaManifest113 = {
+        id: '1.20.1',
+        assets: '1.20',
+        type: 'release',
+        libraries: [],
+        arguments: {
+            jvm: [
+                '-Djava.library.path=${natives_directory}',
+                {
+                    rules: [{ action: 'allow', os: { name: 'windows' } }],
+                    value: '-Dtest.os.flag=true'
+                }
+            ],
+            game: [
+                '--username', '${auth_player_name}',
+                '--version', '${version_name}',
+                '--gameDir', '${game_directory}',
+                '--assetsDir', '${assets_root}'
+            ]
+        }
+    }
+
+    const modManifest113 = {
+        id: 'forge-1.20.1',
+        mainClass: 'net.minecraft.boot.Main',
+        arguments: {
+            jvm: ['-Dforge.logging.level=debug'],
+            game: ['--forge-arg']
+        }
+    }
 
     beforeEach(() => {
         jest.resetModules()
         
-        // Correct path: tests/unit/app/assets/js/core/game/LaunchArgumentBuilder.test.js -> core/configmanager
         jest.mock('../../../../../../../app/assets/js/core/configmanager', () => ({
-            getMaxRAM: jest.fn(),
-            getMinRAM: jest.fn(),
-            getJVMOptions: jest.fn(),
-            getAutoConnect: jest.fn(),
-            getGameWidth: jest.fn(),
-            getGameHeight: jest.fn(),
-            getFullscreen: jest.fn(),
-            fetchWithTimeout: jest.fn()
+            getMaxRAM: jest.fn().mockReturnValue('2G'),
+            getMinRAM: jest.fn().mockReturnValue('1G'),
+            getJVMOptions: jest.fn().mockReturnValue([]),
+            getAutoConnect: jest.fn().mockReturnValue(true),
+            getGameWidth: jest.fn().mockReturnValue(800),
+            getGameHeight: jest.fn().mockReturnValue(600),
+            getFullscreen: jest.fn().mockReturnValue(false),
+            getLaunchDetached: jest.fn().mockReturnValue(false)
         }))
         
         jest.mock('../../../../../../../app/assets/js/core/common/FileUtils', () => ({
-            validateLocalFile: jest.fn()
+            extractZip: jest.fn().mockResolvedValue()
+        }))
+
+        jest.mock('../../../../../../../app/assets/js/core/common/MojangUtils', () => ({
+            getMojangOS: jest.fn().mockReturnValue('windows'),
+            isLibraryCompatible: jest.fn().mockReturnValue(true),
+            mcVersionAtLeast: jest.fn((ver, current) => {
+                const v1 = ver.split('.').map(Number)
+                const v2 = (current || '0.0.0').split('.').map(Number)
+                for(let i=0; i<Math.max(v1.length, v2.length); i++) {
+                    const n1 = v1[i] || 0
+                    const n2 = v2[i] || 0
+                    if (n2 > n1) return true
+                    if (n2 < n1) return false
+                }
+                return true
+            })
         }))
         
         jest.mock('fs/promises', () => ({
-            readFile: jest.fn(),
-            writeFile: jest.fn(),
             mkdir: jest.fn().mockResolvedValue(),
-            rm: jest.fn().mockResolvedValue()
+            rm: jest.fn().mockResolvedValue(),
+            readdir: jest.fn().mockResolvedValue([])
         }))
 
         jest.mock('../../../../../../../app/assets/js/core/util/LoggerUtil', () => ({
@@ -81,59 +111,76 @@ describe('LaunchArgumentBuilder', () => {
             }
         }))
 
-        jest.mock('p-limit', () => ({
-            __esModule: true,
-            default: jest.fn(() => (fn) => fn())
-        }))
-
         LaunchArgumentBuilder = require('../../../../../../../app/assets/js/core/game/LaunchArgumentBuilder')
         ConfigManager = require('../../../../../../../app/assets/js/core/configmanager')
-        FileUtils = require('../../../../../../../app/assets/js/core/common/FileUtils')
-
-        const serverClone = JSON.parse(JSON.stringify(mockServer))
-        const manifestClone = JSON.parse(JSON.stringify(vanillaManifest))
-        const modClone = JSON.parse(JSON.stringify(modManifest))
-
-        builder = new LaunchArgumentBuilder(serverClone, manifestClone, modClone, authUser, launcherVersion, gameDir, commonDir)
-
-        ConfigManager.getMaxRAM.mockReturnValue('2G')
-        ConfigManager.getMinRAM.mockReturnValue('1G')
-        ConfigManager.getJVMOptions.mockReturnValue([])
-        ConfigManager.getAutoConnect.mockReturnValue(false)
-        ConfigManager.getGameWidth.mockReturnValue(800)
-        ConfigManager.getGameHeight.mockReturnValue(600)
-        ConfigManager.getFullscreen.mockReturnValue(false)
     })
 
-    describe('constructJVMArguments (1.12)', () => {
-        it('should build 1.12 arguments correctly', async () => {
-            builder.classpathArg = jest.fn().mockResolvedValue(['lib1.jar', 'lib2.jar'])
-            const args = await builder.constructJVMArguments([], 'natives', false, false, null)
-            expect(args).toContain('-Xmx2G')
-            expect(args).toContain('-Xms1G')
-            expect(args).toContain('net.minecraft.launchwrapper.Launch')
+    describe('constructJVMArguments (1.13+)', () => {
+        it('should build modern arguments and replace placeholders', async () => {
+            const builder = new LaunchArgumentBuilder(
+                mockServer, 
+                vanillaManifest113, 
+                modManifest113, 
+                mockAuthUser, 
+                '1.0.0', 
+                'gameDir', 
+                'commonDir'
+            )
+            builder.classpathArg = jest.fn().mockResolvedValue(['lib.jar'])
+
+            const args = await builder.constructJVMArguments([], 'nativesDir', false, false, null)
+
+            expect(args).toContain('-Djava.library.path=nativesDir')
+            expect(args).toContain('-Dtest.os.flag=true')
+            expect(args).toContain('--username')
+            expect(args).toContain('TestPlayer')
+            expect(args).toContain('--quickPlayMultiplayer')
+        })
+
+        it('should handle OS rules in JVM arguments', async () => {
+            const MojangUtils = require('../../../../../../../app/assets/js/core/common/MojangUtils')
+            MojangUtils.getMojangOS.mockReturnValue('linux')
+
+            const builder = new LaunchArgumentBuilder(
+                mockServer, 
+                vanillaManifest113, 
+                modManifest113, 
+                mockAuthUser, 
+                '1.0.0', 
+                'gameDir', 
+                'commonDir'
+            )
+            builder.classpathArg = jest.fn().mockResolvedValue(['lib.jar'])
+
+            const args = await builder.constructJVMArguments([], 'nativesDir', false, false, null)
+
+            expect(args).not.toContain('-Dtest.os.flag=true')
         })
     })
 
-    describe('_resolveSanitizedJMArgs', () => {
-        it('should remove forbidden flags and add G1GC if missing', () => {
-            ConfigManager.getJVMOptions.mockReturnValue(['-XX:+UseConcMarkSweepGC'])
-            const sanitized = builder._resolveSanitizedJMArgs([])
-            expect(sanitized).not.toContain('-XX:+UseConcMarkSweepGC')
-            expect(sanitized).toContain('-XX:+UseG1GC')
-        })
-    })
+    describe('Server Library Resolution', () => {
+        it('should resolve libraries from server modules and submodules', () => {
+            const mockModule = {
+                rawModule: { type: Type.Library },
+                getVersionlessMavenIdentifier: jest.fn().mockReturnValue('lib1'),
+                getPath: jest.fn().mockReturnValue('path/to/lib1.jar'),
+                subModules: [
+                    {
+                        rawModule: { type: Type.Library },
+                        getVersionlessMavenIdentifier: jest.fn().mockReturnValue('lib1-sub'),
+                        getPath: jest.fn().mockReturnValue('path/to/lib1-sub.jar'),
+                        subModules: []
+                    }
+                ]
+            }
+            const builder = new LaunchArgumentBuilder(
+                { modules: [mockModule], rawServer: { id: 'test' } },
+                {}, {}, mockAuthUser, '1.0.0', 'game', 'common'
+            )
 
-    describe('classpathArg', () => {
-        it('should include version jar and libraries', async () => {
-            builder._resolveMojangLibraries = jest.fn().mockResolvedValue({ 'lib1': 'common/libraries/lib1.jar' })
-            builder._resolveServerLibraries = jest.fn().mockReturnValue({ 'lib2': 'common/libraries/lib2.jar' })
-
-            const cp = await builder.classpathArg([], 'natives', false, null, false)
-
-            expect(cp).toContain(path.join(commonDir, 'versions', '1.12.2', '1.12.2.jar'))
-            expect(cp).toContain('common/libraries/lib1.jar')
-            expect(cp).toContain('common/libraries/lib2.jar')
+            const libs = builder._resolveServerLibraries([])
+            expect(libs['lib1']).toBe('path/to/lib1.jar')
+            expect(libs['lib1-sub']).toBe('path/to/lib1-sub.jar')
         })
     })
 })

@@ -36,7 +36,7 @@ async function setupDummyConfig() {
             p2pPromptShown: true
         },
         clientToken: "test-client-token",
-        selectedServer: "Programming-vanilla-1.20.1",
+        selectedServer: "TestServer",
         selectedAccount: "test-uuid",
         authenticationDatabase: {
             "test-uuid": {
@@ -45,17 +45,13 @@ async function setupDummyConfig() {
                 username: "TestUser@example.com",
                 uuid: "test-uuid",
                 displayName: "TestUser"
-            },
-            "test-uuid-2": {
-                type: "mojang",
-                accessToken: "test-access-token-2",
-                username: "SecondaryUser@example.com",
-                uuid: "test-uuid-2",
-                displayName: "SecondaryUser"
             }
         },
         modConfigurations: {},
-        javaConfig: {}
+        javaConfig: {
+            minRAM: "1G",
+            maxRAM: "2G"
+        }
     };
 
     fs.writeFileSync(path.join(FOXFORD_DATA_PATH, 'config.json'), JSON.stringify(dummyConfig, null, 2));
@@ -210,6 +206,25 @@ async function switchSettingsTab(window, tabId) {
     await window.waitForSelector(`#${tabId}`, { state: 'visible' });
 }
 
+/**
+ * Delete a specific file in an instance directory to simulate corruption.
+ */
+function deleteInstanceFile(serverId, relativePath) {
+    const filePath = path.join(FOXFORD_DATA_PATH, 'instances', serverId, relativePath);
+    if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        console.log(`[TestUtils] Deleted file for corruption test: ${filePath}`);
+    }
+}
+
+/**
+ * Verify a file exists in an instance directory.
+ */
+function verifyInstanceFile(serverId, relativePath) {
+    const filePath = path.join(FOXFORD_DATA_PATH, 'instances', serverId, relativePath);
+    return fs.existsSync(filePath);
+}
+
 module.exports = {
     launchApp,
     handleInitialOverlays,
@@ -218,6 +233,8 @@ module.exports = {
     setupMockDistro,
     setupDummyConfig,
     clearTestData,
+    deleteInstanceFile,
+    verifyInstanceFile,
     TEST_USER_DATA,
     FOXFORD_DATA_PATH
 };

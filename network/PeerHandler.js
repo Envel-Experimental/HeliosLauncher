@@ -95,6 +95,7 @@ class PeerHandler {
         this.metricsInterval = setInterval(() => {
             this.updateMetrics()
         }, 5000)
+        if (this.metricsInterval.unref) this.metricsInterval.unref()
     }
 
     /**
@@ -243,10 +244,13 @@ class PeerHandler {
                 break
             case MSG_HELLO:
                 this.handleHello(payload)
-                break
+                break;
+            case MSG_PING:
+                this.sendPong(reqId)
+                break;
             case MSG_BATCH_REQUEST:
                 this.handleBatchRequest(payload)
-                break
+                break;
         }
     }
 
@@ -633,7 +637,7 @@ class PeerHandler {
                     // We allow 45s of silence to avoid race conditions with the 15s check interval.
                     if (now - lastActivity > 45000) {
                         errorOccurred = true
-                        if (isDev) console.warn(`[P2P Security] Disconnecting ${remoteIP} due to inactivity (>45s).`)
+                        if (isDev) console.warn(`[P2PEngine] Disconnecting ${remoteIP} due to inactivity (>45s).`)
                         stream.destroy()
                         clearInterval(watchdog)
                         return
@@ -658,12 +662,12 @@ class PeerHandler {
 
                             if (currentSpeed < 128000) { // < 125 KB/s
                                 this.watchdogStrikes = (this.watchdogStrikes || 0) + 1
-                                if (isDev) console.warn(`[P2P Security] Peer ${remoteIP} slow (${currentSpeed.toFixed(0)} B/s). Strike ${this.watchdogStrikes}/3`)
+                                if (isDev) console.warn(`[P2PEngine] Peer ${remoteIP} slow (${currentSpeed.toFixed(0)} B/s). Strike ${this.watchdogStrikes}/3`)
 
                                 if (this.watchdogStrikes >= 3) {
                                     // 3 strikes * 15s = 45s max patience for dead/slow peers
                                     errorOccurred = true
-                                    if (isDev) console.error(`[P2P Security] Disconnecting ${remoteIP} due to sustained slow speed.`)
+                                    if (isDev) console.error(`[P2PEngine] Disconnecting ${remoteIP} due to sustained slow speed.`)
                                     stream.destroy()
                                     clearInterval(watchdog)
                                 }
@@ -676,6 +680,7 @@ class PeerHandler {
                         }
                     }
                 }, 15000)
+                if (watchdog.unref) watchdog.unref()
                 let cleanupDone = false
                 const cleanup = () => {
                     if (cleanupDone) return
@@ -832,6 +837,18 @@ class PeerHandler {
         header.writeUInt32BE(0, 1) // reqId 0 for system messages
         header.writeUInt32BE(payload.length, 5)
         this.socket.write(b4a.concat([header, payload]))
+    }
+
+    /**
+     * Send PONG response for keep-alive
+     * @param {number} reqId 
+     */
+    sendPong(reqId) {
+        const header = /** @type {Buffer} */(b4a.alloc(9))
+        header[0] = MSG_PONG
+        header.writeUInt32BE(reqId, 1)
+        header.writeUInt32BE(0, 5)
+        this.socket.write(header)
     }
 
 

@@ -297,18 +297,6 @@ class MojangIndexProcessor extends IndexProcessor {
                                 size: artifact.size,
                                 url: artifact.url,
                                 fallbackUrls: MirrorManager.getSortedMirrors().map(m => m.libraries ? artifact.url.replace('https://libraries.minecraft.net', m.libraries) : null).filter(Boolean), // Assuming libraries mirror logic if needed, or strict.
-                                // Actually, libraries usually come from libraries.minecraft.net. 
-                                // Ideally we should have a 'libraries' field in config? Or just use 'assets' generically?
-                                // User request was generic. Let's stick to known overrides.
-                                // If user provides a 'libraries' mirror key, we can use it.
-                                // NOTE: Config example didn't have libraries.
-                                // Leaving fallbackUrls empty for libraries unless we add it to config. 
-                                // Wait, the user said "all mojang links". Libraries IS Mojang.
-                                // I should probably treat 'libraries' same as 'assets' or add a specific key?
-                                // Let's check the config again. 
-                                // I added assets, version_manifest, launcher_meta.
-                                // Libraries are often on libraries.minecraft.net.
-                                // I will add 'libraries' to the logic if present.
                                 path: filePath
                             };
                         }

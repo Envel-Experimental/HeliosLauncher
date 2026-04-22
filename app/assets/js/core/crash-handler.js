@@ -48,7 +48,7 @@ exports.analyzeLog = function (logContent) {
     // Matches: "ModConfig$ConfigLoadingException: ... farmersdelight-client.toml"
     // Regex logic: Find "ConfigLoadingException" OR "Failed loading config", 
     // then ignore everything until the first .toml filename found (that doesn't have spaces).
-    const configErrorRegex = /(?:ConfigLoadingException|Failed loading config file).*?([^\s]+\.toml)/i;
+    const configErrorRegex = /(?:ConfigLoadingException|Failed loading config file)[\s\S]*?([^\s]+\.toml)/i;
     match = configErrorRegex.exec(logContent);
     if (match && match[1]) {
         return {
@@ -88,7 +88,7 @@ exports.analyzeLog = function (logContent) {
     // 3. JsonSyntaxException (Corrupted JSON)
     // Matches: "com.google.gson.JsonSyntaxException: ... path/to/example.json"
     // Regex logic: Look for JsonSyntaxException and then find the next .json file.
-    const jsonSyntaxRegex = /com\.google\.gson\.JsonSyntaxException:.*?([^\s]+\.json)/i;
+    const jsonSyntaxRegex = /com\.google\.gson\.JsonSyntaxException:[\s\S]*?([^\s]+\.json)/i;
     match = jsonSyntaxRegex.exec(logContent);
     if (match && match[1]) {
         return {

@@ -1,4 +1,18 @@
-jest.mock('@app/assets/js/core/configmanager');
+jest.mock('@app/assets/js/core/configmanager', () => ({
+    getLauncherDirectorySync: jest.fn().mockReturnValue('/mock/launcher'),
+    getDataDirectory: jest.fn(),
+    isLoaded: jest.fn(),
+    load: jest.fn(),
+    getConfig: jest.fn(),
+    setConfig: jest.fn(),
+    save: jest.fn()
+}));
+jest.mock('@network/PeerPersistence', () => ({
+    load: jest.fn().mockResolvedValue(true),
+    getPeers: jest.fn().mockReturnValue([]),
+    addPeer: jest.fn(),
+    save: jest.fn()
+}));
 jest.mock('@app/assets/js/core/java/JavaGuard');
 jest.mock('@app/assets/js/core/pathutil');
 jest.mock('@app/assets/js/core/dl/DownloadEngine');

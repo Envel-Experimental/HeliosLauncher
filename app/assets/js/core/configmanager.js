@@ -147,13 +147,18 @@ exports.getLauncherDirectorySync = function () {
  * @returns {Promise<Response>}
  */
 exports.fetchWithTimeout = function (url, options, timeout) {
+    let timeoutId
+    const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error('timeout')), timeout)
+        if (timeoutId.unref) timeoutId.unref()
+    })
+
     return Promise.race([
-        fetch(url, options),
-        new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('timeout')), timeout)
-        )
+        fetch(url, options).finally(() => clearTimeout(timeoutId)),
+        timeoutPromise
     ])
 }
+
 
 /**
  * Get the common directory.

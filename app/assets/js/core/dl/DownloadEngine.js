@@ -15,6 +15,11 @@ let RaceManager = require('../../../../../network/RaceManager');
 if (process.env.JEST_WORKER_ID) {
     if (global.__P2P_MOCK__) P2PEngine = global.__P2P_MOCK__;
     if (global.__RACE_MOCK__) RaceManager = global.__RACE_MOCK__;
+    // Test hook to reset counters
+    global.__RESET_DL_ENGINE_COUNTERS__ = () => {
+        activeHttpRequests = 0;
+        activeWrites = 0;
+    };
 }
 
 const { MAX_PARALLEL_DOWNLOADS } = require('../../../../../network/constants');
@@ -352,60 +357,60 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
             while (activeWrites >= MAX_CONCURRENT_WRITES) {
                 await sleep(4);
             }
-            activeWrites++;
-
-            let fileStream;
-            try {
-                fileStream = fsSync.createWriteStream(tempPath, { flags: startOffset > 0 ? 'a' : 'w' });
-            } catch (e) {
-                activeWrites--;
-                throw e;
-            }
-
             // Progress tracking wrapper
             let loaded = startOffset;
-            let lastProgressTime = 0;
             const total = asset.size || 0;
 
-            // Direct Node Stream (P2P / RaceManager optimized)
-            if (response.p2pStream) {
-                const progressStream = new Transform({
-                    transform(chunk, encoding, callback) {
-                        loaded += chunk.length;
-                        const now = Date.now();
-                        if (onProgress && (now - lastProgressTime >= 100 || loaded === total)) {
-                            onProgress(loaded);
-                            lastProgressTime = now;
-                        }
-                        this.push(chunk);
-                        callback();
-                    }
-                });
-                await pipeline(response.p2pStream, progressStream, fileStream);
-            }
-            // Web Response Body (Standard HTTP)
-            else if (response.body) {
-                const nodeStream = Readable.fromWeb(response.body);
-                const progressStream = new Transform({
-                    transform(chunk, encoding, callback) {
-                        loaded += chunk.length;
-                        const now = Date.now();
-                        if (onProgress && (now - lastProgressTime >= 100 || loaded === total)) {
-                            onProgress(loaded);
-                            lastProgressTime = now;
-                        }
-                        this.push(chunk);
-                        callback();
-                    }
-                });
+            activeWrites++;
+            try {
+                let fileStream;
+                try {
+                    fileStream = fsSync.createWriteStream(tempPath, { flags: startOffset > 0 ? 'a' : 'w' });
+                } catch (e) {
+                    throw e;
+                }
 
-                await pipeline(nodeStream, progressStream, fileStream);
-            } else {
+                let lastProgressTime = 0;
+
+                // Direct Node Stream (P2P / RaceManager optimized)
+                if (response.p2pStream) {
+                    const progressStream = new Transform({
+                        transform(chunk, encoding, callback) {
+                            loaded += chunk.length;
+                            const now = Date.now();
+                            if (onProgress && (now - lastProgressTime >= 100 || loaded === total)) {
+                                onProgress(loaded);
+                                lastProgressTime = now;
+                            }
+                            this.push(chunk);
+                            callback();
+                        }
+                    });
+                    await pipeline(response.p2pStream, progressStream, fileStream);
+                }
+                // Web Response Body (Standard HTTP)
+                else if (response.body) {
+                    const nodeStream = Readable.fromWeb(response.body);
+                    const progressStream = new Transform({
+                        transform(chunk, encoding, callback) {
+                            loaded += chunk.length;
+                            const now = Date.now();
+                            if (onProgress && (now - lastProgressTime >= 100 || loaded === total)) {
+                                onProgress(loaded);
+                                lastProgressTime = now;
+                            }
+                            this.push(chunk);
+                            callback();
+                        }
+                    });
+
+                    await pipeline(nodeStream, progressStream, fileStream);
+                } else {
+                    throw new Error('No body in response');
+                }
+            } finally {
                 activeWrites--;
-                throw new Error('No body in response');
             }
-
-            activeWrites--;
 
             // Validate Atomic Write (RCE Guard)
             const isP2P = !!response.p2pStream;

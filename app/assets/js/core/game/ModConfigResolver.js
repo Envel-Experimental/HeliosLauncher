@@ -58,7 +58,7 @@ class ModConfigResolver {
                 if (!o || (o && e)) {
                     if (mdl.subModules.length > 0) {
                         // Safe recursion
-                        const nextModCfg = (modConfigEntry && modConfigEntry.mods) ? modConfigEntry.mods : {};
+                        const nextModCfg = (modConfigEntry != null && typeof modConfigEntry === 'object' && modConfigEntry.mods) ? modConfigEntry.mods : {};
                         const v = this.resolveModConfiguration(nextModCfg, mdl.subModules)
                         fMods = fMods.concat(v.fMods)
                         lMods = lMods.concat(v.lMods)
@@ -102,7 +102,7 @@ class ModConfigResolver {
             if (this._lteMinorVersion(9)) {
                 return false
             }
-            const ver = this.modManifest.id.split('-')[2]
+            const ver = this.modManifest.id.split('-').pop()
             const pts = ver.split('.')
             const min = [14, 23, 3, 2655]
             for (let i = 0; i < pts.length; i++) {

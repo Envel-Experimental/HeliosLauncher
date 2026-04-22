@@ -105,7 +105,7 @@ class MirrorManager {
             })
 
             req.on('timeout', () => {
-                logMain(`TIMEOUT: ${mirrorEntry.config.name}`)
+                logMain(`TIMEOUT: ${mirrorEntry.config.name || 'Unknown Mirror'}`)
                 req.destroy()
                 mirrorEntry.latency = 9999
                 mirrorEntry.status = 'down'

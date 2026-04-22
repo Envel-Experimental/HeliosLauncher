@@ -27,6 +27,7 @@ class RateLimiter {
         this.interval = setInterval(() => {
             this.refill();
         }, 100); // 100ms interval
+        if (this.interval.unref) this.interval.unref();
     }
 
     stopRefill() {

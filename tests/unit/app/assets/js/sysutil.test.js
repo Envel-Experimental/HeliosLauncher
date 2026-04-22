@@ -8,6 +8,7 @@ describe('SysUtil', () => {
         jest.resetModules()
         
         jest.mock('os', () => ({
+            hostname: jest.fn().mockReturnValue('test-host'),
             platform: jest.fn(),
             totalmem: jest.fn().mockReturnValue(16 * 1024 * 1024 * 1024),
             freemem: jest.fn().mockReturnValue(4 * 1024 * 1024 * 1024),

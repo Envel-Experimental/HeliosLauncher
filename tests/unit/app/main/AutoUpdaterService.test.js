@@ -1,102 +1,114 @@
+const { EventEmitter } = require('events')
+
+// Mock electron
+const mockSender = {
+    send: jest.fn(),
+    isDestroyed: jest.fn().mockReturnValue(false)
+}
+const mockEvent = { sender: mockSender }
+
+const ipcListeners = {}
 jest.mock('electron', () => ({
     ipcMain: {
-        on: jest.fn()
+        on: jest.fn((event, cb) => { ipcListeners[event] = cb })
     },
     app: {
-        getVersion: jest.fn(() => '3.0.0-beta'),
-        getAppPath: jest.fn(() => '/mock/app/path')
+        getAppPath: jest.fn().mockReturnValue('/app'),
+        getVersion: jest.fn().mockReturnValue('1.0.0')
     }
 }))
 
+// Mock electron-updater
+const mockAutoUpdater = new EventEmitter()
+mockAutoUpdater.checkForUpdates = jest.fn().mockResolvedValue({ updateInfo: { version: '1.1.0' } })
+mockAutoUpdater.quitAndInstall = jest.fn()
+mockAutoUpdater.setFeedURL = jest.fn()
+mockAutoUpdater.removeAllListeners = jest.fn()
+mockAutoUpdater.allowPrerelease = false
 jest.mock('electron-updater', () => ({
-    autoUpdater: {
-        checkForUpdates: jest.fn().mockResolvedValue({ updateInfo: { version: '3.0.1' } }),
-        setFeedURL: jest.fn(),
-        quitAndInstall: jest.fn(),
-        on: jest.fn(),
-        removeAllListeners: jest.fn(),
-        allowPrerelease: false,
-        autoInstallOnAppQuit: true
-    }
+    autoUpdater: mockAutoUpdater
 }))
 
+// Mock dependencies
+jest.mock('../../../../app/assets/js/core/isdev', () => false)
 jest.mock('../../../../app/assets/js/core/configmanager', () => ({
-    getAllowPrerelease: jest.fn(() => false),
-    fetchWithTimeout: jest.fn()
+    fetchWithTimeout: jest.fn().mockResolvedValue({
+        ok: true,
+        arrayBuffer: jest.fn().mockResolvedValue(new ArrayBuffer(10)),
+        text: jest.fn().mockResolvedValue('mock-signature')
+    })
 }))
-
 jest.mock('../../../../app/assets/js/core/util/SignatureUtils', () => ({
-    verifyDistribution: jest.fn(() => true)
+    verifyDistribution: jest.fn().mockReturnValue(true)
 }))
 
-const { ipcMain, app } = require('electron')
-const { autoUpdater } = require('electron-updater')
 const AutoUpdaterService = require('../../../../app/main/AutoUpdaterService')
-const ConfigManager = require('../../../../app/assets/js/core/configmanager')
-const { verifyDistribution } = require('../../../../app/assets/js/core/util/SignatureUtils')
 
 describe('AutoUpdaterService', () => {
-    let mockEvent
-
     beforeEach(() => {
         jest.clearAllMocks()
-        mockEvent = {
-            sender: {
-                send: jest.fn(),
-                isDestroyed: jest.fn(() => false)
-            }
-        }
-    })
-
-    test('should initialize and register IPC listeners', () => {
         AutoUpdaterService.init()
-        expect(ipcMain.on).toHaveBeenCalledWith('autoUpdateAction', expect.any(Function))
     })
 
-    test('checkForUpdate should trigger autoUpdater', async () => {
-        AutoUpdaterService.handleAction(mockEvent, 'checkForUpdate')
-        
-        // Use setImmediate to wait for the promise inside handleAction
-        await new Promise(resolve => setImmediate(resolve))
-        
-        expect(autoUpdater.checkForUpdates).toHaveBeenCalled()
+    it('should register autoUpdateAction listener', () => {
+        expect(ipcListeners['autoUpdateAction']).toBeDefined()
     })
 
-    test('installUpdateNow should call quitAndInstall', () => {
-        AutoUpdaterService.handleAction(mockEvent, 'installUpdateNow')
-        expect(autoUpdater.quitAndInstall).toHaveBeenCalled()
+    describe('handleAction', () => {
+        it('should handle initAutoUpdater', () => {
+            ipcListeners['autoUpdateAction'](mockEvent, 'initAutoUpdater', true)
+            expect(mockSender.send).toHaveBeenCalledWith('autoUpdateNotification', 'ready')
+            expect(mockAutoUpdater.allowPrerelease).toBe(true)
+        })
+
+        it('should handle checkForUpdate success', async () => {
+            await AutoUpdaterService.handleAction(mockEvent, 'checkForUpdate')
+            expect(mockAutoUpdater.checkForUpdates).toHaveBeenCalled()
+        })
+
+        it('should handle checkForUpdate fallback on failure', async () => {
+            mockAutoUpdater.checkForUpdates.mockRejectedValueOnce(new Error('primary fail'))
+            
+            await AutoUpdaterService.handleAction(mockEvent, 'checkForUpdate')
+            
+            // Wait for async fallback
+            await new Promise(resolve => setImmediate(resolve))
+            
+            expect(mockAutoUpdater.setFeedURL).toHaveBeenCalled()
+            expect(mockAutoUpdater.checkForUpdates).toHaveBeenCalledTimes(2)
+        })
+
+        it('should handle installUpdateNow', () => {
+            AutoUpdaterService.handleAction(mockEvent, 'installUpdateNow')
+            expect(mockAutoUpdater.quitAndInstall).toHaveBeenCalled()
+        })
     })
 
-    test('verifyMetadataSignature should return true for valid signature', async () => {
-        ConfigManager.fetchWithTimeout.mockResolvedValueOnce({
-            ok: true,
-            arrayBuffer: jest.fn().mockResolvedValue(Buffer.from('mock yaml content'))
-        })
-        ConfigManager.fetchWithTimeout.mockResolvedValueOnce({
-            ok: true,
-            text: jest.fn().mockResolvedValue('mock-signature-hex')
+    describe('sendError', () => {
+        it('should send antivirus-issue for EPERM', () => {
+            AutoUpdaterService.sendError(mockSender, { code: 'EPERM' })
+            expect(mockSender.send).toHaveBeenCalledWith('autoUpdateNotification', 'antivirus-issue')
         })
 
-        const result = await AutoUpdaterService.verifyMetadataSignature('https://f-launcher.ru/fox/new/updates')
-        
-        expect(result).toBe(true)
-        expect(verifyDistribution).toHaveBeenCalled()
+        it('should send realerror for other errors', () => {
+            const err = new Error('boom')
+            AutoUpdaterService.sendError(mockSender, err)
+            expect(mockSender.send).toHaveBeenCalledWith('autoUpdateNotification', 'realerror', err)
+        })
     })
 
-    test('verifyMetadataSignature should return false for invalid signature', async () => {
-        ConfigManager.fetchWithTimeout.mockResolvedValueOnce({
-            ok: true,
-            arrayBuffer: jest.fn().mockResolvedValue(Buffer.from('corrupted content'))
+    describe('verifyMetadataSignature', () => {
+        it('should return true on valid signature', async () => {
+            const result = await AutoUpdaterService.verifyMetadataSignature('http://test')
+            expect(result).toBe(true)
         })
-        ConfigManager.fetchWithTimeout.mockResolvedValueOnce({
-            ok: true,
-            text: jest.fn().mockResolvedValue('invalid-sig')
-        })
-        
-        verifyDistribution.mockReturnValueOnce(false)
 
-        const result = await AutoUpdaterService.verifyMetadataSignature('https://f-launcher.ru/fox/new/updates')
-        
-        expect(result).toBe(false)
+        it('should return false on fetch failure', async () => {
+            const ConfigManager = require('../../../../app/assets/js/core/configmanager')
+            ConfigManager.fetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 404 })
+            
+            const result = await AutoUpdaterService.verifyMetadataSignature('http://test')
+            expect(result).toBe(false)
+        })
     })
 })

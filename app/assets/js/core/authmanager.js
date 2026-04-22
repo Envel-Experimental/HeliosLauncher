@@ -7,13 +7,13 @@
  * @module authmanager
  */
 
-const ConfigManager = require('./configmanager')
-const { LoggerUtil } = require('./util/LoggerUtil')
-const { RestResponseStatus } = require('./common/RestResponse')
-const { MicrosoftAuth } = require('./microsoft/MicrosoftAuth')
-const { MicrosoftErrorCode } = require('./microsoft/MicrosoftResponse')
-const { AZURE_CLIENT_ID } = require('./ipcconstants')
-const Lang = require('./langloader')
+const ConfigManager = require('@core/configmanager')
+const { LoggerUtil } = require('@core/util/LoggerUtil')
+const { RestResponseStatus } = require('@core/common/RestResponse')
+const { MicrosoftAuth } = require('@core/microsoft/MicrosoftAuth')
+const { MicrosoftErrorCode } = require('@core/microsoft/MicrosoftResponse')
+const { AZURE_CLIENT_ID } = require('@core/ipcconstants')
+const Lang = require('@core/langloader')
 
 const log = LoggerUtil.getLogger('AuthManager')
 
@@ -96,7 +96,7 @@ const AUTH_MODE = { FULL: 0, MS_REFRESH: 1, MC_REFRESH: 2 }
  * @param {*} authMode The auth mode.
  * @returns An object with all auth data. AccessToken object will be null when mode is MC_REFRESH.
  */
-const { retry } = require('./util')
+const { retry } = require('@core/util')
 
 async function fullMicrosoftAuthFlow(entryCode, authMode) {
     const executionLogic = async () => {
@@ -161,11 +161,18 @@ async function fullMicrosoftAuthFlow(entryCode, authMode) {
     if (authMode === AUTH_MODE.FULL) {
         return await executionLogic().catch((err) => {
             log.error('Error during Microsoft auth flow (FULL):', err)
+            // Preserve known error codes
+            if (Object.values(MicrosoftErrorCode).includes(err.message)) {
+                return Promise.reject(microsoftErrorDisplayable(err.message))
+            }
             return Promise.reject(microsoftErrorDisplayable(MicrosoftErrorCode.UNKNOWN))
         })
     } else {
         return await retry(executionLogic).catch((err) => {
             log.error('Error during Microsoft auth flow (RETRY):', err)
+            if (Object.values(MicrosoftErrorCode).includes(err.message)) {
+                return Promise.reject(microsoftErrorDisplayable(err.message))
+            }
             return Promise.reject(microsoftErrorDisplayable(MicrosoftErrorCode.UNKNOWN))
         })
     }

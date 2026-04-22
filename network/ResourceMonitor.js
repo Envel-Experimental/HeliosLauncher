@@ -14,6 +14,7 @@ class ResourceMonitor extends EventEmitter {
         if (this.isMonitoring) return
         this.isMonitoring = true
         this.interval = setInterval(() => this._measureLoop(), intervalMs)
+        if (this.interval.unref) this.interval.unref()
     }
 
     stop() {
@@ -44,10 +45,12 @@ class ResourceMonitor extends EventEmitter {
             const cpu = cpus[i]
             const lastCpu = this.lastCpus[i]
 
-            for (const type in cpu.times) {
-                total += cpu.times[type] - lastCpu.times[type]
+            if (lastCpu && lastCpu.times && cpu.times) {
+                for (const type in cpu.times) {
+                    total += cpu.times[type] - lastCpu.times[type]
+                }
+                idle += cpu.times.idle - lastCpu.times.idle
             }
-            idle += cpu.times.idle - lastCpu.times.idle
         }
 
         this.lastCpus = cpus

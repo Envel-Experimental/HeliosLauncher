@@ -135,10 +135,10 @@ function rankApplicableJvms(details) {
             if (a.semver.minor === b.semver.minor) {
                 if (a.semver.patch === b.semver.patch) {
                     if (a.path.toLowerCase().includes('jdk')) {
-                        return b.path.toLowerCase().includes('jdk') ? 0 : 1;
+                        return b.path.toLowerCase().includes('jdk') ? 0 : -1;
                     }
                     else {
-                        return -1;
+                        return b.path.toLowerCase().includes('jdk') ? 1 : 0;
                     }
                 }
                 else {
@@ -827,6 +827,22 @@ module.exports = {
     javaExecFromRoot,
     discoverBestJvmInstallation,
     latestOpenJDK,
+    latestAdoptium,
+    latestCorretto,
+    latestGraalVM,
+    latestGraalVM_GitHub,
+    latestLibericaNIK,
     extractJdk,
-    runInstaller
+    runInstaller,
+    getHotSpotSettings,
+    resolveJvmSettings,
+    rankApplicableJvms,
+    isJavaExecPath,
+    parseJavaRuntimeVersion,
+    javaVersionToString,
+    getValidatableJavaPaths,
+    PathBasedJavaDiscoverer,
+    DirectoryBasedJavaDiscoverer,
+    EnvironmentBasedJavaDiscoverer,
+    Win32RegistryJavaDiscoverer
 }

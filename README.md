@@ -56,6 +56,23 @@ Build for a specific platform.
 
 ---
 
+## Testing
+
+The project uses a multi-level testing strategy to ensure stability and prevent regressions.
+
+| Level | Command | Description |
+| :--- | :--- | :--- |
+| **Unit** | `npm run test:unit` | Fast tests for individual logic modules. |
+| **Integration** | `npm run test:integration` | Verifies interactions between services (e.g., Launcher orchestration). |
+| **Smoke** | `npm run test:smoke` | Quick check if the app starts and reaches a functional state. |
+| **E2E** | `npm run test:e2e` | Full user flow simulations using Playwright. |
+| **Coverage** | `npm run test:coverage` | Generates a code coverage report for unit/integration tests. |
+
+### CI/CD
+Automated tests run on every push and pull request via [GitHub Actions](.github/workflows/test.yml).
+
+---
+
 ### Visual Studio Code
 
 All development should be done using [Visual Studio Code](https://code.visualstudio.com/).
