@@ -13,7 +13,13 @@ asarUnpack:
   - "**/udx-native/**"
 
 files:
-  - '!{dist,.gitignore,.vscode,docs,dev-app-update.yml,.nvmrc,.eslintrc.json}'
+  - 'index.js'
+  - 'app/**/*'
+  - 'network/**/*'
+  - '!dist'
+  - '!build'
+  - '!.gitignore'
+  - '!.vscode'
 
 extraResources:
   - 'libraries'

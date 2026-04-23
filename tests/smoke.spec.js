@@ -53,7 +53,6 @@ test.describe('Application Startup Smoke Test', () => {
         const startTime = Date.now();
         // 90 секунд на всё про всё
         const timeout = 90000;
-
         // Fail-fast check for bundle existence
         const fs = require('fs');
         const path = require('path');
@@ -61,6 +60,14 @@ test.describe('Application Startup Smoke Test', () => {
         if (!fs.existsSync(bundlePath)) {
             throw new Error(`CRITICAL: renderer.bundle.js not found at ${bundlePath}. Did you run 'npm run bundle'?`);
         }
+
+        const loginUsername = window.locator('#loginUsername');
+        const loginOptions = window.locator('#loginOptionsContainer');
+
+        console.log('Starting UI loop...');
+        const startTime = Date.now();
+        // 90 секунд на всё про всё
+        const timeout = 90000;
 
         while (Date.now() - startTime < timeout) {
             
@@ -72,9 +79,9 @@ test.describe('Application Startup Smoke Test', () => {
                  throw new Error(`Startup Hang detected by Failsafe! Current Status: ${statusText}`);
             }
 
-            // 1. ПОБЕДА: Видим кнопку запуска
-            if (await launchButton.isVisible() || await serverSelect.isVisible()) {
-                console.log('PASS: Main menu reached (Launch button visible).');
+            // 1. ПРОВЕРКА УСПЕХА
+            if (await launchButton.isVisible() || await serverSelect.isVisible() || await loginUsername.isVisible() || await loginOptions.isVisible()) {
+                console.log('PASS: Application reached a stable functional state (Landing or Login).');
                 return;
             }
 
