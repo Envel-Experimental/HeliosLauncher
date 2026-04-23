@@ -30,12 +30,12 @@ module.exports = {
         },
         {
             "name": "Ext 1 Mirror",
-            "assets": "https://mirror.nikita.best/assets/objects",
-            "libraries": "https://mirror.nikita.best/libraries",
-            "client": "https://mirror.nikita.best/client",
-            "version_manifest": "https://mirror.nikita.best/metadata/version_manifest_v2.json",
-            "piston_meta": "https://mirror.nikita.best/metadata",
-            "launcher_meta": "https://mirror.nikita.best/metadata",
+            "assets": "https://mirror.nikita.best/mirror/assets/objects",
+            "libraries": "https://mirror.nikita.best/mirror/libraries",
+            "client": "https://mirror.nikita.best/mirror/client",
+            "version_manifest": "https://mirror.nikita.best/mirror/metadata/version_manifest_v2.json",
+            "piston_meta": "https://mirror.nikita.best/mirror/metadata",
+            "launcher_meta": "https://mirror.nikita.best/mirror/metadata",
             "java_manifest": "https://mirror.nikita.best/java/manifest.json",
             "distribution": "https://mirror.nikita.best/distribution.json"
         }
