@@ -132,8 +132,6 @@ ConfigManager.load().then(async () => {
         console.warn('[Renderer] Failed to apply initial translations:', e)
     }
 
-    const bkid = Math.floor(Math.random() * 5) // roughly 5 backgrounds in assets
-    document.body.setAttribute('bkid', bkid.toString())
     document.body.setAttribute('data-platform', platform)
 
     // Expose DistroAPI and isDev for legacy compatibility

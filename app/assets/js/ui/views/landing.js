@@ -150,41 +150,47 @@ setInterval(async () => {
 const launchButton = document.getElementById('launch_button')
 if (launchButton) {
     launchButton.addEventListener('click', async e => {
-    loggerLanding.info('Launching game..')
-    try {
-        const distro = await DistroAPI.getDistribution()
-        if (distro == null) {
-            showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), Lang.queryJS('landing.launch.noDistributionIndex'))
-            return
-        }
-        const server = distro.getServerById(ConfigManager.getSelectedServer())
-        if (server == null) {
-            showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), Lang.queryJS('landing.launch.noServerSelected'))
-            return
-        }
-        const jExe = ConfigManager.getJavaExecutable(ConfigManager.getSelectedServer())
-        if (jExe == null) {
-            await asyncSystemScan(server.effectiveJavaOptions)
-        } else {
-
-            setLaunchDetails(Lang.queryJS('landing.launch.pleaseWait'))
-            toggleLaunchArea(true)
-            setLaunchPercentage(0, 100)
-
-            /** @type {any} */
-            const details = await ipcRenderer.invoke('sys:validateJava', ensureJavaDirIsRoot(jExe), server.effectiveJavaOptions.supported)
-            if (details != null) {
-                loggerLanding.info('Jvm Details', details)
-                await dlAsync()
-
-            } else {
-                await asyncSystemScan(server.effectiveJavaOptions)
+        loggerLanding.info('Launching game..')
+        const vid = document.getElementById('background-video')
+        if (vid) vid.pause()
+        
+        try {
+            const distro = await DistroAPI.getDistribution()
+            if (distro == null) {
+                showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), Lang.queryJS('landing.launch.noDistributionIndex'))
+                if (vid && !ConfigManager.getBackgroundVideoPaused()) vid.play().catch(() => {})
+                return
             }
+            const server = distro.getServerById(ConfigManager.getSelectedServer())
+            if (server == null) {
+                showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), Lang.queryJS('landing.launch.noServerSelected'))
+                if (vid && !ConfigManager.getBackgroundVideoPaused()) vid.play().catch(() => {})
+                return
+            }
+            const jExe = ConfigManager.getJavaExecutable(ConfigManager.getSelectedServer())
+            if (jExe == null) {
+                await asyncSystemScan(server.effectiveJavaOptions)
+            } else {
+
+                setLaunchDetails(Lang.queryJS('landing.launch.pleaseWait'))
+                toggleLaunchArea(true)
+                setLaunchPercentage(0, 100)
+
+                /** @type {any} */
+                const details = await ipcRenderer.invoke('sys:validateJava', ensureJavaDirIsRoot(jExe), server.effectiveJavaOptions.supported)
+                if (details != null) {
+                    loggerLanding.info('Jvm Details', details)
+                    await dlAsync()
+
+                } else {
+                    await asyncSystemScan(server.effectiveJavaOptions)
+                }
+            }
+        } catch (err) {
+            loggerLanding.error('Unhandled error in during launch process.', err)
+            showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), Lang.queryJS('landing.launch.failureText'))
+            if (vid && !ConfigManager.getBackgroundVideoPaused()) vid.play().catch(() => {})
         }
-    } catch (err) {
-        loggerLanding.error('Unhandled error in during launch process.', err)
-        showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), Lang.queryJS('landing.launch.failureText'))
-    }
     })
 }
 

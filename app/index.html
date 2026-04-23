@@ -51,7 +51,6 @@
         #main {
             display: none;
             height: calc(100% - 22px);
-            background: linear-gradient(to top, rgba(0, 0, 0, 0.75) 0%, rgba(0, 0, 0, 0) 100%);
             width: 100%;
             position: absolute;
             z-index: 10;
@@ -96,10 +95,118 @@
                 transform: rotate(360deg);
             }
         }
+
+        #background-video {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -100;
+            object-fit: cover;
+            object-position: center;
+            will-change: transform;
+            pointer-events: none;
+            background-color: #000;
+        }
+
+        #loadingContainer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #0c0c0c;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        }
+
+        #background-dim-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -50;
+            pointer-events: none;
+            background: linear-gradient(to bottom,
+                    rgba(0, 0, 0, 0.75) 0%,
+                    rgba(0, 0, 0, 0.6) 25%,
+                    transparent 48%,
+                    transparent 52%,
+                    rgba(0, 0, 0, 0.7) 75%,
+                    rgba(0, 0, 0, 0.8) 100%);
+        }
+
+        #video-controls-overlay {
+            position: fixed;
+            bottom: 15px;
+            left: 15px;
+            z-index: 9999;
+            transition: opacity 0.3s ease;
+        }
+
+        #background-video-toggle {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(4px);
+            padding: 0;
+            outline: none;
+        }
+
+        #background-video-toggle:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+            transform: scale(1.05);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        #background-video-toggle:active {
+            transform: scale(0.95);
+        }
+
+        #background-video-toggle svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        body.subview-active #background-dim-overlay {
+            background: rgba(0, 0, 0, 0.75) !important;
+            transition: background 0.5s ease;
+        }
+
+        body.subview-active #frameBar {
+            background-color: rgba(0, 0, 0, 0.75) !important;
+            transition: background-color 0.5s ease;
+        }
     </style>
 </head>
 
-<body bkid="">
+<body data-platform="win32">
+    <video id="background-video" preload="auto" loop muted playsinline disablepictureinpicture
+        disableremoteplayback poster="assets/images/backgrounds/background_fallback.jpg"></video>
+    <div id="background-dim-overlay"></div>
+    <div id="video-controls-overlay">
+        <button id="background-video-toggle" title="Пауза/Воспроизведение фона">
+            <svg id="vid-pause-icon" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M14,19H18V5H14M6,19H10V5H6V19Z" />
+            </svg>
+            <svg id="vid-play-icon" viewBox="0 0 24 24" style="display: none;">
+                <path fill="currentColor" d="M8,5.14V19.14L19,12.14L8,5.14Z" />
+            </svg>
+        </button>
+    </div>
     <script>
         // Emergency Platform Stabilization - Runs before heavy CSS/JS
         if (typeof HeliosAPI !== 'undefined' && HeliosAPI.system) {
@@ -152,7 +259,7 @@
         </div>
     </div>
     <div id="main">
-        <div id="welcomeContainer" style="display: none;">
+        <div id="welcomeContainer" style="display: none; background: rgba(0, 0, 0, 0.75);">
             <!--<div class="cloudDiv">
         <div class="cloudTop"></div>
         <div class="cloudBottom"></div>
@@ -184,7 +291,7 @@
             </div>
 
         </div>
-        <div id="loginContainer" style="display: none;">
+        <div id="loginContainer" style="display: none; background: rgba(0, 0, 0, 0.75);">
             <div id="loginCancelContainer" style="display: none;">
                 <button id="loginCancelButton">
                     <div id="loginCancelIcon">X</div>
@@ -239,7 +346,7 @@
             </div>
 
         </div>
-        <div id="waitingContainer" style="display: none;">
+        <div id="waitingContainer" style="display: none; background: rgba(0, 0, 0, 0.75);">
             <div id="waitingContent">
                 <div class="waitingSpinner"></div>
                 <div id="waitingTextContainer">
@@ -1111,9 +1218,9 @@
         </div>
     </div>
     <script>console.log('[Failsafe] Attempting to load renderer.bundle.js...')</script>
-    <script src="dist/renderer.bundle.js" 
-            onload="console.log('[Failsafe] Script successfully LOADED: renderer.bundle.js')"
-            onerror="console.error('[Failsafe] Script FAILED to load: dist/renderer.bundle.js. Check asar contents.')"></script>
+    <script src="dist/renderer.bundle.js"
+        onload="console.log('[Failsafe] Script successfully LOADED: renderer.bundle.js')"
+        onerror="console.error('[Failsafe] Script FAILED to load: dist/renderer.bundle.js. Check asar contents.')"></script>
 </body>
 
 </html>

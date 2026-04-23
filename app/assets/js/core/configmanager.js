@@ -100,7 +100,9 @@ const DEFAULT_CONFIG = {
             noMojang: false,
             noServers: false
         },
-        p2pPromptShown: false
+        p2pPromptShown: false,
+        backgroundVideoPaused: false,
+        backgroundVideoInitialized: false
     },
     clientToken: null,
     selectedServer: null,
@@ -451,6 +453,8 @@ exports.getNoServers = () => config?.settings?.deliveryOptimization?.noServers |
 exports.getAllowPrerelease = () => config?.settings?.launcher?.allowPrerelease || false
 exports.getSupportUrl = () => config?.supportUrl || DEFAULT_CONFIG.supportUrl
 exports.getP2PPromptShown = () => config?.settings?.p2pPromptShown || false
+exports.getBackgroundVideoPaused = () => config?.settings?.launcher?.backgroundVideoPaused || false
+exports.getBackgroundVideoInitialized = () => config?.settings?.launcher?.backgroundVideoInitialized || false
 
 exports.getModConfiguration = (id) => {
     if (!config || !config.modConfigurations) return { mods: {} }
@@ -530,6 +534,8 @@ exports.setP2POnlyMode = (val) => { if(config) { if(!config.settings.deliveryOpt
 exports.setNoMojang = (val) => { if(config) { if(!config.settings.deliveryOptimization) config.settings.deliveryOptimization = {}; config.settings.deliveryOptimization.noMojang = val } }
 exports.setNoServers = (val) => { if(config) { if(!config.settings.deliveryOptimization) config.settings.deliveryOptimization = {}; config.settings.deliveryOptimization.noServers = val } }
 exports.setP2PPromptShown = (val) => { if(config) config.settings.p2pPromptShown = val }
+exports.setBackgroundVideoPaused = (val) => { if(config) config.settings.launcher.backgroundVideoPaused = val }
+exports.setBackgroundVideoInitialized = (val) => { if(config) config.settings.launcher.backgroundVideoInitialized = val }
 exports.setGameWidth = (val) => { if(config) config.settings.game.resWidth = Number(val) }
 exports.setGameHeight = (val) => { if(config) config.settings.game.resHeight = Number(val) }
 exports.setFullscreen = (val) => { if(config) config.settings.game.fullscreen = val }
