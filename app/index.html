@@ -6,6 +6,27 @@
 
     <script>
         window._startupTime = Date.now();
+        // Failsafe Hang Detector: Show status if JS doesn't start in 6s
+        setTimeout(() => {
+            const statusText = document.getElementById('loadingStatusText');
+            if (statusText && statusText.style.display === 'none') {
+                statusText.innerText = 'Запуск... (инициализация модулей)';
+                statusText.style.display = 'block';
+                console.log('[Failsafe] Initialization is taking longer than expected. Showing status.');
+            }
+        }, 6000);
+        // Failsafe Critical Hang Detector: Show error if no progress in 20s
+        setTimeout(() => {
+            if (window._startupFinished) return;
+            const container = document.getElementById('loadingContainer');
+            if (container && !document.getElementById('uiBinderInitMarker')) {
+                container.innerHTML += `
+                    <div style="position: absolute; bottom: 20px; color: #ff5555; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 5px; font-size: 12px; z-index: 9999;">
+                        Похоже, запуск затянулся. Попробуйте перезагрузить (Ctrl+R) или проверьте интернет-соединение.
+                    </div>
+                `;
+            }
+        }, 20000);
         console.log('Inline script in app.ejs executing...');
         console.log('HeliosAPI status:', typeof HeliosAPI !== 'undefined' ? 'EXPOSED' : 'MISSING');
         if (typeof HeliosAPI !== 'undefined') {

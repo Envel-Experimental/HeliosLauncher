@@ -92,63 +92,79 @@ window.setMiddleButtonHandler = overlay.setMiddleButtonHandler
 window.setDismissHandler = overlay.setDismissHandler
 
 
+// Initialize frame early so close button works
+const platform = window.HeliosAPI?.system?.getPlatform() || process.platform || 'win32'
+const frameDarwin = document.getElementById('frameContentDarwin')
+const frameWin = document.getElementById('frameContentWin')
+if (platform === 'darwin') {
+    if (frameDarwin) frameDarwin.style.display = 'flex'
+    if (frameWin) frameWin.style.display = 'none'
+} else {
+    if (frameDarwin) frameDarwin.style.display = 'none'
+    if (frameWin) frameWin.style.display = 'flex'
+}
+console.log('[Renderer] Window frame enabled early (Platform: ' + platform + ')')
+
 // Initialize Languages immediately before config load
 try {
+    console.log('[Renderer] Setting up language engine...')
     Lang.setupLanguage()
     if (window.setLoadingStatus) {
         window.setLoadingStatus('js.uibinder.loading.loadingConfig')
     }
 } catch (e) {
-    console.error('Failed to initialize language engine:', e)
-    if (e.stack) console.error(e.stack)
+    console.error('[Renderer] Failed to initialize language engine:', e)
 }
 
+console.log('[Renderer] Starting ConfigManager load...')
 ConfigManager.load().then(async () => {
-
+    console.log('[Renderer] ConfigManager load complete.')
 
     // Polyfill EJS functionality
     try {
         i18n.applyTranslations()
     } catch (e) {
-        console.warn('Failed to apply initial translations:', e)
+        console.warn('[Renderer] Failed to apply initial translations:', e)
     }
-
-    // Set platform attribute
-    const platform = window.HeliosAPI?.system?.getPlatform() || process.platform || 'win32'
-    document.body.setAttribute('data-platform', platform)
-
-    // process polyfill moved to top stage zero
 
     const bkid = Math.floor(Math.random() * 5) // roughly 5 backgrounds in assets
     document.body.setAttribute('bkid', bkid.toString())
-
-
-    // Detect OS and set attribute for CSS targeting
     document.body.setAttribute('data-platform', platform)
-
-    // Hardened window frame visibility based on platform
-    const frameDarwin = document.getElementById('frameContentDarwin')
-    const frameWin = document.getElementById('frameContentWin')
-
-    if (platform === 'darwin') {
-        if (frameDarwin) frameDarwin.style.display = 'flex'
-        if (frameWin) frameWin.style.display = 'none'
-    } else {
-        if (frameDarwin) frameDarwin.style.display = 'none'
-        if (frameWin) frameWin.style.display = 'flex'
-    }
 
     // Expose DistroAPI and isDev for legacy compatibility
     window.DistroAPI = DistroAPI
     window.isDev = window.isDev || false
 
-    // Initialize Distribution API
+    // Initialize Distribution API with Safety Timeout
     try {
-        await DistroAPI.init() // This is DistroManager.init basically
+        console.log('[Renderer] Initializing DistroAPI...')
+        if (window.setLoadingStatus) {
+            window.setLoadingStatus('js.uibinder.loading.loadingDistribution')
+        }
+
+        const distroPromise = DistroAPI.init()
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('DistroAPI initialization timed out (15s)')), 15000)
+        )
+
+        await Promise.race([distroPromise, timeoutPromise])
+        console.log('[Renderer] DistroAPI initialized.')
+
     } catch (e) {
-        console.error('Failed to initialize DistroAPI:', e)
+        console.error('[Renderer] Failed to initialize DistroAPI:', e)
+        if (window.setLoadingStatus) {
+            window.setLoadingStatus('Ошибка: ' + e.message)
+        }
     }
 
     // Signal readiness
+    console.log('[Renderer] Sending renderer-ready signal.')
     ipcRenderer.send('renderer-ready')
+    
+    window._startupFinished = true
+    // Create marker for failsafe
+    const marker = document.createElement('div')
+    marker.id = 'uiBinderInitMarker'
+    marker.style.display = 'none'
+    document.body.appendChild(marker)
 })

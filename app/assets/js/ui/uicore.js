@@ -29,18 +29,21 @@ export function setLoadingStatus(key) {
 
     latestLoadingStatus = key
     const elapsed = Date.now() - (window._startupTime || Date.now())
+    const localized = Lang.queryJS(key) || key
+
+    console.log(`[UICore] Loading Status: ${key} (${localized}) [Elapsed: ${elapsed}ms]`)
 
     if (elapsed >= 6000) {
-        const localized = Lang.queryJS(key) || key
         el.innerHTML = `Загрузка: ${localized}`
         el.style.display = 'block'
     } else if (!window._loadingTimer) {
         window._loadingTimer = setTimeout(() => {
             const elDelayed = document.getElementById('loadingStatusText')
             if (elDelayed && latestLoadingStatus) {
-                const localized = Lang.queryJS(latestLoadingStatus) || latestLoadingStatus
-                elDelayed.innerHTML = `Загрузка: ${localized}`
+                const loc = Lang.queryJS(latestLoadingStatus) || latestLoadingStatus
+                elDelayed.innerHTML = `Загрузка: ${loc}`
                 elDelayed.style.display = 'block'
+                console.log('[UICore] 6s Grace period passed. Showing status:', latestLoadingStatus)
             }
             window._loadingTimer = null
         }, 6000 - elapsed)

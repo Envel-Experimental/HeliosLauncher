@@ -9,6 +9,8 @@ const AuthManager = require('@core/authmanager')
 const ConfigManager = require('@core/configmanager')
 const DistroManager = require('@core/distromanager')
 
+console.log('[UIBinder] Module Loading...')
+
 
 export let rscShouldLoad = false
 export let fatalStartupError = false

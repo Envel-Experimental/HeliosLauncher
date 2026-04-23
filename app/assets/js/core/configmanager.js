@@ -201,8 +201,12 @@ exports.load = async function () {
 
     if (isRenderer) {
         try {
-
-            config = await window.HeliosAPI.ipc.invoke('config:load')
+            console.log('[ConfigManager] Loading config from Main (with 10s timeout)...')
+            const loadPromise = window.HeliosAPI.ipc.invoke('config:load')
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Config load timed out')), 10000)
+            )
+            config = await Promise.race([loadPromise, timeoutPromise])
             if (!config) config = DEFAULT_CONFIG
             logger.info('Configuration successfully proxied from Main Process')
             return
