@@ -64,10 +64,6 @@ test.describe('Application Startup Smoke Test', () => {
         const loginUsername = window.locator('#loginUsername');
         const loginOptions = window.locator('#loginOptionsContainer');
 
-        console.log('Starting UI loop...');
-        const startTime = Date.now();
-        // 90 секунд на всё про всё
-        const timeout = 90000;
 
         while (Date.now() - startTime < timeout) {
             

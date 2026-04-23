@@ -16,10 +16,10 @@ files:
   - 'index.js'
   - 'app/**/*'
   - 'network/**/*'
-  - '!dist'
-  - '!build'
-  - '!.gitignore'
-  - '!.vscode'
+  - '!/dist'
+  - '!/build'
+  - '!/.gitignore'
+  - '!/.vscode'
 
 extraResources:
   - 'libraries'
