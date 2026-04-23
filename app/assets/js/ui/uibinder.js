@@ -198,9 +198,9 @@ export async function showMainUI(data) {
     setTimeout(async () => {
         initBackgroundVideo()
         console.log('[UIBinder] Showing main container...')
-        document.body.style.backgroundImage = "url('assets/images/backgrounds/background_fallback.jpg')"
-        document.body.style.backgroundSize = "cover"
-        document.body.style.backgroundPosition = "center"
+        document.body.classList.add('main-ui-active')
+        const fallbackImg = document.getElementById('background-fallback-img')
+        if (fallbackImg) fallbackImg.style.display = 'block'
         document.getElementById('frameBar').style.backgroundColor = 'transparent'
         show(document.getElementById('main'))
         console.log('[UIBinder] Main container visibility set to show.')

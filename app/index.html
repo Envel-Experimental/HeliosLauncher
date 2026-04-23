@@ -60,6 +60,24 @@
             filter: blur(3px);
         }
 
+        .refresh#newsButton {
+    background: #3d3938;
+    box-shadow: inset 0 -4px 0 #262423, inset 0 4px 0 #6b6562;
+    border: 2px solid #000;
+    cursor: pointer;
+    outline: none;
+    height: 48px;
+    width: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: transform 0.1s ease;
+    color: #fff;
+    font-family: 'Segoe UI', sans-serif;
+    font-weight: 700;
+}
+
         .refresh-btn-icon {
             background: none;
             border: none;
@@ -101,13 +119,32 @@
             top: 0;
             left: 0;
             width: 100%;
-            height: 100%;
+            height: calc(100% - 110px);
             z-index: -100;
             object-fit: cover;
             object-position: center;
             will-change: transform;
             pointer-events: none;
             background-color: #000;
+            background-repeat: no-repeat;
+            background-size: cover;
+            background-position: center top;
+        }
+
+        #bottom-solid-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 110px;
+            background-color: #111111;
+            z-index: -60;
+            display: none;
+            border-top: 4px solid #3d3938;
+        }
+
+        body.main-ui-active #bottom-solid-bar {
+            display: block;
         }
 
         #loadingContainer {
@@ -128,7 +165,7 @@
             top: 0;
             left: 0;
             width: 100%;
-            height: 100%;
+            height: calc(100% - 110px);
             z-index: -50;
             pointer-events: none;
             background: linear-gradient(to bottom,
@@ -194,9 +231,13 @@
 </head>
 
 <body data-platform="win32">
-    <video id="background-video" preload="auto" loop muted playsinline disablepictureinpicture
-        disableremoteplayback poster="assets/images/backgrounds/background_fallback.jpg"></video>
+    <div id="background-fallback-img"
+        style="position: fixed; top: 0; left: 0; width: 100%; height: calc(100% - 110px); background-image: url('assets/images/backgrounds/background_fallback.jpg'); background-size: cover; background-position: center; z-index: -110; display: none;">
+    </div>
+    <video id="background-video" preload="auto" loop muted playsinline disablepictureinpicture disableremoteplayback
+        poster="assets/images/backgrounds/background_fallback.jpg"></video>
     <div id="background-dim-overlay"></div>
+    <div id="bottom-solid-bar"></div>
     <div id="video-controls-overlay">
         <button id="background-video-toggle" title="Пауза/Воспроизведение фона">
             <svg id="vid-pause-icon" viewBox="0 0 24 24">
@@ -1115,20 +1156,19 @@
                         <div id="content">
                             <button id="newsButton">
                                 <!--<img src="assets/images/icons/arrow.svg" id="newsButtonSVG"/>-->
-                                <div id="newsButtonAlert" style="display: none;"></div>
+                                <span id="newsButtonText"><span data-lang="landing.newsButton">FOLDER</span></span>
                                 <svg id="newsButtonSVG" viewBox="0 0 24.87 13.97">
                                     <defs>
                                         <style>
                                             .arrowLine {
                                                 fill: none;
                                                 stroke: #FFF;
-                                                stroke-width: 2px;
+                                                stroke-width: 2.5px;
                                             }
                                         </style>
                                     </defs>
                                     <polyline class="arrowLine" points="0.71 13.26 12.56 1.41 24.16 13.02" />
                                 </svg>
-                                &#10;<span id="newsButtonText"><span data-lang="landing.newsButton">FOLDER</span></span>
                             </button>
                         </div>
                     </div>
@@ -1137,7 +1177,6 @@
                     <div class="bot_wrapper">
                         <div id="launch_content">
                             <button id="launch_button"><span data-lang="landing.launchButton">PLAY</span></button>
-                            <div class="bot_divider"></div>
                             <button id="server_selection_button" class="bot_label"><span
                                     data-lang="landing.selectedServer.loading"></span></button>
                         </div>
