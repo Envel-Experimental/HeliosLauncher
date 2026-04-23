@@ -206,9 +206,15 @@ exports.load = async function () {
             const timeoutPromise = new Promise((_, reject) => 
                 setTimeout(() => reject(new Error('Config load timed out')), 10000)
             )
-            config = await Promise.race([loadPromise, timeoutPromise])
-            if (!config) config = DEFAULT_CONFIG
-            logger.info('Configuration successfully proxied from Main Process')
+            const res = await Promise.race([loadPromise, timeoutPromise])
+            if (res) {
+                config = res
+                firstLaunch = !!res.firstLaunch
+                delete config.firstLaunch
+            } else {
+                config = DEFAULT_CONFIG
+            }
+            logger.info('Configuration successfully proxied from Main Process (First launch: ' + firstLaunch + ')')
             return
         } catch (err) {
             logger.error('Failed to proxy configuration:', err)
@@ -236,6 +242,7 @@ exports.load = async function () {
             console.log('[ConfigManager] Creating default config...')
             DEFAULT_CONFIG.settings.launcher.dataDirectory = await exports.getLauncherDirectory()
             config = DEFAULT_CONFIG
+            firstLaunch = true
             await exports.save()
             return
         }
@@ -581,7 +588,10 @@ exports.isLoaded = function () {
 }
 
 exports.getConfig = function() {
-    return config
+    return {
+        ...config,
+        firstLaunch
+    }
 }
 
 exports.getSupportUrl = () => config?.supportUrl || DEFAULT_CONFIG.supportUrl

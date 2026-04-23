@@ -1790,6 +1790,10 @@ export let CACHE_SELECTED_SHADERPACK
  */
 async function resolveShaderpacksForUI() {
     const serv = (await DistroAPI.getDistribution()).getServerById(ConfigManager.getSelectedServer())
+    if (!serv) {
+        console.warn('[Settings] resolveShaderpacksForUI: No server selected.')
+        return
+    }
     CACHE_SETTINGS_INSTANCE_DIR = sysPath.join(ConfigManager.getInstanceDirectory(), serv.rawServer.id)
     CACHE_SHADERPACKS = await DropinModUtil.scanForShaderpacks(CACHE_SETTINGS_INSTANCE_DIR)
     CACHE_SELECTED_SHADERPACK = await DropinModUtil.getEnabledShaderpack(CACHE_SETTINGS_INSTANCE_DIR)
@@ -1869,6 +1873,10 @@ export function bindShaderpackButton() {
  */
 async function loadSelectedServerOnModsTab() {
     const serv = (await DistroAPI.getDistribution()).getServerById(ConfigManager.getSelectedServer())
+    if (!serv) {
+        console.warn('[Settings] loadSelectedServerOnModsTab: No server selected.')
+        return
+    }
 
     for (const el of document.getElementsByClassName('settingsSelServContent')) {
         const safeName = (typeof serv.rawServer.name === 'string' ? serv.rawServer.name : (serv.rawServer.name?.value || 'Server')).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;")

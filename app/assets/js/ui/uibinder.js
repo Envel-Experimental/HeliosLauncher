@@ -145,9 +145,21 @@ export async function showMainUI(data) {
 
 
 
+    // 1. Initial Server Selection (MUST be before prepareSettings)
+    let selectedServ = data.getServerById(ConfigManager.getSelectedServer())
+    if (selectedServ == null) {
+        selectedServ = data.getMainServer()
+        if (selectedServ) {
+            console.log('[UIBinder] Auto-selecting main server:', selectedServ.rawServer.id)
+            ConfigManager.setSelectedServer(selectedServ.rawServer.id)
+            await ConfigManager.save()
+        }
+    }
+
     console.log('[UIBinder] Preparing settings...')
     await prepareSettings(true)
     console.log('[UIBinder] Settings prepared.')
+    
     let selectedAcc = ConfigManager.getSelectedAccount()
     if (selectedAcc == null) {
         const accounts = ConfigManager.getAuthAccounts()
@@ -161,10 +173,6 @@ export async function showMainUI(data) {
     console.log('[UIBinder] Updating selected account to:', selectedAcc?.displayName)
     updateSelectedAccount(selectedAcc)
 
-    let selectedServ = data.getServerById(ConfigManager.getSelectedServer())
-    if (selectedServ == null) {
-        selectedServ = data.getMainServer()
-    }
     console.log('[UIBinder] Updating selected server to:', selectedServ?.rawServer?.id)
     await updateSelectedServer(selectedServ)
 
@@ -192,9 +200,13 @@ export async function showMainUI(data) {
         }
 
         if (ConfigManager.isFirstLaunch()) {
-            currentView = VIEWS.welcome
-            const welcomeEl = document.querySelector(VIEWS.welcome)
-            if (welcomeEl) show(welcomeEl)
+            console.log('[UIBinder] First launch detected. Jumping directly to nickname login.')
+            loginCancelEnabled(false)
+            window.loginViewOnSuccess = VIEWS.landing
+            window.loginViewOnCancel = VIEWS.loginOptions
+            currentView = VIEWS.login
+            const loginEl = document.querySelector(VIEWS.login)
+            if (loginEl) show(loginEl)
         } else {
             if (isLoggedIn) {
                 currentView = VIEWS.landing
@@ -211,14 +223,6 @@ export async function showMainUI(data) {
                     }
                     toggleLaunchArea(false)
                     checkAndShowP2PPrompt()
-                    
-                    // Final safety visibility check
-                    const settingsBtn = document.getElementById('settingsMediaButton')
-                    if (settingsBtn) {
-                        console.log('[UIBinder] Settings button opacity:', getComputedStyle(settingsBtn).opacity)
-                        console.log('[UIBinder] Settings button display:', getComputedStyle(settingsBtn).display)
-                        console.log('[UIBinder] Settings button parent display:', getComputedStyle(settingsBtn.parentElement).display)
-                    }
                 }
             } else {
                 loginOptionsCancelEnabled(false)
