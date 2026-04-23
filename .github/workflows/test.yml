@@ -27,6 +27,9 @@ jobs:
       - name: Run Unit Tests
         run: npm run test:unit
 
+      - name: Build Renderer Bundle
+        run: npm run bundle
+
       - name: Run Integration Tests
         run: npm run test:integration
 

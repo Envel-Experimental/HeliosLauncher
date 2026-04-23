@@ -15,18 +15,22 @@
                 console.log('[Failsafe] Initialization is taking longer than expected. Showing status.');
             }
         }, 6000);
-        // Failsafe Critical Hang Detector: Show error if no progress in 20s
-        setTimeout(() => {
-            if (window._startupFinished) return;
-            const container = document.getElementById('loadingContainer');
-            if (container && !document.getElementById('uiBinderInitMarker')) {
-                container.innerHTML += `
-                    <div style="position: absolute; bottom: 20px; color: #ff5555; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 5px; font-size: 12px; z-index: 9999;">
-                        Похоже, запуск затянулся. Попробуйте перезагрузить (Ctrl+R) или проверьте интернет-соединение.
-                    </div>
-                `;
+        // Failsafe Resource Error Detector
+        window.addEventListener('error', (event) => {
+            if (event.target && (event.target.tagName === 'SCRIPT' || event.target.tagName === 'LINK')) {
+                console.error(`[Failsafe] Critical resource failed to load: ${event.target.src || event.target.href}`);
+                const container = document.getElementById('loadingContainer');
+                if (container) {
+                    container.innerHTML += `
+                        <div style="position: absolute; bottom: 60px; color: #ff5555; background: rgba(0,0,0,0.8); padding: 15px; border: 1px solid #ff5555; border-radius: 5px; font-family: sans-serif; font-size: 13px; z-index: 10000; width: 80%; left: 10%;">
+                            <h3 style="margin-top:0">Ошибка загрузки ресурсов</h3>
+                            <p>Не удалось загрузить критический файл: <b>${(event.target.src || event.target.href).split('/').pop()}</b></p>
+                            <p style="font-size: 11px; opacity: 0.8;">Путь: ${event.target.src || event.target.href}</p>
+                        </div>
+                    `;
+                }
             }
-        }, 20000);
+        }, true);
         console.log('Inline script in app.ejs executing...');
         console.log('HeliosAPI status:', typeof HeliosAPI !== 'undefined' ? 'EXPOSED' : 'MISSING');
         if (typeof HeliosAPI !== 'undefined') {
@@ -1106,7 +1110,10 @@
             </div>
         </div>
     </div>
-    <script src="dist/renderer.bundle.js"></script>
+    <script>console.log('[Failsafe] Attempting to load renderer.bundle.js...')</script>
+    <script src="dist/renderer.bundle.js" 
+            onload="console.log('[Failsafe] Script successfully LOADED: renderer.bundle.js')"
+            onerror="console.error('[Failsafe] Script FAILED to load: dist/renderer.bundle.js. Check asar contents.')"></script>
 </body>
 
 </html>

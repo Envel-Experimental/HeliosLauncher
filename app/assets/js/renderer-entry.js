@@ -1,3 +1,4 @@
+console.log('[Renderer] Bundle execution STARTED');
 /**
  * Renderer entry point for bundling
  * Using require() instead of import to ensure strict execution order.
@@ -5,6 +6,7 @@
  */
 
 // 1. STAGE ZERO: Global polyfills
+console.log('[Renderer] Stage Zero: Polyfills')
 window.global = window
 
 
@@ -63,10 +65,12 @@ Object.assign(window, {
 })
 
 // 3. STAGE TWO: UI Core Initialization
+console.log('[Renderer] Stage Two: UI Core')
 const uicore = require('./ui/uicore.js')
 const uibinder = require('./ui/uibinder.js')
 
 // 4. STAGE THREE: UI View Modules
+console.log('[Renderer] Stage Three: UI Views')
 const landing = require('./ui/views/landing.js')
 const settings = require('./ui/views/settings.js')
 const welcome = require('./ui/views/welcome.js')
@@ -75,6 +79,7 @@ const loginOptions = require('./ui/views/loginOptions.js')
 const overlay = require('./ui/views/overlay.js')
 
 // 5. STAGE FOUR: Global Export Merge
+console.log('[Renderer] Stage Four: Merging Exports')
 Object.assign(window, uicore)
 Object.assign(window, uibinder)
 Object.assign(window, landing)
@@ -85,6 +90,7 @@ Object.assign(window, welcome)
 Object.assign(window, login)
 
 // 6. STAGE FIVE: Manual Wrapper Linkage
+console.log('[Renderer] Stage Five: Wrapper Linkage')
 window.setOverlayContent = overlay.setOverlayContent
 window.toggleOverlay = overlay.toggleOverlay
 window.setOverlayHandler = overlay.setOverlayHandler
@@ -93,7 +99,6 @@ window.setDismissHandler = overlay.setDismissHandler
 
 
 // Initialize frame early so close button works
-const platform = window.HeliosAPI?.system?.getPlatform() || process.platform || 'win32'
 const frameDarwin = document.getElementById('frameContentDarwin')
 const frameWin = document.getElementById('frameContentWin')
 if (platform === 'darwin') {

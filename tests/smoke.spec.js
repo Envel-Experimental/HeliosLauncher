@@ -54,8 +54,24 @@ test.describe('Application Startup Smoke Test', () => {
         // 90 секунд на всё про всё
         const timeout = 90000;
 
+        // Fail-fast check for bundle existence
+        const fs = require('fs');
+        const path = require('path');
+        const bundlePath = path.join(__dirname, '..', 'app', 'dist', 'renderer.bundle.js');
+        if (!fs.existsSync(bundlePath)) {
+            throw new Error(`CRITICAL: renderer.bundle.js not found at ${bundlePath}. Did you run 'npm run bundle'?`);
+        }
+
         while (Date.now() - startTime < timeout) {
             
+            // 0. ПРОВЕРКА FAILSAFE (если приложение зависло на старте)
+            const failsafeMarker = window.locator('text=Initialization is taking longer than expected');
+            if (await failsafeMarker.count() > 0) {
+                 // Если видим маркер фейлсейфа, значит бандл не запустился вовремя
+                 const statusText = await window.locator('#loadingStatusText').innerText();
+                 throw new Error(`Startup Hang detected by Failsafe! Current Status: ${statusText}`);
+            }
+
             // 1. ПОБЕДА: Видим кнопку запуска
             if (await launchButton.isVisible() || await serverSelect.isVisible()) {
                 console.log('PASS: Main menu reached (Launch button visible).');
