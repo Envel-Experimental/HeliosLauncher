@@ -92,7 +92,7 @@ class FullRepair {
         let currentPercent = 0;
         const receivedEach = await downloadQueue(this.assets, received => {
             if (expectedTotalSize > 0) {
-                const nextPercent = Math.trunc((received / expectedTotalSize) * 100);
+                const nextPercent = Math.min(100, Math.trunc((received / expectedTotalSize) * 100));
                 if (currentPercent !== nextPercent) {
                     currentPercent = nextPercent;
                     if (onProgress) onProgress(currentPercent);

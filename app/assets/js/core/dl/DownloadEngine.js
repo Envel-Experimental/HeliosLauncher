@@ -240,7 +240,7 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
         const isInstanceFile = decodedPath.replace(/\\/g, '/').includes('/instances/');
         const isConfig = CONFIG_EXTENSIONS.includes(path.extname(decodedPath));
 
-        if (isConfig || isInstanceFile) {
+        if (!asset.force && (isConfig || isInstanceFile)) {
             log.debug(`Skipping validation/download of mutable file: ${decodedPath}`);
             if (onProgress) onProgress(asset.size);
             return;
@@ -425,35 +425,44 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
                 // Report Success to MirrorManager
                 MirrorManager.reportSuccess(currentUrl, Date.now() - downloadStartTime, loaded);
                 return;
-            } else {
-                const isInstanceFile = decodedPath.replace(/\\/g, '/').includes('/instances/');
-                const isConfig = CONFIG_EXTENSIONS.includes(path.extname(decodedPath));
-                if (isDev) {
-                    const logFn = (isConfig || isInstanceFile) ? console.warn : console.error;
-                    logFn(`[DownloadEngine] Validation failed for ${asset.id}. File size: ${loaded} / ${total}`)
-                }
-
-                // DEBUG: Inspect contents and delete temp
-                try {
-                    const fd = await fs.open(tempPath, 'r');
-                    const buffer = Buffer.alloc(100);
-                    const { bytesRead } = await fd.read(buffer, 0, 100, 0);
-                    await fd.close();
-                    
-                    const preview = buffer.slice(0, bytesRead).toString('utf-8');
-                    console.error(`[DownloadEngine] Failed File Content Preview (First 100 bytes): ${preview}`);
-                    await fs.unlink(tempPath);
-                } catch (e) { }
-
-                const validationError = new Error('Validation failed');
-                attemptHistory.push({
-                    attempt: attempt + 1,
-                    url: currentUrl,
-                    method: headers.has('X-Skip-P2P') ? 'HTTP' : 'Race(P2P+HTTP)',
-                    error: `Hash Mismatch (Got ${loaded} bytes)`
-                });
-                throw validationError;
             }
+
+            const isInstanceFile = decodedPath.replace(/\\/g, '/').includes('/instances/');
+            const isConfig = CONFIG_EXTENSIONS.includes(path.extname(decodedPath));
+
+            if (asset.force && (isConfig || isInstanceFile)) {
+                log.warn(`[DownloadEngine] Validation failed for forced mutable file ${asset.id}, but accepting anyway. Size: ${loaded} / ${total}`);
+                if (fsSync.existsSync(tempPath)) {
+                    await safeRename(tempPath, decodedPath);
+                }
+                return;
+            }
+
+            if (isDev) {
+                const logFn = (isConfig || isInstanceFile) ? console.warn : console.error;
+                logFn(`[DownloadEngine] Validation failed for ${asset.id}. File size: ${loaded} / ${total}`)
+            }
+
+            // DEBUG: Inspect contents and delete temp
+            try {
+                const fd = await fs.open(tempPath, 'r');
+                const buffer = Buffer.alloc(100);
+                const { bytesRead } = await fd.read(buffer, 0, 100, 0);
+                await fd.close();
+
+                const preview = buffer.slice(0, bytesRead).toString('utf-8');
+                console.error(`[DownloadEngine] Failed File Content Preview (First 100 bytes): ${preview}`);
+                await fs.unlink(tempPath);
+            } catch (e) { }
+
+            const validationError = new Error('Validation failed');
+            attemptHistory.push({
+                attempt: attempt + 1,
+                url: currentUrl,
+                method: headers.has('X-Skip-P2P') ? 'HTTP' : 'Race(P2P+HTTP)',
+                error: `Hash Mismatch (Got ${loaded} bytes)`
+            });
+            throw validationError;
 
         } catch (err) {
             lastError = err;

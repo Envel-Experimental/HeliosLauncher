@@ -42,6 +42,7 @@ interface ModuleData {
         value?: boolean;
         def?: boolean;
     };
+    force?: boolean;
     subModules?: ModuleData[];
 }
 
