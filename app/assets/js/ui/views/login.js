@@ -154,6 +154,9 @@ loginButton.addEventListener('click', () => {
     // Attempt login with empty password.
     AuthManager.addMojangAccount(loginUsername.value, '').then((value) => {
         console.log('[LoginUI] addMojangAccount resolved successfully');
+        Analytics.capture('Account Added', {
+            type: 'mojang'
+        })
         updateSelectedAccount(value)
         loginButton.innerHTML = loginButton.innerHTML.replace(Lang.queryJS('login.loggingIn'), Lang.queryJS('login.success'))
         document.querySelectorAll('.circle-loader').forEach(el => toggleClass(el, 'load-complete'))

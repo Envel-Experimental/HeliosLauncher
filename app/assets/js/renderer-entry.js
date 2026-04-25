@@ -35,11 +35,13 @@ if (typeof process === 'undefined') {
 const { LoggerUtil } = require('./core/util/LoggerUtil')
 const Lang = require('./core/langloader')
 const ConfigManager = require('./core/configmanager')
+const Analytics = require('./core/util/Analytics')
 const uiUtil = require('./ui/views/ui-util')
 
 // Global error handling for Renderer Process
 window.addEventListener('error', (event) => {
     console.error('[Renderer ERROR]', event.error || event.message)
+    Analytics.captureException(event.error || event.message)
     if (window.HeliosAPI?.ipc) {
         window.HeliosAPI.ipc.send('renderer-error', (event.error ? event.error.stack : event.message))
     }
@@ -47,6 +49,7 @@ window.addEventListener('error', (event) => {
 
 window.addEventListener('unhandledrejection', (event) => {
     console.error('[Renderer ASYNC ERROR]', event.reason)
+    Analytics.captureException(event.reason)
     if (window.HeliosAPI?.ipc) {
         window.HeliosAPI.ipc.send('renderer-error', (event.reason ? event.reason.stack : event.reason.toString()))
     }
@@ -60,6 +63,7 @@ Object.assign(window, {
     Lang,
     ConfigManager,
     DistroAPI,
+    Analytics,
     i18n,
     ...uiUtil
 })
@@ -124,6 +128,9 @@ try {
 console.log('[Renderer] Starting ConfigManager load...')
 ConfigManager.load().then(async () => {
     console.log('[Renderer] ConfigManager load complete.')
+    
+    // Initialize Analytics
+    await Analytics.init()
 
     // Polyfill EJS functionality
     try {

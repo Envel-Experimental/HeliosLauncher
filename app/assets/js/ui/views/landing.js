@@ -48,7 +48,7 @@ export function toggleLaunchArea(loading) {
             lower.style.opacity = '1'
         }
         if (lDetails) lDetails.style.display = 'none'
-        
+
         const showElement = (el) => {
             if (el) {
                 el.style.display = '' // Revert to CSS default
@@ -61,7 +61,7 @@ export function toggleLaunchArea(loading) {
         showElement(lCenter)
         showElement(lRight)
     }
-    
+
     // Final visibility check for buttons
     const buttons = [
         document.getElementById('settingsMediaButton'),
@@ -150,41 +150,48 @@ setInterval(async () => {
 const launchButton = document.getElementById('launch_button')
 if (launchButton) {
     launchButton.addEventListener('click', async e => {
-    loggerLanding.info('Launching game..')
-    try {
-        const distro = await DistroAPI.getDistribution()
-        if (distro == null) {
-            showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), Lang.queryJS('landing.launch.noDistributionIndex'))
-            return
-        }
-        const server = distro.getServerById(ConfigManager.getSelectedServer())
-        if (server == null) {
-            showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), Lang.queryJS('landing.launch.noServerSelected'))
-            return
-        }
-        const jExe = ConfigManager.getJavaExecutable(ConfigManager.getSelectedServer())
-        if (jExe == null) {
-            await asyncSystemScan(server.effectiveJavaOptions)
-        } else {
-
-            setLaunchDetails(Lang.queryJS('landing.launch.pleaseWait'))
-            toggleLaunchArea(true)
-            setLaunchPercentage(0, 100)
-
-            /** @type {any} */
-            const details = await ipcRenderer.invoke('sys:validateJava', ensureJavaDirIsRoot(jExe), server.effectiveJavaOptions.supported)
-            if (details != null) {
-                loggerLanding.info('Jvm Details', details)
-                await dlAsync()
-
-            } else {
-                await asyncSystemScan(server.effectiveJavaOptions)
+        loggerLanding.info('Launching game..')
+        try {
+            const distro = await DistroAPI.getDistribution()
+            if (distro == null) {
+                showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), Lang.queryJS('landing.launch.noDistributionIndex'))
+                return
             }
+            const server = distro.getServerById(ConfigManager.getSelectedServer())
+            if (server == null) {
+                showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), Lang.queryJS('landing.launch.noServerSelected'))
+                return
+            }
+            const jExe = ConfigManager.getJavaExecutable(ConfigManager.getSelectedServer())
+            if (jExe == null) {
+                await asyncSystemScan(server.effectiveJavaOptions)
+            } else {
+
+                setLaunchDetails(Lang.queryJS('landing.launch.pleaseWait'))
+                toggleLaunchArea(true)
+                setLaunchPercentage(0, 100)
+
+                /** @type {any} */
+                const details = await ipcRenderer.invoke('sys:validateJava', ensureJavaDirIsRoot(jExe), server.effectiveJavaOptions.supported)
+                if (details != null) {
+                    loggerLanding.info('Jvm Details', details)
+                    await dlAsync()
+
+                } else {
+                    await asyncSystemScan(server.effectiveJavaOptions)
+                }
+            }
+            Analytics.capture('Game Launch Started', {
+                serverId: ConfigManager.getSelectedServer(),
+                server_name: server.name,
+                mc_version: server.minecraftVersion,
+                module_count: server.modules.length
+            })
+        } catch (err) {
+            loggerLanding.error('Unhandled error in during launch process.', err)
+            Analytics.captureException(err)
+            showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), Lang.queryJS('landing.launch.failureText'))
         }
-    } catch (err) {
-        loggerLanding.error('Unhandled error in during launch process.', err)
-        showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), Lang.queryJS('landing.launch.failureText'))
-    }
     })
 }
 
@@ -484,7 +491,7 @@ async function downloadJava(effectiveJavaOptions, launchAfter = true) {
             setLaunchDetails(Lang.queryJS('landing.dlAsync.downloadingFiles')) // Reuse "Downloading Files"
             setDownloadPercentage(status.progress)
         } else if (status.type === 'extract') {
-            setLaunchDetails('Extracting Java...') 
+            setLaunchDetails('Extracting Java...')
             setLaunchPercentage(100)
         } else if (status.type === 'install') {
             setLaunchDetails('Installing Java...') // Accurate feedback for MSI

@@ -107,6 +107,14 @@ class FullRepair {
                 FullRepair.logger.warn(`Asset ${asset.id} declared a size of ${asset.size} bytes, but ${receivedEach[asset.id]} were received!`);
                 if (!await validateLocalFile(asset.path, asset.algo, asset.hash, asset.size)) {
                     FullRepair.logger.error(`Hashes do not match, ${asset.id} may be corrupted.`);
+                    
+                    // Track corruption event
+                    if (typeof window.Analytics !== 'undefined') {
+                        window.Analytics.capture('File Corruption Detected', {
+                            asset_id: asset.id,
+                            serverId: this.serverId
+                        })
+                    }
                 }
             }
         }
