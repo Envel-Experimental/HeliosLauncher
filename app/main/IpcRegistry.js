@@ -136,11 +136,7 @@ class IpcRegistry {
             }
         })
 
-        ipcMain.on('distributionIndexDone', (event, res) => {
-            if (!event.sender.isDestroyed()) {
-                event.sender.send('distributionIndexDone', res)
-            }
-        })
+
 
         ipcMain.handle(SHELL_OPCODE.TRASH_ITEM, async (event, ...args) => {
             try {

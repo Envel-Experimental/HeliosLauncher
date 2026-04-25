@@ -99,6 +99,11 @@ exports.decryptString = function (encryptedHex) {
     // Try safeStorage
     if (safeStorage && safeStorage.isEncryptionAvailable()) {
         try {
+            // Optimization: If it's not a valid hex string or too short, it's not ours.
+            if (encryptedHex.length < 32 || !/^[0-9a-fA-F]+$/.test(encryptedHex)) {
+                return encryptedHex
+            }
+
             const buffer = Buffer.from(encryptedHex, 'hex')
             return safeStorage.decryptString(buffer)
         } catch (error) {

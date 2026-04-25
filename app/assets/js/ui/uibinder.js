@@ -469,84 +469,91 @@ export function mergeModConfiguration(o, n, nReq = false) {
 }
 
 async function validateSelectedAccount() {
-    const selectedAcc = ConfigManager.getSelectedAccount()
-    if (selectedAcc != null) {
-        const val = await AuthManager.validateSelected()
-        if (!val) {
-            ConfigManager.removeAuthAccount(selectedAcc.uuid)
-            ConfigManager.save()
-            const accLen = Object.keys(ConfigManager.getAuthAccounts()).length
-            setOverlayContent(
-                Lang.queryJS('uibinder.validateAccount.failedMessageTitle'),
-                accLen > 0
-                    ? Lang.queryJS('uibinder.validateAccount.failedMessage', { 'account': selectedAcc.displayName })
-                    : Lang.queryJS('uibinder.validateAccount.failedMessageSelectAnotherAccount', { 'account': selectedAcc.displayName }),
-                Lang.queryJS('uibinder.validateAccount.loginButton'),
-                Lang.queryJS('uibinder.validateAccount.selectAnotherAccountButton')
-            )
-            setOverlayHandler(() => {
+    try {
+        const selectedAcc = ConfigManager.getSelectedAccount()
+        if (selectedAcc != null) {
+            const val = await AuthManager.validateSelected()
+            if (!val) {
+                ConfigManager.removeAuthAccount(selectedAcc.uuid)
+                ConfigManager.save()
+                const accLen = Object.keys(ConfigManager.getAuthAccounts()).length
+                setOverlayContent(
+                    Lang.queryJS('uibinder.validateAccount.failedMessageTitle'),
+                    accLen > 0
+                        ? Lang.queryJS('uibinder.validateAccount.failedMessage', { 'account': selectedAcc.displayName })
+                        : Lang.queryJS('uibinder.validateAccount.failedMessageSelectAnotherAccount', { 'account': selectedAcc.displayName }),
+                    Lang.queryJS('uibinder.validateAccount.loginButton'),
+                    Lang.queryJS('uibinder.validateAccount.selectAnotherAccountButton')
+                )
+                setOverlayHandler(() => {
 
-                const isMicrosoft = selectedAcc.type === 'microsoft'
+                    const isMicrosoft = selectedAcc.type === 'microsoft'
 
-                if (isMicrosoft) {
-                    // Empty for now
-                } else {
-                    // Mojang
-                    // For convenience, pre-populate the username of the account.
-                    document.getElementById('loginUsername').value = selectedAcc.username
-                    validateEmail(selectedAcc.username)
-                }
-
-                window.loginOptionsViewOnLoginSuccess = getCurrentView()
-                window.loginOptionsViewOnLoginCancel = VIEWS.loginOptions
-
-                if (accLen > 0) {
-                    window.loginOptionsViewOnCancel = getCurrentView()
-                    window.loginOptionsViewCancelHandler = () => {
-                        if (isMicrosoft) {
-                            ConfigManager.addMicrosoftAuthAccount(
-                                selectedAcc.uuid,
-                                selectedAcc.accessToken,
-                                selectedAcc.username,
-                                selectedAcc.expiresAt,
-                                selectedAcc.microsoft.access_token,
-                                selectedAcc.microsoft.refresh_token,
-                                selectedAcc.microsoft.expires_at
-                            )
-                        } else {
-                            ConfigManager.addMojangAuthAccount(selectedAcc.uuid, selectedAcc.accessToken, selectedAcc.username, selectedAcc.displayName)
-                        }
-                        ConfigManager.save()
-                        validateSelectedAccount()
+                    if (isMicrosoft) {
+                        // Empty for now
+                    } else {
+                        // Mojang
+                        // For convenience, pre-populate the username of the account.
+                        document.getElementById('loginUsername').value = selectedAcc.username
+                        validateEmail(selectedAcc.username)
                     }
-                    loginOptionsCancelEnabled(true)
-                } else {
-                    loginOptionsCancelEnabled(false)
-                }
-                toggleOverlay(false)
-                switchView(getCurrentView(), VIEWS.loginOptions)
-            })
-            setDismissHandler(() => {
-                if (accLen > 1) {
-                    prepareAccountSelectionList()
-                    fadeOut(document.getElementById('overlayContent'), 250, () => {
-                        bindOverlayKeys(true, 'accountSelectContent', true)
-                        fadeIn(document.getElementById('accountSelectContent'), 250)
-                    })
-                } else {
-                    const accountsObj = ConfigManager.getAuthAccounts()
-                    const accounts = Array.from(Object.keys(accountsObj), v => accountsObj[v])
-                    // This function validates the account switch.
-                    setSelectedAccount(accounts[0].uuid)
+
+                    window.loginOptionsViewOnLoginSuccess = getCurrentView()
+                    window.loginOptionsViewOnLoginCancel = VIEWS.loginOptions
+
+                    if (accLen > 0) {
+                        window.loginOptionsViewOnCancel = getCurrentView()
+                        window.loginOptionsViewCancelHandler = () => {
+                            if (isMicrosoft) {
+                                ConfigManager.addMicrosoftAuthAccount(
+                                    selectedAcc.uuid,
+                                    selectedAcc.accessToken,
+                                    selectedAcc.username,
+                                    selectedAcc.expiresAt,
+                                    selectedAcc.microsoft.access_token,
+                                    selectedAcc.microsoft.refresh_token,
+                                    selectedAcc.microsoft.expires_at
+                                )
+                            } else {
+                                ConfigManager.addMojangAuthAccount(selectedAcc.uuid, selectedAcc.accessToken, selectedAcc.username, selectedAcc.displayName)
+                            }
+                            ConfigManager.save()
+                            validateSelectedAccount()
+                        }
+                        loginOptionsCancelEnabled(true)
+                    } else {
+                        loginOptionsCancelEnabled(false)
+                    }
                     toggleOverlay(false)
-                }
-            })
-            toggleOverlay(true, accLen > 0)
+                    switchView(getCurrentView(), VIEWS.loginOptions)
+                })
+                setDismissHandler(() => {
+                    if (accLen > 1) {
+                        prepareAccountSelectionList()
+                        fadeOut(document.getElementById('overlayContent'), 250, () => {
+                            bindOverlayKeys(true, 'accountSelectContent', true)
+                            fadeIn(document.getElementById('accountSelectContent'), 250)
+                        })
+                    } else {
+                        const accountsObj = ConfigManager.getAuthAccounts()
+                        const accounts = Array.from(Object.keys(accountsObj), v => accountsObj[v])
+                        // This function validates the account switch.
+                        setSelectedAccount(accounts[0].uuid)
+                        toggleOverlay(false)
+                    }
+                })
+                toggleOverlay(true, accLen > 0)
+            } else {
+                return true
+            }
         } else {
             return true
         }
-    } else {
-        return true
+    } catch (error) {
+        console.error('[UIBinder] Failed to validate selected account:', error)
+        // If it's a network error or transient issue, don't remove the account
+        // This prevents an infinite loop back to login on temporary connection issues.
+        return true 
     }
 }
 
