@@ -189,6 +189,10 @@ if (launchButton) {
             })
         } catch (err) {
             loggerLanding.error('Unhandled error in during launch process.', err)
+            Analytics.capture('Game Launch Failed', {
+                serverId: ConfigManager.getSelectedServer(),
+                error: err.message || err.toString()
+            })
             Analytics.captureException(err)
             showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), Lang.queryJS('landing.launch.failureText'))
         }

@@ -637,6 +637,16 @@ ipcRenderer.on('distributionIndexDone', async (event, res) => {
     }
 })
 
+// Track game exit for analytics
+ipcRenderer.on('launcher:exit', (event, code) => {
+    console.log(`[UIBinder] Game process exited with code ${code}`)
+    if (typeof Analytics !== 'undefined') {
+        Analytics.capture('Game Exited', {
+            exit_code: code
+        })
+    }
+})
+
 /**
  * Handle system power resume
  */

@@ -750,6 +750,16 @@ async function saveSettingsValues() {
 
     await ConfigManager.save()
 
+    // Track important setting changes
+    if (typeof Analytics !== 'undefined') {
+        const javaConfig = ConfigManager.getJavaConfig()
+        Analytics.capture('Settings Changed', {
+            java_max_ram: javaConfig.maxRAM,
+            p2p_enabled: ConfigManager.getP2PUploadEnabled(),
+            p2p_limit: ConfigManager.getP2PUploadLimit()
+        })
+    }
+
     // Apply P2P Settings immediately
 
 

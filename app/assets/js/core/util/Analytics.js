@@ -25,7 +25,23 @@ class Analytics {
 
         const sysInfo = ipcRenderer.sendSync('system:getSystemInfoSync')
         const javaConfig = ConfigManager.getJavaConfig()
+        const currentVersion = ipcRenderer.sendSync('app:getVersionSync')
+        const lastVersion = ConfigManager.getLastLauncherVersion()
         
+        // Track Launcher Updated or First Launch
+        if (!lastVersion) {
+            this.capture('Launcher First Launch', { version: currentVersion })
+            ConfigManager.setLastLauncherVersion(currentVersion)
+            await ConfigManager.save()
+        } else if (lastVersion !== currentVersion) {
+            this.capture('Launcher Updated', { 
+                from_version: lastVersion,
+                to_version: currentVersion 
+            })
+            ConfigManager.setLastLauncherVersion(currentVersion)
+            await ConfigManager.save()
+        }
+
         this.capture('Launcher Loaded', {
             // OS & Launcher
             os_platform: sysInfo.platform,

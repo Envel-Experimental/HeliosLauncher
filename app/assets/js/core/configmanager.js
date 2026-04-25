@@ -111,7 +111,8 @@ const DEFAULT_CONFIG = {
         minRAM: '1G',
         maxRAM: '3G'
     },
-    supportUrl: null
+    supportUrl: null,
+    lastLauncherVersion: null
 }
 
 let configPath = null
@@ -598,3 +599,6 @@ exports.getSupportUrl = () => config?.supportUrl || DEFAULT_CONFIG.supportUrl
 exports.setSupportUrl = (url) => {
     if (config) config.supportUrl = url
 }
+
+exports.getLastLauncherVersion = () => { if(config) return config.lastLauncherVersion; return null }
+exports.setLastLauncherVersion = (version) => { if(config) config.lastLauncherVersion = version }
