@@ -55,7 +55,8 @@ describe('SecurityUtils', () => {
             safeStorage.isEncryptionAvailable.mockReturnValue(true)
             safeStorage.decryptString.mockReturnValue('secret')
 
-            const result = SecurityUtils.decryptString('deadbeef')
+            // Use a 32-char hex string to pass validation
+            const result = SecurityUtils.decryptString('0123456789abcdef0123456789abcdef')
             expect(result).toBe('secret')
         })
 
@@ -72,7 +73,8 @@ describe('SecurityUtils', () => {
             safeStorage.isEncryptionAvailable.mockReturnValue(true)
             safeStorage.decryptString.mockImplementation(() => { throw new Error('fail') })
 
-            const result = SecurityUtils.decryptString('deadbeef')
+            // Use a 32-char hex string to pass validation
+            const result = SecurityUtils.decryptString('0123456789abcdef0123456789abcdef')
             expect(result).toBeNull()
         })
     })

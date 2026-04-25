@@ -33,7 +33,7 @@ describe('SecurityUtils', () => {
     })
 
     it('should encrypt and decrypt using safeStorage', () => {
-        const secret = 'my-secret'
+        const secret = 'my-secret-long-string-for-test'
         const encrypted = SecurityUtils.encryptString(secret)
         expect(encrypted).toBeDefined()
         expect(mockSafeStorage.encryptString).toHaveBeenCalledWith(secret)
@@ -61,7 +61,9 @@ describe('SecurityUtils', () => {
 
     it('should return null on safeStorage decryption failure', () => {
         mockSafeStorage.decryptString.mockImplementationOnce(() => { throw new Error('fail') })
-        const decrypted = SecurityUtils.decryptString('abcdef123456')
+        // Use a long enough hex string to pass the length check (> 32 chars)
+        const longHex = '0123456789abcdef0123456789abcdef0123456789abcdef'
+        const decrypted = SecurityUtils.decryptString(longHex)
         expect(decrypted).toBeNull()
     })
 })

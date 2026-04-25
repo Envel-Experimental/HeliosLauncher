@@ -109,7 +109,7 @@ class FullRepair {
                     FullRepair.logger.error(`Hashes do not match, ${asset.id} may be corrupted.`);
                     
                     // Track corruption event
-                    if (typeof window.Analytics !== 'undefined') {
+                    if (typeof window !== 'undefined' && typeof window.Analytics !== 'undefined') {
                         window.Analytics.capture('File Corruption Detected', {
                             asset_id: asset.id,
                             serverId: this.serverId
