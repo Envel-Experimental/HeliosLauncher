@@ -64,6 +64,59 @@ describe('Renderer Polyfills Verification', () => {
             stream.write(Buffer.from('world'))
             stream.end()
         })
+
+        test('pipeline should pipe streams and resolve on finish', async () => {
+            const { Readable, Transform, pipeline } = require('../../../../../../app/assets/js/mocks/stream-polyfill')
+            
+            const source = new Readable({
+                read() {
+                    this.push('chunk')
+                    this.push(null)
+                }
+            })
+            
+            const transform = new Transform({
+                transform(chunk, enc, cb) {
+                    cb(null, chunk.toString().toUpperCase())
+                }
+            })
+            
+            let result = ''
+            const dest = new (require('../../../../../../app/assets/js/mocks/stream-polyfill').Writable)({
+                write(chunk, enc, cb) {
+                    result += chunk.toString()
+                    cb()
+                }
+            })
+            
+            await pipeline(source, transform, dest)
+            expect(result).toBe('CHUNK')
+        })
+
+        test('Readable.fromWeb should convert web stream to node stream', (done) => {
+            const { Readable } = require('../../../../../../app/assets/js/mocks/stream-polyfill')
+            
+            // Mock Web ReadableStream
+            const webStream = {
+                getReader: () => ({
+                    read: jest.fn()
+                        .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode('web') })
+                        .mockResolvedValueOnce({ done: true })
+                })
+            }
+            
+            const stream = Readable.fromWeb(webStream)
+            let result = ''
+            stream.on('data', chunk => { result += chunk.toString() })
+            stream.on('end', () => {
+                try {
+                    expect(result).toBe('web')
+                    done()
+                } catch (e) {
+                    done(e)
+                }
+            })
+        })
     })
 
     describe('Crypto Polyfill', () => {
