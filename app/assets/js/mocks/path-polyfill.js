@@ -61,6 +61,20 @@ const path = {
         return res
     },
     normalize: (p) => normalize(p),
+    relative: (from, to) => {
+        const fromParts = normalize(from).split('/').filter(p => p.length > 0)
+        const toParts = normalize(to).split('/').filter(p => p.length > 0)
+        
+        let i = 0
+        while (i < fromParts.length && i < toParts.length && fromParts[i].toLowerCase() === toParts[i].toLowerCase()) {
+            i++
+        }
+        
+        const up = fromParts.slice(i).map(() => '..')
+        const down = toParts.slice(i)
+        
+        return up.concat(down).join('/') || '.'
+    },
     sep: '/',
     delimiter: ';'
 }
