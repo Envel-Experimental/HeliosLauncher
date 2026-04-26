@@ -26,7 +26,12 @@ describe('DistributionAPI', () => {
         }))
 
         jest.doMock('../../../../../../../app/assets/js/core/util/SignatureUtils', () => ({
-            verifyDistribution: jest.fn().mockReturnValue(true)
+            verifyDistribution: jest.fn().mockImplementation((params) => {
+                if (process.type === 'renderer') {
+                    return global.window.HeliosAPI.ipc.invoke('crypto:verifyDistribution', params)
+                }
+                return true
+            })
         }))
 
         jest.doMock('../../../../../../../app/assets/js/core/common/DistributionClasses', () => ({
@@ -46,7 +51,12 @@ describe('DistributionAPI', () => {
         distroApi = new DistributionAPI(launcherDir, commonDir, instanceDir, remoteUrls, false)
 
         global.window = {
-            ipcRenderer: {
+            HeliosAPI: {
+                ipc: {
+                    invoke: jest.fn()
+                }
+            },
+            ipcRenderer: { // Keep for backward compatibility if needed by other parts
                 invoke: jest.fn()
             }
         }
@@ -208,7 +218,7 @@ describe('DistributionAPI', () => {
         it('should verify signature in Renderer process', async () => {
             process.type = 'renderer'
             distroApi.trustedKeys = ['key1']
-            global.window.ipcRenderer.invoke.mockResolvedValue(true)
+            global.window.HeliosAPI.ipc.invoke.mockResolvedValue(true)
 
             const result = await distroApi.pullRemote()
             expect(result.signatureValid).toBe(true)
@@ -230,7 +240,7 @@ describe('DistributionAPI', () => {
             configmanager.fetchWithTimeout.mockResolvedValueOnce({ ok: true, arrayBuffer: () => Promise.resolve(Buffer.from(JSON.stringify(mockData))) })
             configmanager.fetchWithTimeout.mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('bad-sig'), status: 200 })
             
-            global.window.ipcRenderer.invoke.mockResolvedValue(false)
+            global.window.HeliosAPI.ipc.invoke.mockResolvedValue(false)
             const result = await distroApi.pullRemote()
             expect(result.responseStatus).toBe('ERROR')
             expect(result.error.message).toBe('Distribution signature verification failed.')
@@ -256,7 +266,7 @@ describe('DistributionAPI', () => {
             distroApi.trustedKeys = ['key1']
             configmanager.fetchWithTimeout.mockResolvedValueOnce({ ok: true, arrayBuffer: () => Promise.resolve(Buffer.from(JSON.stringify(mockData))) })
             configmanager.fetchWithTimeout.mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('sig'), status: 200 })
-            global.window.ipcRenderer.invoke.mockRejectedValue(new Error('IPC crash'))
+            global.window.HeliosAPI.ipc.invoke.mockRejectedValue(new Error('IPC crash'))
             
             const warnSpy = jest.spyOn(console, 'warn').mockImplementation()
             const result = await distroApi.pullRemote()

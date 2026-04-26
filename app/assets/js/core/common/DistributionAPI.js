@@ -186,14 +186,8 @@ class DistributionAPI {
                                 trustedKeys: this.trustedKeys
                             }
 
-                            if (process.type === 'renderer') {
-                                // Invoke Main Process to verify the buffer
-                                signatureValid = await window.ipcRenderer.invoke('distribution:verify', verifyData)
-                            } else {
-                                // Direct verification in Main process
-                                const { verifyDistribution } = require('../util/SignatureUtils')
-                                signatureValid = verifyDistribution(verifyData)
-                            }
+                            const { verifyDistribution } = require('../util/SignatureUtils')
+                            signatureValid = await verifyDistribution(verifyData)
 
                             if (signatureValid) {
                                 console.log('[DistributionAPI] Signature VALID.')

@@ -880,7 +880,7 @@ async function updateConnectivityStatus(refresh = false) {
 
     try {
         const res = await ipcRenderer.invoke('connectivity:check')
-        console.log('[Settings] Connectivity check results:', res)
+        console.log(`Connectivity check results: ${JSON.stringify(res)}`);
         const ghInd = document.getElementById('deliveryIndicatorGitHub')
         const ghStat = document.getElementById('deliveryStatusGitHub')
         const mjInd = document.getElementById('deliveryIndicatorMojang')

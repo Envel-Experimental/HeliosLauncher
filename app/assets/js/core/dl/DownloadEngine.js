@@ -429,7 +429,7 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
                             const signatureHex = (await sigRes.text()).trim();
                             const dataBuffer = await fs.readFile(tempPath);
                             
-                            const isValid = verifyDistribution({
+                            const isValid = await verifyDistribution({
                                 dataHex: dataBuffer.toString('hex'),
                                 signatureHex: signatureHex,
                                 trustedKeys: DISTRO_PUB_KEYS

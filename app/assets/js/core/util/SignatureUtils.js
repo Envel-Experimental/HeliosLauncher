@@ -9,7 +9,21 @@ const crypto = require('crypto')
  * @param {string[]} params.trustedKeys Array of trusted public keys in hex
  * @returns {boolean} True if signature is valid, otherwise false.
  */
+/**
+ * Verifies the signature of the distribution data using the provided trusted keys.
+ * 
+ * @param {Object} params
+ * @param {string} params.dataHex Hex encoded data buffer
+ * @param {string} params.signatureHex Hex encoded signature
+ * @param {string[]} params.trustedKeys Array of trusted public keys in hex
+ * @returns {Promise<boolean>|boolean} True if signature is valid, otherwise false.
+ */
 function verifyDistribution({ dataHex, signatureHex, trustedKeys }) {
+    if (process.type === 'renderer') {
+        // Use IPC bridge for renderer
+        return window.HeliosAPI.ipc.invoke('crypto:verifyDistribution', { dataHex, signatureHex, trustedKeys })
+    }
+
     try {
         const contentBuffer = Buffer.from(dataHex, 'hex')
         const signature = Buffer.from(signatureHex, 'hex')

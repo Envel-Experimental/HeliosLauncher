@@ -22,7 +22,16 @@ const fs = {
             return res
         },
         stat: async (path) => {
-            return await window.HeliosAPI?.ipc?.invoke('fs:stat', path)
+            // Robust stat with retry for race conditions
+            for (let i = 0; i < 3; i++) {
+                try {
+                    const res = await window.HeliosAPI?.ipc?.invoke('fs:stat', path)
+                    if (res) return res
+                } catch (e) {
+                    if (i === 2) throw e
+                }
+                await new Promise(r => setTimeout(r, 50))
+            }
         },
         readdir: async (path, options) => {
             return await window.HeliosAPI?.ipc?.invoke('fs:readdir', path, options)
@@ -67,12 +76,19 @@ const fs = {
         const w = new Writable({
             write(chunk, encoding, callback) {
                 buffer.push(chunk)
-                callback()
+                if (typeof callback === 'function') callback()
             },
-            final(callback) {
+            async final(callback) {
                 const fullData = Buffer.concat(buffer)
-                // Use existing writeFile implementation
-                fs.promises.writeFile(path, fullData).then(() => callback()).catch(callback)
+                buffer.length = 0
+                try {
+                    await fs.promises.writeFile(path, fullData)
+                    // Small grace period for OS flush
+                    await new Promise(r => setTimeout(r, 20))
+                    if (typeof callback === 'function') callback()
+                } catch (err) {
+                    if (typeof callback === 'function') callback(err)
+                }
             }
         })
         return w

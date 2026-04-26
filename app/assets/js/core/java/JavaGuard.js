@@ -198,7 +198,7 @@ async function loadJavaMirrorManifest(mirrorUrl) {
                     const sigRes = await fetchWithTimeout(mirrorUrl + '.sig', { cache: 'no-store' });
                     if (sigRes.ok) {
                         const signatureHex = (await sigRes.text()).trim();
-                        const signatureValid = verifyDistribution({
+                        const signatureValid = await verifyDistribution({
                             dataHex: rawBuffer.toString('hex'),
                             signatureHex: signatureHex,
                             trustedKeys: DISTRO_PUB_KEYS

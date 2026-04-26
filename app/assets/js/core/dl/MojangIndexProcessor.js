@@ -46,7 +46,7 @@ class MojangIndexProcessor extends IndexProcessor {
                     const sigRes = await fetch(mirror.version_manifest + '.sig');
                     if (sigRes.ok) {
                         const signatureHex = (await sigRes.text()).trim();
-                        const isValid = verifyDistribution({
+                        const isValid = await verifyDistribution({
                             dataHex: rawBuffer.toString('hex'),
                             signatureHex: signatureHex,
                             trustedKeys: DISTRO_PUB_KEYS

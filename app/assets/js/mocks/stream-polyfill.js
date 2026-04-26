@@ -1,69 +1,117 @@
-/**
- * Functional Stream Polyfill for the Renderer.
- */
+const { EventEmitter } = require('events')
 
-const EventEmitter = require('events')
-
-class Stream extends EventEmitter {
-    constructor() {
-        super()
-    }
-    pipe(dest, options) {
-        this.on('data', (chunk) => dest.write(chunk))
-        this.on('end', () => dest.end())
-        return dest
-    }
-}
-
-class Readable extends Stream {
+class Readable extends EventEmitter {
     constructor(options) {
         super()
-        if (options && options.read) this._read = options.read
+        this._options = options || {}
+        if (this._options.read) this._read = this._options.read
+        this._readableState = { ended: false, reading: false, paused: false }
     }
-    _read() {}
-    read() { this._read() }
-    pause() { return this }
-    resume() { return this }
+
+    _read() { }
+
+    push(chunk) {
+        if (this._readableState.ended) return false
+        if (chunk === null) {
+            this._readableState.ended = true
+            this.emit('end')
+            return false
+        }
+        this.emit('data', chunk)
+        return true
+    }
+
+    pipe(dest, options) {
+        const onData = (chunk) => {
+            const canWrite = dest.write(chunk)
+            if (!canWrite && this.pause) {
+                this.pause()
+                dest.once('drain', () => this.resume())
+            }
+        }
+        this.on('data', onData)
+        
+        const onEnd = () => {
+            if (!options || options.end !== false) {
+                if (dest.end) dest.end()
+            }
+        }
+        this.on('end', onEnd)
+        
+        return dest
+    }
+
+    pause() { this._readableState.paused = true }
+    resume() { 
+        this._readableState.paused = false 
+        this._read()
+    }
+    
+    destroy(err) {
+        if (err) this.emit('error', err)
+        this.emit('close')
+    }
 
     static fromWeb(webStream) {
+        const readable = new Readable()
         const reader = webStream.getReader()
-        const stream = new Readable()
-        async function pump() {
+        
+        const pump = async () => {
             try {
                 while (true) {
                     const { done, value } = await reader.read()
                     if (done) {
-                        stream.emit('end')
+                        readable.push(null)
                         break
                     }
-                    stream.emit('data', Buffer.from(value))
+                    readable.push(Buffer.from(value))
                 }
             } catch (err) {
-                stream.emit('error', err)
+                readable.emit('error', err)
             }
         }
+        
         pump()
-        return stream
+        return readable
     }
 }
 
-class Writable extends Stream {
+class Writable extends EventEmitter {
     constructor(options) {
         super()
-        if (options && options.write) this._write = options.write
-        if (options && options.final) this._final = options.final
+        this._options = options || {}
+        if (this._options.write) this._write = this._options.write
+        if (this._options.final) this._final = this._options.final
+        this._finished = false
     }
-    _write(chunk, encoding, callback) { callback() }
-    _final(callback) { callback() }
+
+    _write(chunk, encoding, callback) { 
+        if (typeof callback === 'function') callback() 
+    }
     
+    _final(callback) { 
+        if (typeof callback === 'function') callback() 
+    }
+
     write(chunk, encoding, callback) {
         if (typeof encoding === 'function') {
             callback = encoding
             encoding = 'utf-8'
         }
-        this._write(chunk, encoding, callback || (() => {}))
+        // Safety: ensure callback is always a function if passed, or undefined
+        const cb = typeof callback === 'function' ? callback : undefined
+        
+        try {
+            this._write(chunk, encoding, (err) => {
+                if (cb) cb(err)
+            })
+        } catch (e) {
+            if (cb) cb(e)
+            else this.emit('error', e)
+        }
         return true
     }
+
     end(chunk, encoding, callback) {
         if (typeof chunk === 'function') {
             callback = chunk
@@ -72,55 +120,135 @@ class Writable extends Stream {
             callback = encoding
             encoding = 'utf-8'
         }
+        
+        const cb = typeof callback === 'function' ? callback : undefined
+        
         if (chunk) this.write(chunk, encoding)
-        this._final(() => {
-            if (callback) callback()
+        
+        this._final((err) => {
+            this._finished = true
+            if (cb) cb(err)
             this.emit('finish')
         })
     }
 }
 
-class Duplex extends Readable {}
-// Mixin Writable methods into Duplex
-Object.assign(Duplex.prototype, Writable.prototype)
+class Duplex extends Readable {
+    constructor(options) {
+        super(options)
+        this._writableState = { finished: false }
+        if (options && options.write) this._write = options.write
+        if (options && options.final) this._final = options.final
+    }
+
+    _write(chunk, encoding, callback) { 
+        if (typeof callback === 'function') callback() 
+    }
+    
+    _final(callback) { 
+        if (typeof callback === 'function') callback() 
+    }
+
+    write(chunk, encoding, callback) {
+        return Writable.prototype.write.call(this, chunk, encoding, callback)
+    }
+
+    end(chunk, encoding, callback) {
+        return Writable.prototype.end.call(this, chunk, encoding, (err) => {
+            this.push(null)
+            if (typeof callback === 'function') callback(err)
+        })
+    }
+}
 
 class Transform extends Duplex {
     constructor(options) {
         super(options)
         if (options && options.transform) this._transform = options.transform
+        if (options && options.flush) this._flush = options.flush
     }
+
     _transform(chunk, encoding, callback) {
-        callback(null, chunk)
+        if (typeof callback === 'function') callback(null, chunk)
     }
-    write(chunk, encoding, callback) {
+
+    _flush(callback) {
+        if (typeof callback === 'function') callback()
+    }
+
+    _write(chunk, encoding, callback) {
+        const cb = typeof callback === 'function' ? callback : (() => {})
         this._transform(chunk, encoding, (err, data) => {
-            if (data) this.emit('data', data)
-            if (callback) callback(err)
+            if (err) return cb(err)
+            if (data !== undefined && data !== null) this.push(data)
+            cb()
         })
-        return true
+    }
+    
+    _final(callback) {
+        const cb = typeof callback === 'function' ? callback : (() => {})
+        this._flush((err) => {
+            cb(err)
+        })
     }
 }
-
-class PassThrough extends Transform {}
 
 async function pipeline(...streams) {
     return new Promise((resolve, reject) => {
-        for (let i = 0; i < streams.length - 1; i++) {
-            streams[i].pipe(streams[i + 1])
-            streams[i].on('error', reject)
+        if (streams.length < 2) return reject(new Error('Pipeline requires at least two streams'))
+        
+        let errorEmitted = false
+        const onError = (err) => {
+            if (errorEmitted) return
+            errorEmitted = true
+            reject(err)
+            streams.forEach(s => { 
+                if (s.destroy) s.destroy(err) 
+                else if (s.emit) s.emit('error', err)
+            })
         }
+
+        for (let i = 0; i < streams.length - 1; i++) {
+            const current = streams[i]
+            const next = streams[i + 1]
+            current.on('error', onError)
+            current.pipe(next)
+        }
+
         const last = streams[streams.length - 1]
-        last.on('finish', resolve)
-        last.on('error', reject)
+        last.on('error', onError)
+        
+        const onFinish = () => {
+            if (!errorEmitted) resolve()
+        }
+
+        // Handle both 'finish' (Writable) and 'end' (Readable)
+        if (last instanceof Writable || last instanceof Duplex || typeof last.write === 'function') {
+            last.on('finish', onFinish)
+            // Safety for streams that might already be finished
+            if (last._finished) resolve()
+        } else {
+            last.on('end', onFinish)
+        }
+
+        // Start the flow
+        const first = streams[0]
+        if (first instanceof Readable && first._read) {
+            setTimeout(() => {
+                if (!first._readableState.ended) first._read()
+            }, 0)
+        }
     })
 }
 
+// Support for stream/promises
+const promises = { pipeline }
+
 module.exports = {
-    Stream,
     Readable,
     Writable,
     Duplex,
     Transform,
-    PassThrough,
-    pipeline
+    pipeline,
+    promises
 }
