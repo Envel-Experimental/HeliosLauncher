@@ -119,11 +119,27 @@ class MirrorManager {
 
     _sortMirrors() {
         this.mirrors.sort((a, b) => {
+            // 1. Sort by status first (down/invalid always at bottom)
             if (a.status !== b.status) {
                 const statusScore = { 'active': 0, 'slow': 1, 'down': 2, 'invalid': 3, 'unknown': 2 }
                 return statusScore[a.status] - statusScore[b.status]
             }
-            return a.latency - b.latency
+
+            // 2. Latency comparison with "Fox Bonus"
+            const getAdjustedLatency = (entry) => {
+                const name = (entry.config.name || '').toLowerCase()
+                const dist = (entry.config.distribution || '').toLowerCase()
+                const manifest = (entry.config.version_manifest || '').toLowerCase()
+                
+                let lat = entry.latency
+                if (name.includes('fox') || dist.includes('f-launcher.ru') || manifest.includes('f-launcher.ru')) {
+                    // Give 500ms "loyalty bonus" to our mirror
+                    lat -= 500 
+                }
+                return lat
+            }
+
+            return getAdjustedLatency(a) - getAdjustedLatency(b)
         })
     }
 
