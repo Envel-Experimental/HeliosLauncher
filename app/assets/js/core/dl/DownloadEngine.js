@@ -257,7 +257,7 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
 
     await safeEnsureDir(path.dirname(decodedPath));
 
-    const maxAttempts = 10;
+    const maxAttempts = asset.maxAttempts || 10;
     let lastError = null;
     const attemptHistory = [];
     const candidates = [asset.url, ...(asset.fallbackUrls || [])].filter(Boolean);

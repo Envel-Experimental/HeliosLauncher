@@ -200,7 +200,8 @@ class MojangIndexProcessor extends IndexProcessor {
             hash: null,
             fallbackUrls: candidates,
             verifySignature: true,
-            force: true
+            force: true,
+            maxAttempts: 3
         };
 
         try {
