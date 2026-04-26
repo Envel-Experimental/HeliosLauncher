@@ -62,12 +62,16 @@ class FsService {
         })
 
         ipcMain.handle('fs:stat', async (event, path) => {
-            const stats = await fs.stat(path)
-            return {
-                isDirectory: stats.isDirectory(),
-                isFile: stats.isFile(),
-                size: stats.size,
-                mtimeMs: stats.mtimeMs
+            try {
+                const stats = await fs.stat(path)
+                return {
+                    isDirectory: stats.isDirectory(),
+                    isFile: stats.isFile(),
+                    size: stats.size,
+                    mtimeMs: stats.mtimeMs
+                }
+            } catch (e) {
+                return null
             }
         })
 

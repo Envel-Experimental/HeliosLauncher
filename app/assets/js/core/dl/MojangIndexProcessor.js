@@ -39,7 +39,7 @@ class MojangIndexProcessor extends IndexProcessor {
             const response = await fetch(mirror.version_manifest);
             if (!response.ok) return null;
             const rawBuffer = Buffer.from(await response.arrayBuffer());
-            
+
             // Verify Signature if it's our mirror
             if (MirrorManager.isMirrorUrl(mirror.version_manifest) && DISTRO_PUB_KEYS && DISTRO_PUB_KEYS.length > 0) {
                 try {

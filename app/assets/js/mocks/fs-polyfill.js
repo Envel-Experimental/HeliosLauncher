@@ -24,14 +24,14 @@ const fs = {
         stat: async (path) => {
             // Robust stat with retry for race conditions
             for (let i = 0; i < 3; i++) {
-                try {
-                    const res = await window.HeliosAPI?.ipc?.invoke('fs:stat', path)
-                    if (res) return res
-                } catch (e) {
-                    if (i === 2) throw e
-                }
-                await new Promise(r => setTimeout(r, 50))
+                const res = await window.HeliosAPI?.ipc?.invoke('fs:stat', path)
+                if (res) return res
+                await new Promise(r => setTimeout(r, 100))
             }
+            // If we're here, it really doesn't exist
+            const err = new Error(`ENOENT: no such file or directory, stat '${path}'`)
+            err.code = 'ENOENT'
+            throw err
         },
         readdir: async (path, options) => {
             return await window.HeliosAPI?.ipc?.invoke('fs:readdir', path, options)
