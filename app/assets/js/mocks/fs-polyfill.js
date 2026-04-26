@@ -60,6 +60,37 @@ const fs = {
     },
     renameSync: (path, newPath) => {
         return window.HeliosAPI?.ipc?.sendSync('fs:renameSync', path, newPath)
+    },
+    createWriteStream: (path, options) => {
+        const { Writable } = require('stream')
+        const buffer = []
+        const w = new Writable({
+            write(chunk, encoding, callback) {
+                buffer.push(chunk)
+                callback()
+            },
+            final(callback) {
+                const fullData = Buffer.concat(buffer)
+                // Use existing writeFile implementation
+                fs.promises.writeFile(path, fullData).then(() => callback()).catch(callback)
+            }
+        })
+        return w
+    },
+    createReadStream: (path, options) => {
+        const { Readable } = require('stream')
+        const r = new Readable({
+            async read() {
+                try {
+                    const data = await fs.promises.readFile(path)
+                    this.push(data)
+                    this.push(null)
+                } catch (e) {
+                    this.destroy(e)
+                }
+            }
+        })
+        return r
     }
 }
 

@@ -58,7 +58,15 @@ module.exports = {
     createHash: (algorithm) => new Hash(algorithm),
     randomBytes: (size) => {
         const buf = Buffer.alloc(size)
-        window.crypto.getRandomValues(buf)
+        if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
+            window.crypto.getRandomValues(buf)
+        }
         return buf
+    },
+    verify: (algorithm, data, key, signature) => {
+        if (typeof window !== 'undefined' && window.HeliosAPI && window.HeliosAPI.ipc) {
+            return window.HeliosAPI.ipc.sendSync('crypto:verifySync', algorithm, data, key, signature)
+        }
+        return false
     }
 }
