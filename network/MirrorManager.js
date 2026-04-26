@@ -136,6 +136,10 @@ class MirrorManager {
         return this.mirrors.map(m => m.config)
     }
 
+    isMirrorUrl(urlStr) {
+        return !!this._findMirrorByUrl(urlStr)
+    }
+
     reportSuccess(mirrorUrl, durationMs, bytes) {
         const entry = this._findMirrorByUrl(mirrorUrl)
         if (entry) {

@@ -19,7 +19,12 @@ jest.mock('../../../../../../../network/MirrorManager', () => ({
     init: jest.fn().mockResolvedValue(),
     getSortedMirrors: jest.fn().mockReturnValue([
         { assets: 'http://mirror/assets', version_manifest: 'http://mirror/manifest' }
-    ])
+    ]),
+    isMirrorUrl: jest.fn().mockReturnValue(true)
+}))
+
+jest.mock('../../../../../../../app/assets/js/core/util/SignatureUtils', () => ({
+    verifyDistribution: jest.fn().mockReturnValue(true)
 }))
 
 const mockFs = {
@@ -69,9 +74,17 @@ describe('MojangIndexProcessor', () => {
     describe('getMirrorManifest', () => {
         it('should fetch and cache mirror manifest', async () => {
             const mockManifest = { versions: [] }
-            global.fetch.mockResolvedValue({
-                ok: true,
-                json: jest.fn().mockResolvedValue(mockManifest)
+            global.fetch.mockImplementation((url) => {
+                if (url.endsWith('.sig')) {
+                    return Promise.resolve({
+                        ok: true,
+                        text: jest.fn().mockResolvedValue('mock-signature')
+                    })
+                }
+                return Promise.resolve({
+                    ok: true,
+                    arrayBuffer: jest.fn().mockResolvedValue(Buffer.from(JSON.stringify(mockManifest)))
+                })
             })
 
             const mirror = { version_manifest: 'http://mirror/v1' }
@@ -79,10 +92,11 @@ describe('MojangIndexProcessor', () => {
             
             expect(result).toEqual(mockManifest)
             expect(global.fetch).toHaveBeenCalledWith('http://mirror/v1')
+            expect(global.fetch).toHaveBeenCalledWith('http://mirror/v1.sig')
             
             // Second call should use cache
             await processor.getMirrorManifest(mirror)
-            expect(global.fetch).toHaveBeenCalledTimes(1)
+            expect(global.fetch).toHaveBeenCalledTimes(2)
         })
     })
 

@@ -8,10 +8,11 @@ const { downloadFile } = require('./DownloadEngine');
 const { mcVersionAtLeast, isLibraryCompatible, getMojangOS } = require('../common/MojangUtils');
 const { LoggerUtil } = require('../util/LoggerUtil');
 const { handleFetchError } = require('../common/RestResponse');
-const { MOJANG_MIRRORS } = require('../../../../../network/config');
+const { MOJANG_MIRRORS, DISTRO_PUB_KEYS } = require('../../../../../network/config');
 const { pLimit } = require('../util/NodeUtil');
 require('../configmanager');
 const MirrorManager = require('../../../../../network/MirrorManager');
+const { verifyDistribution } = require('../util/SignatureUtils');
 
 class MojangIndexProcessor extends IndexProcessor {
     static LAUNCHER_JSON_ENDPOINT = 'https://launchermeta.mojang.com/mc/launcher.json';
@@ -37,7 +38,34 @@ class MojangIndexProcessor extends IndexProcessor {
         try {
             const response = await fetch(mirror.version_manifest);
             if (!response.ok) return null;
-            const manifest = await response.json();
+            const rawBuffer = Buffer.from(await response.arrayBuffer());
+            
+            // Verify Signature if it's our mirror
+            if (MirrorManager.isMirrorUrl(mirror.version_manifest) && DISTRO_PUB_KEYS && DISTRO_PUB_KEYS.length > 0) {
+                try {
+                    const sigRes = await fetch(mirror.version_manifest + '.sig');
+                    if (sigRes.ok) {
+                        const signatureHex = (await sigRes.text()).trim();
+                        const isValid = verifyDistribution({
+                            dataHex: rawBuffer.toString('hex'),
+                            signatureHex: signatureHex,
+                            trustedKeys: DISTRO_PUB_KEYS
+                        });
+                        if (!isValid) {
+                            MojangIndexProcessor.logger.warn(`Signature verification failed for mirror manifest: ${mirror.version_manifest}`);
+                            return null;
+                        }
+                    } else {
+                        MojangIndexProcessor.logger.warn(`Signature file missing for mirror manifest: ${mirror.version_manifest}`);
+                        return null;
+                    }
+                } catch (e) {
+                    MojangIndexProcessor.logger.warn(`Error verifying signature for mirror manifest: ${mirror.version_manifest}`, e);
+                    return null;
+                }
+            }
+
+            const manifest = JSON.parse(rawBuffer.toString('utf-8'));
             this.mirrorManifestCache.set(mirror.version_manifest, manifest);
             return manifest;
         } catch (e) {
@@ -142,7 +170,8 @@ class MojangIndexProcessor extends IndexProcessor {
             algo: hash ? hash.algo : null,
             hash: hash ? hash.value : null,
             fallbackUrls: candidates,
-            size: size
+            size: size,
+            verifySignature: true
         };
 
         await downloadFile(asset);
@@ -169,7 +198,9 @@ class MojangIndexProcessor extends IndexProcessor {
             path: manifestPath,
             algo: null, // No hash verification for root manifest
             hash: null,
-            fallbackUrls: candidates
+            fallbackUrls: candidates,
+            verifySignature: true,
+            force: true
         };
 
         try {

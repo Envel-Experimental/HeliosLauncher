@@ -26,6 +26,8 @@ const { MAX_PARALLEL_DOWNLOADS } = require('../../../../../network/constants');
 const ConfigManager = require('../configmanager');
 const isDev = require('../isdev');
 const MirrorManager = require('../../../../../network/MirrorManager');
+const { DISTRO_PUB_KEYS } = require('../../../../../network/config');
+const { verifyDistribution } = require('../util/SignatureUtils');
 
 /**
  * @typedef {import('../../../../../types').DistributionData} DistributionData
@@ -246,7 +248,7 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
             return;
         }
 
-        if (await validateLocalFile(decodedPath, algo, hash, asset.size)) {
+        if (!asset.force && await validateLocalFile(decodedPath, algo, hash, asset.size)) {
             // log.debug(`File already exists and is valid: ${decodedPath}`);
             if (onProgress) onProgress(asset.size); // Account for skipping
             return;
@@ -415,6 +417,47 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
             // Validate Atomic Write (RCE Guard)
             const isP2P = !!response.p2pStream;
             if (await validateLocalFile(tempPath, algo, currentHash, asset.size, isP2P)) {
+
+                // Signature Verification for Mirrored Manifests
+                if (asset.verifySignature && MirrorManager.isMirrorUrl(currentUrl)) {
+                    if (DISTRO_PUB_KEYS && DISTRO_PUB_KEYS.length > 0) {
+                        try {
+                            const sigUrl = currentUrl + '.sig';
+                            const sigRes = await fetch(sigUrl, { cache: 'no-store' });
+                            if (!sigRes.ok) throw new Error(`Signature file missing or inaccessible (HTTP ${sigRes.status})`);
+                            
+                            const signatureHex = (await sigRes.text()).trim();
+                            const dataBuffer = await fs.readFile(tempPath);
+                            
+                            const isValid = verifyDistribution({
+                                dataHex: dataBuffer.toString('hex'),
+                                signatureHex: signatureHex,
+                                trustedKeys: DISTRO_PUB_KEYS
+                            });
+
+                            if (!isValid) {
+                                throw new Error('Signature verification failed');
+                            }
+                            log.debug(`[DownloadEngine] Signature verified for ${asset.id} from mirror.`);
+                        } catch (e) {
+                            log.warn(`[DownloadEngine] Signature check FAILED for ${asset.id} from ${currentUrl}: ${e.message}`);
+                            // If signature fails, we MUST NOT use this file. 
+                            // Treat as validation failure to trigger retry/fallback.
+                            try { await fs.unlink(tempPath) } catch (err) {}
+                            
+                            attemptHistory.push({
+                                attempt: attempt + 1,
+                                url: currentUrl,
+                                method: 'Signature Check',
+                                error: e.message
+                            });
+                            continue; // Retry loop
+                        }
+                    } else {
+                        log.warn(`[DownloadEngine] Signature verification requested for ${asset.id} but no DISTRO_PUB_KEYS configured.`);
+                    }
+                }
+
                 // Success! Atomic rename to final path with retries for Windows (Antivirus guard)
                 if (fsSync.existsSync(tempPath)) {
                     await safeRename(tempPath, decodedPath);

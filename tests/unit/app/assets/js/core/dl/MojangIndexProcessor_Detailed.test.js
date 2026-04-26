@@ -39,7 +39,8 @@ describe('MojangIndexProcessor Detailed Tests', () => {
 
         jest.doMock('@network/MirrorManager', () => ({
             init: jest.fn().mockResolvedValue(),
-            getSortedMirrors: jest.fn().mockReturnValue([])
+            getSortedMirrors: jest.fn().mockReturnValue([]),
+            isMirrorUrl: jest.fn().mockReturnValue(true)
         }))
 
         jest.doMock('@network/config', () => ({
@@ -60,6 +61,10 @@ describe('MojangIndexProcessor Detailed Tests', () => {
 
         jest.doMock('p-limit', () => ({
             pLimit: jest.fn((limit) => (fn) => fn())
+        }))
+        
+        jest.doMock('@core/util/SignatureUtils', () => ({
+            verifyDistribution: jest.fn().mockReturnValue(true)
         }))
 
         // Mock global fetch

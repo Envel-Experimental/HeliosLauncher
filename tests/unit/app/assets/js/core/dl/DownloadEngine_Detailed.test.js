@@ -52,7 +52,16 @@ jest.mock('@network/RaceManager', () => ({
 jest.mock('@network/MirrorManager', () => ({
     reportSuccess: jest.fn(),
     reportFailure: jest.fn(),
-    getSortedMirrors: jest.fn().mockReturnValue([])
+    getSortedMirrors: jest.fn().mockReturnValue([]),
+    isMirrorUrl: jest.fn().mockReturnValue(false)
+}))
+
+jest.mock('@network/config', () => ({
+    DISTRO_PUB_KEYS: ['mock-key']
+}))
+
+jest.mock('@core/util/SignatureUtils', () => ({
+    verifyDistribution: jest.fn().mockReturnValue(true)
 }))
 
 // Mock stream/promises pipeline
