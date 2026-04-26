@@ -39,10 +39,28 @@ class AutoUpdaterService {
                 }
                 break
             case 'checkForUpdate':
-                console.log('[AutoUpdater] Received checkForUpdate request.')
+                console.log('[AutoUpdater] Received checkForUpdate request (Floating Release Mode: ' + !!data + ')')
                 try {
                     const autoUpdater = getAutoUpdater()
+                    
+                    // If we are in "Floating Release" mode, we allow pre-releases
+                    // but we will add a filter in setupListeners or here.
+                    autoUpdater.allowPrerelease = !!data
+
                     autoUpdater.checkForUpdates().then((result) => {
+                        if (result && result.updateInfo) {
+                            const title = (result.updateInfo.releaseName || result.updateInfo.version || '').toUpperCase()
+                            const isPre = !!result.updateInfo.prerelease
+                            
+                            // If it's a pre-release, it MUST have "STABLE" in the title to be accepted as a "Floating Release"
+                            if (isPre && !title.includes('STABLE')) {
+                                console.log(`[AutoUpdater] Skipping pre-release ${result.updateInfo.version} because it lacks "STABLE" in title.`)
+                                if (event.sender && !event.sender.isDestroyed()) {
+                                    event.sender.send('autoUpdateNotification', 'update-not-available')
+                                }
+                                return
+                            }
+                        }
                         console.log('[AutoUpdater] Update check completed (Primary).', result ? 'Update available: ' + !!result.updateInfo : 'No result')
                     }).catch(async (err) => {
                         console.warn('[AutoUpdater] Primary update check failed, attempting fallback to custom server...', err.message)

@@ -58,7 +58,7 @@ async function cleanupStaleTempFiles() {
     lastCleanup = now;
 
     log.info('[Cleanup] Starting stale .tmp file cleanup...');
-    const MAX_AGE = 24 * 60 * 60 * 1000; // 24 Hours
+    const MAX_AGE = 4 * 60 * 60 * 1000; // 4 hours
 
     const scanAndClean = async (dir) => {
         try {
