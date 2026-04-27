@@ -79,7 +79,7 @@ jobs:
       - name: Upload source maps to PostHog
         if: success() && (runner.os == 'Windows' || github.event.head_commit.message != '1')
         continue-on-error: true
-        uses: PostHog/upload-source-maps@v2
+        uses: PostHog/upload-source-maps@v2.0.0
         with:
           directory: ./app/dist
           project-id: 166635
@@ -123,7 +123,7 @@ jobs:
 
       - name: Upload source maps to PostHog
         if: success() && (runner.os == 'Windows' || github.event.head_commit.message != '1')
-        uses: PostHog/upload-source-maps@v1
+        uses: PostHog/upload-source-maps@v2
         with:
           directory: ./app/dist
           project-id: 166635
