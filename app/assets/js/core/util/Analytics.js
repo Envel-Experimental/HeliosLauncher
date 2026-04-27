@@ -20,7 +20,7 @@ class Analytics {
             this.distinctId = crypto.randomUUID ? crypto.randomUUID() : 'ph_' + Math.random().toString(36).substring(2, 15)
             ConfigManager.setClientToken(this.distinctId)
             await ConfigManager.save()
-            console.log('[Analytics] Generated and persisted new clientToken:', this.distinctId)
+            if (window.isDev) console.log('[Analytics] Generated and persisted new clientToken:', this.distinctId)
         }
 
         const sysInfo = ipcRenderer.sendSync('system:getSystemInfoSync')
@@ -43,10 +43,20 @@ class Analytics {
         }
 
         this.capture('Launcher Loaded', {
+            // These properties will be set on the person in PostHog
+            $set: {
+                os_platform: sysInfo.platform,
+                os_arch: sysInfo.arch,
+                launcher_version: currentVersion,
+                cpu_model: sysInfo.cpus[0]?.model || 'Unknown',
+                cpu_count: sysInfo.cpus.length,
+                ram_total: Math.round(sysInfo.totalmem / 1024 / 1024 / 1024) + 'GB',
+                screen_res: `${window.screen.width}x${window.screen.height}`
+            },
             // OS & Launcher
             os_platform: sysInfo.platform,
             os_arch: sysInfo.arch,
-            launcher_version: ipcRenderer.sendSync('app:getVersionSync'),
+            launcher_version: currentVersion,
             
             // CPU & RAM
             cpu_model: sysInfo.cpus[0]?.model || 'Unknown',
@@ -102,7 +112,7 @@ class Analytics {
                 ...properties,
                 distinct_id: this.distinctId,
                 $lib: 'FlauncherAnalytics',
-                $lib_version: '1.0.0',
+                $lib_version: '1.1.0',
                 $ip: '0.0.0.0',
                 $os: process.platform,
                 $browser: 'Electron'
@@ -120,27 +130,92 @@ class Analytics {
                     api_key: POSTHOG_KEY,
                     batch: [payload]
                 })
-            }).catch(() => {
-                // Silently fail if analytics are blocked
+            }).then(res => {
+                if (!res.ok && window.isDev) {
+                    console.warn('[Analytics] PostHog request failed:', res.status, res.statusText)
+                }
+            }).catch(err => {
+                if (window.isDev) console.error('[Analytics] Network error during PostHog request:', err)
             })
         } catch (e) {
-            // Silently fail
+            if (window.isDev) console.error('[Analytics] Error sending to PostHog:', e)
         }
     }
 
     /**
-     * Track an error
+     * Track an error using PostHog's standard $exception event for Error Tracking
      * @param {Error|string} error 
      */
     captureException(error) {
-        const message = error instanceof Error ? error.message : error
-        const stack = error instanceof Error ? error.stack : null
+        if (!error) return
 
-        this.capture('Error Occurred', {
-            message,
-            stack,
-            isFatal: true
+        // Filter out noisy errors (mirrors SentryService.js filters)
+        if (error.code === 'EPERM' || error.code === 'EBUSY' || error.code === 'ENOSPC') {
+            return
+        }
+        
+        const message = error instanceof Error ? error.message : error
+        if (typeof message === 'string' && (
+            message.includes('fs:statfs') ||
+            message.includes('is not signed by the application owner') ||
+            message.includes('ERR_CONNECTION_RESET')
+        )) {
+            return
+        }
+
+        const type = error instanceof Error ? error.name : 'Error'
+        const stack = error instanceof Error ? error.stack : ''
+
+        // PostHog "Error Tracking" requires a very specific schema
+        this.capture('$exception', {
+            $exception_list: [
+                {
+                    type: type,
+                    value: message,
+                    stacktrace: {
+                        type: 'raw',
+                        frames: this._parseStack(stack)
+                    },
+                    mechanism: {
+                        handled: false,
+                        type: 'generic'
+                    }
+                }
+            ],
+            $exception_level: 'error'
         })
+    }
+
+    /**
+     * Simple stack trace parser to convert raw stack string into PostHog/Sentry-like frames
+     * @param {string} stack 
+     * @returns {Array} Array of frames
+     */
+    _parseStack(stack) {
+        if (!stack) return []
+        const lines = stack.split('\n').slice(1) // Skip the first line (error message)
+        const frames = []
+
+        for (const line of lines) {
+            try {
+                // Match "at FunctionName (path/to/file.js:line:col)" or "at path/to/file.js:line:col"
+                const match = line.match(/at\s+(?:(.+?)\s+\()?(?:(.+?):(\d+):(\d+))\)?/)
+                if (match) {
+                    frames.push({
+                        platform: 'web:javascript', // REQUIRED for PostHog Error Tracking
+                        function: match[1] || 'anonymous',
+                        filename: match[2] || 'unknown',
+                        lineno: parseInt(match[3], 10),
+                        colno: parseInt(match[4], 10)
+                    })
+                }
+            } catch (e) {
+                // Ignore parsing errors for individual lines
+            }
+        }
+
+        // PostHog expects frames in reverse order (bottom-up)
+        return frames.reverse()
     }
 }
 

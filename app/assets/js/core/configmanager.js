@@ -204,7 +204,7 @@ exports.load = async function () {
         try {
             console.log('[ConfigManager] Loading config from Main (with 10s timeout)...')
             const loadPromise = window.HeliosAPI.ipc.invoke('config:load')
-            const timeoutPromise = new Promise((_, reject) => 
+            const timeoutPromise = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('Config load timed out')), 10000)
             )
             const res = await Promise.race([loadPromise, timeoutPromise])
@@ -253,7 +253,7 @@ exports.load = async function () {
         const { safeReadJson } = require('./util')
         console.log('[ConfigManager] Reading config via safeReadJson...')
         config = await safeReadJson(configPath)
-        
+
         // Ensure structure
         if (!config.settings) {
             console.log('[ConfigManager] Restoring missing settings structure...')
@@ -269,7 +269,7 @@ exports.load = async function () {
             config.settings.launcher.dataDirectory = await exports.getLauncherDirectory()
         }
         if (!config.authenticationDatabase) config.authenticationDatabase = {}
-        
+
         // Decrypt (Only in Main)
         if (config.authenticationDatabase) {
             console.log('[ConfigManager] Decrypting auth database...')
@@ -322,7 +322,23 @@ exports.save = async function () {
     }
 
     const { safeWriteJson } = require('./util')
-    await safeWriteJson(configPath, configToSave)
+    try {
+        await safeWriteJson(configPath, configToSave)
+    } catch (err) {
+        if (err.code === 'ENOSPC') {
+            console.error('[ConfigManager] Disk full! Cannot save configuration.')
+            if (!isRenderer) {
+                try {
+                    const { dialog } = require('electron')
+                    dialog.showErrorBox(
+                        'Недостаточно места на диске',
+                        'Не удалось сохранить файлы лаунчера, так как на твоём диске закончилось свободное место. Пожалуйста, освободи пространство и попробуй снова.'
+                    )
+                } catch (e) { /* ignore dialog errors during shutdown */ }
+            }
+        }
+        throw err
+    }
 }
 
 function validateKeySet(srcObj, destObj) {
@@ -360,7 +376,7 @@ exports.removeAuthAccount = (uuid) => {
     }
 }
 
-exports.addMojangAuthAccount = function(uuid, accessToken, username, displayName) {
+exports.addMojangAuthAccount = function (uuid, accessToken, username, displayName) {
     if (!config) return
     if (!config.authenticationDatabase) config.authenticationDatabase = {}
     config.authenticationDatabase[uuid] = {
@@ -374,7 +390,7 @@ exports.addMojangAuthAccount = function(uuid, accessToken, username, displayName
     return config.authenticationDatabase[uuid]
 }
 
-exports.addMicrosoftAuthAccount = function(uuid, accessToken, name, expiresAt, msToken, msRefresh, msExpiresAt) {
+exports.addMicrosoftAuthAccount = function (uuid, accessToken, name, expiresAt, msToken, msRefresh, msExpiresAt) {
     if (!config) return
     if (!config.authenticationDatabase) config.authenticationDatabase = {}
     config.authenticationDatabase[uuid] = {
@@ -394,7 +410,7 @@ exports.addMicrosoftAuthAccount = function(uuid, accessToken, name, expiresAt, m
     return config.authenticationDatabase[uuid]
 }
 
-exports.updateMicrosoftAuthAccount = function(uuid, accessToken, msToken, msRefresh, msExpiresAt, mcExpiresAt) {
+exports.updateMicrosoftAuthAccount = function (uuid, accessToken, msToken, msRefresh, msExpiresAt, mcExpiresAt) {
     if (!config || !config.authenticationDatabase || !config.authenticationDatabase[uuid]) return
     const acc = config.authenticationDatabase[uuid]
     acc.accessToken = accessToken
@@ -467,13 +483,13 @@ exports.setModConfiguration = (id, modConf) => {
 exports.getAbsoluteMaxRAM = (serverMax) => {
     const totalMemBytes = os.totalmem()
     const totalMemGb = Math.floor(totalMemBytes / 1024 / 1024 / 1024)
-    
+
     // Rule: Not more than 70% of total RAM
     let limitGb = Math.floor(totalMemGb * 0.7)
-    
+
     // Rule: Hard cap of 12 GB
     limitGb = Math.min(limitGb, 12)
-    
+
     // Safety minimum for the slider
     limitGb = Math.max(limitGb, 1)
 
@@ -520,30 +536,30 @@ exports.getLaunchDetached = (def = false) => {
 exports.getTempNativeFolder = () => 'natives'
 
 // Setters
-exports.setSelectedServer = (id) => { if(config) config.selectedServer = id }
-exports.setSelectedAccount = (uuid) => { if(config) config.selectedAccount = uuid }
-exports.setClientToken = (token) => { if(config) config.clientToken = token }
-exports.setModConfigurations = (configs) => { if(config) config.modConfigurations = configs }
-exports.setLocalOptimization = (val) => { if(config) { if(!config.settings.deliveryOptimization) config.settings.deliveryOptimization = {}; config.settings.deliveryOptimization.localOptimization = val } }
-exports.setGlobalOptimization = (val) => { if(config) { if(!config.settings.deliveryOptimization) config.settings.deliveryOptimization = {}; config.settings.deliveryOptimization.globalOptimization = val } }
-exports.setP2PUploadEnabled = (val) => { if(config) { if(!config.settings.deliveryOptimization) config.settings.deliveryOptimization = {}; config.settings.deliveryOptimization.p2pUploadEnabled = val } }
-exports.setP2POnlyMode = (val) => { if(config) { if(!config.settings.deliveryOptimization) config.settings.deliveryOptimization = {}; config.settings.deliveryOptimization.p2pOnlyMode = val } }
-exports.setNoMojang = (val) => { if(config) { if(!config.settings.deliveryOptimization) config.settings.deliveryOptimization = {}; config.settings.deliveryOptimization.noMojang = val } }
-exports.setNoServers = (val) => { if(config) { if(!config.settings.deliveryOptimization) config.settings.deliveryOptimization = {}; config.settings.deliveryOptimization.noServers = val } }
-exports.setP2PPromptShown = (val) => { if(config) config.settings.p2pPromptShown = val }
-exports.setGameWidth = (val) => { if(config) config.settings.game.resWidth = Number(val) }
-exports.setGameHeight = (val) => { if(config) config.settings.game.resHeight = Number(val) }
-exports.setFullscreen = (val) => { if(config) config.settings.game.fullscreen = val }
-exports.setAutoConnect = (val) => { if(config) config.settings.game.autoConnect = val }
-exports.setLaunchDetached = (val) => { if(config) config.settings.game.launchDetached = val }
-exports.setAllowPrerelease = (val) => { if(config) config.settings.launcher.allowPrerelease = val }
+exports.setSelectedServer = (id) => { if (config) config.selectedServer = id }
+exports.setSelectedAccount = (uuid) => { if (config) config.selectedAccount = uuid }
+exports.setClientToken = (token) => { if (config) config.clientToken = token }
+exports.setModConfigurations = (configs) => { if (config) config.modConfigurations = configs }
+exports.setLocalOptimization = (val) => { if (config) { if (!config.settings.deliveryOptimization) config.settings.deliveryOptimization = {}; config.settings.deliveryOptimization.localOptimization = val } }
+exports.setGlobalOptimization = (val) => { if (config) { if (!config.settings.deliveryOptimization) config.settings.deliveryOptimization = {}; config.settings.deliveryOptimization.globalOptimization = val } }
+exports.setP2PUploadEnabled = (val) => { if (config) { if (!config.settings.deliveryOptimization) config.settings.deliveryOptimization = {}; config.settings.deliveryOptimization.p2pUploadEnabled = val } }
+exports.setP2POnlyMode = (val) => { if (config) { if (!config.settings.deliveryOptimization) config.settings.deliveryOptimization = {}; config.settings.deliveryOptimization.p2pOnlyMode = val } }
+exports.setNoMojang = (val) => { if (config) { if (!config.settings.deliveryOptimization) config.settings.deliveryOptimization = {}; config.settings.deliveryOptimization.noMojang = val } }
+exports.setNoServers = (val) => { if (config) { if (!config.settings.deliveryOptimization) config.settings.deliveryOptimization = {}; config.settings.deliveryOptimization.noServers = val } }
+exports.setP2PPromptShown = (val) => { if (config) config.settings.p2pPromptShown = val }
+exports.setGameWidth = (val) => { if (config) config.settings.game.resWidth = Number(val) }
+exports.setGameHeight = (val) => { if (config) config.settings.game.resHeight = Number(val) }
+exports.setFullscreen = (val) => { if (config) config.settings.game.fullscreen = val }
+exports.setAutoConnect = (val) => { if (config) config.settings.game.autoConnect = val }
+exports.setLaunchDetached = (val) => { if (config) config.settings.game.launchDetached = val }
+exports.setAllowPrerelease = (val) => { if (config) config.settings.launcher.allowPrerelease = val }
 exports.setJVMOptions = (id, val) => {
     if (!config) return
     if (!config.javaConfig) config.javaConfig = JSON.parse(JSON.stringify(DEFAULT_CONFIG.javaConfig))
     if (!config.javaConfig[id]) config.javaConfig[id] = {}
     config.javaConfig[id].opts = val
 }
-exports.setDataDirectory = (val) => { if(config) config.settings.launcher.dataDirectory = val }
+exports.setDataDirectory = (val) => { if (config) config.settings.launcher.dataDirectory = val }
 exports.setConfig = (newConfig) => { config = newConfig }
 
 exports.ensureJavaConfig = (id, opts, ram) => {
@@ -588,7 +604,7 @@ exports.isLoaded = function () {
     return config != null
 }
 
-exports.getConfig = function() {
+exports.getConfig = function () {
     return {
         ...config,
         firstLaunch
@@ -600,5 +616,5 @@ exports.setSupportUrl = (url) => {
     if (config) config.supportUrl = url
 }
 
-exports.getLastLauncherVersion = () => { if(config) return config.lastLauncherVersion; return null }
-exports.setLastLauncherVersion = (version) => { if(config) config.lastLauncherVersion = version }
+exports.getLastLauncherVersion = () => { if (config) return config.lastLauncherVersion; return null }
+exports.setLastLauncherVersion = (version) => { if (config) config.lastLauncherVersion = version }

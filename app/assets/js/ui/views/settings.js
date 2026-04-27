@@ -748,7 +748,21 @@ async function saveSettingsValues() {
         }
     })
 
-    await ConfigManager.save()
+    try {
+        await ConfigManager.save()
+    } catch (err) {
+        console.error('Failed to save settings:', err)
+        if (err.message && (err.message.includes('ENOSPC') || err.message.includes('no space left'))) {
+            setOverlayContent(
+                'Ошибка сохранения',
+                'Не удалось сохранить настройки: на диске недостаточно места.',
+                'Понятно'
+            )
+            setOverlayHandler(() => toggleOverlay(false))
+            toggleOverlay(true)
+            return
+        }
+    }
 
     // Track important setting changes
     if (typeof Analytics !== 'undefined') {

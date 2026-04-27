@@ -604,11 +604,16 @@ async function dlAsync(login = true) {
         ipcRenderer.removeListener('dl:progress', progressListener)
         loggerLaunchSuite.warn('Error during file download via Main Process.', err)
 
+        const isDiskFull = err.message && (err.message.includes('ENOSPC') || err.message.includes('no space left'))
+        const errorText = isDiskFull 
+            ? 'На диске недостаточно места для загрузки файлов игры. Пожалуйста, освободите пространство.' 
+            : err.message
+
         // Provide an option to skip download failures and try to launch anyway
         const skip = await new Promise((resolve) => {
             setOverlayContent(
                 Lang.queryJS('landing.dlAsync.errorDuringFileDownloadTitle'),
-                err.message + '<br><br>' + Lang.queryJS('landing.dlAsync.skipQuestion'),
+                errorText + '<br><br>' + Lang.queryJS('landing.dlAsync.skipQuestion'),
                 Lang.queryJS('landing.dlAsync.retryButton'),
                 Lang.queryJS('landing.dlAsync.skipButton')
             )

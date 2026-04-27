@@ -24,9 +24,13 @@ class SentryService {
                             return null
                         }
                         // Filter out known noisy messages
-                        if (typeof error.message === 'string' && error.message.includes('fs:statfs')) {
-                            // If it's the duplicate handler error, we want to know, but maybe not spam
-                            // However, we are fixing it now.
+                        if (typeof error.message === 'string' && (
+                            error.message.includes('fs:statfs') ||
+                            error.message.includes('is not signed by the application owner') ||
+                            error.message.includes('ERR_CONNECTION_RESET') ||
+                            error.message.includes('ENOSPC')
+                        )) {
+                            return null
                         }
                     }
                     return event
