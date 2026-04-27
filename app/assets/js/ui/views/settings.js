@@ -1670,7 +1670,7 @@ async function resolveDropinModsForUI() {
         console.warn('[Settings] resolveDropinModsForUI: No server selected.')
         return
     }
-    CACHE_SETTINGS_MODS_DIR = sysPath.join(ConfigManager.getInstanceDirectory(), serv.rawServer.id, 'mods')
+    CACHE_SETTINGS_MODS_DIR = sysPath.join(await ConfigManager.getInstanceDirectory(), serv.rawServer.id, 'mods')
     CACHE_DROPIN_MODS = await DropinModUtil.scanForDropinMods(CACHE_SETTINGS_MODS_DIR, serv.rawServer.minecraftVersion)
 
     let dropinMods = ''
@@ -1818,7 +1818,7 @@ async function resolveShaderpacksForUI() {
         console.warn('[Settings] resolveShaderpacksForUI: No server selected.')
         return
     }
-    CACHE_SETTINGS_INSTANCE_DIR = sysPath.join(ConfigManager.getInstanceDirectory(), serv.rawServer.id)
+    CACHE_SETTINGS_INSTANCE_DIR = sysPath.join(await ConfigManager.getInstanceDirectory(), serv.rawServer.id)
     CACHE_SHADERPACKS = await DropinModUtil.scanForShaderpacks(CACHE_SETTINGS_INSTANCE_DIR)
     CACHE_SELECTED_SHADERPACK = await DropinModUtil.getEnabledShaderpack(CACHE_SETTINGS_INSTANCE_DIR)
 
