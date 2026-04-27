@@ -72,18 +72,6 @@ jobs:
           echo "=== Trying ping ==="
           ping -c 3 89.23.113.35 || true
 
-      - name: Build and Upload
-        if: runner.os == 'Windows' || github.event.head_commit.message != '1'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
-          GIT_BRANCH: ${{ env.BRANCH_NAME }}
-          GIT_SHA:    ${{ env.COMMIT_SHA }}
-          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-        shell: bash
-        run: |
       - name: Build and Distribute
         if: runner.os == 'Windows' || github.event.head_commit.message != '1'
         env:
@@ -94,6 +82,7 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: "foxford-dc"
           SENTRY_PROJECT: "node"
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         shell: bash
         run: |
           # 1. Сборка фронтенда
