@@ -72,47 +72,7 @@ jobs:
           echo "=== Trying ping ==="
           ping -c 3 89.23.113.35 || true
 
-      - name: Bundle Renderer
-        if: runner.os == 'Windows' || github.event.head_commit.message != '1'
-        run: npm run bundle
-
-      - name: Prepare Release Name
-        if: success() && (runner.os == 'Windows' || github.event.head_commit.message != '1')
-        id: release_info
-        shell: bash
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          SHA_SHORT=$(git rev-parse --short HEAD)
-          echo "release=FLauncher@$VERSION+$SHA_SHORT" >> $GITHUB_OUTPUT
-
-      - name: Upload source maps to PostHog
-        if: success() && (runner.os == 'Windows' || github.event.head_commit.message != '1')
-        continue-on-error: true
-        uses: PostHog/upload-source-maps@v2.0.0
-        with:
-          directory: ./app/dist
-          project-id: 166635
-          api-key: ${{ secrets.POSTHOG_API_KEY }}
-          host: https://eu.posthog.com
-          release-name: ${{ steps.release_info.outputs.release }}
-          release-version: ${{ github.sha }}
-
-      - name: Create Sentry release and upload source files
-        if: success() && (runner.os == 'Windows' || github.event.head_commit.message != '1')
-        continue-on-error: true
-        uses: getsentry/action-release@v1
-        env:
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: "foxford-dc"
-          SENTRY_PROJECT: "node"
-        with:
-          environment: production
-          version: ${{ steps.release_info.outputs.release }}
-          sourcemaps: './'
-          ignore_missing: true
-          ignore_empty: true
-
-      - name: Build Distribution
+      - name: Build and Upload
         if: runner.os == 'Windows' || github.event.head_commit.message != '1'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -120,8 +80,35 @@ jobs:
           CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
           GIT_BRANCH: ${{ env.BRANCH_NAME }}
           GIT_SHA:    ${{ env.COMMIT_SHA }}
+          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         shell: bash
         run: |
+          # 1. Сборка фронтенда
+          npm run bundle
+          
+          # 2. Метаданные
+          VERSION=$(node -p "require('./package.json').version")
+          SHA_SHORT=$(git rev-parse --short HEAD)
+          RELEASE_NAME="FLauncher@$VERSION+$SHA_SHORT"
+          echo "Release: $RELEASE_NAME"
+
+          # 3. PostHog (через официальный CLI)
+          npx -y posthog-cli sourcemaps upload \
+            --project 166635 \
+            --api-key "$POSTHOG_API_KEY" \
+            --path ./app/dist \
+            --release "$RELEASE_NAME" \
+            --base-url https://eu.posthog.com || echo "PostHog failed"
+
+          # 4. Sentry (через официальный CLI)
+          export SENTRY_ORG="foxford-dc"
+          export SENTRY_PROJECT="node"
+          npx -y @sentry/cli sourcemaps upload ./ \
+            --release "$RELEASE_NAME" \
+            --rewrite || echo "Sentry failed"
+
+          # 5. Сборка дистрибутива (Mac билд не падает, если всё в одном шаге)
           if [ "$RUNNER_OS" == "Linux" ]; then
             npm run dist -- --linux appimage snap deb rpm tar.gz
           elif [ "$RUNNER_OS" == "Windows" ]; then
