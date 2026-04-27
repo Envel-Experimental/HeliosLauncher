@@ -462,7 +462,7 @@ async function asyncSystemScan(effectiveJavaOptions, launchAfter = true) {
         }
 
         ConfigManager.setJavaExecutable(ConfigManager.getSelectedServer(), javaExec)
-        ConfigManager.save()
+        await ConfigManager.save()
 
         // We need to make sure that the updated value is on the settings UI.
         // Just incase the settings UI is already open.
@@ -517,7 +517,7 @@ async function downloadJava(effectiveJavaOptions, launchAfter = true) {
         if (javaPath != null) {
             // Success (ZIP/direct path)
             ConfigManager.setJavaExecutable(ConfigManager.getSelectedServer(), javaPath)
-            ConfigManager.save()
+            await ConfigManager.save()
 
             if (document.getElementById('settingsJavaExecVal')) {
                 document.getElementById('settingsJavaExecVal').value = javaPath

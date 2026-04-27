@@ -9,6 +9,7 @@ const ServerStatusService = require('./ServerStatusService')
 const ConfigManager = require('../assets/js/core/configmanager')
 const { SHELL_OPCODE } = require('../assets/js/core/ipcconstants')
 const SentryService = require('./SentryService')
+const Analytics = require('../assets/js/core/util/Analytics')
 
 class IpcRegistry {
     init() {
@@ -24,6 +25,7 @@ class IpcRegistry {
         ServerStatusService.init()
         require('./CryptoService').init()
         require('../assets/js/core/LaunchController').init()
+        Analytics.init().catch(err => console.error('[Main] Failed to initialize Analytics:', err))
         
         ipcMain.on('app:getVersionSync', (event) => {
             event.returnValue = app.getVersion()
@@ -36,6 +38,7 @@ class IpcRegistry {
         ipcMain.on('renderer-error', (event, error) => {
             console.error('[Renderer ERROR]', error)
             SentryService.captureException(error)
+            Analytics.captureException(error)
         })
 
         ipcMain.on('app:getAppPath', (event) => {

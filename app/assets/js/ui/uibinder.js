@@ -475,7 +475,7 @@ async function validateSelectedAccount() {
             const val = await AuthManager.validateSelected()
             if (!val) {
                 ConfigManager.removeAuthAccount(selectedAcc.uuid)
-                ConfigManager.save()
+                await ConfigManager.save()
                 const accLen = Object.keys(ConfigManager.getAuthAccounts()).length
                 setOverlayContent(
                     Lang.queryJS('uibinder.validateAccount.failedMessageTitle'),
@@ -503,7 +503,7 @@ async function validateSelectedAccount() {
 
                     if (accLen > 0) {
                         window.loginOptionsViewOnCancel = getCurrentView()
-                        window.loginOptionsViewCancelHandler = () => {
+                        window.loginOptionsViewCancelHandler = async () => {
                             if (isMicrosoft) {
                                 ConfigManager.addMicrosoftAuthAccount(
                                     selectedAcc.uuid,
@@ -517,7 +517,7 @@ async function validateSelectedAccount() {
                             } else {
                                 ConfigManager.addMojangAuthAccount(selectedAcc.uuid, selectedAcc.accessToken, selectedAcc.username, selectedAcc.displayName)
                             }
-                            ConfigManager.save()
+                            await ConfigManager.save()
                             validateSelectedAccount()
                         }
                         loginOptionsCancelEnabled(true)
@@ -733,7 +733,7 @@ async function devModeToggle() {
 /**
  * Check if the P2P prompt should be showed.
  */
-export function checkAndShowP2PPrompt() {
+export async function checkAndShowP2PPrompt() {
     if (!ConfigManager.getP2PPromptShown() && !isOverlayVisible()) {
 
         if (ConfigManager.isFirstLaunch()) {
@@ -742,8 +742,8 @@ export function checkAndShowP2PPrompt() {
             ConfigManager.setGlobalOptimization(true)
             ConfigManager.setP2PUploadEnabled(true)
             ConfigManager.markFirstLaunchCompleted()
-            ConfigManager.save()
-            ipcRenderer.invoke('p2p:configUpdate')
+            await ConfigManager.save()
+            await ipcRenderer.invoke('p2p:configUpdate')
             return
         }
 
@@ -763,7 +763,7 @@ export function checkAndShowP2PPrompt() {
             ConfigManager.markFirstLaunchCompleted()
             await ConfigManager.save()
             toggleOverlay(false)
-            ipcRenderer.invoke('p2p:configUpdate') // Notify Main Process
+            await ipcRenderer.invoke('p2p:configUpdate') // Notify Main Process
         })
 
         setMiddleButtonHandler(async () => {
@@ -774,7 +774,7 @@ export function checkAndShowP2PPrompt() {
             ConfigManager.markFirstLaunchCompleted()
             await ConfigManager.save()
             toggleOverlay(false)
-            ipcRenderer.invoke('p2p:configUpdate') // Notify Main Process
+            await ipcRenderer.invoke('p2p:configUpdate') // Notify Main Process
         })
 
         toggleOverlay(true, false)

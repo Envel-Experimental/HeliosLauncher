@@ -778,7 +778,7 @@ async function saveSettingsValues() {
 
 
     // Notify Main Process to update P2P Engine
-    ipcRenderer.invoke('p2p:configUpdate')
+    await ipcRenderer.invoke('p2p:configUpdate')
 }
 
 export let selectedSettingsTab = 'settingsTabAccount'
@@ -1060,7 +1060,7 @@ export async function fullSettingsSave() {
     await ConfigManager.save()
     await saveDropinModConfiguration()
     await saveShaderpackSettings()
-    ipcRenderer.invoke('p2p:configUpdate')
+    await ipcRenderer.invoke('p2p:configUpdate')
 }
 
 /* Closes the settings view and saves all data. */

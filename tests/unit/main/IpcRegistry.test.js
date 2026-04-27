@@ -100,7 +100,9 @@ jest.mock('../../../app/assets/js/core/configmanager', () => ({
     getLauncherDirectory: jest.fn().mockResolvedValue('/launcher'),
     getLauncherDirectorySync: jest.fn().mockReturnValue('/launcher'),
     getSupportUrl: jest.fn().mockReturnValue('http://support'),
-    getP2PUploadLimit: jest.fn().mockReturnValue(15)
+    getP2PUploadLimit: jest.fn().mockReturnValue(15),
+    getClientToken: jest.fn().mockReturnValue('test-id'),
+    setClientToken: jest.fn()
 }))
 
 const { ipcMain, app, shell } = require('electron')

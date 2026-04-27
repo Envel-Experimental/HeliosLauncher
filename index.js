@@ -12,6 +12,7 @@ const MirrorManager = require('./network/MirrorManager')
 const P2PEngine = require('./network/P2PEngine')
 const RaceManager = require('./network/RaceManager')
 const { MOJANG_MIRRORS } = require('./network/config')
+const Analytics = require('./app/assets/js/core/util/Analytics')
 
 // Single Instance Lock
 if (!app.requestSingleInstanceLock()) {
@@ -29,11 +30,13 @@ if (!app.requestSingleInstanceLock()) {
 // Global Error Handlers
 process.on('uncaughtException', (err) => {
     console.error('Critical Uncaught Exception:', err)
+    Analytics.captureException(err)
     WindowManager.showCriticalError(err)
 })
 
 process.on('unhandledRejection', (reason) => {
     console.error('Unhandled Rejection:', reason)
+    Analytics.captureException(reason)
 })
 
 app.on('ready', async () => {

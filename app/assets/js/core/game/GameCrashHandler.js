@@ -287,7 +287,7 @@ class GameCrashHandler {
                     if (data.url) {
                         supportUrl = data.url
                         ConfigManager.setSupportUrl(supportUrl)
-                        ConfigManager.save()
+                        await ConfigManager.save()
                     }
                 }
             } catch (err) {
@@ -376,7 +376,7 @@ class GameCrashHandler {
             if (modCfg) {
                 modCfg.mods = {}
                 ConfigManager.setModConfiguration(this.server.rawServer.id, modCfg)
-                ConfigManager.save()
+                await ConfigManager.save()
             }
 
             this.restartGame()
@@ -400,7 +400,7 @@ class GameCrashHandler {
     /**
      * Disable all optional mods and save configuration.
      */
-    disableOptionalMods() {
+    async disableOptionalMods() {
         const modCfg = ConfigManager.getModConfiguration(this.server.rawServer.id)
         for (const mdl of this.server.modules) {
             const type = mdl.rawModule.type
@@ -411,7 +411,7 @@ class GameCrashHandler {
             }
         }
         ConfigManager.setModConfiguration(this.server.rawServer.id, modCfg)
-        ConfigManager.save()
+        await ConfigManager.save()
 
         this._callUI('setOverlayContent',
             Lang.queryJS('processbuilder.exit.disabled.title'),
@@ -431,7 +431,7 @@ class GameCrashHandler {
     /**
      * Attempts to repair a corrupted Java installation by deleting it and resetting config.
      */
-    handleJavaRepair() {
+    async handleJavaRepair() {
         const serverId = this.server.rawServer.id
         const javaPath = ConfigManager.getJavaExecutable(serverId)
 
@@ -476,7 +476,7 @@ class GameCrashHandler {
 
         // Reset config to force re-download or re-selection
         ConfigManager.setJavaExecutable(serverId, null)
-        ConfigManager.save()
+        await ConfigManager.save()
         logger.info('Java configuration reset. Restarting...')
 
         this.restartGame()

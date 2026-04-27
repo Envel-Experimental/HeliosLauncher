@@ -1,5 +1,6 @@
 // 1. Mocks must be at the very top (before any requires)
 jest.mock('../../../../app/assets/js/core/configmanager')
+process.type = 'renderer'
 
 const Analytics = require('../../../../app/assets/js/core/util/Analytics')
 const ConfigManager = require('../../../../app/assets/js/core/configmanager')
