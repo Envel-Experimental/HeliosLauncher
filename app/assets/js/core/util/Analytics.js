@@ -13,6 +13,13 @@ class Analytics {
     async init() {
         if (!this.enabled) return
 
+        try {
+            const versionData = require('../../version.json')
+            this.release = versionData.release
+        } catch (e) {
+            this.release = undefined
+        }
+
         this.distinctId = ConfigManager.getClientToken()
         
         if (!this.distinctId) {
@@ -182,7 +189,8 @@ class Analytics {
                     }
                 }
             ],
-            $exception_level: 'error'
+            $exception_level: 'error',
+            release: this.release
         })
     }
 

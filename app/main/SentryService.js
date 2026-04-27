@@ -13,9 +13,18 @@ class SentryService {
         }
 
         try {
+            let release = undefined
+            try {
+                const versionData = require('../assets/version.json')
+                release = versionData.release
+            } catch (e) {
+                // Fallback if version.json is missing (e.g. dev without bundle)
+            }
+
             Sentry.init({
                 dsn: 'https://f02442d2a0733ac2c810b8d8d7f4a21e@o4508545424359424.ingest.de.sentry.io/4508545432027216',
                 enabled: isProd,
+                release: release,
                 beforeSend(event, hint) {
                     const error = hint.originalException
                     if (error) {

@@ -9,6 +9,21 @@ try {
     console.warn('Failed to get build hash:', e.message)
 }
 
+const pkg = require('./package.json')
+const fs = require('fs')
+const versionData = {
+    version: pkg.version,
+    buildHash: buildHash,
+    release: `FLauncher@${pkg.version}+${buildHash}`
+}
+
+if (!fs.existsSync(path.join(__dirname, 'app', 'assets'))) {
+    fs.mkdirSync(path.join(__dirname, 'app', 'assets'), { recursive: true })
+}
+fs.writeFileSync(path.join(__dirname, 'app', 'assets', 'version.json'), JSON.stringify(versionData, null, 2))
+console.log(`[Build] Generated version.json: ${versionData.release}`)
+
+
 esbuild.build({
     entryPoints: [
         path.join(__dirname, 'app', 'assets', 'js', 'renderer-entry.js')
