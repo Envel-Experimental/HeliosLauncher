@@ -94,17 +94,21 @@ jobs:
           echo "Release: $RELEASE_NAME"
 
           # 3. PostHog (через официальный CLI)
-          npx -y posthog-cli sourcemaps upload \
+          # Обязательно inject перед upload! И команда в единственном числе: sourcemap
+          npx -y posthog-cli sourcemap inject --directory ./app/dist || true
+          npx -y posthog-cli sourcemap upload \
             --project 166635 \
             --api-key "$POSTHOG_API_KEY" \
-            --path ./app/dist \
-            --release "$RELEASE_NAME" \
-            --base-url https://eu.posthog.com || echo "PostHog failed"
+            --directory ./app/dist \
+            --release-name FLauncher \
+            --release-version "$RELEASE_NAME" \
+            --host https://eu.posthog.com || echo "PostHog failed"
 
           # 4. Sentry (через официальный CLI)
           export SENTRY_ORG="foxford-dc"
           export SENTRY_PROJECT="node"
-          npx -y @sentry/cli sourcemaps upload ./ \
+          # Загружаем только дист и исходники, чтобы не сканировать node_modules
+          npx -y @sentry/cli sourcemaps upload ./app/dist ./app/assets/js \
             --release "$RELEASE_NAME" \
             --rewrite || echo "Sentry failed"
 
