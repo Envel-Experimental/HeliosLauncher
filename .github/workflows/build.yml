@@ -72,7 +72,38 @@ jobs:
           echo "=== Trying ping ==="
           ping -c 3 89.23.113.35 || true
 
-      - name: Build
+      - name: Bundle Renderer
+        if: runner.os == 'Windows' || github.event.head_commit.message != '1'
+        run: npm run bundle
+
+      - name: Upload source maps to PostHog
+        if: success() && (runner.os == 'Windows' || github.event.head_commit.message != '1')
+        continue-on-error: true
+        uses: PostHog/upload-source-maps@v1
+        with:
+          directory: ./app/dist
+          project-id: 166635
+          api-key: ${{ secrets.POSTHOG_API_KEY }}
+          host: https://eu.posthog.com
+          release-name: "FLauncher@${{ github.ref_name }}"
+          release-version: ${{ github.sha }}
+
+      - name: Create Sentry release and upload source files
+        if: success() && (runner.os == 'Windows' || github.event.head_commit.message != '1')
+        continue-on-error: true
+        uses: getsentry/action-release@v1
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: "foxford-dc"
+          SENTRY_PROJECT: "node"
+        with:
+          environment: production
+          version: "FLauncher@${{ github.ref_name }}"
+          sourcemaps: './'
+          ignore_missing: true
+          ignore_empty: true
+
+      - name: Build Distribution
         if: runner.os == 'Windows' || github.event.head_commit.message != '1'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -82,7 +113,6 @@ jobs:
           GIT_SHA:    ${{ env.COMMIT_SHA }}
         shell: bash
         run: |
-          npm run bundle
           if [ "$RUNNER_OS" == "Linux" ]; then
             npm run dist -- --linux appimage snap deb rpm tar.gz
           elif [ "$RUNNER_OS" == "Windows" ]; then
@@ -90,6 +120,17 @@ jobs:
           elif [ "$RUNNER_OS" == "macOS" ]; then
             npm run dist -- --mac
           fi
+
+      - name: Upload source maps to PostHog
+        if: success() && (runner.os == 'Windows' || github.event.head_commit.message != '1')
+        uses: PostHog/upload-source-maps@v1
+        with:
+          directory: ./app/dist
+          project-id: 166635
+          api-key: ${{ secrets.POSTHOG_API_KEY }}
+          host: https://eu.posthog.com
+          release-name: "FLauncher@${{ github.ref_name }}"
+          release-version: ${{ github.sha }}
         
       - name: List dist (Linux/macOS)
         if: runner.os != 'Windows' && (runner.os == 'Windows' || github.event.head_commit.message != '1')

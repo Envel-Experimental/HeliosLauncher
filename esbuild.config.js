@@ -19,6 +19,7 @@ esbuild.build({
     target: 'chrome100',
     format: 'iife',
     minify: true,
+    sourcemap: true,
     banner: {
         js: `
             window.global = window;
