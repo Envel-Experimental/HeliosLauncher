@@ -84,31 +84,68 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         shell: bash
         run: |
-          # 1. Сборка фронтенда
-          npm run bundle
-          
-          # 2. Метаданные
+      - name: Bundle Renderer
+        if: runner.os == 'Windows' || github.event.head_commit.message != '1'
+        run: npm run bundle
+
+      - name: Prepare Release Name
+        if: success() && (runner.os == 'Windows' || github.event.head_commit.message != '1')
+        id: release_info
+        shell: bash
+        run: |
           VERSION=$(node -p "require('./package.json').version")
           SHA_SHORT=$(git rev-parse --short HEAD)
-          RELEASE_NAME="FLauncher@$VERSION+$SHA_SHORT"
-          echo "Release: $RELEASE_NAME"
+          echo "release=FLauncher@$VERSION+$SHA_SHORT" >> $GITHUB_OUTPUT
 
-          # 3. PostHog (через официальную утилиту)
-          npx -y @posthog/cli-sourcemaps upload \
-            --project 166635 \
-            --api-key "$POSTHOG_API_KEY" \
-            --directory ./app/dist \
-            --release-name FLauncher \
-            --release-version "$RELEASE_NAME" \
-            --host https://eu.posthog.com || echo "PostHog failed"
+      - name: Upload source maps to PostHog
+        if: success() && (runner.os == 'Windows' || github.event.head_commit.message != '1')
+        continue-on-error: true
+        uses: PostHog/upload-source-maps@v2.0.0
+        with:
+          directory: ./app/dist
+          project-id: 166635
+          api-key: ${{ secrets.POSTHOG_API_KEY }}
+          host: https://eu.posthog.com
+          release-name: ${{ steps.release_info.outputs.release }}
+          release-version: ${{ github.sha }}
 
-          # 4. Sentry (через официальный CLI)
-          export SENTRY_ORG="foxford-dc"
-          export SENTRY_PROJECT="node"
-          # Загружаем только дист и исходники, чтобы не сканировать node_modules
-          npx -y @sentry/cli sourcemaps upload ./app/dist ./app/assets/js \
-            --release "$RELEASE_NAME" \
-            --rewrite || echo "Sentry failed"
+      - name: Create Sentry release and upload source files
+        if: success() && (runner.os == 'Windows' || github.event.head_commit.message != '1')
+        continue-on-error: true
+        uses: getsentry/action-release@v1
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: "foxford-dc"
+          SENTRY_PROJECT: "node"
+        with:
+          environment: production
+          version: ${{ steps.release_info.outputs.release }}
+          sourcemaps: './app/dist ./app/assets/js'
+          ignore_missing: true
+          ignore_empty: true
+
+      - name: Build Distribution
+        if: runner.os == 'Windows' || github.event.head_commit.message != '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          GIT_BRANCH: ${{ env.BRANCH_NAME }}
+          GIT_SHA:    ${{ env.COMMIT_SHA }}
+        shell: bash
+        run: |
+          # Фикс для macOS: убеждаемся, что пути к инструментам сборки на месте
+          if [ "$RUNNER_OS" == "macOS" ]; then
+            export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+          fi
+          
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            npm run dist -- --linux appimage snap deb rpm tar.gz
+          elif [ "$RUNNER_OS" == "Windows" ]; then
+            npm run dist -- --win
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            npm run dist -- --mac
+          fi
 
           # 5. Сборка дистрибутива (Mac билд не падает, если всё в одном шаге)
           if [ "$RUNNER_OS" == "Linux" ]; then
