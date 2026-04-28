@@ -121,8 +121,8 @@ class LaunchArgumentBuilder {
             }
         }
 
-        // Dock Icon for macOS
-        if (process.platform === 'darwin') {
+        // Dock Icon for macOS (Only for pre-1.13 or legacy Java 8 setups if applicable, but for 1.13+ we omit it to avoid crashes on Java 14+)
+        if (process.platform === 'darwin' && !mcVersionAtLeast('1.13', this.server.rawServer.minecraftVersion)) {
             args.push('-Xdock:name=FLauncher')
             args.push('-Xdock:icon=' + path.join(__dirname, '..', '..', 'images', 'minecraft.icns'))
         }

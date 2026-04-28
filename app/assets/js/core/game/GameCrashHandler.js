@@ -221,7 +221,10 @@ class GameCrashHandler {
                 window.setDismissHandler(null)
             } else {
                 const { ipcMain } = require('electron')
+                ipcMain.removeAllListeners('ui:crash-fix-action')
+                ipcMain.removeAllListeners('ui:close-overlay')
                 ipcMain.once('ui:crash-fix-action', () => this.handleCrashFix(crashAnalysis))
+                ipcMain.once('ui:close-overlay', () => this._callUI('toggleOverlay', false))
                 await this._callUI('setOverlayHandler', 'ui:crash-fix-action')
                 await this._callUI('setMiddleButtonHandler', 'ui:close-overlay') // Predefined or generic
                 await this._callUI('setDismissHandler', null)
@@ -338,7 +341,10 @@ class GameCrashHandler {
                 window.setDismissHandler(null)
             } else {
                 const { ipcMain } = require('electron')
+                ipcMain.removeAllListeners('ui:crash-disable-mods-action')
+                ipcMain.removeAllListeners('ui:close-overlay')
                 ipcMain.once('ui:crash-disable-mods-action', () => this.disableOptionalMods())
+                ipcMain.once('ui:close-overlay', () => this._callUI('toggleOverlay', false))
                 await this._callUI('setOverlayHandler', 'ui:close-overlay')
                 await this._callUI('setMiddleButtonHandler', 'ui:crash-disable-mods-action')
                 await this._callUI('setDismissHandler', null)
@@ -423,6 +429,9 @@ class GameCrashHandler {
             window.setOverlayHandler(() => window.toggleOverlay(false))
             window.setMiddleButtonHandler(null)
         } else {
+            const { ipcMain } = require('electron')
+            ipcMain.removeAllListeners('ui:close-overlay')
+            ipcMain.once('ui:close-overlay', () => this._callUI('toggleOverlay', false))
             this._callUI('setOverlayHandler', 'ui:close-overlay')
             this._callUI('setMiddleButtonHandler', null)
         }
