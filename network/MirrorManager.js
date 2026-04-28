@@ -68,6 +68,7 @@ class MirrorManager {
                 ...url.parse(testUrl),
                 method: 'GET',
                 timeout: 8000,
+                family: 4, // Force IPv4 to prevent 8-second timeouts on macOS with faulty IPv6 setups
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 HeliosLauncher/1.0',
                     'Referer': 'https://minecraft.net/',
