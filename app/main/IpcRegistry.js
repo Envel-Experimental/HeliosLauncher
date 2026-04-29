@@ -330,13 +330,25 @@ class IpcRegistry {
             }
 
             const pingCmd = 'ping'
+            // Windows: -w is ms
+            // macOS (darwin): -W is ms
+            // Linux: -W is seconds
             const pingArgs = platform === 'win32'
                 ? ['-n', '1', '-w', '2000', node.host]
-                : ['-c', '1', '-W', '2', node.host]
+                : platform === 'darwin'
+                    ? ['-c', '1', '-W', '2000', node.host]
+                    : ['-c', '1', '-W', '2', node.host]
 
             execFile(pingCmd, pingArgs, (error, stdout) => {
                 const output = stdout ? stdout.toString() : ''
-                const isOnline = !error && (output.includes('time=') || output.includes('время=') || output.includes('TTL='))
+                // Standardize success detection: look for TTL or time= across platforms
+                const isOnline = !error && (
+                    output.includes('time=') || 
+                    output.includes('время=') || 
+                    output.includes('TTL=') ||
+                    (platform === 'darwin' && output.includes('bytes from'))
+                )
+                
                 resolve({
                     index,
                     isPrivate: !!node.publicKey,

@@ -589,11 +589,6 @@ class P2PEngine extends EventEmitter {
 
             await discovery.flushed()
             console.log(`[P2PEngine] P2P Service Started. Debug Mode: ${isDev}`)
-            // console.log(`[P2PEngine] Active Data Directory: ${ConfigManager.getDataDirectory()}`)
-            // console.log(`[P2PEngine] Active Common Directory: ${ConfigManager.getCommonDirectory()}`)
-            if (isDev) {
-                // console.debug(`[P2P Debug] Extended Debug Info...`)
-            }
             if (shouldAnnounce) {
                 if (ConfigManager.getLocalOptimization()) console.log(`[P2PEngine] Local Network: Active (Announcing via MDNS)`)
                 if (ConfigManager.getP2PUploadEnabled()) console.log(`[P2PEngine] Global Network: Active (Announcing via DHT)`)
@@ -1429,7 +1424,16 @@ class P2PEngine extends EventEmitter {
         const interfaces = os.networkInterfaces()
         let fingerprint = ''
         const sortedKeys = Object.keys(interfaces).sort()
+        
+        // List of interfaces to ignore because they are highly dynamic/virtual
+        const ignoreList = ['awdl', 'utun', 'llw', 'gif', 'stf']
+
         for (const key of sortedKeys) {
+            // macOS specific: skip dynamic virtual interfaces
+            if (process.platform === 'darwin' && ignoreList.some(ignore => key.startsWith(ignore))) {
+                continue
+            }
+
             const iface = interfaces[key]
             for (const details of iface) {
                 if (!details.internal && (details.family === 'IPv4' || /** @type {any} */(details.family) === 4)) {
