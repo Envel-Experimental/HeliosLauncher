@@ -66,8 +66,10 @@ describe('P2PEngine - Network Orchestration Tests', () => {
         ConfigManager = require('@core/configmanager')
         RateLimiter = require('@core/util/RateLimiter')
 
-        // IMPORTANT: P2PEngine checks this.swarm to continue loops
-        p2pEngine.swarm = { flushed: jest.fn().mockResolvedValue() }
+        global.fetch = jest.fn().mockResolvedValue({
+            ok: true,
+            json: jest.fn().mockResolvedValue([])
+        })
     })
 
     afterEach(() => {
@@ -87,6 +89,8 @@ describe('P2PEngine - Network Orchestration Tests', () => {
             peer2.rtt = 100
             peer2.getIP.mockReturnValue('2.2.2.2')
 
+            p2pEngine.swarm = { flushed: jest.fn().mockResolvedValue() }
+            p2pEngine.stopping = false
             p2pEngine.peers = [peer1, peer2]
 
             let callCount = 0
@@ -101,12 +105,13 @@ describe('P2PEngine - Network Orchestration Tests', () => {
             // Initial async steps
             for (let i = 0; i < 5; i++) await Promise.resolve()
             
-            // Advance timers for retry sleep (200ms)
-            jest.advanceTimersByTime(200)
+            // Step-by-step advance to ensure all microtasks between timer and next loop iteration run
+            for(let i=0; i<5; i++) {
+                jest.advanceTimersByTime(250)
+                await Promise.resolve()
+                await Promise.resolve()
+            }
             
-            // Retry async steps
-            for (let i = 0; i < 10; i++) await Promise.resolve()
-
             expect(callCount).toBe(2)
         })
     })

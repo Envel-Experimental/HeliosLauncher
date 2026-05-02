@@ -67,9 +67,9 @@ class MirrorManager {
             const options = {
                 ...url.parse(testUrl),
                 method: 'GET',
-                timeout: 8000,
+                timeout: 5000,
                 autoSelectFamily: true,
-                autoSelectFamilyAttemptTimeout: 250,
+                autoSelectFamilyAttemptTimeout: 200,
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 HeliosLauncher/1.0',
                     'Referer': 'https://minecraft.net/',

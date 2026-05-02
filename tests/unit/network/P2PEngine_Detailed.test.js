@@ -3,6 +3,7 @@ describe('P2PEngine Detailed Tests', () => {
     let ConfigManager
     let Hyperswarm
     let HyperDHT
+    let RateLimiter
 
     beforeEach(() => {
         jest.resetModules()
@@ -54,13 +55,31 @@ describe('P2PEngine Detailed Tests', () => {
         }))
 
         jest.doMock('@network/ResourceMonitor', () => ({
-            stop: jest.fn()
+            start: jest.fn(),
+            stop: jest.fn(),
+            getCPUUsage: jest.fn().mockReturnValue(10)
         }))
+
+        jest.doMock('@app/assets/js/core/util/RateLimiter', () => ({
+            update: jest.fn()
+        }))
+
+        global.fetch = jest.fn().mockResolvedValue({
+            ok: true,
+            json: jest.fn().mockResolvedValue([])
+        })
 
         p2pEngine = require('@network/P2PEngine')
         ConfigManager = require('@core/configmanager')
         Hyperswarm = require('hyperswarm')
         HyperDHT = require('hyperdht')
+        RateLimiter = require('@app/assets/js/core/util/RateLimiter')
+    })
+
+    afterEach(async () => {
+        if (p2pEngine) {
+            await p2pEngine.stop()
+        }
     })
 
     describe('UsageTracker', () => {

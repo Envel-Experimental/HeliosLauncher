@@ -195,7 +195,7 @@ async function loadJavaMirrorManifest(mirrorUrl) {
             if (DISTRO_PUB_KEYS && DISTRO_PUB_KEYS.length > 0) {
                 log.info(`Verifying signature for Java manifest: ${mirrorUrl}`);
                 try {
-                    const sigRes = await fetchWithTimeout(mirrorUrl + '.sig', { cache: 'no-store' });
+                    const sigRes = await fetchWithTimeout(mirrorUrl + '.sig', { cache: 'no-store' }, 5000);
                     if (sigRes.ok) {
                         const signatureHex = (await sigRes.text()).trim();
                         const signatureValid = await verifyDistribution({

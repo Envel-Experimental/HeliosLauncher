@@ -147,8 +147,8 @@ async function pullRemoteInterceptor() {
  */
 async function getDistributionRetry() {
     const FAILED_DOWNLOAD_ERROR_CODE = 1
-    const MAX_DOWNLOAD_RETRIES = 3
-    const DOWNLOAD_RETRY_DELAY = 2000
+    const MAX_DOWNLOAD_RETRIES = 2
+    const DOWNLOAD_RETRY_DELAY = 500
 
     const realGetDistribution = DistributionAPI.prototype.getDistribution.bind(this)
     return await retry(

@@ -157,105 +157,103 @@ class DistributionAPI {
      * @param {number} [localTimestamp] 
      */
     async pullRemote(localTimestamp = 0) {
-        let lastError = null;
-
-        for (const url of this.remoteUrls) {
-            try {
-                const res = await fetchWithTimeout(url, { cache: 'no-store' }, 8000);
-
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-                // Get buffer first to preserve exact bytes for verification
-                const rawBuffer = Buffer.from(await res.arrayBuffer());
-                const rawText = rawBuffer.toString('utf-8');
-                const data = JSON.parse(rawText);
-
-                let signatureValid = true; // Default to true if no keys configured (or logic disabled)
-
-                if (this.trustedKeys && Array.isArray(this.trustedKeys) && this.trustedKeys.length > 0) {
-                    console.log('[DistributionAPI] Verifying signature via Main Process...')
-                    signatureValid = false
-                    try {
-                        const sigRes = await fetchWithTimeout(url + '.sig', { cache: 'no-store' }, 5000)
-                        if (sigRes.ok) {
-                            const signatureHex = (await sigRes.text()).trim()
-
-                            const verifyData = {
-                                dataHex: rawBuffer.toString('hex'),
-                                signatureHex: signatureHex,
-                                trustedKeys: this.trustedKeys
-                            }
-
-                            const { verifyDistribution } = require('../util/SignatureUtils')
-                            signatureValid = await verifyDistribution(verifyData)
-
-                            if (signatureValid) {
-                                console.log('[DistributionAPI] Signature VALID.')
-                            } else {
-                                console.warn('[DistributionAPI] Signature verification failed in Main Process.')
-                            }
-                        } else {
-                            console.warn(`[DistributionAPI] Signature file missing (${sigRes.status})`)
-                        }
-                    } catch (e) {
-                        DistributionAPI.log.warn('Signature verification call error:', e)
-                    }
-                }
-
-                // ANTI-REPLAY CHECK
-                if (signatureValid && this.trustedKeys && this.trustedKeys.length > 0) {
-                    const remoteTimestampStr = data.timestamp || data.rss // Fallback to rss if used as a timestamp proxy, though explicit timestamp is better
-                    const remoteTimestamp = remoteTimestampStr ? new Date(remoteTimestampStr).getTime() : 0
-
-                    if (localTimestamp > 0 && remoteTimestamp < localTimestamp) {
-                        console.warn(`[DistributionAPI] Replay Attack Detected! Remote timestamp (${remoteTimestampStr}) is older than local (${new Date(localTimestamp).toISOString()}).`);
-                        signatureValid = false;
-                        /** @type {Error & { dataPackage?: any }} */
-                        const err = new Error('Distribution replay attack detected (downgrade attempt).');
-                        err.dataPackage = {
-                            data: data,
-                            responseStatus: RestResponseStatus.SUCCESS,
-                            signatureValid: false,
-                            replayDetected: true
-                        }
-                        throw err;
-                    }
-                }
-
-
-                if (!signatureValid && this.trustedKeys && this.trustedKeys.length > 0) {
-                    /** @type {Error & { dataPackage?: any }} */
-                    const err = new Error('Distribution signature verification failed.');
-                    err.dataPackage = {
-                        data: data,
-                        responseStatus: RestResponseStatus.SUCCESS,
-                        signatureValid: false
-                    }
-                    throw err;
-                }
-
-                // If successful, return immediately
-                return {
-                    data: data,
-                    responseStatus: RestResponseStatus.SUCCESS,
-                    signatureValid: signatureValid
-                };
-
-            } catch (err) {
-                /** @type {Error & { dataPackage?: any }} */
-                const error = err instanceof Error ? err : new Error(String(err));
-                console.error(`[DistributionAPI] Pull Failed from ${url}:`, error.message);
-                lastError = error;
-                if (error.dataPackage && error.dataPackage.signatureValid === false) {
-                    console.warn('[DistributionAPI] Signature validation failed. Trying next mirror...');
-                    lastError = error; // Save this specific error as it's more informative
-                }
-            }
+        if (this.remoteUrls.length === 0) {
+            return handleFetchError('Pull Remote', new Error('No distribution URLs configured'), DistributionAPI.log);
         }
 
-        // If loop finishes, all failed.
-        console.error('[DistributionAPI] All distribution sources failed.');
-        return handleFetchError('Pull Remote', lastError || new Error('All mirrors failed'), DistributionAPI.log);
+        const fetchOne = async (url) => {
+            const res = await fetchWithTimeout(url, { cache: 'no-store' }, 10000);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+            const rawBuffer = Buffer.from(await res.arrayBuffer());
+            const rawText = rawBuffer.toString('utf-8');
+            const data = JSON.parse(rawText);
+
+            let signatureValid = false;
+
+            if (this.trustedKeys && Array.isArray(this.trustedKeys) && this.trustedKeys.length > 0) {
+                try {
+                    const sigRes = await fetchWithTimeout(url + '.sig', { cache: 'no-store' }, 5000);
+                    if (sigRes.ok) {
+                        const signatureHex = (await sigRes.text()).trim();
+                        const verifyData = {
+                            dataHex: rawBuffer.toString('hex'),
+                            signatureHex: signatureHex,
+                            trustedKeys: this.trustedKeys
+                        };
+                        const { verifyDistribution } = require('../util/SignatureUtils');
+                        signatureValid = await verifyDistribution(verifyData);
+                    } else {
+                        console.warn(`[DistributionAPI] Signature file missing for: ${url}`);
+                    }
+                } catch (e) {
+                    console.warn(`[DistributionAPI] Error checking signature for ${url}:`, e.message);
+                }
+            }
+
+            // ANTI-REPLAY CHECK
+            if (signatureValid && this.trustedKeys && this.trustedKeys.length > 0) {
+                const remoteTimestampStr = data.timestamp || data.rss;
+                const remoteTimestamp = remoteTimestampStr ? new Date(remoteTimestampStr).getTime() : 0;
+
+                if (localTimestamp > 0 && remoteTimestamp < localTimestamp) {
+                    console.warn(`[DistributionAPI] Replay Attack Detected! Remote timestamp (${remoteTimestampStr}) is older than local (${new Date(localTimestamp).toISOString()}).`);
+                    throw new Error('Distribution replay attack detected (downgrade attempt).');
+                }
+            }
+
+            if (!signatureValid && this.trustedKeys && this.trustedKeys.length > 0) {
+                throw new Error('Distribution signature verification failed.');
+            }
+
+            return {
+                data: data,
+                responseStatus: RestResponseStatus.SUCCESS,
+                signatureValid: signatureValid,
+                url: url // Track which one won
+            };
+        };
+
+        // Competitive Racing: Give the first URL (primary) a 500ms head start
+        // This satisfies the requirement: "if f-launcher is slower by 500+ ms or doesn't respond immediately, switch"
+        const promises = this.remoteUrls.map(async (url, index) => {
+            if (index > 0) {
+                // Secondary mirrors wait 500ms before starting
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+            try {
+                return await fetchOne(url);
+            } catch (err) {
+                // Re-throw to be caught by Promise.any or similar
+                throw err;
+            }
+        });
+
+        try {
+            // Promise.any returns the first SUCCESSFUL promise
+            const winner = await Promise.any(promises);
+            if (winner.url !== this.remoteUrls[0]) {
+                console.log(`[DistributionAPI] Primary mirror was slow/down. Switched to: ${winner.url}`);
+            }
+            return winner;
+        } catch (err) {
+            console.error('[DistributionAPI] All distribution sources failed or timed out.');
+            
+            let finalError = new Error('All mirrors failed');
+            
+            // Satisfy test expectations by extracting the specific security error if it exists
+            if (err instanceof AggregateError) {
+                // Priority: Replay > Signature > Other
+                const replayErr = err.errors.find(e => e.message.includes('replay'));
+                const sigErr = err.errors.find(e => e.message.includes('signature'));
+                
+                if (replayErr) finalError = replayErr;
+                else if (sigErr) finalError = sigErr;
+                else if (err.errors.length > 0) finalError = err.errors[0];
+            }
+
+            return handleFetchError('Pull Remote', finalError, DistributionAPI.log);
+        }
     }
 
     /**

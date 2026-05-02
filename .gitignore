@@ -12,6 +12,7 @@
 /dist/
 /out/
 /app/dist/
+/app/assets/version.json
 
 # Logs
 /logs/

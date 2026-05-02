@@ -165,7 +165,7 @@ class RaceManager {
             const httpTimeout = setTimeout(() => {
                 abortController.abort();
                 reject(new Error('HTTP Timeout'));
-            }, 30000); // 30s timeout for HTTP
+            }, 10000); // 10s timeout for HTTP
 
             fetch(url, { 
                 signal: abortController.signal,
