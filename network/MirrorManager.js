@@ -1,5 +1,5 @@
-const https = require('https')
-const url = require('url')
+// Using native fetch for better reliability and IPv6 support
+
 const isDev = require('../app/assets/js/core/isdev')
 
 function logMain(msg) {
@@ -48,28 +48,39 @@ class MirrorManager {
         this._logStatus()
     }
 
-    _measureLatency(mirrorEntry) {
-        return new Promise((resolve) => {
-            const rawUrl = mirrorEntry.config.version_manifest || 
-                           mirrorEntry.config.assets || 
-                           mirrorEntry.config.java_manifest || 
-                           mirrorEntry.config.distribution
-            
-            if (!rawUrl) {
-                mirrorEntry.latency = 9999
-                mirrorEntry.status = 'invalid'
-                return resolve()
-            }
+    async _measureLatency(mirrorEntry) {
+        const rawUrl = mirrorEntry.config.version_manifest || 
+                       mirrorEntry.config.assets || 
+                       mirrorEntry.config.java_manifest || 
+                       mirrorEntry.config.distribution
+        
+        if (!rawUrl) {
+            mirrorEntry.latency = 9999
+            mirrorEntry.status = 'invalid'
+            return
+        }
 
-            const start = Date.now()
-            const testUrl = rawUrl + (rawUrl.includes('?') ? '&' : '?') + 't=' + start
-            
-            const options = {
-                ...url.parse(testUrl),
+        const start = Date.now()
+        let testUrlStr
+        try {
+            const urlObj = new URL(rawUrl)
+            urlObj.searchParams.set('t', start.toString())
+            testUrlStr = urlObj.toString()
+        } catch (e) {
+            logMain(`INVALID URL: ${mirrorEntry.config.name} (${rawUrl})`)
+            mirrorEntry.latency = 9999
+            mirrorEntry.status = 'invalid'
+            return
+        }
+        
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 5000)
+
+        try {
+            const response = await fetch(testUrlStr, {
                 method: 'GET',
-                timeout: 5000,
-                autoSelectFamily: true,
-                autoSelectFamilyAttemptTimeout: 200,
+                signal: controller.signal,
+                cache: 'no-store',
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 HeliosLauncher/1.0',
                     'Referer': 'https://minecraft.net/',
@@ -77,46 +88,36 @@ class MirrorManager {
                     'Cache-Control': 'no-cache',
                     'Pragma': 'no-cache'
                 }
+            })
+
+            clearTimeout(timeoutId)
+            const latency = Date.now() - start
+            mirrorEntry.lastChecked = Date.now()
+            
+            if (response.ok) {
+                mirrorEntry.latency = latency
+                mirrorEntry.status = latency < 400 ? 'active' : 'slow'
+                mirrorEntry.failures = 0
+                logMain(`SUCCESS: ${mirrorEntry.config.name} (${latency}ms)`)
+            } else {
+                logMain(`FAILED: ${mirrorEntry.config.name} (Status: ${response.status})`)
+                mirrorEntry.latency = 9999
+                mirrorEntry.status = 'down'
+                mirrorEntry.failures++
             }
+        } catch (err) {
+            clearTimeout(timeoutId)
+            mirrorEntry.lastChecked = Date.now()
+            mirrorEntry.latency = 9999
+            mirrorEntry.status = 'down'
+            mirrorEntry.failures++
 
-            const req = https.request(options, (res) => {
-                const latency = Date.now() - start
-                mirrorEntry.lastChecked = Date.now()
-                
-                if (res.statusCode >= 200 && res.statusCode < 400) {
-                    mirrorEntry.latency = latency
-                    mirrorEntry.status = latency < 400 ? 'active' : 'slow'
-                    mirrorEntry.failures = 0
-                    logMain(`SUCCESS: ${mirrorEntry.config.name} (${latency}ms)`)
-                } else {
-                    logMain(`FAILED: ${mirrorEntry.config.name} (Status: ${res.statusCode})`)
-                    mirrorEntry.latency = 9999
-                    mirrorEntry.status = 'down'
-                    mirrorEntry.failures++
-                }
-                res.on('data', () => {}) // Consume data
-                res.on('end', () => resolve())
-            })
-
-            req.on('error', (err) => {
-                logMain(`ERROR: ${mirrorEntry.config.name} (${err.message})`)
-                mirrorEntry.latency = 9999
-                mirrorEntry.status = 'down'
-                mirrorEntry.failures++
-                resolve()
-            })
-
-            req.on('timeout', () => {
+            if (err.name === 'AbortError') {
                 logMain(`TIMEOUT: ${mirrorEntry.config.name || 'Unknown Mirror'}`)
-                req.destroy()
-                mirrorEntry.latency = 9999
-                mirrorEntry.status = 'down'
-                mirrorEntry.failures++
-                resolve()
-            })
-
-            req.end()
-        })
+            } else {
+                logMain(`ERROR: ${mirrorEntry.config.name} (${err.message})`)
+            }
+        }
     }
 
     _sortMirrors() {

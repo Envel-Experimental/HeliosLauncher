@@ -6,16 +6,16 @@ describe('MirrorManager', () => {
         jest.resetModules()
 
         // Mock Dependencies
-        jest.doMock('https', () => ({
-            request: jest.fn()
-        }))
+        // Mock Fetch
+        global.fetch = jest.fn()
+
 
         // Mock Logger/Console to avoid noise
         jest.spyOn(process.stdout, 'write').mockImplementation(() => true)
         jest.spyOn(console, 'log').mockImplementation(() => true)
 
         MirrorManager = require('@network/MirrorManager')
-        https = require('https')
+
     })
 
     afterEach(() => {
@@ -29,27 +29,19 @@ describe('MirrorManager', () => {
                 { name: 'Mirror 2', distribution: 'https://m2.com/dist' }
             ]
 
-            // Mock https responses
-            https.request.mockImplementation((options, callback) => {
-                const res = {
-                    statusCode: 200,
-                    on: jest.fn((event, cb) => {
-                        if (event === 'end') cb()
-                    })
-                }
-                callback(res)
-                return {
-                    on: jest.fn(),
-                    end: jest.fn(),
-                    destroy: jest.fn()
-                }
+            // Mock fetch responses
+            global.fetch.mockResolvedValue({
+                ok: true,
+                status: 200
             })
+
 
             await MirrorManager.init(mockConfigs)
 
             expect(MirrorManager.initialized).toBe(true)
             expect(MirrorManager.mirrors.length).toBe(2)
-            expect(https.request).toHaveBeenCalledTimes(2)
+            expect(global.fetch).toHaveBeenCalledTimes(2)
+
         })
 
         test('should handle missing configs gracefully', async () => {
