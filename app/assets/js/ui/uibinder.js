@@ -103,11 +103,15 @@ export function setLaunchEnabled(val) {
  * Bind selected server
  */
 export async function updateSelectedServer(serv) {
+    console.log('[UIBinder] updateSelectedServer: requested server:', serv != null ? serv.rawServer.id : 'null')
     if (getCurrentView() === VIEWS.settings) {
         fullSettingsSave()
     }
     ConfigManager.setSelectedServer(serv != null ? serv.rawServer.id : null)
+    const savedServer = ConfigManager.getSelectedServer()
+    console.log('[UIBinder] updateSelectedServer: ConfigManager now has:', savedServer)
     await ConfigManager.save()
+    console.log('[UIBinder] updateSelectedServer: Config saved.')
     const serverSelectionBtn = document.getElementById('server_selection_button')
     serverSelectionBtn.innerHTML = (serv != null ? serv.rawServer.name : Lang.queryJS('landing.noSelection'))
     if (getCurrentView() === VIEWS.settings) {

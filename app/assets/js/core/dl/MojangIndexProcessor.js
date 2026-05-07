@@ -120,17 +120,17 @@ class MojangIndexProcessor extends IndexProcessor {
             const versionJson = await this.loadContentWithRemoteFallback(versionInfo.url, versionJsonPath, { algo: HashAlgo.SHA1, value: versionInfo.sha1 }, explicitFallbacks);
 
             if (process.arch === 'arm64' && !mcVersionAtLeast('1.19', version)) {
-                const latestVersion = versionManifest.latest.release;
-                const latestVersionJsonPath = getVersionJsonPath(this.commonDir, latestVersion);
-                const latestVersionInfo = versionManifest.versions.find(({ id }) => id === latestVersion);
-                if (latestVersionInfo == null) {
-                    throw new AssetGuardError('Cannot find the latest version.');
+                const compatVersion = '1.19.4'
+                const compatVersionJsonPath = getVersionJsonPath(this.commonDir, compatVersion)
+                const compatVersionInfo = versionManifest.versions.find(({ id }) => id === compatVersion)
+                if (compatVersionInfo == null) {
+                    throw new AssetGuardError(`Cannot find compatibility version ${compatVersion}.`)
                 }
-                const explicitLatestFallbacks = await this.resolveVersionFallbacks(latestVersion);
-                const latestVersionJson = await this.loadContentWithRemoteFallback(latestVersionInfo.url, latestVersionJsonPath, { algo: HashAlgo.SHA1, value: latestVersionInfo.sha1 }, explicitLatestFallbacks);
+                const explicitCompatFallbacks = await this.resolveVersionFallbacks(compatVersion)
+                const compatVersionJson = await this.loadContentWithRemoteFallback(compatVersionInfo.url, compatVersionJsonPath, { algo: HashAlgo.SHA1, value: compatVersionInfo.sha1 }, explicitCompatFallbacks)
 
-                MojangIndexProcessor.logger.info(`Using LWJGL from ${latestVersion} for ARM64 compatibility.`);
-                versionJson.libraries = versionJson.libraries.filter(l => !l.name.startsWith('org.lwjgl:')).concat(latestVersionJson.libraries.filter(l => l.name.startsWith('org.lwjgl:')));
+                MojangIndexProcessor.logger.info(`Using LWJGL from ${compatVersion} for ARM64 compatibility (fixes mallocStack errors).`)
+                versionJson.libraries = versionJson.libraries.filter(l => !l.name.startsWith('org.lwjgl:')).concat(compatVersionJson.libraries.filter(l => l.name.startsWith('org.lwjgl:')))
             }
             return versionJson;
         }

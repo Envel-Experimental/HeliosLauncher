@@ -2632,7 +2632,7 @@ async function factoryReset() {
         setOverlayContent(
             Lang.query('ejs.settings.factoryReset.title'),
             Lang.query('ejs.settings.factoryReset.success'),
-            Lang.queryJS('uicore.update.updateButton')
+            'Перезапустить'
         )
         
         setOverlayHandler(() => {

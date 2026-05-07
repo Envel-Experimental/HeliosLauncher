@@ -474,7 +474,9 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
             const isConfig = CONFIG_EXTENSIONS.includes(path.extname(decodedPath));
 
             if (asset.force && (isConfig || isInstanceFile)) {
-                log.warn(`[DownloadEngine] Validation failed for forced mutable file ${asset.id}, but accepting anyway. Size: ${loaded} / ${total}`);
+                if (total > 0 && loaded !== total) {
+                    log.warn(`[DownloadEngine] Size mismatch for forced mutable file ${asset.id} (${loaded} vs ${total}), but accepting anyway.`);
+                }
                 if (fsSync.existsSync(tempPath)) {
                     await safeRename(tempPath, decodedPath);
                 }

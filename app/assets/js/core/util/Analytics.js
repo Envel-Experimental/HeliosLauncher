@@ -45,16 +45,16 @@ class Analytics {
             const javaConfig = ConfigManager.getJavaConfig()
             const currentVersion = ipcRenderer.sendSync('app:getVersionSync')
             const lastVersion = ConfigManager.getLastLauncherVersion()
-            
+
             // Track Launcher Updated or First Launch
             if (!lastVersion) {
                 this.capture('Launcher First Launch', { version: currentVersion })
                 ConfigManager.setLastLauncherVersion(currentVersion)
                 await ConfigManager.save()
             } else if (lastVersion !== currentVersion) {
-                this.capture('Launcher Updated', { 
+                this.capture('Launcher Updated', {
                     from_version: lastVersion,
-                    to_version: currentVersion 
+                    to_version: currentVersion
                 })
                 ConfigManager.setLastLauncherVersion(currentVersion)
                 await ConfigManager.save()
@@ -76,17 +76,17 @@ class Analytics {
                 os_platform: sysInfo.platform,
                 os_arch: sysInfo.arch,
                 launcher_version: currentVersion,
-                
+
                 // CPU & RAM
                 cpu_model: sysInfo.cpus[0]?.model || 'Unknown',
                 cpu_count: sysInfo.cpus.length,
                 ram_total: Math.round(sysInfo.totalmem / 1024 / 1024 / 1024) + 'GB',
                 ram_free_at_start: Math.round(sysInfo.freemem / 1024 / 1024 / 1024) + 'GB',
-                
+
                 // Display
                 screen_res: `${window.screen.width}x${window.screen.height}`,
                 screen_ratio: window.devicePixelRatio,
-                
+
                 // Launcher Settings
                 java_min_ram: javaConfig.minRAM,
                 java_max_ram: javaConfig.maxRAM,
@@ -126,16 +126,15 @@ class Analytics {
         if (!this.enabled || !this.distinctId) return
 
         const payload = {
-            api_key: POSTHOG_KEY,
             event: event,
             properties: {
                 ...properties,
                 distinct_id: this.distinctId,
                 $lib: 'FlauncherAnalytics',
                 $lib_version: '1.2.0',
-                $ip: '0.0.0.0',
                 $os: process.platform,
-                $browser: isRenderer ? 'Electron-Renderer' : 'Electron-Main'
+                $browser: isRenderer ? 'Electron-Renderer' : 'Electron-Main',
+                release: this.release
             },
             timestamp: new Date().toISOString()
         }
@@ -174,7 +173,7 @@ class Analytics {
         if (error.code === 'EPERM' || error.code === 'EBUSY' || error.code === 'ENOSPC') {
             return
         }
-        
+
         const message = error instanceof Error ? error.message : error
         if (typeof message === 'string' && (
             message.includes('fs:statfs') ||

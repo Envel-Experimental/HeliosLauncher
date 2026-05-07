@@ -536,7 +536,14 @@ exports.getLaunchDetached = (def = false) => {
 exports.getTempNativeFolder = () => 'natives'
 
 // Setters
-exports.setSelectedServer = (id) => { if (config) config.selectedServer = id }
+exports.setSelectedServer = (id) => { 
+    if (config) {
+        console.log(`[ConfigManager] Setting selectedServer from ${config.selectedServer} to ${id}`)
+        config.selectedServer = id 
+    } else {
+        console.warn('[ConfigManager] Cannot set selectedServer: config is null!')
+    }
+}
 exports.setSelectedAccount = (uuid) => { if (config) config.selectedAccount = uuid }
 exports.setClientToken = (token) => { if (config) config.clientToken = token }
 exports.setModConfigurations = (configs) => { if (config) config.modConfigurations = configs }

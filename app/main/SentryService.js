@@ -27,22 +27,30 @@ class SentryService {
                 release: release,
                 beforeSend(event, hint) {
                     const error = hint.originalException
-                    if (error) {
-                        // Filter out EPERM/EBUSY (common on Windows during file cleanup)
-                        if (error.code === 'EPERM' || error.code === 'EBUSY') {
-                            return null
-                        }
-                        // Filter out known noisy messages
-                        if (typeof error.message === 'string' && (
-                            error.message.includes('fs:statfs') ||
-                            error.message.includes('is not signed by the application owner') ||
-                            error.message.includes('ERR_CONNECTION_RESET') ||
-                            error.message.includes('ENOSPC')
-                        )) {
+                    const message = (error && error.message) || event.message || ''
+                    
+                    if (typeof message === 'string') {
+                        if (
+                            message.includes('is not signed by the application owner') ||
+                            message.includes('fs:statfs') ||
+                            message.includes('ERR_CONNECTION_RESET') ||
+                            message.includes('ENOSPC') ||
+                            message.includes('EPERM') ||
+                            message.includes('EBUSY')
+                        ) {
                             return null
                         }
                     }
                     return event
+                },
+                beforeBreadcrumb(breadcrumb) {
+                    if (breadcrumb.category === 'console' && breadcrumb.level === 'error') {
+                        const message = breadcrumb.message || ''
+                        if (message.includes('is not signed by the application owner')) {
+                            return null
+                        }
+                    }
+                    return breadcrumb
                 }
             })
         } catch (e) {
