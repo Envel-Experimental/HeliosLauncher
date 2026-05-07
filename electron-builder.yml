@@ -34,7 +34,6 @@ publish:
 
 # Windows Configuration
 win: 
-  publisherName: "FLauncher"
   verifyUpdateCodeSignature: false
   target: 
     - target: 'nsis'
