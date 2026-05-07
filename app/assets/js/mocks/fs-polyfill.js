@@ -27,11 +27,16 @@ const fs = {
                 const res = await window.HeliosAPI?.ipc?.invoke('fs:stat', path)
                 if (res) {
                     // Wrap to provide standard Stats methods
-                    return {
-                        ...res,
-                        isDirectory: () => res.isDirectory,
-                        isFile: () => res.isFile
+                    const stats = { ...res }
+                    if (typeof stats.isDirectory !== 'function') {
+                        const isD = !!stats.isDirectory
+                        stats.isDirectory = () => isD
                     }
+                    if (typeof stats.isFile !== 'function') {
+                        const isF = !!stats.isFile
+                        stats.isFile = () => isF
+                    }
+                    return stats
                 }
                 await new Promise(r => setTimeout(r, 100))
             }

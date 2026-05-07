@@ -2629,7 +2629,15 @@ async function factoryReset() {
             const fullPath = sysPath.join(dataDir, file)
             try {
                 const stat = await fs.stat(fullPath)
-                const isDir = (typeof stat.isDirectory === 'function') ? stat.isDirectory() : !!stat.isDirectory
+                // Robust check for directory
+                let isDir = false
+                if (stat && typeof stat.isDirectory === 'function') {
+                    isDir = stat.isDirectory()
+                } else if (stat && typeof stat.isDirectory === 'boolean') {
+                    isDir = stat.isDirectory
+                } else if (stat && stat.mode) {
+                    isDir = (stat.mode & 0o040000) !== 0
+                }
                 
                 if (isDir) {
                     if (typeof fs.rm === 'function') {

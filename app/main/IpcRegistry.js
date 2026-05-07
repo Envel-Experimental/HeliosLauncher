@@ -152,18 +152,25 @@ class IpcRegistry {
 
         ipcMain.on('app:restart', () => {
             try {
-                // Filter out development-only arguments that might force a console window
                 const args = process.argv.slice(1).filter(arg => 
                     !arg.includes('--enable-logging') && 
                     !arg.includes('--remote-debugging-port') &&
                     !arg.includes('--inspect') &&
                     !arg.includes('--debug')
                 )
-                app.relaunch({ args })
-                app.exit(0)
+                
+                app.relaunch({
+                    execPath: process.execPath,
+                    args: args
+                })
+                
+                // Small delay to ensure the OS handles the relaunch request
+                setTimeout(() => {
+                    app.quit()
+                }, 500)
             } catch (err) {
                 console.error('[Main] Restart failed:', err)
-                process.exit(1)
+                app.exit(1)
             }
         })
 
