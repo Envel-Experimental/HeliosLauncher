@@ -28,6 +28,7 @@ class SentryService {
                 beforeSend(event, hint) {
                     const error = hint.originalException
                     const message = (error && error.message) || event.message || ''
+                    const code = (error && error.code) || ''
                     
                     if (typeof message === 'string') {
                         if (
@@ -36,7 +37,10 @@ class SentryService {
                             message.includes('ERR_CONNECTION_RESET') ||
                             message.includes('ENOSPC') ||
                             message.includes('EPERM') ||
-                            message.includes('EBUSY')
+                            message.includes('EBUSY') ||
+                            code === 'EPERM' ||
+                            code === 'EBUSY' ||
+                            code === 'ENOSPC'
                         ) {
                             return null
                         }

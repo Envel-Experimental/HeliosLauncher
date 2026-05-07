@@ -103,6 +103,7 @@ describe('MojangIndexProcessor Detailed Tests', () => {
             latest: { release: '1.20.1' },
             versions: [
                 { id: '1.18', url: 'http://1.18.json', sha1: 'h1' },
+                { id: '1.19.4', url: 'http://1.19.4.json', sha1: 'h19' },
                 { id: '1.20.1', url: 'http://1.20.json', sha1: 'h2' }
             ] 
         }
@@ -112,6 +113,7 @@ describe('MojangIndexProcessor Detailed Tests', () => {
         // Mock loading JSONs
         jest.spyOn(processor, 'loadContentWithRemoteFallback').mockImplementation((url) => {
             if (url === 'http://1.18.json') return Promise.resolve({ libraries: [{ name: 'org.lwjgl:1' }, { name: 'other:1' }] })
+            if (url === 'http://1.19.4.json') return Promise.resolve({ libraries: [{ name: 'org.lwjgl:2' }] })
             if (url === 'http://1.20.json') return Promise.resolve({ libraries: [{ name: 'org.lwjgl:2' }] })
         })
 
