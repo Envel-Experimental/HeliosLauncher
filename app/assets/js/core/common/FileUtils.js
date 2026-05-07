@@ -38,7 +38,7 @@ async function runCommand(cmd, args, options = {}) {
 async function validateLocalFile(filePath, algo, hash, expectedSize, requireHash = false) {
     if (hash == null) {
         if (requireHash) {
-            console.error(`[Security] Validation failed: Hash is strictly required for ${filePath}.`);
+            // console.debug(`[Security] No hash provided for ${filePath}. Skipping validation.`);
             return false;
         }
         

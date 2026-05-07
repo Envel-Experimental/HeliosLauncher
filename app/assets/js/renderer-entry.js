@@ -12,23 +12,26 @@ window.global = window
 
 // Platform Detection (Immediate stabilization)
 const platform = (window.HeliosAPI && window.HeliosAPI.system) ? window.HeliosAPI.system.getPlatform() : 'win32'
+const arch = (window.HeliosAPI && window.HeliosAPI.system) ? window.HeliosAPI.system.getArch() : 'x64'
 window.isDev = (window.HeliosAPI && window.HeliosAPI.app) ? window.HeliosAPI.app.isDev() : false
 document.body.setAttribute('data-platform', platform)
+document.body.setAttribute('data-arch', arch)
 
 
 // 1.1 Polyfill process immediately (Essential for libraries and env detection)
 if (typeof process === 'undefined') {
     window.process = {
         platform,
+        arch,
         type: 'renderer',
         env: { HELIOS_DEV_MODE: window.isDev },
         nextTick: (fn) => setTimeout(fn, 0)
     }
 } else {
     if (!process.platform) process.platform = platform
+    if (!process.arch) process.arch = arch
     if (process.env) process.env.HELIOS_DEV_MODE = window.isDev
     // Set process type if not defined (handled by esbuild define normally)
-    const isRenderer = true
     if (!process.nextTick) process.nextTick = (fn) => setTimeout(fn, 0)
 }
 

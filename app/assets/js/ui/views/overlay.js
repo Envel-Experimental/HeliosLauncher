@@ -66,6 +66,10 @@ export function bindOverlayKeys(state, content, dismissable) {
  * @param {string} content Optional. The content div to be shown.
  */
 export function toggleOverlay(toggleState, dismissable = false, content = 'overlayContent') {
+    if (toggleState === false && window.isResetting) {
+        return
+    }
+
     if (toggleState == null) {
         toggleState = !document.getElementById('main').hasAttribute('overlay')
     }
@@ -137,8 +141,10 @@ export function setOverlayContent(title, description, acknowledge, acknowledge_m
     const titleEl = document.getElementById('overlayTitle')
     const descEl = document.getElementById('overlayDesc')
 
-    const sanitize = (text) => text
-        .replace(/&/g, "&amp;")
+    const sanitize = (text) => {
+        if (text == null) return ''
+        return String(text)
+            .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
@@ -148,20 +154,46 @@ export function setOverlayContent(title, description, acknowledge, acknowledge_m
         .replace(/&lt;strong&gt;/g, "<strong>").replace(/&lt;\/strong&gt;/g, "</strong>")
         .replace(/&lt;em&gt;/g, "<em>").replace(/&lt;\/em&gt;/g, "</em>")
         .replace(/&lt;span style=&quot;color: #aaa; font-size: 12px;&quot;&gt;/g, '<span style="color: #aaa; font-size: 12px;">').replace(/&lt;\/span&gt;/g, "</span>")
-
-    titleEl.innerHTML = sanitize(title)
-    descEl.innerHTML = sanitize(description)
-
-    document.getElementById('overlayAcknowledge').textContent = acknowledge
-
-    if (acknowledge_mid != null) {
-        document.getElementById('overlayAcknowledgeMid').textContent = acknowledge_mid
-        document.getElementById('overlayAcknowledgeMid').style.display = ''
-    } else {
-        document.getElementById('overlayAcknowledgeMid').style.display = 'none'
     }
 
-    document.getElementById('overlayDismiss').textContent = dismiss
+    if (titleEl) {
+        titleEl.innerHTML = sanitize(title)
+        titleEl.style.display = 'block'
+    }
+    if (descEl) {
+        descEl.innerHTML = sanitize(description)
+        descEl.style.display = 'block'
+    }
+
+    const ackEl = document.getElementById('overlayAcknowledge')
+    if (ackEl) {
+        if (acknowledge != null && acknowledge !== '') {
+            ackEl.innerHTML = sanitize(acknowledge)
+            ackEl.style.display = 'inline-block'
+        } else {
+            ackEl.style.display = 'none'
+        }
+    }
+
+    const ackMidEl = document.getElementById('overlayAcknowledgeMid')
+    if (ackMidEl) {
+        if (acknowledge_mid != null && acknowledge_mid !== '') {
+            ackMidEl.innerHTML = sanitize(acknowledge_mid)
+            ackMidEl.style.display = 'inline-block'
+        } else {
+            ackMidEl.style.display = 'none'
+        }
+    }
+
+    const dismissEl = document.getElementById('overlayDismiss')
+    if (dismissEl) {
+        if (dismiss != null && dismiss !== '') {
+            dismissEl.innerHTML = sanitize(dismiss)
+            dismissEl.style.display = 'inline-block'
+        } else {
+            dismissEl.style.display = 'none'
+        }
+    }
 }
 
 // Legacy Global Exposure

@@ -2546,6 +2546,9 @@ export async function prepareSettings(first = false) {
     }
 }
 
+let isResetting = false
+window.isResetting = false
+
 /**
  * Bind Factory Reset Buttons
  */
@@ -2553,6 +2556,7 @@ export function bindFactoryReset() {
     const btn = document.getElementById('settingsFactoryResetButton')
     if (btn) {
         btn.onclick = () => {
+            if (isResetting) return
             setOverlayContent(
                 Lang.query('ejs.settings.factoryReset.confirmTitle'),
                 Lang.query('ejs.settings.factoryReset.confirmDesc'),
@@ -2560,7 +2564,6 @@ export function bindFactoryReset() {
                 Lang.query('ejs.settings.factoryReset.cancelButton')
             )
             setOverlayHandler(() => {
-                toggleOverlay(false)
                 factoryReset()
             })
             setMiddleButtonHandler(() => {
@@ -2576,6 +2579,8 @@ document.addEventListener('DOMContentLoaded', () => {
 })
 
 async function factoryReset() {
+    isResetting = true
+    window.isResetting = true
     const dataDir = ConfigManager.getDataDirectory()
 
     // Whitelist of files/folders to KEEP.
@@ -2600,11 +2605,22 @@ async function factoryReset() {
         // Show loading
         setOverlayContent(
             Lang.query('ejs.settings.factoryReset.title'),
-            'Processing...',
-            ''
+            'Очистка файлов лаунчера... Пожалуйста, подождите.',
+            '',
+            null,
+            null
         )
         toggleOverlay(true)
+        
+        // Wait a bit for overlay to show
+        await new Promise(resolve => setTimeout(resolve, 150))
 
+        // Disable ConfigManager saving during reset
+        if (ConfigManager.setSaveEnabled) {
+            ConfigManager.setSaveEnabled(false)
+        }
+
+        // Start deletion loop
         for (const file of files) {
             if (whitelist.includes(file)) {
                 continue
@@ -2613,7 +2629,9 @@ async function factoryReset() {
             const fullPath = sysPath.join(dataDir, file)
             try {
                 const stat = await fs.stat(fullPath)
-                if (stat.isDirectory()) {
+                const isDir = (typeof stat.isDirectory === 'function') ? stat.isDirectory() : !!stat.isDirectory
+                
+                if (isDir) {
                     if (typeof fs.rm === 'function') {
                         await fs.rm(fullPath, { recursive: true, force: true })
                     } else {
@@ -2622,24 +2640,41 @@ async function factoryReset() {
                 } else {
                     await fs.unlink(fullPath)
                 }
-                console.log('Factory Reset: Deleted', fullPath)
+                // Deleted
             } catch (err) {
                 console.warn('Factory Reset: Failed to delete', fullPath, err)
             }
         }
 
+        // Loop finished
+
+        const successTitle = Lang.queryEJS('settings.factoryReset.title') || 'Сброс завершен'
+        const successDesc = Lang.queryEJS('settings.factoryReset.success') || 'Лаунчер будет перезапущен.'
+        
         // Success & Restart
         setOverlayContent(
-            Lang.query('ejs.settings.factoryReset.title'),
-            Lang.query('ejs.settings.factoryReset.success'),
-            'Перезапустить'
+            successTitle,
+            successDesc,
+            'Перезапустить',
+            null,
+            null
         )
         
         setOverlayHandler(() => {
+            const ackBtn = document.getElementById('overlayAcknowledge')
+            if (ackBtn) {
+                ackBtn.style.backgroundColor = '#ff4444'
+                ackBtn.innerHTML = 'Перезапуск...'
+            }
             ipcRenderer.send('app:restart')
         })
 
+        // Re-toggle overlay to ensure it's on top and visible
+        toggleOverlay(true)
+
     } catch (err) {
+        isResetting = false
+        window.isResetting = false
         console.error('Factory Reset Error', err)
         setOverlayContent(
             Lang.query('ejs.settings.factoryReset.title'),

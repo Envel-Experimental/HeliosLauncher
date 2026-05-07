@@ -151,23 +151,19 @@ class IpcRegistry {
         })
 
         ipcMain.on('app:restart', () => {
-            console.log('[Main] Restart requested. Relaunching...')
             try {
-                const args = process.argv.slice(1).filter(arg =>
-                    !arg.startsWith('--inspect') &&
-                    !arg.startsWith('--remote-debugging-port') &&
-                    !arg.startsWith('--enable-logging') &&
-                    !arg.startsWith('--debug-brk')
+                // Filter out development-only arguments that might force a console window
+                const args = process.argv.slice(1).filter(arg => 
+                    !arg.includes('--enable-logging') && 
+                    !arg.includes('--remote-debugging-port') &&
+                    !arg.includes('--inspect') &&
+                    !arg.includes('--debug')
                 )
-                
-                // Add a small delay to ensure IPC responses are sent if needed
-                setTimeout(() => {
-                    app.relaunch({ execPath: process.execPath, args: args })
-                    app.exit(0)
-                }, 100)
+                app.relaunch({ args })
+                app.exit(0)
             } catch (err) {
-                console.error('[Main] Failed to relaunch app:', err)
-                app.exit(1)
+                console.error('[Main] Restart failed:', err)
+                process.exit(1)
             }
         })
 

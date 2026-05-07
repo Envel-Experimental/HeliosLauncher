@@ -55,6 +55,18 @@ class FsService {
             }, 5, 100, (err) => err.code === 'EPERM' || err.code === 'EBUSY')
         })
 
+        ipcMain.handle('fs:rmdir', async (event, path, opts) => {
+            return await retry(async () => {
+                return await fs.rmdir(path, opts)
+            }, 5, 100, (err) => err.code === 'EPERM' || err.code === 'EBUSY')
+        })
+
+        ipcMain.handle('fs:unlink', async (event, path) => {
+            return await retry(async () => {
+                return await fs.unlink(path)
+            }, 5, 100, (err) => err.code === 'EPERM' || err.code === 'EBUSY')
+        })
+
         ipcMain.handle('fs:rename', async (event, path, newPath) => {
             return await retry(async () => {
                 return await fs.rename(path, newPath)
@@ -67,8 +79,8 @@ class FsService {
                 return {
                     isDirectory: stats.isDirectory(),
                     isFile: stats.isFile(),
-                    size: stats.size,
-                    mtimeMs: stats.mtimeMs
+                    size: stats.size || 0,
+                    mtimeMs: stats.mtimeMs || Date.now()
                 }
             } catch (e) {
                 return null

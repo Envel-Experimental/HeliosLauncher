@@ -25,7 +25,14 @@ const fs = {
             // Robust stat with retry for race conditions
             for (let i = 0; i < 3; i++) {
                 const res = await window.HeliosAPI?.ipc?.invoke('fs:stat', path)
-                if (res) return res
+                if (res) {
+                    // Wrap to provide standard Stats methods
+                    return {
+                        ...res,
+                        isDirectory: () => res.isDirectory,
+                        isFile: () => res.isFile
+                    }
+                }
                 await new Promise(r => setTimeout(r, 100))
             }
             // If we're here, it really doesn't exist
@@ -38,6 +45,12 @@ const fs = {
         },
         unlink: async (path) => {
             return await window.HeliosAPI?.ipc?.invoke('fs:unlink', path)
+        },
+        rmdir: async (path, opts) => {
+            return await window.HeliosAPI?.ipc?.invoke('fs:rmdir', path, opts)
+        },
+        rm: async (path, opts) => {
+            return await window.HeliosAPI?.ipc?.invoke('fs:rm', path, opts)
         },
         statfs: async (path) => {
             return await window.HeliosAPI?.ipc?.invoke('fs:statfs', path)

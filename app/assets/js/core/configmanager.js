@@ -302,10 +302,17 @@ exports.load = async function () {
     }
 }
 
+let saveEnabled = true
+
+exports.setSaveEnabled = (enabled) => {
+    saveEnabled = enabled
+}
+
 /**
  * Save the configuration.
  */
 exports.save = async function () {
+    if (!saveEnabled) return
     if (isRenderer) {
         await window.HeliosAPI.ipc.invoke('config:save', config)
         return
@@ -617,6 +624,12 @@ exports.getConfig = function () {
         firstLaunch
     }
 }
+
+exports.setConfig = function (newConfig) {
+    config = newConfig
+}
+
+exports.isSaveEnabled = () => saveEnabled
 
 exports.getSupportUrl = () => config?.supportUrl || DEFAULT_CONFIG.supportUrl
 exports.setSupportUrl = (url) => {

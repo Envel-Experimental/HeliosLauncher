@@ -103,17 +103,26 @@ export function setLaunchEnabled(val) {
  * Bind selected server
  */
 export async function updateSelectedServer(serv) {
-    console.log('[UIBinder] updateSelectedServer: requested server:', serv != null ? serv.rawServer.id : 'null')
+    const requestedId = serv != null ? serv.rawServer.id : 'null'
+    console.log(`[UIBinder] updateSelectedServer: requested server: ${requestedId}`)
+    
     if (getCurrentView() === VIEWS.settings) {
-        fullSettingsSave()
+        console.log('[UIBinder] updateSelectedServer: saving settings before switch...')
+        await fullSettingsSave()
     }
+    
     ConfigManager.setSelectedServer(serv != null ? serv.rawServer.id : null)
     const savedServer = ConfigManager.getSelectedServer()
-    console.log('[UIBinder] updateSelectedServer: ConfigManager now has:', savedServer)
+    console.log(`[UIBinder] updateSelectedServer: ConfigManager state updated to: ${savedServer}`)
+    
     await ConfigManager.save()
-    console.log('[UIBinder] updateSelectedServer: Config saved.')
+    console.log('[UIBinder] updateSelectedServer: Config saved to disk.')
+    
     const serverSelectionBtn = document.getElementById('server_selection_button')
-    serverSelectionBtn.innerHTML = (serv != null ? serv.rawServer.name : Lang.queryJS('landing.noSelection'))
+    if (serverSelectionBtn) {
+        serverSelectionBtn.innerHTML = (serv != null ? serv.rawServer.name : Lang.queryJS('landing.noSelection'))
+    }
+    
     if (getCurrentView() === VIEWS.settings) {
         animateSettingsTabRefresh()
     }
@@ -273,16 +282,26 @@ export function showFatalStartupError() {
  * @param {Object} data The distro index object.
  */
 export async function onDistroRefresh(data) {
-
     if (!data) return
 
-    let selectedServ = data.getServerById(ConfigManager.getSelectedServer())
+    const currentSelectedId = ConfigManager.getSelectedServer()
+    let selectedServ = data.getServerById(currentSelectedId)
+    
     if (selectedServ == null) {
+        console.log(`[UIBinder] onDistroRefresh: Current server ${currentSelectedId} not found in index. Falling back to main.`)
         selectedServ = data.getMainServer()
+        await updateSelectedServer(selectedServ)
+    } else {
+        // Just refresh the button text and status without a full config save/cycle
+        console.log(`[UIBinder] onDistroRefresh: Server ${currentSelectedId} is still valid. Updating UI.`)
+        const serverSelectionBtn = document.getElementById('server_selection_button')
+        if (serverSelectionBtn) {
+            serverSelectionBtn.innerHTML = selectedServ.rawServer.name
+        }
     }
-    await updateSelectedServer(selectedServ)
-    syncModConfigurations(data)
-    ensureJavaSettings(data)
+    
+    await syncModConfigurations(data)
+    await ensureJavaSettings(data)
 }
 
 /**
