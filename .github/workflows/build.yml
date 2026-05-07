@@ -136,7 +136,24 @@ jobs:
             npm run dist -- --mac
           fi
 
-        
+      - name: Apply Staging Percentage from Commit
+        if: success() && (runner.os == 'Windows' || github.event.head_commit.message != '1')
+        shell: bash
+        run: |
+          MSG="${{ github.event.head_commit.message }}"
+          if [[ "$MSG" =~ \[([0-9]+)%\] ]]; then
+            PERCENT="${BASH_REMATCH[1]}"
+            echo "Detected staging percentage: $PERCENT%"
+            FILES=$(ls dist/latest*.yml 2>/dev/null || true)
+            if [ -z "$FILES" ]; then
+              echo "No latest*.yml files found."
+            else
+              for f in $FILES; do
+                echo "stagingPercentage: $PERCENT" >> "$f"
+              done
+            fi
+          fi
+
       - name: List dist (Linux/macOS)
         if: runner.os != 'Windows' && (runner.os == 'Windows' || github.event.head_commit.message != '1')
         run: ls -la dist
