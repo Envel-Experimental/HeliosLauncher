@@ -18,13 +18,15 @@ async function runCommand(cmd, args, options = {}) {
             shell: false
         });
 
-        let stdout = Buffer.alloc(0);
-        let stderr = Buffer.alloc(0);
+        const stdoutChunks = [];
+        const stderrChunks = [];
 
-        process.stdout.on('data', (data) => { stdout = Buffer.concat([stdout, data]); });
-        process.stderr.on('data', (data) => { stderr = Buffer.concat([stderr, data]); });
+        process.stdout.on('data', (data) => { stdoutChunks.push(data); });
+        process.stderr.on('data', (data) => { stderrChunks.push(data); });
 
         process.on('close', (code) => {
+            const stdout = Buffer.concat(stdoutChunks);
+            const stderr = Buffer.concat(stderrChunks);
             if (code === 0) resolve({ stdout });
             else reject(new Error(`Command ${cmd} failed with code ${code}: ${stderr.toString()}`));
         });
@@ -35,33 +37,26 @@ async function runCommand(cmd, args, options = {}) {
     });
 }
 
-async function validateLocalFile(filePath, algo, hash, expectedSize, requireHash = false) {
-    if (hash == null) {
-        if (requireHash) {
-            // console.debug(`[Security] No hash provided for ${filePath}. Skipping validation.`);
-            return false;
-        }
-        
-        try {
-            const stat = await fs.stat(filePath);
-            if (expectedSize && stat.size !== expectedSize) {
-                return false;
-            }
-        } catch (e) {
-            return false;
-        }
-        
-        return true;
-    }
-
+async function validateLocalFile(filePath, algo, hash, expectedSize, requireHash = false, fastValidate = false) {
     try {
         const stat = await fs.stat(filePath);
         if (expectedSize && stat.size !== expectedSize) {
-            // console.debug(`[FileUtils] Size mismatch for ${path.basename(filePath)}: Expected ${expectedSize}, Got ${stat.size}`);
             return false;
+        }
+        
+        // Quick path: If fastValidate is enabled and size matches, assume valid.
+        if (fastValidate && !requireHash) {
+            return true;
         }
     } catch (e) {
         return false;
+    }
+
+    if (hash == null) {
+        if (requireHash) {
+            return false;
+        }
+        return true;
     }
 
     return new Promise((resolve, reject) => {

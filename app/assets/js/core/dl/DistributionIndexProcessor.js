@@ -27,7 +27,11 @@ class DistributionIndexProcessor extends IndexProcessor {
         return 1;
     }
 
-    async validate(onStageComplete) {
+    /**
+     * @param {boolean} [forceFullHash] Whether to force hash validation for all files.
+     */
+    async validate(onStageComplete, forceFullHash = false) {
+        this.forceFullHash = forceFullHash;
         const server = this.distribution.getServerById(this.serverId);
         if (server == null) {
             throw new AssetGuardError(`Invalid server id ${this.serverId}`);
@@ -59,8 +63,14 @@ class DistributionIndexProcessor extends IndexProcessor {
         };
         traverse(modules);
 
+        let processed = 0;
         const tasks = flatModules.map(module => {
             return limit(async () => {
+                // Yield to event loop every 50 files
+                if (++processed % 50 === 0) {
+                    await new Promise(resolve => setImmediate(resolve));
+                }
+
                 const modulePath = module.getPath();
                 const artifact = module.rawModule.artifact;
                 
@@ -77,7 +87,10 @@ class DistributionIndexProcessor extends IndexProcessor {
                     return null;
                 }
 
-                if (!await validateLocalFile(modulePath, algo, hash, artifact.size)) {
+                // Modules are fewer in number (~50-100), so we can afford full hashing
+                // to ensure updates work correctly even if size is identical.
+                // We still yield to the event loop to prevent UI hangs.
+                if (!await validateLocalFile(modulePath, algo, hash, artifact.size, false, false)) {
                     return {
                         id: module.rawModule.id,
                         force: module.rawModule.force,

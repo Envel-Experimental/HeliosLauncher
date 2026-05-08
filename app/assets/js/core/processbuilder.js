@@ -10,6 +10,7 @@ const { Type } = require('./common/DistributionClasses')
 const { mcVersionAtLeast } = require('./common/MojangUtils')
 const pathutil = require('./pathutil')
 const ConfigManager = require('./configmanager')
+const { pLimit } = require('./util/NodeUtil')
 
 // New Modules
 const ModConfigResolver = require('./game/ModConfigResolver')
@@ -69,11 +70,13 @@ class ProcessBuilder {
         const tempNativePath = this._setupTempNatives()
 
         // 1. Resolve Mods
+        logger.info('Resolving mod configuration...')
         this._setupLoaders()
         const modObj = this.modResolver.resolveModConfiguration(
             ConfigManager.getModConfiguration(this.server.rawServer.id).mods,
             this.server.modules
         )
+        logger.info(`Resolved ${modObj.fMods.length} Forge/Fabric mods and ${modObj.lMods.length} LiteLoader mods.`)
 
         // 2. Write Mod Lists (Pre-1.13)
         if (!mcVersionAtLeast('1.13', this.server.rawServer.minecraftVersion)) {
@@ -87,6 +90,7 @@ class ProcessBuilder {
         }
 
         // 3. Construct Arguments
+        logger.info('Constructing JVM arguments...')
         let args = await this.argBuilder.constructJVMArguments(
             modObj.fMods.concat(modObj.lMods),
             tempNativePath,
@@ -94,6 +98,7 @@ class ProcessBuilder {
             this.usingLiteLoader,
             this.llPath
         )
+        logger.info('JVM arguments constructed.')
 
         // 4. Mod List (1.13+)
         if (mcVersionAtLeast('1.13', this.server.rawServer.minecraftVersion)) {

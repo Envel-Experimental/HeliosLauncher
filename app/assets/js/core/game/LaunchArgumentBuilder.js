@@ -7,6 +7,7 @@ const { LoggerUtil } = require('../util/LoggerUtil')
 const { getMojangOS, isLibraryCompatible, mcVersionAtLeast } = require('../common/MojangUtils')
 const { Type } = require('../common/DistributionClasses')
 const ConfigManager = require('../configmanager')
+const { pLimit } = require('../util/NodeUtil')
 
 const logger = LoggerUtil.getLogger('LaunchArgumentBuilder')
 
@@ -392,8 +393,7 @@ class LaunchArgumentBuilder {
 
         await fs.mkdir(tempNativePath, { recursive: true })
 
-        // Dynamic import for ESM p-limit
-        const { default: pLimit } = await import('p-limit')
+        // Use internal pLimit to avoid ESM import stalls
         const limit = pLimit(8) // Concurrency 8
 
         // Track items to clean up after extraction to avoid race conditions (EPERM/ENOTEMPTY)

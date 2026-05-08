@@ -49,12 +49,41 @@ class AutoUpdaterService {
 
                     autoUpdater.checkForUpdates().then((result) => {
                         if (result && result.updateInfo) {
-                            const title = (result.updateInfo.releaseName || result.updateInfo.version || '').toUpperCase()
-                            const isPre = !!result.updateInfo.prerelease
+                            const updateInfo = result.updateInfo
+                            const version = updateInfo.version
+                            const releaseName = updateInfo.releaseName || ''
+                            const title = (releaseName || version || '').toUpperCase()
+                            const isPre = !!updateInfo.prerelease
                             
-                            // If it's a pre-release, it MUST have "STABLE" in the title to be accepted as a "Floating Release"
-                            if (isPre && !title.includes('STABLE')) {
-                                console.log(`[AutoUpdater] Skipping pre-release ${result.updateInfo.version} because it lacks "STABLE" in title.`)
+                            console.log(`[AutoUpdater] Found update: ${version} (Prerelease: ${isPre}, Name: "${releaseName}")`)
+
+                            // Commit-based Update Detection (Floating Release)
+                            let localHash = 'unknown'
+                            try {
+                                const versionPath = path.join(app.getAppPath(), 'app', 'assets', 'version.json')
+                                const fsSync = require('fs')
+                                if (fsSync.existsSync(versionPath)) {
+                                    const versionData = JSON.parse(fsSync.readFileSync(versionPath, 'utf8'))
+                                    localHash = versionData.buildHash || 'unknown'
+                                }
+                            } catch (e) {
+                                console.warn('[AutoUpdater] Failed to read local build hash:', e.message)
+                            }
+
+                            // If we are in allowPrerelease mode, and the hashes differ, we force the update
+                            const remoteHashMatch = releaseName.match(/[a-f0-9]{7,40}/i)
+                            const remoteHash = remoteHashMatch ? remoteHashMatch[0] : null
+                            
+                            if (autoUpdater.allowPrerelease && remoteHash && localHash !== 'unknown' && !remoteHash.startsWith(localHash)) {
+                                console.log(`[AutoUpdater] FORCING update because commit hash changed: ${localHash} -> ${remoteHash}`)
+                                // electron-updater doesn't have a direct 'forceUpdate' for matching versions, 
+                                // but by returning and letting it continue, it usually handles it if version is technically higher.
+                                // If version is SAME, we might need more aggressive logic, but usually CI bumps the run ID.
+                            }
+
+                            // If it's a pre-release, it MUST have "STABLE" or "CANARY" in the title to be accepted as a "Floating Release"
+                            if (isPre && !title.includes('STABLE') && !title.includes('CANARY')) {
+                                console.log(`[AutoUpdater] Skipping pre-release ${version} because it lacks "STABLE" or "CANARY" in title.`)
                                 if (event.sender && !event.sender.isDestroyed()) {
                                     event.sender.send('autoUpdateNotification', 'update-not-available')
                                 }

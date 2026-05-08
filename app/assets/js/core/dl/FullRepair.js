@@ -41,7 +41,7 @@ class FullRepair {
         // No-op
     }
 
-    async verifyFiles(onProgress) {
+    async verifyFiles(onProgress, forceFullHash = false) {
         const api = new DistributionAPI(
             this.launcherDirectory,
             this.commonDirectory,
@@ -75,7 +75,7 @@ class FullRepair {
                 completedStages++;
                 const percent = Math.trunc((completedStages / numStages) * 100);
                 if (onProgress) onProgress(percent);
-            });
+            }, forceFullHash);
 
             Object.values(result)
                 .flatMap(asset => asset)
