@@ -10,7 +10,7 @@ const { LoggerUtil } = require('../util/LoggerUtil');
 const { handleFetchError } = require('../common/RestResponse');
 const { MOJANG_MIRRORS, DISTRO_PUB_KEYS } = require('../../../../../network/config');
 const { pLimit } = require('../util/NodeUtil');
-require('../configmanager');
+
 const MirrorManager = require('../../../../../network/MirrorManager');
 const { verifyDistribution } = require('../util/SignatureUtils');
 
@@ -21,18 +21,19 @@ class MojangIndexProcessor extends IndexProcessor {
     static ASSET_RESOURCE_ENDPOINT = 'https://resources.download.minecraft.net';
     static LAUNCHER_META_BASE = 'https://launchermeta.mojang.com';
     static logger = LoggerUtil.getLogger('MojangIndexProcessor');
+    static mirrorManifestCache = new Map();
+    static versionJsonCache = new Map();
 
     constructor(commonDir, version) {
         super(commonDir);
         this.version = version;
         this.assetPath = path.join(commonDir, 'assets');
-        this.mirrorManifestCache = new Map();
     }
 
     async getMirrorManifest(mirror) {
         if (!mirror.version_manifest) return null;
-        if (this.mirrorManifestCache.has(mirror.version_manifest)) {
-            return this.mirrorManifestCache.get(mirror.version_manifest);
+        if (MojangIndexProcessor.mirrorManifestCache.has(mirror.version_manifest)) {
+            return MojangIndexProcessor.mirrorManifestCache.get(mirror.version_manifest);
         }
 
         try {
@@ -66,7 +67,7 @@ class MojangIndexProcessor extends IndexProcessor {
             }
 
             const manifest = JSON.parse(rawBuffer.toString('utf-8'));
-            this.mirrorManifestCache.set(mirror.version_manifest, manifest);
+            MojangIndexProcessor.mirrorManifestCache.set(mirror.version_manifest, manifest);
             return manifest;
         } catch (e) {
             return null;
@@ -98,8 +99,13 @@ class MojangIndexProcessor extends IndexProcessor {
     }
 
     async getVersionJson() {
+        if (MojangIndexProcessor.versionJsonCache.has(this.version)) {
+            return MojangIndexProcessor.versionJsonCache.get(this.version);
+        }
         const versionManifest = await this.loadVersionManifest();
-        return await this.loadVersionJson(this.version, versionManifest);
+        this.versionJson = await this.loadVersionJson(this.version, versionManifest);
+        MojangIndexProcessor.versionJsonCache.set(this.version, this.versionJson);
+        return this.versionJson;
     }
 
     async loadAssetIndex(versionJson) {

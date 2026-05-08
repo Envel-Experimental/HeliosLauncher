@@ -97,6 +97,7 @@ class DistributionIndexProcessor extends IndexProcessor {
     }
 
     async loadModLoaderVersionJson() {
+        if (this.modLoaderData) return this.modLoaderData;
         const server = this.distribution.getServerById(this.serverId);
         if (server == null) {
             throw new AssetGuardError(`Invalid server id ${this.serverId}`);
@@ -119,6 +120,7 @@ class DistributionIndexProcessor extends IndexProcessor {
                 const writePath = getVersionJsonPath(this.commonDir, data.id);
                 await safeEnsureDir(path.dirname(writePath));
                 await fs.writeFile(writePath, JSON.stringify(data));
+                this.modLoaderData = data;
                 return data;
             } catch (e) {
                 throw new AssetGuardError('Failed to extract version.json from modloader', e);
@@ -131,7 +133,8 @@ class DistributionIndexProcessor extends IndexProcessor {
         if (versionManifstModule == null) {
             throw new AssetGuardError('No mod loader version manifest module found!');
         }
-        return JSON.parse(await fs.readFile(versionManifstModule.getPath(), 'utf-8'));
+        this.modLoaderData = JSON.parse(await fs.readFile(versionManifstModule.getPath(), 'utf-8'));
+        return this.modLoaderData;
     }
 
     static isForgeGradle3(mcVersion, forgeVersion) {

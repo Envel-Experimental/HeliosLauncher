@@ -632,54 +632,10 @@ async function dlAsync(login = true) {
         if (!skip) return
     }
 
-    // Receiver destruction moved to Main.
-
     if (isOfflineLaunch) {
         setLaunchDetails(Lang.queryJS('landing.dlAsync.launchingOffline'))
     } else {
         setLaunchDetails(Lang.queryJS('landing.dlAsync.preparingToLaunch'))
-    }
-
-    const mojangIndexProcessor = new MojangIndexProcessor(
-        await ConfigManager.getCommonDirectory(),
-        serv.rawServer.minecraftVersion)
-    await mojangIndexProcessor.init()
-    const distributionIndexProcessor = new DistributionIndexProcessor(
-        await ConfigManager.getCommonDirectory(),
-        distro,
-        serv.rawServer.id
-    )
-
-    let modLoaderData
-    try {
-        modLoaderData = await distributionIndexProcessor.loadModLoaderVersionJson(serv)
-    } catch (err) {
-        loggerLaunchSuite.error('Error loading ModLoader data', err)
-        if (isOfflineLaunch || DistroAPI._remoteFailed) {
-            showLaunchFailure(Lang.queryJS('landing.dlAsync.launchingOffline'), 'Required ModLoader files are missing! Cannot launch offline.<br>Please connect to the internet and try again.')
-            return
-        } else {
-            showLaunchFailure(Lang.queryJS('landing.dlAsync.fatalError'), 'Failed to load ModLoader version data.<br>' + err.message)
-            return
-        }
-    }
-    let versionData
-    let mojangOffline = false
-    try {
-        versionData = await mojangIndexProcessor.getVersionJson()
-    } catch (err) {
-        loggerLaunchSuite.warn('Unable to load Mojang version data, attempting to load from local cache.', err)
-        versionData = await mojangIndexProcessor.getLocalVersionJson()
-        if (!versionData) {
-            loggerLaunchSuite.error('Unable to load Mojang version data from local cache.')
-            showLaunchFailure(Lang.queryJS('landing.dlAsync.fatalError'), Lang.queryJS('landing.dlAsync.unableToLoadMojangVersionData'))
-            return
-        }
-        mojangOffline = true
-    }
-
-    if (DistroAPI._remoteFailed || isOfflineLaunch || mojangOffline) {
-        showOfflineWarning()
     }
 
     if (login) {
