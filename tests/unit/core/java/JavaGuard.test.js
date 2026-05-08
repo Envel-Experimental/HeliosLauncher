@@ -77,7 +77,8 @@ describe('JavaGuard', () => {
                 java_manifest: 'http://fast/manifest.json'
             }])
 
-            const mockManifest = { windows: { x64: { '17': { url: 'http://fast/java', size: 100, name: 'java17', sha1: 'abc' } } } }
+            const currentPlatform = process.platform === 'win32' ? 'windows' : (process.platform === 'darwin' ? 'mac' : process.platform)
+            const mockManifest = { [currentPlatform]: { x64: { '17': { url: 'http://fast/java', size: 100, name: 'java17', sha1: 'abc' } } } }
             
             global.fetch.mockResolvedValueOnce({
                 ok: true,
@@ -103,8 +104,8 @@ describe('JavaGuard', () => {
                     json: () => Promise.resolve([{
                         version: { major: 17 },
                         binary: {
-                            os: 'windows',
-                            image_type: 'jdk',
+                            os: process.platform === 'win32' ? 'windows' : (process.platform === 'darwin' ? 'mac' : process.platform),
+                        image_type: 'jdk',
                             architecture: 'x64',
                             package: { link: 'http://official/java', size: 200, name: 'java17-official.zip', checksum: 'def' }
                         }

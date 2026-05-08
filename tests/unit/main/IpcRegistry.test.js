@@ -268,7 +268,7 @@ describe('IpcRegistry', () => {
 
         it('should handle system:getSystemInfo', async () => {
             const result = await handlers['system:getSystemInfo']()
-            expect(result).toHaveProperty('platform', 'win32')
+            expect(result).toHaveProperty('platform', process.platform)
             expect(result).toHaveProperty('totalmem')
         })
 

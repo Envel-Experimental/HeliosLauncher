@@ -112,7 +112,8 @@ describe('LaunchArgumentBuilder Detailed Tests', () => {
 
         expect(args).toContain('Player')
         expect(args).toContain('-Djava.library.path=/natives')
-        expect(args).toContain('cp1.jar;cp2.jar')
+        const sep = process.platform === 'win32' ? ';' : ':'
+        expect(args).toContain(`cp1.jar${sep}cp2.jar`)
     })
 
     test('_resolveSanitizedJMArgs should remove forbidden flags and add G1GC', () => {

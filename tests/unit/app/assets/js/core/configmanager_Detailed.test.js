@@ -1,3 +1,4 @@
+const path = require('path')
 describe('ConfigManager Detailed Tests', () => {
     let ConfigManager
     let fs
@@ -87,9 +88,12 @@ describe('ConfigManager Detailed Tests', () => {
     describe('Config Loading (Main)', () => {
         test('load should migrate legacy config if it exists', async () => {
             const fsSync = require('fs')
+            const mockLauncherDir = path.join('MockLauncherDir', 'config.json')
+            const mockUserData = path.join('MockUserData', 'config.json')
+
             jest.spyOn(fsSync, 'existsSync').mockImplementation((p) => {
-                if (p.includes('C:\\MockLauncherDir\\config.json')) return false
-                if (p.includes('C:\\MockUserData\\config.json')) return true
+                if (p.includes(mockLauncherDir)) return false
+                if (p.includes(mockUserData)) return true
                 return false
             })
             util.safeReadJson.mockResolvedValue({ settings: {} })
@@ -97,8 +101,8 @@ describe('ConfigManager Detailed Tests', () => {
             await ConfigManager.load()
 
             expect(util.move).toHaveBeenCalledWith(
-                expect.stringContaining('C:\\MockUserData'),
-                expect.stringContaining('C:\\MockLauncherDir')
+                expect.stringContaining('MockUserData'),
+                expect.stringContaining('MockLauncherDir')
             )
         })
 
