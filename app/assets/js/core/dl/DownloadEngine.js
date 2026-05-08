@@ -239,10 +239,12 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
         await fs.access(decodedPath);
 
         // Mutable File Handling: Skip validation for configs and ANYTHING in instances
+        // EXCEPTION: Asset indexes must ALWAYS be validated as they are critical and immutable by nature.
         const isInstanceFile = decodedPath.replace(/\\/g, '/').includes('/instances/');
         const isConfig = CONFIG_EXTENSIONS.includes(path.extname(decodedPath));
+        const isAssetIndex = decodedPath.replace(/\\/g, '/').includes('/assets/indexes/');
 
-        if (!asset.force && (isConfig || isInstanceFile)) {
+        if (!asset.force && !isAssetIndex && (isConfig || isInstanceFile)) {
             log.debug(`Skipping validation/download of mutable file: ${decodedPath}`);
             if (onProgress) onProgress(asset.size);
             return;

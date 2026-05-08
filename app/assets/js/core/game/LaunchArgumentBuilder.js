@@ -98,7 +98,39 @@ class LaunchArgumentBuilder {
         // Forge Arguments
         args = args.concat(this._resolveForgeArgs(usingLiteLoader, llPath))
 
-        return args
+        // Ensure -XstartOnFirstThread is present on macOS to prevent window creation issues
+        if (process.platform === 'darwin') {
+            if (!args.includes('-XstartOnFirstThread')) {
+                args.unshift('-XstartOnFirstThread')
+            }
+            // Additional macOS properties for stability
+            args.push('-Dapple.laf.useScreenMenuBar=true')
+            args.push('-Dapple.awt.showGrowBox=true')
+            args.push('-Djava.net.preferIPv4Stack=true')
+            args.push('-Dorg.lwjgl.util.NoChecks=true')
+        }
+
+        const finalArgs = []
+        for (let i = 0; i < args.length; i++) {
+            const arg = args[i]
+            if (arg == null) continue
+
+            if (typeof arg === 'string') {
+                const lower = arg.toLowerCase()
+                // Block ALL quickPlay variants and server/port
+                if (lower.startsWith('--quickplay') || lower === '--server' || lower === '--port') {
+                    i++ // Skip the value
+                    continue
+                }
+                // Block unresolved placeholders like ${clientid}
+                if (arg.startsWith('${') && arg.endsWith('}')) {
+                    continue
+                }
+            }
+            finalArgs.push(arg)
+        }
+
+        return finalArgs
     }
 
     /**
@@ -141,29 +173,43 @@ class LaunchArgumentBuilder {
         // Process Argument Rules (Allow/Disallow based on OS/Features)
         for (let i = 0; i < args.length; i++) {
             if (typeof args[i] === 'object' && args[i].rules != null) {
-                let checksum = 0
+                let allow = false
                 for (let rule of args[i].rules) {
+                    let match = true
                     if (rule.os != null) {
-                        if (rule.os.name === getMojangOS()
-                            && (rule.os.version == null || new RegExp(rule.os.version).test(os.release))) {
-                            if (rule.action === 'allow') checksum++
-                        } else {
-                            if (rule.action === 'disallow') checksum++
+                        if (rule.os.name != null && rule.os.name !== getMojangOS()) {
+                            match = false
                         }
-                    } else if (rule.features != null) {
-                        if (rule.features.has_custom_resolution && ConfigManager.getFullscreen()) {
-                            args[i].value = ['--fullscreen', 'true']
-                            checksum++
+                        if (rule.os.arch != null && rule.os.arch !== process.arch) {
+                            if (!(rule.os.arch === 'aarch64' && process.arch === 'arm64')) {
+                                match = false
+                            }
                         }
+                        if (rule.os.version != null && !new RegExp(rule.os.version).test(os.release())) {
+                            match = false
+                        }
+                    }
+                    if (rule.features != null) {
+                        if (rule.features.has_custom_resolution != null && rule.features.has_custom_resolution !== ConfigManager.getFullscreen()) {
+                            match = false
+                        }
+                        if (rule.features.is_demo_user != null && rule.features.is_demo_user !== (this.authUser.type === 'demo')) {
+                            match = false
+                        }
+                    }
+
+                    if (match) {
+                        allow = rule.action === 'allow'
                     }
                 }
-                if (checksum === args[i].rules.length) {
+
+                if (allow) {
                     if (typeof args[i].value === 'string') {
                         args[i] = args[i].value
-                    } else if (typeof args[i].value === 'object') {
+                    } else if (Array.isArray(args[i].value)) {
                         args.splice(i, 1, ...args[i].value)
+                        i--
                     }
-                    i--
                 } else {
                     args[i] = null
                 }
@@ -196,7 +242,40 @@ class LaunchArgumentBuilder {
 
         this._processAutoConnectArg(args)
         args = args.concat(this.modManifest.arguments.game)
-        return args.filter(arg => arg != null)
+
+        // Ensure -XstartOnFirstThread is present on macOS to prevent window creation issues
+        if (process.platform === 'darwin') {
+            if (!args.includes('-XstartOnFirstThread')) {
+                args.unshift('-XstartOnFirstThread')
+            }
+            // Additional macOS properties for stability
+            args.push('-Dapple.laf.useScreenMenuBar=true')
+            args.push('-Dapple.awt.showGrowBox=true')
+            args.push('-Djava.net.preferIPv4Stack=true')
+            args.push('-Dorg.lwjgl.util.NoChecks=true')
+        }
+
+        const finalArgs = []
+        for (let i = 0; i < args.length; i++) {
+            const arg = args[i]
+            if (arg == null) continue
+
+            if (typeof arg === 'string') {
+                const lower = arg.toLowerCase()
+                // Block ALL quickPlay variants and server/port
+                if (lower.startsWith('--quickplay') || lower === '--server' || lower === '--port') {
+                    i++ // Skip the value
+                    continue
+                }
+                // Block unresolved placeholders like ${clientid}
+                if (arg.startsWith('${') && arg.endsWith('}')) {
+                    continue
+                }
+            }
+            finalArgs.push(arg)
+        }
+
+        return finalArgs
     }
 
     /**
@@ -263,13 +342,7 @@ class LaunchArgumentBuilder {
      * Helper to inject auto-connect arguments if enabled.
      */
     _processAutoConnectArg(args) {
-        if (ConfigManager.getAutoConnect() && this.server.rawServer.autoconnect) {
-            if (mcVersionAtLeast('1.20', this.server.rawServer.minecraftVersion)) {
-                args.push('--quickPlayMultiplayer', `${this.server.hostname}:${this.server.port}`)
-            } else {
-                args.push('--server', this.server.hostname, '--port', this.server.port)
-            }
-        }
+        // Feature disabled to prevent launch stability issues and environment-specific crashes.
     }
 
     /**
@@ -380,8 +453,13 @@ class LaunchArgumentBuilder {
 
     async _extractNativeNew(lib, tempNativePath, nativesRegex) {
         const regexTest = nativesRegex.exec(lib.name)
-        const arch = regexTest[2] ?? 'x64'
-        if (arch != process.arch) return null
+        let arch = regexTest[2] ?? 'x64'
+        if (arch !== process.arch) {
+            // Support aarch64 synonym for arm64
+            if (!(arch === 'aarch64' && process.arch === 'arm64')) {
+                return null
+            }
+        }
 
         const exclusionArr = lib.extract != null ? lib.extract.exclude : ['META-INF/', '.git', '.sha1']
         const artifact = lib.downloads.artifact

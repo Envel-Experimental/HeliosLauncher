@@ -113,26 +113,46 @@ class ProcessBuilder {
             }
         }
 
+        const filteredArgs = []
+        for (let i = 0; i < args.length; i++) {
+            const arg = args[i]
+            if (arg == null) continue
+            if (typeof arg === 'string') {
+                const lower = arg.toLowerCase()
+                if (lower.startsWith('--quickplay') || lower === '--server' || lower === '--port') {
+                    i++ // Skip the value
+                    continue
+                }
+                if (arg.startsWith('${') && arg.endsWith('}')) {
+                    continue
+                }
+            }
+            filteredArgs.push(arg)
+        }
+        args = filteredArgs
+
         const sanitizedArgs = args.map((arg, index, arr) => {
             if (index > 0 && (arr[index - 1] === '--accessToken' || arr[index - 1] === '--uuid')) return '***'
             return arg
         })
-        logger.info('Launch Arguments:', sanitizedArgs)
 
         // 6. Spawn Process
-        const javaPath = ConfigManager.getJavaExecutable(this.server.rawServer.id)
+        const resolvedJavaPath = ConfigManager.getJavaExecutable(this.server.rawServer.id)
 
-        if (!javaPath || !fs.existsSync(javaPath)) {
+        if (!resolvedJavaPath || !fs.existsSync(resolvedJavaPath)) {
             throw new Error('Не удалось найти Java. Проверьте настройки в разделе Java.')
         }
 
         try {
-            fs.accessSync(javaPath, fs.constants.X_OK)
+            fs.accessSync(resolvedJavaPath, fs.constants.X_OK)
         } catch (e) {
             throw new Error('Проблема с доступом к файлам Java (недостаточно прав).')
         }
 
-        const child = child_process.spawn(javaPath, args, {
+        logger.info('Launch Arguments:', sanitizedArgs)
+        logger.info('Full Command:', [resolvedJavaPath, ...args].join(' '))
+
+        const child = child_process.spawn(resolvedJavaPath, args, {
             cwd: this.gameDir,
             detached: ConfigManager.getLaunchDetached()
         })
