@@ -312,17 +312,16 @@ class LaunchArgumentBuilder {
 
         await fs.mkdir(tempNativePath, { recursive: true })
 
-        // Dynamic import for ESM p-limit
-        const { default: pLimit } = await import('p-limit')
-        const limit = pLimit(8) // Concurrency 8
-
-        // Track items to clean up after extraction to avoid race conditions (EPERM/ENOTEMPTY)
-        // Access to this set must be synchronized or just pushing is fine in JS event loop (single threaded)
-        // Set to avoid duplicates
+        // Use a simple internal pool to avoid p-limit (ESM) import issues in CJS
+        const limit = 8
+        const executing = new Set()
+        const tasks = []
         const globalExclusions = new Set()
 
-        const tasks = libArr.map(lib => {
-            return limit(async () => {
+        logger.info(`Extracting ${libArr.length} Mojang libraries...`)
+
+        for (const lib of libArr) {
+            const p = (async () => {
                 if (!isLibraryCompatible(lib.rules, lib.natives)) return
 
                 let exclusions = []
@@ -342,10 +341,19 @@ class LaunchArgumentBuilder {
                 if (exclusions) {
                     exclusions.forEach(e => globalExclusions.add(e))
                 }
-            })
-        })
+            })()
+
+            tasks.push(p)
+            executing.add(p)
+            p.then(() => executing.delete(p)).catch(() => executing.delete(p))
+
+            if (executing.size >= limit) {
+                await Promise.race(executing)
+            }
+        }
 
         await Promise.all(tasks)
+        logger.info('Mojang libraries extraction complete.')
 
         // Post-Extraction Cleanup (Synchronized)
         // Remove META-INF and other exclusions *after* all files are extracted.

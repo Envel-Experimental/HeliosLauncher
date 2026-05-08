@@ -49,14 +49,17 @@ class LauncherService {
         const pb = new ProcessBuilder(serv, versionData, modLoaderData, authUser, app.getVersion())
         
         const { LogBatcher } = require('../assets/js/core/util/LogBatcher')
-        const logBatcher = new LogBatcher((combined) => {
-            if (event && event.sender && !event.sender.isDestroyed()) {
-                event.sender.send('launcher:log', combined)
-            }
-        })
-
+        
+        log.info('Starting pb.build()...')
         try {
             this.activeProcess = await pb.build()
+            log.info('pb.build() successful.')
+            
+            const logBatcher = new LogBatcher((combined) => {
+                if (event && event.sender && !event.sender.isDestroyed()) {
+                    event.sender.send('launcher:log', combined)
+                }
+            })
             
             this.activeProcess.stdout.on('data', (data) => logBatcher.enqueue(data))
             this.activeProcess.stderr.on('data', (data) => logBatcher.enqueue(data))

@@ -182,4 +182,32 @@ describe('LaunchArgumentBuilder', () => {
             expect(libs['lib1-sub']).toBe('path/to/lib1-sub.jar')
         })
     })
+
+    describe('_resolveMojangLibraries', () => {
+        it('should correctly process library extraction loop', async () => {
+            const vanillaManifest = {
+                libraries: [
+                    {
+                        name: 'com.mojang:authlib:4.0.43',
+                        downloads: { artifact: { path: 'com/mojang/authlib/4.0.43/authlib-4.0.43.jar' } }
+                    },
+                    {
+                        name: 'org.lwjgl:lwjgl:3.3.1:natives-windows',
+                        rules: [{ action: 'allow', os: { name: 'windows' } }],
+                        natives: { windows: 'natives-windows' },
+                        downloads: { classifiers: { 'natives-windows': { path: 'org/lwjgl/lwjgl/3.3.1/lwjgl-3.3.1-natives-windows.jar' } } }
+                    }
+                ]
+            }
+            const builder = new LaunchArgumentBuilder(mockServer, vanillaManifest, {}, mockAuthUser, '1.0.0', 'game', 'common')
+            
+            // Mock native extraction to avoid real FS zip operations but keep the loop logic
+            builder._extractNative = jest.fn().mockResolvedValue(['META-INF/'])
+            
+            const libs = await builder._resolveMojangLibraries('tempNatives')
+            
+            expect(libs['com.mojang:authlib']).toBeDefined()
+            expect(builder._extractNative).toHaveBeenCalled()
+        })
+    })
 })
