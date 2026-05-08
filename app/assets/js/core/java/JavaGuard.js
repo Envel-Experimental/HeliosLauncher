@@ -90,15 +90,22 @@ async function getHotSpotSettings(execPath) {
     return ret;
 }
 
+const jvmSettingsCache = new Map();
+
 async function resolveJvmSettings(paths) {
     const ret = {};
-    for (const path of paths) {
-        const settings = await getHotSpotSettings(javaExecFromRoot(path));
+    for (const p of paths) {
+        if (jvmSettingsCache.has(p)) {
+            ret[p] = jvmSettingsCache.get(p);
+            continue;
+        }
+        const settings = await getHotSpotSettings(javaExecFromRoot(p));
         if (settings != null) {
-            ret[path] = settings;
+            ret[p] = settings;
+            jvmSettingsCache.set(p, settings);
         }
         else {
-            log.warn(`Skipping invalid JVM candidate: ${path}`);
+            log.warn(`Skipping invalid JVM candidate: ${p}`);
         }
     }
     return ret;
@@ -108,7 +115,7 @@ function filterApplicableJavaPaths(resolvedSettings, semverRange) {
     const arm = process.arch === 'arm64';
     const jvmDetailsUnfiltered = Object.entries(resolvedSettings)
         .filter(([, settings]) => parseInt(settings['sun.arch.data.model']) === 64)
-        .filter(([, settings]) => arm ? settings['os.arch'] === 'aarch64' : true)
+        .filter(([, settings]) => arm ? (settings['os.arch'] === 'aarch64' || settings['os.arch'] === 'arm64') : true)
         .map(([path, settings]) => {
             const parsedVersion = parseJavaRuntimeVersion(settings['java.version']);
             if (parsedVersion == null) {

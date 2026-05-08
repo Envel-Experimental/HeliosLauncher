@@ -13,22 +13,26 @@ function getMojangOS() {
 }
 
 function validateLibraryRules(rules) {
-    if (rules == null) {
-        return false;
-    }
+    if (rules == null) return false
     for (const rule of rules) {
         if (rule.action != null && rule.os != null) {
-            const osName = rule.os.name;
-            const osMoj = getMojangOS();
-            if (rule.action === 'allow') {
-                return osName === osMoj;
+            let match = true
+            if (rule.os.name && rule.os.name !== getMojangOS()) match = false
+            if (rule.os.arch && rule.os.arch !== process.arch) {
+                // Support aarch64 synonym for arm64
+                if (!(rule.os.arch === 'aarch64' && process.arch === 'arm64')) {
+                    match = false
+                }
             }
-            else if (rule.action === 'disallow') {
-                return osName !== osMoj;
+            
+            if (rule.action === 'allow') {
+                return match
+            } else if (rule.action === 'disallow') {
+                return !match
             }
         }
     }
-    return true;
+    return true
 }
 
 function validateLibraryNatives(natives) {
