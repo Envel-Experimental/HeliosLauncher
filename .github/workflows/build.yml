@@ -112,19 +112,6 @@ jobs:
         run: |
           # 1. Метаданные релиза
           VERSION=$(node -p "require('./package.json').version")
-          
-          # If on master and NOT a release commit, bump version for canary
-          if [[ "$BRANCH_NAME" == "master" && "${{ github.event.head_commit.message }}" != "release" ]]; then
-            # Simple bump: change 3.0.0 to 3.0.1-canary.RUN_ID
-            BASE_VERSION=$(echo $VERSION | cut -d. -f1-2)
-            PATCH_VERSION=$(echo $VERSION | cut -d. -f3)
-            NEW_PATCH=$((PATCH_VERSION + 1))
-            CANARY_VERSION="${BASE_VERSION}.${NEW_PATCH}-canary.${{ github.run_number }}"
-            echo "Bumping version to $CANARY_VERSION for Canary build"
-            npm version $CANARY_VERSION --no-git-tag-version
-            VERSION=$CANARY_VERSION
-          fi
-
           SHA_SHORT=$(git rev-parse --short HEAD)
           RELEASE_NAME="FLauncher@$VERSION+$SHA_SHORT"
 
@@ -219,15 +206,15 @@ jobs:
           elif [[ "$BRANCH" == "master" && "${{ github.event.head_commit.message }}" == "release" ]]; then
             echo "tag_name=release-${{ github.run_id }}" >> $GITHUB_OUTPUT
             echo "prerelease=false"                 >> $GITHUB_OUTPUT
-            echo "release_name=Release build [${COMMIT:0:7}]"         >> $GITHUB_OUTPUT
+            echo "release_name=Release build"         >> $GITHUB_OUTPUT
           elif [[ "$BRANCH" == "master" ]]; then
             echo "tag_name=prerelease-${{ github.run_id }}" >> $GITHUB_OUTPUT
             echo "prerelease=true"                         >> $GITHUB_OUTPUT
-            echo "release_name=Prerelease build from master [${COMMIT:0:7}]" >> $GITHUB_OUTPUT
+            echo "release_name=Prerelease build from master" >> $GITHUB_OUTPUT
           else
             echo "tag_name=beta-${BRANCH}-${{ github.run_id }}" >> $GITHUB_OUTPUT
             echo "prerelease=true"                              >> $GITHUB_OUTPUT
-            echo "release_name=Beta build from ${BRANCH} [${COMMIT:0:7}]"       >> $GITHUB_OUTPUT
+            echo "release_name=Beta build from ${BRANCH}"       >> $GITHUB_OUTPUT
           fi
 
           echo "branch=$BRANCH" >> $GITHUB_OUTPUT

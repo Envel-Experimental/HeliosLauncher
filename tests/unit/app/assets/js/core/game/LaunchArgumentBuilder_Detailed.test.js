@@ -126,7 +126,7 @@ describe('LaunchArgumentBuilder Detailed Tests', () => {
         expect(sanitized).toContain('-Xmx2G')
     })
 
-    test('_processAutoConnectArg should NOT add server/port for older versions (feature disabled)', () => {
+    test('_processAutoConnectArg should add server/port for older versions', () => {
         const builder = new LaunchArgumentBuilder(mockServer, mockVanilla, mockMod, mockUser, '1.0.0', '/game', '/common')
         ConfigManager.getAutoConnect.mockReturnValue(true)
         mockServer.rawServer.autoconnect = true
@@ -136,11 +136,12 @@ describe('LaunchArgumentBuilder Detailed Tests', () => {
         const args = []
         builder._processAutoConnectArg(args)
         
-        expect(args).not.toContain('--server')
-        expect(args).toHaveLength(0)
+        expect(args).toContain('--server')
+        expect(args).toContain('play.server.com')
+        expect(args).toContain(25565)
     })
 
-    test('_processAutoConnectArg should NOT add quickPlayMultiplayer for 1.20+ (feature disabled)', () => {
+    test('_processAutoConnectArg should add quickPlayMultiplayer for 1.20+', () => {
         const builder = new LaunchArgumentBuilder(mockServer, mockVanilla, mockMod, mockUser, '1.0.0', '/game', '/common')
         ConfigManager.getAutoConnect.mockReturnValue(true)
         mockServer.rawServer.autoconnect = true
@@ -150,7 +151,7 @@ describe('LaunchArgumentBuilder Detailed Tests', () => {
         const args = []
         builder._processAutoConnectArg(args)
         
-        expect(args).not.toContain('--quickPlayMultiplayer')
-        expect(args).toHaveLength(0)
+        expect(args).toContain('--quickPlayMultiplayer')
+        expect(args).toContain('play.server.com:25565')
     })
 })

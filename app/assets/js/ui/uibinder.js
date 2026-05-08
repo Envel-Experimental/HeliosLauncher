@@ -276,18 +276,13 @@ export function showFatalStartupError() {
     }, 750)
 }
 
-let isRefreshingDistro = false
 /**
  * Common functions to perform after refreshing the distro index.
  *
  * @param {Object} data The distro index object.
  */
 export async function onDistroRefresh(data) {
-    if (!data || isRefreshingDistro) return
-    isRefreshingDistro = true
-    console.log('[UIBinder] Starting onDistroRefresh...')
-    
-    try {
+    if (!data) return
 
     const currentSelectedId = ConfigManager.getSelectedServer()
     let selectedServ = data.getServerById(currentSelectedId)
@@ -305,14 +300,8 @@ export async function onDistroRefresh(data) {
         }
     }
     
-        await syncModConfigurations(data)
-        await ensureJavaSettings(data)
-    } catch (err) {
-        console.error('[UIBinder] Error during onDistroRefresh:', err)
-    } finally {
-        isRefreshingDistro = false
-        console.log('[UIBinder] onDistroRefresh complete.')
-    }
+    await syncModConfigurations(data)
+    await ensureJavaSettings(data)
 }
 
 /**

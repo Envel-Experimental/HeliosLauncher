@@ -105,7 +105,6 @@ contextBridge.exposeInMainWorld('HeliosAPI', {
         onLog: (callback) => ipcRenderer.on('launcher:log', (e, data) => callback(data)),
         onLogError: (callback) => ipcRenderer.on('launcher:log-error', (e, data) => callback(data)),
         onExit: (callback) => ipcRenderer.on('launcher:exit', (e, code) => callback(code)),
-        removeAllListeners: (channel) => ipcRenderer.removeAllListeners(`launcher:${channel}`),
         terminate: () => ipcRenderer.send('launcher:terminate')
     },
     // System & OS Info (Safe versions)

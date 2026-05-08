@@ -91,22 +91,22 @@ describe('LaunchArgumentBuilder', () => {
     })
 
     describe('_processAutoConnectArg', () => {
-        it('should NOT add server/port for older versions (feature disabled)', () => {
+        it('should add server/port for older versions', () => {
             MojangUtils.mcVersionAtLeast.mockReturnValue(false)
             const args = []
             builder._processAutoConnectArg(args)
-            expect(args).not.toContain('--server')
-            expect(args).toHaveLength(0)
+            expect(args).toContain('--server')
+            expect(args).toContain('play.test.com')
         })
 
-        it('should NOT add quickPlayMultiplayer for 1.20+ (feature disabled)', () => {
+        it('should add quickPlayMultiplayer for 1.20+', () => {
             // Force mcVersionAtLeast to return true when checking for 1.20
             MojangUtils.mcVersionAtLeast.mockImplementation((v) => v === '1.20')
             
             const args = []
             builder._processAutoConnectArg(args)
-            expect(args).not.toContain('--quickPlayMultiplayer')
-            expect(args).toHaveLength(0)
+            expect(args).toContain('--quickPlayMultiplayer')
+            expect(args).toContain('play.test.com:25565')
         })
     })
 

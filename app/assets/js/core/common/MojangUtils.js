@@ -1,5 +1,3 @@
-const os = require('os')
-
 function getMojangOS() {
     const opSys = process.platform;
     switch (opSys) {
@@ -15,35 +13,22 @@ function getMojangOS() {
 }
 
 function validateLibraryRules(rules) {
-    if (rules == null) return false
-    let result = false
+    if (rules == null) {
+        return false;
+    }
     for (const rule of rules) {
-        let match = true
-        if (rule.os != null) {
-            if (rule.os.name != null && rule.os.name !== getMojangOS()) {
-                match = false
+        if (rule.action != null && rule.os != null) {
+            const osName = rule.os.name;
+            const osMoj = getMojangOS();
+            if (rule.action === 'allow') {
+                return osName === osMoj;
             }
-            if (rule.os.arch != null && rule.os.arch !== process.arch) {
-                if (!(rule.os.arch === 'aarch64' && process.arch === 'arm64')) {
-                    match = false
-                }
+            else if (rule.action === 'disallow') {
+                return osName !== osMoj;
             }
-            if (rule.os.version != null) {
-                try {
-                    const reg = new RegExp(rule.os.version)
-                    if (!reg.test(os.release())) {
-                        match = false
-                    }
-                } catch (e) { }
-            }
-        }
-        if (match) {
-            result = rule.action === 'allow'
-        } else if (rule.action === 'disallow') {
-            result = true
         }
     }
-    return result
+    return true;
 }
 
 function validateLibraryNatives(natives) {

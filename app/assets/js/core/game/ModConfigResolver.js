@@ -235,7 +235,7 @@ class ModConfigResolver {
                     libs[sm.getVersionlessMavenIdentifier()] = sm.getPath()
                 }
             }
-            if (sm.subModules.length > 0) {
+            if (mdl.subModules.length > 0) {
                 const res = this._resolveModuleLibraries(sm)
                 libs = { ...libs, ...res }
             }

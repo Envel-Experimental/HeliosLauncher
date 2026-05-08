@@ -371,7 +371,7 @@ async function showOfflineWarning() {
 let proc
 // Joined server regex
 // Change this if your server uses something different.
-const GAME_LAUNCH_REGEX = /.*(Setting user: |(Open|Build)ing [Ll]evel|Server startup|Backend library: LWJGL version|Loading Minecraft .+ with Fabric Loader .+|.+ \/.+\]: .+).*/
+const GAME_LAUNCH_REGEX = /^\[.+\]: (?:MinecraftForge .+ Initialized|ModLauncher .+ starting: .+|Loading Minecraft .+ with Fabric Loader .+|.+ \/.+\]: .+|.+LWJGL.+)$/
 const MIN_LINGER = 5000
 
 /* System (Java) Scan */
@@ -661,11 +661,6 @@ async function dlAsync(login = true) {
             }
         }
 
-        // Clean up any existing listeners before adding new ones
-        window.HeliosAPI.launcher.removeAllListeners('log')
-        window.HeliosAPI.launcher.removeAllListeners('log-error')
-        window.HeliosAPI.launcher.removeAllListeners('exit')
-
         window.HeliosAPI.launcher.onLog(tempListener)
         window.HeliosAPI.launcher.onLogError(gameErrorListener)
         window.HeliosAPI.launcher.onExit((code) => {
@@ -679,6 +674,11 @@ async function dlAsync(login = true) {
         window.HeliosAPI.launcher.onLog((data) => {
             console.log('[Minecraft] ' + data)
         })
+
+        // For E2E tests
+        window.activeMinecraftProcess = {
+            kill: () => window.HeliosAPI.launcher.terminate()
+        }
 
         const start = Date.now()
         try {

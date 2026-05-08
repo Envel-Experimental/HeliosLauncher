@@ -104,12 +104,7 @@ class MojangIndexProcessor extends IndexProcessor {
         }
         const versionManifest = await this.loadVersionManifest();
         this.versionJson = await this.loadVersionJson(this.version, versionManifest);
-        
-        // Cache the result
-        if (this.versionJson) {
-            MojangIndexProcessor.versionJsonCache.set(this.version, this.versionJson);
-        }
-        
+        MojangIndexProcessor.versionJsonCache.set(this.version, this.versionJson);
         return this.versionJson;
     }
 
@@ -240,11 +235,7 @@ class MojangIndexProcessor extends IndexProcessor {
         return 4;
     }
 
-    /**
-     * @param {boolean} [forceFullHash] Whether to force hash validation for all files.
-     */
-    async validate(onStageComplete, forceFullHash = false) {
-        this.forceFullHash = forceFullHash;
+    async validate(onStageComplete) {
         const assets = await this.validateAssets(this.assetIndex);
         if (onStageComplete) await onStageComplete();
         const libraries = await this.validateLibraries(this.versionJson);
@@ -271,14 +262,8 @@ class MojangIndexProcessor extends IndexProcessor {
         const objectDir = path.join(this.assetPath, 'objects');
         const limit = pLimit(32); // Concurrency limit 32
 
-        let processed = 0;
         const tasks = Object.entries(assetIndex.objects).map(([id, meta]) => {
             return limit(async () => {
-                // Yield to event loop every 50 files to keep the main process responsive
-                if (++processed % 50 === 0) {
-                    await new Promise(resolve => setImmediate(resolve));
-                }
-
                 // Skip unnecessary language files (Only keep EN and RU)
                 const isLangFile = id.startsWith('minecraft/lang/') || id.startsWith('realms/lang/') || id.includes('/lang/');
                 if (isLangFile) {
@@ -304,8 +289,7 @@ class MojangIndexProcessor extends IndexProcessor {
                     }
                 }
 
-                // Use fastValidate by default to prevent hangs
-                if (!await validateLocalFile(filePath, HashAlgo.SHA1, hash, meta.size, false, !this.forceFullHash)) {
+                if (!await validateLocalFile(filePath, HashAlgo.SHA1, hash, meta.size)) {
                     return {
                         id,
                         hash,
@@ -343,17 +327,17 @@ class MojangIndexProcessor extends IndexProcessor {
                     if (artifact) {
                         const filePath = path.join(libDir, artifact.path);
                         const hash = artifact.sha1;
-                if (!await validateLocalFile(filePath, HashAlgo.SHA1, hash, artifact.size, false, !this.forceFullHash)) {
-                    return {
-                        id: libEntry.name,
-                        hash,
-                        algo: HashAlgo.SHA1,
-                        size: artifact.size,
-                        url: artifact.url,
-                        fallbackUrls: MirrorManager.getSortedMirrors().map(m => m.libraries ? artifact.url.replace('https://libraries.minecraft.net', m.libraries) : null).filter(Boolean), // Assuming libraries mirror logic if needed, or strict.
-                        path: filePath
-                    };
-                }
+                        if (!await validateLocalFile(filePath, HashAlgo.SHA1, hash, artifact.size)) {
+                            return {
+                                id: libEntry.name,
+                                hash,
+                                algo: HashAlgo.SHA1,
+                                size: artifact.size,
+                                url: artifact.url,
+                                fallbackUrls: MirrorManager.getSortedMirrors().map(m => m.libraries ? artifact.url.replace('https://libraries.minecraft.net', m.libraries) : null).filter(Boolean), // Assuming libraries mirror logic if needed, or strict.
+                                path: filePath
+                            };
+                        }
                     }
                 }
                 return null;
