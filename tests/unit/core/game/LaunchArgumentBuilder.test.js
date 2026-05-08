@@ -90,25 +90,7 @@ describe('LaunchArgumentBuilder', () => {
         })
     })
 
-    describe('_processAutoConnectArg', () => {
-        it('should add server/port for older versions', () => {
-            MojangUtils.mcVersionAtLeast.mockReturnValue(false)
-            const args = []
-            builder._processAutoConnectArg(args)
-            expect(args).toContain('--server')
-            expect(args).toContain('play.test.com')
-        })
 
-        it('should add quickPlayMultiplayer for 1.20+', () => {
-            // Force mcVersionAtLeast to return true when checking for 1.20
-            MojangUtils.mcVersionAtLeast.mockImplementation((v) => v === '1.20')
-            
-            const args = []
-            builder._processAutoConnectArg(args)
-            expect(args).toContain('--quickPlayMultiplayer')
-            expect(args).toContain('play.test.com:25565')
-        })
-    })
 
     describe('classpathArg', () => {
         it('should include version jar for older versions', async () => {

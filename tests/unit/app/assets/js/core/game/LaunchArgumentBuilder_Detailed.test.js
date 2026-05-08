@@ -126,32 +126,5 @@ describe('LaunchArgumentBuilder Detailed Tests', () => {
         expect(sanitized).toContain('-Xmx2G')
     })
 
-    test('_processAutoConnectArg should add server/port for older versions', () => {
-        const builder = new LaunchArgumentBuilder(mockServer, mockVanilla, mockMod, mockUser, '1.0.0', '/game', '/common')
-        ConfigManager.getAutoConnect.mockReturnValue(true)
-        mockServer.rawServer.autoconnect = true
-        mockServer.rawServer.minecraftVersion = '1.12.2'
-        MojangUtils.mcVersionAtLeast.mockReturnValue(false)
-
-        const args = []
-        builder._processAutoConnectArg(args)
-        
-        expect(args).toContain('--server')
-        expect(args).toContain('play.server.com')
-        expect(args).toContain(25565)
-    })
-
-    test('_processAutoConnectArg should add quickPlayMultiplayer for 1.20+', () => {
-        const builder = new LaunchArgumentBuilder(mockServer, mockVanilla, mockMod, mockUser, '1.0.0', '/game', '/common')
-        ConfigManager.getAutoConnect.mockReturnValue(true)
-        mockServer.rawServer.autoconnect = true
-        mockServer.rawServer.minecraftVersion = '1.20.1'
-        MojangUtils.mcVersionAtLeast.mockReturnValue(true)
-
-        const args = []
-        builder._processAutoConnectArg(args)
-        
-        expect(args).toContain('--quickPlayMultiplayer')
-        expect(args).toContain('play.server.com:25565')
-    })
 })
+

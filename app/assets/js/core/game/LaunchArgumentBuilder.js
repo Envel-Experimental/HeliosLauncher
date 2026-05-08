@@ -121,10 +121,11 @@ class LaunchArgumentBuilder {
             }
         }
 
-        // Dock Icon for macOS (Only for pre-1.13 or legacy Java 8 setups if applicable, but for 1.13+ we omit it to avoid crashes on Java 14+)
+        // macOS fix for old versions (LWJGL requires -XstartOnFirstThread)
         if (process.platform === 'darwin' && !mcVersionAtLeast('1.13', this.server.rawServer.minecraftVersion)) {
             args.push('-Xdock:name=FLauncher')
             args.push('-Xdock:icon=' + path.join(__dirname, '..', '..', 'images', 'minecraft.icns'))
+            args.push('-XstartOnFirstThread')
         }
 
         // Memory Settings
@@ -162,8 +163,8 @@ class LaunchArgumentBuilder {
                         args[i] = args[i].value
                     } else if (typeof args[i].value === 'object') {
                         args.splice(i, 1, ...args[i].value)
+                        i--
                     }
-                    i--
                 } else {
                     args[i] = null
                 }
@@ -194,9 +195,13 @@ class LaunchArgumentBuilder {
             }
         }
 
-        this._processAutoConnectArg(args)
         args = args.concat(this.modManifest.arguments.game)
-        return args.filter(arg => arg != null)
+
+        return args.filter(arg => {
+            if (arg == null || arg === '') return false
+            if (typeof arg === 'string' && arg.startsWith('${') && arg.endsWith('}')) return false
+            return true
+        })
     }
 
     /**
@@ -245,7 +250,6 @@ class LaunchArgumentBuilder {
                 if (val != null) mcArgs[i] = val
             }
         }
-        this._processAutoConnectArg(mcArgs)
 
         if (ConfigManager.getFullscreen()) {
             mcArgs.push('--fullscreen', true)
@@ -259,18 +263,7 @@ class LaunchArgumentBuilder {
         return mcArgs
     }
 
-    /**
-     * Helper to inject auto-connect arguments if enabled.
-     */
-    _processAutoConnectArg(args) {
-        if (ConfigManager.getAutoConnect() && this.server.rawServer.autoconnect) {
-            if (mcVersionAtLeast('1.20', this.server.rawServer.minecraftVersion)) {
-                args.push('--quickPlayMultiplayer', `${this.server.hostname}:${this.server.port}`)
-            } else {
-                args.push('--server', this.server.hostname, '--port', this.server.port)
-            }
-        }
-    }
+
 
     /**
      * Build the classpath array.
@@ -380,8 +373,13 @@ class LaunchArgumentBuilder {
 
     async _extractNativeNew(lib, tempNativePath, nativesRegex) {
         const regexTest = nativesRegex.exec(lib.name)
-        const arch = regexTest[2] ?? 'x64'
-        if (arch != process.arch) return null
+        let arch = regexTest[2] ?? 'x64'
+        if (arch !== process.arch) {
+            // Support aarch64 synonym for arm64
+            if (!(arch === 'aarch64' && process.arch === 'arm64')) {
+                return null
+            }
+        }
 
         const exclusionArr = lib.extract != null ? lib.extract.exclude : ['META-INF/', '.git', '.sha1']
         const artifact = lib.downloads.artifact

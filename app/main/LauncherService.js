@@ -48,24 +48,24 @@ class LauncherService {
         // 3. Build Process
         const pb = new ProcessBuilder(serv, versionData, modLoaderData, authUser, app.getVersion())
         
+        const { LogBatcher } = require('../assets/js/core/util/LogBatcher')
+        const logBatcher = new LogBatcher((combined) => {
+            if (event && event.sender && !event.sender.isDestroyed()) {
+                event.sender.send('launcher:log', combined)
+            }
+        })
+
         try {
             this.activeProcess = await pb.build()
             
-            // Forward logs to renderer if needed
-            this.activeProcess.stdout.on('data', (data) => {
-                if (!event.sender.isDestroyed()) {
-                    event.sender.send('launcher:log', data.toString())
-                }
-            })
-            this.activeProcess.stderr.on('data', (data) => {
-                if (!event.sender.isDestroyed()) {
-                    event.sender.send('launcher:log-error', data.toString())
-                }
-            })
+            this.activeProcess.stdout.on('data', (data) => logBatcher.enqueue(data))
+            this.activeProcess.stderr.on('data', (data) => logBatcher.enqueue(data))
 
             this.activeProcess.on('exit', (code) => {
+                logBatcher.flush()
+                logBatcher.destroy()
                 log.info(`Game process exited with code ${code}`)
-                if (!event.sender.isDestroyed()) {
+                if (event && event.sender && !event.sender.isDestroyed()) {
                     event.sender.send('launcher:exit', code)
                 }
                 this.activeProcess = null

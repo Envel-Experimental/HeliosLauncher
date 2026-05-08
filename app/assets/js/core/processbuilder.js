@@ -113,14 +113,15 @@ class ProcessBuilder {
             }
         }
 
+        // 6. Spawn Process
+        const javaPath = ConfigManager.getJavaExecutable(this.server.rawServer.id)
+
         const sanitizedArgs = args.map((arg, index, arr) => {
             if (index > 0 && (arr[index - 1] === '--accessToken' || arr[index - 1] === '--uuid')) return '***'
             return arg
         })
         logger.info('Launch Arguments:', sanitizedArgs)
-
-        // 6. Spawn Process
-        const javaPath = ConfigManager.getJavaExecutable(this.server.rawServer.id)
+        logger.info('Full Command:', [javaPath, ...sanitizedArgs].join(' '))
 
         if (!javaPath || !fs.existsSync(javaPath)) {
             throw new Error('Не удалось найти Java. Проверьте настройки в разделе Java.')
@@ -222,15 +223,20 @@ class ProcessBuilder {
         child.stderr.setEncoding('utf8')
 
         const handleLog = (data, isErr) => {
-            const lines = data.trim().split('\n')
-            lines.forEach(x => {
-                const color = isErr ? '\x1b[31m' : '\x1b[32m'
-                console.log(`${color}[Minecraft]\x1b[0m ${x}`)
-
-                // Keep last 1000 lines for crash analysis
-                this.logBuffer.push(x)
-                if (this.logBuffer.length > 1000) this.logBuffer.shift()
-            })
+            const lines = data.split('\n')
+            let added = false
+            for (let x of lines) {
+                const trimmed = x.trim()
+                if (trimmed.length > 0) {
+                    const color = isErr ? '\x1b[31m' : '\x1b[32m'
+                    console.log(`${color}[Minecraft]\x1b[0m ${trimmed}`)
+                    this.logBuffer.push(trimmed)
+                    added = true
+                }
+            }
+            if (added && this.logBuffer.length > 1000) {
+                this.logBuffer = this.logBuffer.slice(-1000)
+            }
         }
 
         child.stdout.on('data', d => handleLog(d, false))
