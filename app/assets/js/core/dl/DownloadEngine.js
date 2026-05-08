@@ -78,10 +78,10 @@ async function cleanupStaleTempFiles() {
                             await fs.unlink(fullPath);
                             log.debug(`[Cleanup] Deleted stale file: ${fullPath}`);
                         }
-                    } catch (e) { }
+                    } catch (e) { /* Ignored: cleanup failure is not critical */ }
                 }
             }
-        } catch (e) { }
+        } catch (e) { /* Ignored: dir scanning failure */ }
     };
 
     try {
@@ -253,7 +253,7 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
             if (onProgress) onProgress(asset.size); // Account for skipping
             return;
         }
-    } catch (e) { }
+    } catch (e) { /* File doesn't exist, proceed to download */ }
 
     await safeEnsureDir(path.dirname(decodedPath));
 
@@ -316,7 +316,7 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
                     // log.debug(`[DownloadEngine] Blocking official URL in "No Mojang" Mode: ${currentUrl}`)
                     continue
                 }
-            } catch (e) { }
+            } catch (e) { /* Invalid URL, ignore blocking */ }
         }
 
         try {
@@ -443,7 +443,7 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
                             log.warn(`[DownloadEngine] Signature check FAILED for ${asset.id} from ${currentUrl}: ${e.message}`);
                             // If signature fails, we MUST NOT use this file. 
                             // Treat as validation failure to trigger retry/fallback.
-                            try { await fs.unlink(tempPath) } catch (err) {}
+                            try { await fs.unlink(tempPath) } catch (err) { /* Ignored */ }
                             
                             attemptHistory.push({
                                 attempt: attempt + 1,
@@ -498,7 +498,7 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
                 const preview = buffer.slice(0, bytesRead).toString('utf-8');
                 console.error(`[DownloadEngine] Failed File Content Preview (First 100 bytes): ${preview}`);
                 await fs.unlink(tempPath);
-            } catch (e) { }
+            } catch (e) { /* Preview failed */ }
 
             const validationError = new Error('Validation failed');
             attemptHistory.push({
@@ -519,7 +519,7 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
                                       (err.message && err.message.toLowerCase().includes('hash mismatch'));
 
             if (isValidationError) {
-                try { await fs.unlink(decodedPath + '.tmp') } catch (e) { }
+                try { await fs.unlink(decodedPath + '.tmp') } catch (e) { /* Ignored */ }
             }
 
             // Record failure if not already recorded (Validation failed adds its own)

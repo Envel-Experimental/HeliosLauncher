@@ -169,7 +169,7 @@ async function validateSelectedJvm(path, semverRange) {
     }
     try {
         await fs.access(path);
-    } catch (e) { return null; }
+    } catch (e) { /* Java binary inaccessible */ return null; }
 
     const resolvedSettings = await resolveJvmSettings([path]);
 
@@ -700,7 +700,7 @@ async function win32DriveMounts() {
         try {
             await fs.access(drive);
             drives.push(drive);
-        } catch (e) {}
+        } catch (e) { /* Drive inaccessible (e.g. CD-ROM or locked drive) */ }
     }
     return drives.length > 0 ? drives : ['C:\\'];
 }
@@ -738,7 +738,7 @@ class PathBasedJavaDiscoverer {
             try {
                 await fs.access(javaExecFromRoot(p));
                 res.add(p);
-            } catch (e) { }
+            } catch (e) { /* Drive inaccessible */ }
         }
         return [...res];
     }
@@ -758,9 +758,9 @@ class DirectoryBasedJavaDiscoverer {
                     try {
                         await fs.access(javaExecFromRoot(fullPath));
                         res.add(fullPath);
-                    } catch (e) { }
+                    } catch (e) { /* Drive inaccessible */ }
                 }
-            } catch (e) { }
+            } catch (e) { /* Drive inaccessible */ }
         }
         return [...res];
     }
@@ -779,7 +779,7 @@ class EnvironmentBasedJavaDiscoverer {
                 try {
                     await fs.access(asRoot);
                     res.add(asRoot);
-                } catch (e) { }
+                } catch (e) { /* Drive inaccessible */ }
             }
         }
         return [...res];
@@ -813,9 +813,9 @@ class Win32RegistryJavaDiscoverer {
                                 candidates.add(javaHome);
                             }
                         }
-                    } catch (e) {}
+                    } catch (e) { /* Registry value does not exist */ }
                 }
-            } catch (e) {}
+            } catch (e) { /* Registry key does not exist */ }
         }
         return [...candidates];
     }

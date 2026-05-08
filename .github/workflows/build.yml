@@ -60,6 +60,15 @@ jobs:
         if: runner.os == 'Windows' || github.event.head_commit.message != '1'
         run: npm ci --no-audit --no-fund
 
+      - name: Lint Code
+        if: runner.os == 'ubuntu-latest' && github.event.head_commit.message != '1'
+        run: npm run lint -- --max-warnings 0
+        continue-on-error: true # Allow build even if lint fails for now, but we will see it
+
+      - name: Run Unit Tests
+        if: github.event.head_commit.message != '1'
+        run: npm run test:unit
+
       - name: Configure Network (Force IP & DNS)
         if: runner.os == 'macOS'
         run: |

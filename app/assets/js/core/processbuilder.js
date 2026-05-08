@@ -1,4 +1,4 @@
-/* global process */
+
 const child_process = require('child_process')
 const crypto = require('crypto')
 const fs = require('fs')

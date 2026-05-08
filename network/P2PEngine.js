@@ -384,9 +384,7 @@ class P2PEngine extends EventEmitter {
             this.peers = [] // Clear peers immediately
             try {
                 await swarm.destroy()
-            } catch (e) {
-                // Ignore errors during destroy
-            }
+            } catch (e) { /* Swarm destruction failure ignored */ }
         }
 
         const ResourceMonitor = require('./ResourceMonitor')
@@ -395,7 +393,7 @@ class P2PEngine extends EventEmitter {
         if (this.dht) {
             try {
                 await this.dht.destroy()
-            } catch (e) { }
+            } catch (e) { /* DHT destruction failure ignored */ }
             this.dht = null
         }
         if (this.speedMonitorInterval) {

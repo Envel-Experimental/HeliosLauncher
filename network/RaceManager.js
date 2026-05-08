@@ -91,7 +91,7 @@ class RaceManager {
         try {
             const sizeHeader = request.headers.get('X-Expected-Size')
             if (sizeHeader) expectedSize = parseInt(sizeHeader, 10)
-        } catch (e) { }
+        } catch (e) { /* Missing or invalid expected size header */ }
 
         // Convert mc-asset protocol back to https for the HTTP fetch leg
         if (url.startsWith('mc-asset://')) {
@@ -111,7 +111,7 @@ class RaceManager {
 
             const hashHeader = request.headers.get('X-File-Hash');
             if (hashHeader) hash = hashHeader;
-        } catch (e) { }
+        } catch (e) { /* Missing or invalid custom headers */ }
 
         // Attempt to extract hash from URL if not provided in header (legacy/standard pattern)
         if (!hash) {
@@ -143,7 +143,7 @@ class RaceManager {
                 if (isDev) console.log(`[RaceManager] File too large for P2P (${(expectedSize / 1024 / 1024).toFixed(2)} MB > 200 MB). Forcing HTTP.`)
                 skipP2P = true
             }
-        } catch (e) { }
+        } catch (e) { /* Invalid P2P skip header */ }
 
         // 1. HTTP Task
         const httpTask = new Promise((resolve, reject) => {
@@ -196,11 +196,12 @@ class RaceManager {
 
         // 2. Global P2P Task (Hyperswarm)
         let globalP2PStream = null
-        const globalP2PTask = new Promise(async (resolve, reject) => {
-            if (skipP2P) {
-                reject(new Error('P2P Skipped'))
-                return
-            }
+        const globalP2PTask = new Promise((resolve, reject) => {
+            (async () => {
+                if (skipP2P) {
+                    reject(new Error('P2P Skipped'))
+                    return
+                }
 
             const P2PEngine = require('./P2PEngine')
 
@@ -266,10 +267,11 @@ class RaceManager {
                 globalP2PStream.off('error', onError)
                 // CRITICAL: Add no-op error listener to prevent crash if 
                 // the stream fails later (after we stop caring)
-                globalP2PStream.on('error', () => { })
+                globalP2PStream.on('error', () => { /* Ignored: post-finalization failure */ })
             }
             globalP2PStream.on('readable', onReadable)
             globalP2PStream.on('error', onError)
+            })().catch(reject)
         })
 
         // 3. Local P2P Task (Legacy UDP/HTTP - DISABLED in favor of HyperDHT Local)

@@ -42,7 +42,7 @@ console.log = (...args) => {
             } catch (e) { return '[Complex Object]' }
         }).join(' ')
         ipcRenderer.send('renderer-log', msg)
-    } catch (e) {}
+    } catch (e) { /* Log forwarding failed */ }
     originalConsoleLog.apply(console, args)
 }
 console.error = (...args) => {
@@ -53,7 +53,7 @@ console.error = (...args) => {
             } catch (e) { return '[Complex Object]' }
         }).join(' ')
         ipcRenderer.send('renderer-error', msg)
-    } catch (e) {}
+    } catch (e) { /* Error logging failed */ }
     originalConsoleError.apply(console, args)
 }
 console.warn = (...args) => {
@@ -64,7 +64,7 @@ console.warn = (...args) => {
             } catch (e) { return '[Complex Object]' }
         }).join(' ')
         ipcRenderer.send('renderer-warn', msg)
-    } catch (e) {}
+    } catch (e) { /* Warn logging failed */ }
     originalConsoleWarn.apply(console, args)
 }
 

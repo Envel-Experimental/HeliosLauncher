@@ -58,7 +58,7 @@ describe('Real-World Download Verification Cycle', () => {
                                     const publicKeyObj = crypto.createPublicKey({ key: spkiBuffer, format: 'der', type: 'spki' })
                                     const isValid = crypto.verify(null, Buffer.from(dataHex, 'hex'), publicKeyObj, Buffer.from(signatureHex, 'hex'))
                                     if (isValid) return true
-                                } catch (e) {}
+                                } catch (e) { /* Invalid key format, try next */ }
                             }
                             return false
                         }

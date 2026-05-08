@@ -143,7 +143,7 @@ setInterval(async () => {
         } else {
             if (p2pStatus) p2pStatus.style.display = 'none'
         }
-    } catch (e) { }
+    } catch (e) { /* P2P Status update failed, engine might be stopping */ }
 }, 5000)
 
 // Bind launch button

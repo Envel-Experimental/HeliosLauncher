@@ -94,7 +94,7 @@ class PeerPersistence {
             await fs.promises.rename(tempPath, this.filePath);
         } catch (err) {
             console.error('[PeerPersistence] Failed to save peers', err);
-            try { await fs.promises.unlink(tempPath); } catch (e) { }
+            try { await fs.promises.unlink(tempPath); } catch (e) { /* Ignored: cleanup failure */ }
         }
     }
 
@@ -130,7 +130,7 @@ class PeerPersistence {
             .slice(0, 100);
 
         // Save async (debounce could be added but simple for now)
-        this.save().catch(e => { }); // Fire and forget
+        this.save().catch(e => { /* Ignored: fire and forget */ });
     }
 
     getPeers(type) {

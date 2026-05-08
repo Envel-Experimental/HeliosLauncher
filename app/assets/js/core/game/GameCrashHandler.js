@@ -17,7 +17,7 @@ const logger = LoggerUtil.getLogger('GameCrashHandler')
 // Dynamically import Electron components based on process type
 const { ipcMain, BrowserWindow } = (process.type !== 'renderer') ? require('electron') : { ipcMain: null, BrowserWindow: null }
 
-/* global setOverlayContent, setOverlayHandler, setDismissHandler, toggleOverlay, setMiddleButtonHandler */
+
 
 /**
  * Module responsible for handling game crashes and exit events.
@@ -539,6 +539,7 @@ class GameCrashHandler {
                 logger.info(`Handling fix for crash type: ${analysis.type}`)
                 
                 if (analysis.type === 'incompatible-mods') {
+
                     const modsDir = path.join(this.gameDir, 'mods')
                     if (fs.existsSync(modsDir)) {
                         logger.info(`Deleting mods directory: ${modsDir}`)

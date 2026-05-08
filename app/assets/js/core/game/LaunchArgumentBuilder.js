@@ -1,4 +1,4 @@
-/* global process */
+
 const path = require('path')
 const os = require('os')
 const fs = require('fs/promises')
