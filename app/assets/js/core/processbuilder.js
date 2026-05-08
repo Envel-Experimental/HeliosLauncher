@@ -63,20 +63,26 @@ class ProcessBuilder {
     /**
      * Main method to build and spawn the Minecraft process.
      * 
+     * @param {Function} onLog Optional callback for logging events to the UI.
      * @returns {Promise<import('child_process').ChildProcess>} The spawned child process.
      */
-    async build() {
+    async build(onLog = null) {
+        const logMsg = (msg) => {
+            logger.info(msg)
+            if (onLog) onLog(msg + '\n')
+        }
+
         fs.mkdirSync(this.gameDir, { recursive: true })
         const tempNativePath = this._setupTempNatives()
 
         // 1. Resolve Mods
-        logger.info('Resolving mod configuration...')
+        logMsg('Resolving mod configuration...')
         this._setupLoaders()
         const modObj = this.modResolver.resolveModConfiguration(
             ConfigManager.getModConfiguration(this.server.rawServer.id).mods,
             this.server.modules
         )
-        logger.info(`Resolved ${modObj.fMods.length} Forge/Fabric mods and ${modObj.lMods.length} LiteLoader mods.`)
+        logMsg(`Resolved ${modObj.fMods.length} Forge/Fabric mods and ${modObj.lMods.length} LiteLoader mods.`)
 
         // 2. Write Mod Lists (Pre-1.13)
         if (!mcVersionAtLeast('1.13', this.server.rawServer.minecraftVersion)) {
@@ -90,7 +96,7 @@ class ProcessBuilder {
         }
 
         // 3. Construct Arguments
-        logger.info('Constructing JVM arguments...')
+        logMsg('Constructing JVM arguments...')
         let args = await this.argBuilder.constructJVMArguments(
             modObj.fMods.concat(modObj.lMods),
             tempNativePath,
@@ -98,7 +104,7 @@ class ProcessBuilder {
             this.usingLiteLoader,
             this.llPath
         )
-        logger.info('JVM arguments constructed.')
+        logMsg('JVM arguments constructed.')
 
         // 4. Mod List (1.13+)
         if (mcVersionAtLeast('1.13', this.server.rawServer.minecraftVersion)) {
@@ -154,8 +160,8 @@ class ProcessBuilder {
             throw new Error('Проблема с доступом к файлам Java (недостаточно прав).')
         }
 
-        logger.info('Launch Arguments:', sanitizedArgs)
-        logger.info('Full Command:', [resolvedJavaPath, ...args].join(' '))
+        logMsg('Launch Arguments: ' + sanitizedArgs.join(' '))
+        logMsg('Full Command: ' + [resolvedJavaPath, ...args].join(' '))
 
         const child = child_process.spawn(resolvedJavaPath, args, {
             cwd: this.gameDir,

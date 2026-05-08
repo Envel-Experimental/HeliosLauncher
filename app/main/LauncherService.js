@@ -49,23 +49,27 @@ class LauncherService {
         const pb = new ProcessBuilder(serv, versionData, modLoaderData, authUser, app.getVersion())
         
         try {
-            this.activeProcess = await pb.build()
+            this.activeProcess = await pb.build((msg) => {
+                if (event && event.sender && !event.sender.isDestroyed?.()) {
+                    event.sender.send('launcher:log', msg)
+                }
+            })
             
             // Forward logs to renderer if needed
             this.activeProcess.stdout.on('data', (data) => {
-                if (!event.sender.isDestroyed()) {
+                if (event && event.sender && !event.sender.isDestroyed?.()) {
                     event.sender.send('launcher:log', data.toString())
                 }
             })
             this.activeProcess.stderr.on('data', (data) => {
-                if (!event.sender.isDestroyed()) {
+                if (event && event.sender && !event.sender.isDestroyed?.()) {
                     event.sender.send('launcher:log-error', data.toString())
                 }
             })
 
             this.activeProcess.on('exit', (code) => {
                 log.info(`Game process exited with code ${code}`)
-                if (!event.sender.isDestroyed()) {
+                if (event && event.sender && !event.sender.isDestroyed?.()) {
                     event.sender.send('launcher:exit', code)
                 }
                 this.activeProcess = null

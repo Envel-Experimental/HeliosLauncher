@@ -165,6 +165,18 @@ class LaunchArgumentBuilder {
         args.push('-Xms' + ConfigManager.getMinRAM(this.server.rawServer.id))
         args = args.concat(this._resolveSanitizedJMArgs(args))
 
+        // Ensure -XstartOnFirstThread is present on macOS to prevent window creation issues
+        if (process.platform === 'darwin') {
+            if (!args.includes('-XstartOnFirstThread')) {
+                args.unshift('-XstartOnFirstThread')
+            }
+            // Additional macOS properties for stability - MUST BE BEFORE MAIN CLASS
+            args.push('-Dapple.laf.useScreenMenuBar=true')
+            args.push('-Dapple.awt.showGrowBox=true')
+            args.push('-Djava.net.preferIPv4Stack=true')
+            args.push('-Dorg.lwjgl.util.NoChecks=true')
+        }
+
         // Main Java Class
         args.push(this.modManifest.mainClass)
 
@@ -241,20 +253,9 @@ class LaunchArgumentBuilder {
             }
         }
 
+        // Auto-connect and extra game args handled after main class
         this._processAutoConnectArg(args)
         args = args.concat(this.modManifest.arguments.game)
-
-        // Ensure -XstartOnFirstThread is present on macOS to prevent window creation issues
-        if (process.platform === 'darwin') {
-            if (!args.includes('-XstartOnFirstThread')) {
-                args.unshift('-XstartOnFirstThread')
-            }
-            // Additional macOS properties for stability
-            args.push('-Dapple.laf.useScreenMenuBar=true')
-            args.push('-Dapple.awt.showGrowBox=true')
-            args.push('-Djava.net.preferIPv4Stack=true')
-            args.push('-Dorg.lwjgl.util.NoChecks=true')
-        }
 
         const finalArgs = []
         for (let i = 0; i < args.length; i++) {
