@@ -146,7 +146,7 @@ class ProcessBuilder {
             child.unref()
         }
 
-        this._setupLogging(child)
+        this._setupLogging(child, javaPath, sanitizedArgs)
 
         // 7. Handle Exit / Crash
         // We defer this entirely to GameCrashHandler
@@ -221,8 +221,17 @@ class ProcessBuilder {
     /**
      * Pipe process output to logger and internal memory buffer for crash analysis.
      */
-    _setupLogging(child) {
+    _setupLogging(child, javaPath, sanitizedArgs) {
         this.logBuffer = []
+        
+        // Inject Launch Context into the crash buffer
+        this.logBuffer.push('====================================================')
+        this.logBuffer.push('Launch Context:')
+        this.logBuffer.push(`Java Path: ${javaPath}`)
+        this.logBuffer.push(`Arguments: ${sanitizedArgs.join(' ')}`)
+        this.logBuffer.push('====================================================')
+        this.logBuffer.push('')
+
         child.stdout.setEncoding('utf8')
         child.stderr.setEncoding('utf8')
 

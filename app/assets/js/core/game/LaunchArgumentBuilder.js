@@ -157,8 +157,19 @@ class LaunchArgumentBuilder {
                 let checksum = 0
                 for (let rule of args[i].rules) {
                     if (rule.os != null) {
-                        if (rule.os.name === getMojangOS()
-                            && (rule.os.version == null || new RegExp(rule.os.version).test(os.release))) {
+                        let osMatch = rule.os.name === getMojangOS()
+                        if (osMatch && rule.os.version != null) {
+                            if (getMojangOS() === 'osx') {
+                                // Mojang's OSX regexes expect macOS marketing versions (e.g. ^10\.),
+                                // but node's os.release() returns Darwin kernel versions (e.g. 20.x for macOS 11+).
+                                // To maintain compatibility with all macOS versions, we bypass the version check for OSX.
+                                osMatch = true
+                            } else {
+                                osMatch = new RegExp(rule.os.version).test(os.release())
+                            }
+                        }
+
+                        if (osMatch) {
                             if (rule.action === 'allow') checksum++
                         } else {
                             if (rule.action === 'disallow') checksum++
