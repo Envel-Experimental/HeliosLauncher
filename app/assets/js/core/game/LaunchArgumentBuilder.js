@@ -82,7 +82,7 @@ class LaunchArgumentBuilder {
         if (process.platform === 'darwin') {
             args.unshift('-XstartOnFirstThread')
             args.push('-Xdock:name=FLauncher')
-            args.push('-Xdock:icon=' + path.join(__dirname, '..', '..', 'images', 'minecraft.icns'))
+            args.push('-Xdock:icon=' + path.join(__dirname, '..', '..', '..', 'images', 'minecraft.icns'))
         }
 
         // Memory Settings
@@ -128,9 +128,13 @@ class LaunchArgumentBuilder {
             if (!args.includes('-XstartOnFirstThread')) {
                 args.unshift('-XstartOnFirstThread')
             }
-            
-            args.push('-Xdock:name=FLauncher')
-            args.push('-Xdock:icon=' + path.join(__dirname, '..', '..', 'images', 'minecraft.icns'))
+
+            // Only add legacy dock arguments for older versions (pre-1.17)
+            // Newer Java versions (17+) used by 1.17+ crash when these AWT hooks are used.
+            if (!mcVersionAtLeast('1.17', this.server.rawServer.minecraftVersion)) {
+                args.push('-Xdock:name=FLauncher')
+                args.push('-Xdock:icon=' + path.join(__dirname, '..', '..', '..', 'images', 'minecraft.icns'))
+            }
         }
 
         // Memory Settings
