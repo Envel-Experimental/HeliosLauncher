@@ -60,6 +60,16 @@ class LauncherService {
                     event.sender.send('launcher:log', combined)
                 }
             })
+
+            // Inject Launch Context for the user to see in DevTools
+            if (pb.args && pb.javaPath) {
+                const sanitizedArgs = pb.args.map((arg, index, arr) => {
+                    if (index > 0 && (arr[index - 1] === '--accessToken' || arr[index - 1] === '--uuid')) return '***'
+                    return arg
+                })
+                const contextString = `====================================================\nLaunch Context:\nJava Path: ${pb.javaPath}\nArguments: ${sanitizedArgs.join(' ')}\n====================================================\n`
+                logBatcher.enqueue(contextString)
+            }
             
             this.activeProcess.stdout.on('data', (data) => logBatcher.enqueue(data))
             this.activeProcess.stderr.on('data', (data) => logBatcher.enqueue(data))

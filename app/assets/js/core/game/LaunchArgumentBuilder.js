@@ -80,6 +80,7 @@ class LaunchArgumentBuilder {
 
         // macOS specific UI/System arguments
         if (process.platform === 'darwin') {
+            args.unshift('-XstartOnFirstThread')
             args.push('-Xdock:name=FLauncher')
             args.push('-Xdock:icon=' + path.join(__dirname, '..', '..', 'images', 'minecraft.icns'))
         }
@@ -123,13 +124,13 @@ class LaunchArgumentBuilder {
 
         // macOS specific UI/System arguments
         if (process.platform === 'darwin') {
+            // Force -XstartOnFirstThread to the front if not already there
+            if (!args.includes('-XstartOnFirstThread')) {
+                args.unshift('-XstartOnFirstThread')
+            }
+            
             args.push('-Xdock:name=FLauncher')
             args.push('-Xdock:icon=' + path.join(__dirname, '..', '..', 'images', 'minecraft.icns'))
-
-            // Legacy versions still require -XstartOnFirstThread
-            if (!mcVersionAtLeast('1.13', this.server.rawServer.minecraftVersion)) {
-                args.push('-XstartOnFirstThread')
-            }
         }
 
         // Memory Settings
@@ -175,9 +176,15 @@ class LaunchArgumentBuilder {
                 }
                 if (checksum === args[i].rules.length) {
                     if (typeof args[i].value === 'string') {
-                        args[i] = args[i].value
+                        // Avoid adding -XstartOnFirstThread if we already unshifted it to the front
+                        if (args[i].value === '-XstartOnFirstThread' && process.platform === 'darwin' && args[0] === '-XstartOnFirstThread') {
+                            args[i] = null
+                        } else {
+                            args[i] = args[i].value
+                        }
                     } else if (typeof args[i].value === 'object') {
-                        args.splice(i, 1, ...args[i].value)
+                        const values = args[i].value.filter(v => !(v === '-XstartOnFirstThread' && process.platform === 'darwin' && args[0] === '-XstartOnFirstThread'))
+                        args.splice(i, 1, ...values)
                         i--
                     }
                 } else {
