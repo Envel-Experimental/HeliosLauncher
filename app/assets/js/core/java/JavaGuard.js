@@ -10,8 +10,24 @@ const { Platform, javaExecFromRoot, ensureJavaDirIsRoot } = require('./JavaUtils
 const { JdkDistribution } = require('../common/DistributionClasses');
 
 const log = LoggerUtil.getLogger('JavaGuard');
-const execAsync = util.promisify(exec);
-const execFileAsync = util.promisify(execFile);
+
+async function execAsync(cmd, opts) {
+    return new Promise((resolve, reject) => {
+        require('child_process').exec(cmd, opts, (err, stdout, stderr) => {
+            if (err) reject(err);
+            else resolve({ stdout, stderr });
+        });
+    });
+}
+
+async function execFileAsync(file, args, opts) {
+    return new Promise((resolve, reject) => {
+        require('child_process').execFile(file, args, opts, (err, stdout, stderr) => {
+            if (err) reject(err);
+            else resolve({ stdout, stderr });
+        });
+    });
+}
 
 /**
  * Perform a fetch with a 10s timeout.
@@ -90,19 +106,12 @@ async function getHotSpotSettings(execPath) {
     return ret;
 }
 
-const jvmSettingsCache = new Map();
-
 async function resolveJvmSettings(paths) {
     const ret = {};
     for (const p of paths) {
-        if (jvmSettingsCache.has(p)) {
-            ret[p] = jvmSettingsCache.get(p);
-            continue;
-        }
         const settings = await getHotSpotSettings(javaExecFromRoot(p));
         if (settings != null) {
             ret[p] = settings;
-            jvmSettingsCache.set(p, settings);
         }
         else {
             log.warn(`Skipping invalid JVM candidate: ${p}`);
@@ -247,8 +256,8 @@ async function latestOpenJDK(major, dataDir, distribution) {
             const start = Date.now()
             const manifest = await loadJavaMirrorManifest(mirror.java_manifest)
             if (manifest) {
-                const os = process.platform === Platform.WIN32 ? 'windows' : (process.platform === Platform.DARWIN ? 'darwin' : 'linux')
-                const arch = process.arch === 'arm64' ? 'arm64' : 'x64'
+                const os = process.platform === Platform.WIN32 ? 'windows' : (process.platform === Platform.DARWIN ? 'mac' : process.platform)
+                const arch = process.arch === 'arm64' ? 'aarch64' : 'x64'
                 const field = (distribution === 'installer' && os === 'windows') ? 'installer' : major.toString()
 
                 if (manifest[os] && manifest[os][arch] && manifest[os][arch][field]) {

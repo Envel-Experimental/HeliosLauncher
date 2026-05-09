@@ -63,7 +63,7 @@ jest.mock('../../../../app/assets/js/core/common/FileUtils', () => ({
 const JavaGuard = require('../../../../app/assets/js/core/java/JavaGuard')
 
 describe('JavaGuard', () => {
-    
+
     beforeEach(() => {
         jest.clearAllMocks()
         global.fetch.mockReset()
@@ -78,7 +78,8 @@ describe('JavaGuard', () => {
             }])
 
             const currentPlatform = process.platform === 'win32' ? 'windows' : (process.platform === 'darwin' ? 'mac' : process.platform)
-            const mockManifest = { [currentPlatform]: { x64: { '17': { url: 'http://fast/java', size: 100, name: 'java17', sha1: 'abc' } } } }
+            const arch = process.arch === 'arm64' ? 'aarch64' : 'x64'
+            const mockManifest = { [currentPlatform]: { [arch]: { '17': { url: 'http://fast/java', size: 100, name: 'java17', sha1: 'abc' } } } }
             
             global.fetch.mockResolvedValueOnce({
                 ok: true,
@@ -106,7 +107,7 @@ describe('JavaGuard', () => {
                         binary: {
                             os: process.platform === 'win32' ? 'windows' : (process.platform === 'darwin' ? 'mac' : process.platform),
                         image_type: 'jdk',
-                            architecture: 'x64',
+                            architecture: process.arch === 'arm64' ? 'aarch64' : 'x64',
                             package: { link: 'http://official/java', size: 200, name: 'java17-official.zip', checksum: 'def' }
                         }
                     }])
@@ -131,7 +132,9 @@ describe('JavaGuard', () => {
             fs.access.mockResolvedValueOnce()
             
             child_process.execFile.mockImplementation((file, args, opts, cb) => {
-                cb(null, { stdout: '', stderr: '    java.version = 17.0.1\n    java.vendor = Oracle\n    sun.arch.data.model = 64' })
+                const callback = typeof opts === 'function' ? opts : cb
+                const arch = process.arch === 'arm64' ? 'aarch64' : 'x64'
+                callback(null, '', `    java.version = 17.0.1\n    java.vendor = Oracle\n    sun.arch.data.model = 64\n    os.arch = ${arch}`)
             })
 
             const result = await JavaGuard.validateSelectedJvm('/path/to/java', '>=17')

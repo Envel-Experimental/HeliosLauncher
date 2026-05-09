@@ -79,11 +79,11 @@ describe('JavaGuard Detailed Tests', () => {
 
     test('getHotSpotSettings should parse java output', async () => {
         // Output from java -XshowSettings:properties usually starts with 4 spaces for properties
-        const mockStderr = '    java.version = 17.0.1\n    java.vendor = Oracle\n    sun.arch.data.model = 64\n    java.library.path = /lib1\n        /lib2'
+        const arch = process.arch === 'arm64' ? 'aarch64' : 'amd64'
+        const mockStderr = `    java.version = 17.0.1\n    java.vendor = Oracle\n    sun.arch.data.model = 64\n    os.arch = ${arch}\n    java.library.path = /lib1\n        /lib2`
         child_process.execFile.mockImplementation((file, args, opts, cb) => {
             const callback = typeof opts === 'function' ? opts : cb
-            // Simulate promisify resolving to an object with stderr
-            callback(null, { stdout: '', stderr: mockStderr })
+            callback(null, '', mockStderr)
         })
         fs.access.mockResolvedValue()
 
@@ -116,12 +116,13 @@ describe('JavaGuard Detailed Tests', () => {
             { name: 'TestMirror', java_manifest: 'http://mirror/java.json' }
         ])
 
+        const currentPlatform = process.platform === 'win32' ? 'windows' : (process.platform === 'darwin' ? 'mac' : process.platform)
+        const arch = process.arch === 'arm64' ? 'aarch64' : 'x64'
+
         global.fetch.mockResolvedValueOnce({
             ok: true,
             arrayBuffer: () => Promise.resolve(Buffer.from(JSON.stringify({
-                windows: { x64: { '17': { url: 'http://mirror/java17.zip', name: 'java17.zip', size: 100, sha1: 'hash' } } },
-                linux: { x64: { '17': { url: 'http://mirror/java17.zip', name: 'java17.zip', size: 100, sha1: 'hash' } } },
-                darwin: { x64: { '17': { url: 'http://mirror/java17.zip', name: 'java17.zip', size: 100, sha1: 'hash' } } }
+                [currentPlatform]: { [arch]: { '17': { url: 'http://mirror/java17.zip', name: 'java17.zip', size: 100, sha1: 'hash' } } }
             })))
         })
 
