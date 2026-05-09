@@ -82,10 +82,6 @@ class LaunchArgumentBuilder {
         if (process.platform === 'darwin') {
             args.push('-Xdock:name=FLauncher')
             args.push('-Xdock:icon=' + path.join(__dirname, '..', '..', 'images', 'minecraft.icns'))
-            // Force headless to prevent AWT from stealing the main thread/AppKit focus from GLFW
-            args.push('-Djava.awt.headless=true')
-            // Hide the Java "coffee cup" icon and prevent it from appearing in the dock/switcher twice
-            args.push('-Dapple.awt.UIElement=true')
         }
 
         // Memory Settings
@@ -129,10 +125,6 @@ class LaunchArgumentBuilder {
         if (process.platform === 'darwin') {
             args.push('-Xdock:name=FLauncher')
             args.push('-Xdock:icon=' + path.join(__dirname, '..', '..', 'images', 'minecraft.icns'))
-            // Force headless to prevent AWT from stealing the main thread/AppKit focus from GLFW
-            args.push('-Djava.awt.headless=true')
-            // Hide the Java "coffee cup" icon and prevent it from appearing in the dock/switcher twice
-            args.push('-Dapple.awt.UIElement=true')
 
             // Legacy versions still require -XstartOnFirstThread
             if (!mcVersionAtLeast('1.13', this.server.rawServer.minecraftVersion)) {

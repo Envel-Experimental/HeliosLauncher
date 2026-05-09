@@ -225,13 +225,8 @@ class ProcessBuilder {
         this.logBuffer = []
         
         // Inject Launch Context into the crash buffer
-        this.logBuffer.push('====================================================')
-        this.logBuffer.push('Launch Context:')
-        this.logBuffer.push(`Java Path: ${javaPath}`)
-        this.logBuffer.push(`Arguments: ${sanitizedArgs.join(' ')}`)
-        this.logBuffer.push('====================================================')
-        this.logBuffer.push('')
-
+        const contextString = `====================================================\nLaunch Context:\nJava Path: ${javaPath}\nArguments: ${sanitizedArgs.join(' ')}\n====================================================\n`
+        
         child.stdout.setEncoding('utf8')
         child.stderr.setEncoding('utf8')
 
@@ -251,6 +246,9 @@ class ProcessBuilder {
                 this.logBuffer = this.logBuffer.slice(-1000)
             }
         }
+
+        // Print context directly
+        handleLog(contextString, false)
 
         child.stdout.on('data', d => handleLog(d, false))
         child.stderr.on('data', d => handleLog(d, true))
