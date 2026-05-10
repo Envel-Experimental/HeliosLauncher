@@ -116,7 +116,16 @@ class LaunchArgumentBuilder {
 
         // Add mandatory macOS arguments
         if (process.platform === 'darwin') {
-            if (!jvmArgs.some(arg => (typeof arg === 'string' && arg === '-XstartOnFirstThread') || (typeof arg === 'object' && arg.value === '-XstartOnFirstThread'))) {
+            const hasStartOnFirstThread = jvmArgs.some(arg => {
+                if (typeof arg === 'string') return arg === '-XstartOnFirstThread'
+                if (typeof arg === 'object' && arg.value) {
+                    if (typeof arg.value === 'string') return arg.value === '-XstartOnFirstThread'
+                    if (Array.isArray(arg.value)) return arg.value.includes('-XstartOnFirstThread')
+                }
+                return false
+            })
+            
+            if (!hasStartOnFirstThread) {
                 jvmArgs.unshift('-XstartOnFirstThread')
             }
             if (!mcVersionAtLeast('1.17', this.server.rawServer.minecraftVersion)) {
@@ -140,94 +149,6 @@ class LaunchArgumentBuilder {
         }
 
         // 3. Process rules and placeholders for BOTH
-        const allArgs = jvmArgs.concat(gameArgs)
-        const jvmArgsCount = jvmArgs.length
-
-        for (let i = 0; i < allArgs.length; i++) {
-            const arg = allArgs[i]
-            if (arg == null) continue
-
-            if (typeof arg === 'object' && arg.rules != null) {
-                let allowed = false
-                for (const rule of arg.rules) {
-                    let match = true
-                    if (rule.os != null) {
-                        if (rule.os.name && rule.os.name !== getMojangOS()) match = false
-                        if (rule.os.arch && rule.os.arch !== process.arch) {
-                            if (!(rule.os.arch === 'aarch64' && process.arch === 'arm64')) match = false
-                        }
-                        if (rule.os.version && !new RegExp(rule.os.version).test(os.release())) match = false
-                    }
-                    if (match) {
-                        allowed = (rule.action === 'allow')
-                    }
-                }
-
-                if (allowed) {
-                    if (Array.isArray(arg.value)) {
-                        const values = [...arg.value]
-                        allArgs.splice(i, 1, ...values)
-                        i += (values.length - 1)
-                    } else if (typeof arg.value === 'string') {
-                        // Avoid duplicates of -XstartOnFirstThread
-                        if (arg.value === '-XstartOnFirstThread' && process.platform === 'darwin' && i > 0 && allArgs[0] === '-XstartOnFirstThread') {
-                            allArgs[i] = null
-                        } else {
-                            allArgs[i] = arg.value
-                        }
-                    }
-                } else {
-                    allArgs[i] = null
-                }
-            }
-        }
-
-        // 4. Resolve placeholders for all allowed arguments
-        for (let i = 0; i < allArgs.length; i++) {
-            let arg = allArgs[i]
-            if (arg == null || typeof arg !== 'string') continue
-
-            if (argDiscovery.test(arg)) {
-                // Determine what this placeholder is
-                const identifier = arg.match(argDiscovery)[1]
-                let val = null
-                switch (identifier) {
-                    case 'auth_player_name': val = this.authUser.displayName.trim(); break;
-                    case 'version_name': val = this.server.rawServer.id; break;
-                    case 'game_directory': val = this.gameDir; break;
-                    case 'assets_root': val = path.join(this.commonDir, 'assets'); break;
-                    case 'assets_index_name': val = this.vanillaManifest.assets; break;
-                    case 'auth_uuid': val = this.authUser.uuid.trim(); break;
-                    case 'auth_access_token': val = this.authUser.accessToken; break;
-                    case 'user_type': val = this.authUser.type === 'microsoft' ? 'msa' : 'mojang'; break;
-                    case 'version_type': val = this.vanillaManifest.type; break;
-                    case 'resolution_width': val = ConfigManager.getGameWidth(); break;
-                    case 'resolution_height': val = ConfigManager.getGameHeight(); break;
-                    case 'library_directory': val = this.libPath; break;
-                    case 'natives_directory': val = tempNativePath; break;
-                    case 'launcher_name': val = 'FLauncher'; break;
-                    case 'launcher_version': val = this.launcherVersion; break;
-                    case 'classpath': val = (await this.classpathArg(mods, tempNativePath, false, null, usingFabricLoader)).join(LaunchArgumentBuilder.getClasspathSeparator()); break;
-                }
-                if (val != null) {
-                    allArgs[i] = arg.replaceAll('${' + identifier + '}', val)
-                }
-            }
-        }
-
-        // 5. Final assembly
-        const filteredArgs = allArgs.filter(arg => arg != null && arg !== '')
-        
-        // We need to find where JVM args end and game args begin
-        // But it's easier to just rebuild the final array from our processed allArgs
-        // Actually, we lost the split point because of splice.
-        
-        // Let's just return them in order: [Processed JVM Args] [Main Class] [Processed Game Args]
-        // Wait, the order in allArgs IS [JVM] [Game].
-        // So we just need to insert Main Class in between.
-        
-        // To do this accurately, we should have processed them separately or kept track.
-        // Let's just process them separately to be safe.
         return this._finishConstruct113(jvmArgs, gameArgs, mods, tempNativePath, usingFabricLoader)
     }
 
@@ -248,6 +169,15 @@ class LaunchArgumentBuilder {
                                 if (!(rule.os.arch === 'aarch64' && process.arch === 'arm64')) match = false
                             }
                             if (rule.os.version && !new RegExp(rule.os.version).test(os.release())) match = false
+                        } else if (rule.features != null) {
+                            for (const [feat, required] of Object.entries(rule.features)) {
+                                if (feat === 'has_custom_resolution' && required === true) {
+                                    if (ConfigManager.getGameWidth() == null || ConfigManager.getGameHeight() == null) match = false
+                                } else {
+                                    // Any other feature (demo, quick play) is not supported by default
+                                    if (required === true) match = false
+                                }
+                            }
                         }
                         if (match) allowed = (rule.action === 'allow')
                     }
@@ -298,7 +228,18 @@ class LaunchArgumentBuilder {
         const finalJvm = await resolve(jvmArgs)
         const finalGame = await resolve(gameArgs)
 
-        return finalJvm.concat([this.modManifest.mainClass]).concat(finalGame)
+        // Deduplicate -XstartOnFirstThread specifically to avoid macOS issues
+        let filteredJvm = []
+        let hasXstart = false
+        for (const arg of finalJvm) {
+            if (arg === '-XstartOnFirstThread') {
+                if (hasXstart) continue
+                hasXstart = true
+            }
+            filteredJvm.push(arg)
+        }
+
+        return filteredJvm.concat([this.modManifest.mainClass]).concat(finalGame)
     }
 
     /**

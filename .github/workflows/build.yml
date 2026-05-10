@@ -12,6 +12,7 @@ permissions:
 env:
   BRANCH_NAME: ${{ github.ref_name }}
   COMMIT_SHA:  ${{ github.sha }}
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
@@ -116,7 +117,7 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: "foxford-dc"
           SENTRY_PROJECT: "node"
-          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+          SENTRY_PROJECT: "node"
         shell: bash
         run: |
           # 1. Метаданные релиза
