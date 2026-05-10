@@ -122,10 +122,11 @@ class ProcessBuilder {
         const javaPath = this.javaPath
         this.args = args
 
-        const sanitizedArgs = args.map((arg, index, arr) => {
+        const sanitizedArgs = args.filter(arg => arg != null).map((arg, index, arr) => {
             if (index > 0 && (arr[index - 1] === '--accessToken' || arr[index - 1] === '--uuid')) return '***'
             return arg
         })
+        logger.info(`Platform: ${process.platform}, Arch: ${process.arch}`)
         logger.info('Launch Arguments:', sanitizedArgs)
         logger.info('Full Command:', [javaPath, ...sanitizedArgs].join(' '))
 

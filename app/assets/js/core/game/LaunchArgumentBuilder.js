@@ -108,96 +108,167 @@ class LaunchArgumentBuilder {
     async _constructJVMArguments113(mods, tempNativePath, usingFabricLoader) {
         const argDiscovery = /\${*(.*)}/
 
-        // Start with JVM arguments from Vanilla Manifest
-        let args = [...this.vanillaManifest.arguments.jvm]
-
-        // Append ModLoader JVM arguments
-        if (this.modManifest.arguments.jvm != null) {
-            for (const argStr of this.modManifest.arguments.jvm) {
-                args.push(argStr
-                    .replaceAll('${library_directory}', this.libPath)
-                    .replaceAll('${classpath_separator}', LaunchArgumentBuilder.getClasspathSeparator())
-                    .replaceAll('${version_name}', this.modManifest.id.replace(/\.\.+/g, '.'))
-                )
-            }
+        // 1. Collect all JVM arguments
+        let jvmArgs = [...(this.vanillaManifest.arguments.jvm || [])]
+        if (this.modManifest.arguments.jvm != null && this.modManifest !== this.vanillaManifest) {
+            jvmArgs = jvmArgs.concat(this.modManifest.arguments.jvm)
         }
 
-        // macOS specific UI/System arguments
+        // Add mandatory macOS arguments
         if (process.platform === 'darwin') {
-            // Force -XstartOnFirstThread to the front if not already there
-            if (!args.includes('-XstartOnFirstThread')) {
-                args.unshift('-XstartOnFirstThread')
+            if (!jvmArgs.some(arg => (typeof arg === 'string' && arg === '-XstartOnFirstThread') || (typeof arg === 'object' && arg.value === '-XstartOnFirstThread'))) {
+                jvmArgs.unshift('-XstartOnFirstThread')
             }
-
-            // Only add legacy dock arguments for older versions (pre-1.17)
-            // Newer Java versions (17+) used by 1.17+ crash when these AWT hooks are used.
             if (!mcVersionAtLeast('1.17', this.server.rawServer.minecraftVersion)) {
-                args.push('-Xdock:name=FLauncher')
-                args.push('-Xdock:icon=' + path.join(__dirname, '..', '..', '..', 'images', 'minecraft.icns'))
+                jvmArgs.push('-Xdock:name=FLauncher')
+                jvmArgs.push('-Xdock:icon=' + path.join(__dirname, '..', '..', '..', 'app', 'assets', 'images', 'minecraft.icns'))
             }
         }
 
-        // Memory Settings
-        args.push('-Xmx' + ConfigManager.getMaxRAM(this.server.rawServer.id))
-        args.push('-Xms' + ConfigManager.getMinRAM(this.server.rawServer.id))
-        args = args.concat(this._resolveSanitizedJMArgs(args))
+        // Resolve common JVM arguments
+        jvmArgs.push('-Djava.library.path=' + path.resolve(tempNativePath))
+        jvmArgs.push('-Xmx' + ConfigManager.getMaxRAM(this.server.rawServer.id))
+        jvmArgs.push('-Xms' + ConfigManager.getMinRAM(this.server.rawServer.id))
+        
+        const extraJvmArgs = this._resolveSanitizedJMArgs(jvmArgs)
+        jvmArgs = jvmArgs.concat(extraJvmArgs)
 
-        // Main Java Class
-        args.push(this.modManifest.mainClass)
+        // 2. Collect all Game arguments
+        let gameArgs = [...(this.vanillaManifest.arguments.game || [])]
+        if (this.modManifest.arguments.game != null && this.modManifest !== this.vanillaManifest) {
+            gameArgs = gameArgs.concat(this.modManifest.arguments.game)
+        }
 
-        // Vanilla Arguments
-        args = args.concat(this.vanillaManifest.arguments.game)
+        // 3. Process rules and placeholders for BOTH
+        const allArgs = jvmArgs.concat(gameArgs)
+        const jvmArgsCount = jvmArgs.length
 
-        // Process Argument Rules (Allow/Disallow based on OS/Features)
-        for (let i = 0; i < args.length; i++) {
-            if (typeof args[i] === 'object' && args[i].rules != null) {
-                let checksum = 0
-                for (let rule of args[i].rules) {
+        for (let i = 0; i < allArgs.length; i++) {
+            const arg = allArgs[i]
+            if (arg == null) continue
+
+            if (typeof arg === 'object' && arg.rules != null) {
+                let allowed = false
+                for (const rule of arg.rules) {
+                    let match = true
                     if (rule.os != null) {
-                        let osMatch = rule.os.name === getMojangOS()
-                        if (osMatch && rule.os.version != null) {
-                            if (getMojangOS() === 'osx') {
-                                // Mojang's OSX regexes expect macOS marketing versions (e.g. ^10\.),
-                                // but node's os.release() returns Darwin kernel versions (e.g. 20.x for macOS 11+).
-                                // To maintain compatibility with all macOS versions, we bypass the version check for OSX.
-                                osMatch = true
-                            } else {
-                                osMatch = new RegExp(rule.os.version).test(os.release())
-                            }
+                        if (rule.os.name && rule.os.name !== getMojangOS()) match = false
+                        if (rule.os.arch && rule.os.arch !== process.arch) {
+                            if (!(rule.os.arch === 'aarch64' && process.arch === 'arm64')) match = false
                         }
-
-                        if (osMatch) {
-                            if (rule.action === 'allow') checksum++
-                        } else {
-                            if (rule.action === 'disallow') checksum++
-                        }
-                    } else if (rule.features != null) {
-                        if (rule.features.has_custom_resolution && ConfigManager.getFullscreen()) {
-                            args[i].value = ['--fullscreen', 'true']
-                            checksum++
-                        }
+                        if (rule.os.version && !new RegExp(rule.os.version).test(os.release())) match = false
+                    }
+                    if (match) {
+                        allowed = (rule.action === 'allow')
                     }
                 }
-                if (checksum === args[i].rules.length) {
-                    if (typeof args[i].value === 'string') {
-                        // Avoid adding -XstartOnFirstThread if we already unshifted it to the front
-                        if (args[i].value === '-XstartOnFirstThread' && process.platform === 'darwin' && args[0] === '-XstartOnFirstThread') {
-                            args[i] = null
+
+                if (allowed) {
+                    if (Array.isArray(arg.value)) {
+                        const values = [...arg.value]
+                        allArgs.splice(i, 1, ...values)
+                        i += (values.length - 1)
+                    } else if (typeof arg.value === 'string') {
+                        // Avoid duplicates of -XstartOnFirstThread
+                        if (arg.value === '-XstartOnFirstThread' && process.platform === 'darwin' && i > 0 && allArgs[0] === '-XstartOnFirstThread') {
+                            allArgs[i] = null
                         } else {
-                            args[i] = args[i].value
+                            allArgs[i] = arg.value
                         }
-                    } else if (typeof args[i].value === 'object') {
-                        const values = args[i].value.filter(v => !(v === '-XstartOnFirstThread' && process.platform === 'darwin' && args[0] === '-XstartOnFirstThread'))
-                        args.splice(i, 1, ...values)
-                        i--
                     }
                 } else {
-                    args[i] = null
+                    allArgs[i] = null
                 }
-            } else if (typeof args[i] === 'string') {
-                // Replace placeholders
-                if (argDiscovery.test(args[i])) {
-                    const identifier = args[i].match(argDiscovery)[1]
+            }
+        }
+
+        // 4. Resolve placeholders for all allowed arguments
+        for (let i = 0; i < allArgs.length; i++) {
+            let arg = allArgs[i]
+            if (arg == null || typeof arg !== 'string') continue
+
+            if (argDiscovery.test(arg)) {
+                // Determine what this placeholder is
+                const identifier = arg.match(argDiscovery)[1]
+                let val = null
+                switch (identifier) {
+                    case 'auth_player_name': val = this.authUser.displayName.trim(); break;
+                    case 'version_name': val = this.server.rawServer.id; break;
+                    case 'game_directory': val = this.gameDir; break;
+                    case 'assets_root': val = path.join(this.commonDir, 'assets'); break;
+                    case 'assets_index_name': val = this.vanillaManifest.assets; break;
+                    case 'auth_uuid': val = this.authUser.uuid.trim(); break;
+                    case 'auth_access_token': val = this.authUser.accessToken; break;
+                    case 'user_type': val = this.authUser.type === 'microsoft' ? 'msa' : 'mojang'; break;
+                    case 'version_type': val = this.vanillaManifest.type; break;
+                    case 'resolution_width': val = ConfigManager.getGameWidth(); break;
+                    case 'resolution_height': val = ConfigManager.getGameHeight(); break;
+                    case 'library_directory': val = this.libPath; break;
+                    case 'natives_directory': val = tempNativePath; break;
+                    case 'launcher_name': val = 'FLauncher'; break;
+                    case 'launcher_version': val = this.launcherVersion; break;
+                    case 'classpath': val = (await this.classpathArg(mods, tempNativePath, false, null, usingFabricLoader)).join(LaunchArgumentBuilder.getClasspathSeparator()); break;
+                }
+                if (val != null) {
+                    allArgs[i] = arg.replaceAll('${' + identifier + '}', val)
+                }
+            }
+        }
+
+        // 5. Final assembly
+        const filteredArgs = allArgs.filter(arg => arg != null && arg !== '')
+        
+        // We need to find where JVM args end and game args begin
+        // But it's easier to just rebuild the final array from our processed allArgs
+        // Actually, we lost the split point because of splice.
+        
+        // Let's just return them in order: [Processed JVM Args] [Main Class] [Processed Game Args]
+        // Wait, the order in allArgs IS [JVM] [Game].
+        // So we just need to insert Main Class in between.
+        
+        // To do this accurately, we should have processed them separately or kept track.
+        // Let's just process them separately to be safe.
+        return this._finishConstruct113(jvmArgs, gameArgs, mods, tempNativePath, usingFabricLoader)
+    }
+
+    async _finishConstruct113(jvmArgs, gameArgs, mods, tempNativePath, usingFabricLoader) {
+        const resolve = async (args) => {
+            const argDiscovery = /\${*(.*)}/
+            // Rule processing
+            for (let i = 0; i < args.length; i++) {
+                const arg = args[i]
+                if (arg == null) continue
+                if (typeof arg === 'object' && arg.rules != null) {
+                    let allowed = false
+                    for (const rule of arg.rules) {
+                        let match = true
+                        if (rule.os != null) {
+                            if (rule.os.name && rule.os.name !== getMojangOS()) match = false
+                            if (rule.os.arch && rule.os.arch !== process.arch) {
+                                if (!(rule.os.arch === 'aarch64' && process.arch === 'arm64')) match = false
+                            }
+                            if (rule.os.version && !new RegExp(rule.os.version).test(os.release())) match = false
+                        }
+                        if (match) allowed = (rule.action === 'allow')
+                    }
+                    if (allowed) {
+                        if (Array.isArray(arg.value)) {
+                            args.splice(i, 1, ...arg.value)
+                            i--
+                        } else {
+                            args[i] = arg.value
+                        }
+                    } else {
+                        args[i] = null
+                    }
+                }
+            }
+            // Placeholder processing
+            const final = []
+            for (let arg of args) {
+                if (arg == null || arg === '') continue
+                if (typeof arg === 'string' && argDiscovery.test(arg)) {
+                    const identifier = arg.match(argDiscovery)[1]
                     let val = null
                     switch (identifier) {
                         case 'auth_player_name': val = this.authUser.displayName.trim(); break;
@@ -211,23 +282,23 @@ class LaunchArgumentBuilder {
                         case 'version_type': val = this.vanillaManifest.type; break;
                         case 'resolution_width': val = ConfigManager.getGameWidth(); break;
                         case 'resolution_height': val = ConfigManager.getGameHeight(); break;
-                        case 'natives_directory': val = args[i].replace(argDiscovery, tempNativePath); break;
-                        case 'launcher_name': val = args[i].replace(argDiscovery, 'FLauncher'); break;
-                        case 'launcher_version': val = args[i].replace(argDiscovery, this.launcherVersion); break;
+                        case 'library_directory': val = this.libPath; break;
+                        case 'natives_directory': val = tempNativePath; break;
+                        case 'launcher_name': val = 'FLauncher'; break;
+                        case 'launcher_version': val = this.launcherVersion; break;
                         case 'classpath': val = (await this.classpathArg(mods, tempNativePath, false, null, usingFabricLoader)).join(LaunchArgumentBuilder.getClasspathSeparator()); break;
                     }
-                    if (val != null) args[i] = val
+                    if (val != null) arg = arg.replaceAll('${' + identifier + '}', val)
                 }
+                if (arg != null && arg !== '') final.push(arg)
             }
+            return final
         }
 
-        args = args.concat(this.modManifest.arguments.game)
+        const finalJvm = await resolve(jvmArgs)
+        const finalGame = await resolve(gameArgs)
 
-        return args.filter(arg => {
-            if (arg == null || arg === '') return false
-            if (typeof arg === 'string' && arg.startsWith('${') && arg.endsWith('}')) return false
-            return true
-        })
+        return finalJvm.concat([this.modManifest.mainClass]).concat(finalGame)
     }
 
     /**

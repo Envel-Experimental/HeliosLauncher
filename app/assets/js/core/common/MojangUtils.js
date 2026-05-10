@@ -12,11 +12,14 @@ function getMojangOS() {
     }
 }
 
+const os = require('os')
+
 function validateLibraryRules(rules) {
-    if (rules == null) return false
+    if (rules == null || rules.length === 0) return true
+    let allowed = false
     for (const rule of rules) {
-        if (rule.action != null && rule.os != null) {
-            let match = true
+        let match = true
+        if (rule.os != null) {
             if (rule.os.name && rule.os.name !== getMojangOS()) match = false
             if (rule.os.arch && rule.os.arch !== process.arch) {
                 // Support aarch64 synonym for arm64
@@ -24,15 +27,16 @@ function validateLibraryRules(rules) {
                     match = false
                 }
             }
-            
-            if (rule.action === 'allow') {
-                return match
-            } else if (rule.action === 'disallow') {
-                return !match
+            if (rule.os.version && !new RegExp(rule.os.version).test(os.release())) {
+                match = false
             }
         }
+        
+        if (match) {
+            allowed = (rule.action === 'allow')
+        }
     }
-    return true
+    return allowed
 }
 
 function validateLibraryNatives(natives) {
