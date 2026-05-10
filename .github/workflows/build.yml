@@ -117,7 +117,6 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: "foxford-dc"
           SENTRY_PROJECT: "node"
-          SENTRY_PROJECT: "node"
         shell: bash
         run: |
           # 1. Метаданные релиза
