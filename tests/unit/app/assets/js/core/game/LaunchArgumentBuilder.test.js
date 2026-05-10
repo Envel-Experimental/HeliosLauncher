@@ -21,8 +21,7 @@ describe('LaunchArgumentBuilder', () => {
     const mockServer = {
         rawServer: {
             id: 'testServer',
-            minecraftVersion: '1.20.1',
-            autoconnect: true
+            minecraftVersion: '1.20.1'
         },
         hostname: 'localhost',
         port: 25565,
@@ -67,7 +66,6 @@ describe('LaunchArgumentBuilder', () => {
             getMaxRAM: jest.fn().mockReturnValue('2G'),
             getMinRAM: jest.fn().mockReturnValue('1G'),
             getJVMOptions: jest.fn().mockReturnValue([]),
-            getAutoConnect: jest.fn().mockReturnValue(true),
             getGameWidth: jest.fn().mockReturnValue(800),
             getGameHeight: jest.fn().mockReturnValue(600),
             getFullscreen: jest.fn().mockReturnValue(false),

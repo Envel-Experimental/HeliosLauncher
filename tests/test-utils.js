@@ -30,7 +30,7 @@ async function setupDummyConfig() {
     }
     const dummyConfig = {
         settings: {
-            game: { resWidth: 1280, resHeight: 720, fullscreen: false, autoConnect: true, launchDetached: false },
+            game: { resWidth: 1280, resHeight: 720, fullscreen: false, launchDetached: false },
             launcher: { allowPrerelease: false, dataDirectory: FOXFORD_DATA_PATH, totalRAMWarningShown: true },
             deliveryOptimization: { localOptimization: true, globalOptimization: true, p2pUploadEnabled: true, p2pUploadLimit: 5, p2pOnlyMode: false },
             p2pPromptShown: true

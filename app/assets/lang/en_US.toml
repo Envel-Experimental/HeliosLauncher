@@ -68,7 +68,7 @@ minecraftTabHeaderText = "Настройки Minecraft"
 minecraftTabHeaderDesc = "Параметры, связанные с запуском игры."
 gameResolutionTitle = "Разрешение игры"
 launchFullscreenTitle = "Запуск в полноэкранном режиме."
-autoConnectTitle = "Автоматически подключаться к серверу при запуске."
+
 launchDetachedTitle = "Запускать игру отдельно от лаунчера."
 launchDetachedDesc = "Если игра не отделена, закрытие лаунчера также закроет игру."
 tabModsHeaderText = "Настройки модов"

@@ -11,8 +11,7 @@ jest.mock('../../../../app/assets/js/core/configmanager', () => ({
     getJVMOptions: jest.fn().mockReturnValue([]),
     getGameWidth: jest.fn().mockReturnValue(800),
     getGameHeight: jest.fn().mockReturnValue(600),
-    getFullscreen: jest.fn().mockReturnValue(false),
-    getAutoConnect: jest.fn().mockReturnValue(true)
+    getFullscreen: jest.fn().mockReturnValue(false)
 }))
 
 jest.mock('../../../../app/assets/js/core/util/LoggerUtil', () => ({
@@ -31,7 +30,7 @@ const path = require('path')
 
 describe('LaunchArgumentBuilder', () => {
     const server = {
-        rawServer: { id: 'test', minecraftVersion: '1.16.5', autoconnect: true },
+        rawServer: { id: 'test', minecraftVersion: '1.16.5' },
         hostname: 'play.test.com',
         port: 25565,
         modules: []

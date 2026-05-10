@@ -16,7 +16,6 @@ const isRenderer = process.type === 'renderer'
  * @property {number} resWidth
  * @property {number} resHeight
  * @property {boolean} fullscreen
- * @property {boolean} autoConnect
  * @property {boolean} launchDetached
  */
 
@@ -83,7 +82,6 @@ const DEFAULT_CONFIG = {
             resWidth: 1280,
             resHeight: 720,
             fullscreen: false,
-            autoConnect: true,
             launchDetached: true
         },
         launcher: {
@@ -530,10 +528,7 @@ exports.getFullscreen = (def = false) => {
     return !def ? config.settings.game.fullscreen : DEFAULT_CONFIG.settings.game.fullscreen
 }
 
-exports.getAutoConnect = (def = false) => {
-    if (!config || !config.settings) return DEFAULT_CONFIG.settings.game.autoConnect
-    return !def ? config.settings.game.autoConnect : DEFAULT_CONFIG.settings.game.autoConnect
-}
+
 
 exports.getLaunchDetached = (def = false) => {
     if (!config || !config.settings) return DEFAULT_CONFIG.settings.game.launchDetached
@@ -564,7 +559,7 @@ exports.setP2PPromptShown = (val) => { if (config) config.settings.p2pPromptShow
 exports.setGameWidth = (val) => { if (config) config.settings.game.resWidth = Number(val) }
 exports.setGameHeight = (val) => { if (config) config.settings.game.resHeight = Number(val) }
 exports.setFullscreen = (val) => { if (config) config.settings.game.fullscreen = val }
-exports.setAutoConnect = (val) => { if (config) config.settings.game.autoConnect = val }
+
 exports.setLaunchDetached = (val) => { if (config) config.settings.game.launchDetached = val }
 exports.setAllowPrerelease = (val) => { if (config) config.settings.launcher.allowPrerelease = val }
 exports.setJVMOptions = (id, val) => {

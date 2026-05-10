@@ -15,8 +15,13 @@ function getMojangOS() {
 const os = require('os')
 
 function validateLibraryRules(rules) {
-    if (rules == null || rules.length === 0) return true
-    let allowed = false
+    if (rules == null) return false
+    if (rules.length === 0) return true
+
+    // Mojang spec: if there are rules, the initial state is 'false' if there is an 'allow' rule,
+    // but if there are only 'disallow' rules, it effectively starts as 'true'.
+    let allowed = !rules.some(r => r.action === 'allow')
+
     for (const rule of rules) {
         let match = true
         if (rule.os != null) {

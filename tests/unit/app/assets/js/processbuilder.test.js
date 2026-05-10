@@ -33,7 +33,6 @@ describe('ProcessBuilder', () => {
             getGameWidth: jest.fn(),
             getGameHeight: jest.fn(),
             getFullscreen: jest.fn(),
-            getAutoConnect: jest.fn(),
             getInstanceDirectorySync: jest.fn(() => '/mock/instances'),
             getCommonDirectorySync: jest.fn(() => '/mock/common'),
             fetchWithTimeout: jest.fn()
@@ -51,7 +50,6 @@ describe('ProcessBuilder', () => {
         ConfigManager.getGameWidth.mockReturnValue(800)
         ConfigManager.getGameHeight.mockReturnValue(600)
         ConfigManager.getFullscreen.mockReturnValue(false)
-        ConfigManager.getAutoConnect.mockReturnValue(false)
 
         const builder = new ProcessBuilder({ id: 'test', rawServer: { id: 'test' } }, { id: '1.12.2' }, {}, { displayName: 'Player' }, '1.0.0')
         expect(builder).toBeDefined()
