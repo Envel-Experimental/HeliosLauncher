@@ -154,7 +154,6 @@ class LaunchArgumentBuilder {
 
     async _finishConstruct113(jvmArgs, gameArgs, mods, tempNativePath, usingFabricLoader) {
         const resolve = async (args) => {
-            const argDiscovery = /\${*(.*)}/
             // Rule processing
             for (let i = 0; i < args.length; i++) {
                 const arg = args[i]
@@ -169,12 +168,16 @@ class LaunchArgumentBuilder {
                                 if (!(rule.os.arch === 'aarch64' && process.arch === 'arm64')) match = false
                             }
                             if (rule.os.version && !new RegExp(rule.os.version).test(os.release())) match = false
-                        } else if (rule.features != null) {
+                        }
+                        if (rule.features != null) {
                             for (const [feat, required] of Object.entries(rule.features)) {
-                                if (feat === 'has_custom_resolution' && required === true) {
-                                    if (ConfigManager.getGameWidth() == null || ConfigManager.getGameHeight() == null) match = false
+                                if (feat === 'has_custom_resolution') {
+                                    if (required !== (ConfigManager.getGameWidth() != null && ConfigManager.getGameHeight() != null)) match = false
+                                } else if (feat === 'is_demo_user') {
+                                    // NEVER allow demo mode rules
+                                    match = false
                                 } else {
-                                    // Any other feature (demo, quick play) is not supported by default
+                                    // Any other feature (quick play, etc) is not supported by default
                                     if (required === true) match = false
                                 }
                             }
@@ -183,10 +186,16 @@ class LaunchArgumentBuilder {
                     }
                     if (allowed) {
                         if (Array.isArray(arg.value)) {
-                            args.splice(i, 1, ...arg.value)
+                            // Ensure no --demo is hiding in the array values
+                            const filteredValue = arg.value.filter(v => v !== '--demo')
+                            args.splice(i, 1, ...filteredValue)
                             i--
                         } else {
-                            args[i] = arg.value
+                            if (arg.value === '--demo') {
+                                args[i] = null
+                            } else {
+                                args[i] = arg.value
+                            }
                         }
                     } else {
                         args[i] = null
@@ -195,30 +204,70 @@ class LaunchArgumentBuilder {
             }
             // Placeholder processing
             const final = []
-            for (let arg of args) {
-                if (arg == null || arg === '') continue
-                if (typeof arg === 'string' && argDiscovery.test(arg)) {
-                    const identifier = arg.match(argDiscovery)[1]
-                    let val = null
-                    switch (identifier) {
-                        case 'auth_player_name': val = this.authUser.displayName.trim(); break;
-                        case 'version_name': val = this.server.rawServer.id; break;
-                        case 'game_directory': val = this.gameDir; break;
-                        case 'assets_root': val = path.join(this.commonDir, 'assets'); break;
-                        case 'assets_index_name': val = this.vanillaManifest.assets; break;
-                        case 'auth_uuid': val = this.authUser.uuid.trim(); break;
-                        case 'auth_access_token': val = this.authUser.accessToken; break;
-                        case 'user_type': val = this.authUser.type === 'microsoft' ? 'msa' : 'mojang'; break;
-                        case 'version_type': val = this.vanillaManifest.type; break;
-                        case 'resolution_width': val = ConfigManager.getGameWidth(); break;
-                        case 'resolution_height': val = ConfigManager.getGameHeight(); break;
-                        case 'library_directory': val = this.libPath; break;
-                        case 'natives_directory': val = tempNativePath; break;
-                        case 'launcher_name': val = 'FLauncher'; break;
-                        case 'launcher_version': val = this.launcherVersion; break;
-                        case 'classpath': val = (await this.classpathArg(mods, tempNativePath, false, null, usingFabricLoader)).join(LaunchArgumentBuilder.getClasspathSeparator()); break;
+            for (let i = 0; i < args.length; i++) {
+                let arg = args[i]
+                if (arg == null || arg === '' || arg === '--demo') continue
+                if (typeof arg === 'string') {
+                    arg = arg.trim()
+                    if (arg === this.vanillaManifest.mainClass || arg === 'net.minecraft.client.main.Main') continue
+                    
+                    // Fix spaces in properties (e.g. -Dprop= value -> -Dprop=value)
+                    if (arg.startsWith('-D') && arg.includes('=')) {
+                        arg = arg.replace(/=\s+/, '=')
                     }
-                    if (val != null) arg = arg.replaceAll('${' + identifier + '}', val)
+                    const matches = [...arg.matchAll(/\${(.*?)}/g)]
+                    let resolved = arg
+                    let anyNull = false
+                    for (const match of matches) {
+                        const identifier = match[1]
+                        let val = null
+                        switch (identifier) {
+                            case 'auth_player_name': val = this.authUser.displayName.trim(); break;
+                            case 'version_name': val = this.server.rawServer.id; break;
+                            case 'game_directory': val = this.gameDir; break;
+                            case 'assets_root': val = path.join(this.commonDir, 'assets'); break;
+                            case 'assets_index_name': val = this.vanillaManifest.assets; break;
+                            case 'auth_uuid': val = this.authUser.uuid.trim(); break;
+                            case 'auth_access_token': val = this.authUser.accessToken; break;
+                            case 'user_type': val = this.authUser.type === 'microsoft' ? 'msa' : 'mojang'; break;
+                            case 'version_type': val = this.vanillaManifest.type; break;
+                            case 'resolution_width': val = ConfigManager.getGameWidth(); break;
+                            case 'resolution_height': val = ConfigManager.getGameHeight(); break;
+                            case 'library_directory': val = this.libPath; break;
+                            case 'natives_directory': val = tempNativePath; break;
+                            case 'launcher_name': val = 'FLauncher'; break;
+                            case 'launcher_version': val = this.launcherVersion; break;
+                            case 'classpath': val = (await this.classpathArg(mods, tempNativePath, false, null, usingFabricLoader)).join(LaunchArgumentBuilder.getClasspathSeparator()); break;
+
+                            case 'clientid': val = this.authUser.clientId || this.authUser.uuid.trim(); break;
+                            case 'auth_xuid': val = this.authUser.xuid || this.authUser.uuid.trim(); break;
+                            
+                            // Unsupported quick play placeholders -> set to null to trigger removal
+                            case 'quickPlayPath':
+                            case 'quickPlaySingleplayer':
+                            case 'quickPlayMultiplayer':
+                            case 'quickPlayRealms':
+                                val = null;
+                                break;
+                        }
+                        if (val != null) {
+                            resolved = resolved.replaceAll('${' + identifier + '}', val)
+                        } else {
+                            anyNull = true
+                        }
+                    }
+                    if (anyNull) {
+                        // If it contains an unsupported placeholder, we remove this argument.
+                        // We also check if the PREVIOUS argument was a flag for this placeholder.
+                        if (final.length > 0) {
+                            const last = final[final.length - 1]
+                            if (last.startsWith('--quickPlay')) {
+                                final.pop()
+                            }
+                        }
+                        continue
+                    }
+                    arg = resolved
                 }
                 if (arg != null && arg !== '') final.push(arg)
             }
