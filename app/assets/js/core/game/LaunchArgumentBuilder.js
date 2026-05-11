@@ -134,11 +134,21 @@ class LaunchArgumentBuilder {
             }
         }
 
-        // Resolve common JVM arguments
-        jvmArgs.push('-Djava.library.path=' + path.resolve(tempNativePath))
+        // 1.5 Add native library path if not already present
+        const hasLibPath = jvmArgs.some(arg => (typeof arg === 'string' && arg.includes('java.library.path')) || (arg.value && Array.isArray(arg.value) && arg.value.some(v => v.includes('java.library.path'))))
+        if (!hasLibPath) {
+            jvmArgs.push('-Djava.library.path=' + path.resolve(tempNativePath))
+        }
+        
         jvmArgs.push('-Xmx' + ConfigManager.getMaxRAM(this.server.rawServer.id))
         jvmArgs.push('-Xms' + ConfigManager.getMinRAM(this.server.rawServer.id))
         
+        jvmArgs.push('-Djna.tmpdir=' + path.resolve(tempNativePath))
+        jvmArgs.push('-Dorg.lwjgl.system.SharedLibraryExtractPath=' + path.resolve(tempNativePath))
+        jvmArgs.push('-Dio.netty.native.workdir=' + path.resolve(tempNativePath))
+        jvmArgs.push('-Dminecraft.launcher.brand=FLauncher')
+        jvmArgs.push('-Dminecraft.launcher.version=' + this.launcherVersion)
+
         const extraJvmArgs = this._resolveSanitizedJMArgs(jvmArgs)
         jvmArgs = jvmArgs.concat(extraJvmArgs)
 
