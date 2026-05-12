@@ -18,22 +18,10 @@ if (agreementButton) {
         await ConfigManager.acceptAgreement()
         
         // Decide where to go next
-        const isLoggedIn = Object.keys(ConfigManager.getAuthAccounts()).length > 0
-        
-        if (ConfigManager.isFirstLaunch()) {
-            loginCancelEnabled(false)
-            window.loginViewOnSuccess = VIEWS.landing
-            window.loginViewOnCancel = VIEWS.loginOptions
-            switchView(VIEWS.agreement, VIEWS.login)
+        if (!ConfigManager.hasAcceptedP2PLegalAgreement()) {
+            switchView(VIEWS.agreement, VIEWS.p2pAgreement)
         } else {
-            if (isLoggedIn) {
-                switchView(VIEWS.agreement, VIEWS.landing)
-            } else {
-                loginOptionsCancelEnabled(false)
-                window.loginOptionsViewOnLoginSuccess = VIEWS.landing
-                window.loginOptionsViewOnLoginCancel = VIEWS.loginOptions
-                switchView(VIEWS.agreement, VIEWS.loginOptions)
-            }
+            await finishOnboarding()
         }
     })
 }

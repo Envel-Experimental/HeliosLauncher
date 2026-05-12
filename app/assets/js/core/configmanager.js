@@ -670,3 +670,23 @@ exports.acceptAgreement = async function () {
     await fs.writeFile(agreementPath, JSON.stringify(agreementData, null, 4))
     logger.info('Mandatory agreement accepted and recorded.')
 }
+
+/**
+ * Check if the user has accepted the NEW P2P legal agreement.
+ * 
+ * @returns {boolean} True if accepted.
+ */
+exports.hasAcceptedP2PLegalAgreement = function () {
+    if (!config) return false
+    return config.settings?.p2pLegalAgreementAccepted || false
+}
+
+/**
+ * Accept the NEW P2P legal agreement.
+ */
+exports.acceptP2PLegalAgreement = function () {
+    if (!config) return
+    if (!config.settings) config.settings = {}
+    config.settings.p2pLegalAgreementAccepted = true
+    exports.setP2PPromptShown(true) // Also mark the old one as shown to prevent popups
+}

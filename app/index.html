@@ -7,9 +7,9 @@
     <script>
         window._startupTime = Date.now();
         // Failsafe Hang Detector: Show status if JS doesn't start in 6s
-        setTimeout(() => {
+        window._failsafeTimer = setTimeout(() => {
             const statusText = document.getElementById('loadingStatusText');
-            if (statusText && statusText.style.display === 'none') {
+            if (statusText && statusText.style.display === 'none' && !window._loadingMonitorPaused) {
                 statusText.innerText = 'Запуск... (инициализация модулей)';
                 statusText.style.display = 'block';
                 console.log('[Failsafe] Initialization is taking longer than expected. Showing status.');
@@ -183,6 +183,22 @@
                         </svg>
                     </div>
                 </button>
+            </div>
+        </div>
+        <div id="p2pAgreementContainer" style="display: none;">
+            <div id="p2pAgreementContent">
+                <img id="p2pAgreementImageSeal" src="assets/images/icon.png" />
+                <span id="p2pAgreementHeader">Оптимизация доставки (P2P)</span>
+                <span id="p2pAgreementDescription">
+                    Для ускорения загрузки лаунчер использует децентрализованный обмен данными. 
+                    Продолжая, вы разрешаете использование части вашего интернет-канала, ресурсов устройства и установку сетевых соединений. 
+                    Подробнее о технологии <a href="https://f-launcher.ru/zombie.html" class="p2pLink">здесь</a>.
+                </span>
+
+                <div id="p2pAgreementButtons">
+                    <button id="p2pAgreementDisableButton" class="p2pButton secondary">ОТКАЗАТЬСЯ</button>
+                    <button id="p2pAgreementEnableButton" class="p2pButton primary">ПОДТВЕРДИТЬ</button>
+                </div>
             </div>
         </div>
         <div id="welcomeContainer" style="display: none;">

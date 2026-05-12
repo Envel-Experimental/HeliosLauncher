@@ -23,7 +23,8 @@ export const VIEWS = {
     settings: '#settingsContainer',
     welcome: '#welcomeContainer',
     waiting: '#waitingContainer',
-    agreement: '#agreementContainer'
+    agreement: '#agreementContainer',
+    p2pAgreement: '#p2pAgreementContainer'
 }
 
 // The currently shown view container.
@@ -74,9 +75,6 @@ export function switchView(current, next, currentFadeTime = 500, nextFadeTime = 
                 await onNextFade()
             } catch (err) {
                 console.error(`[UIBinder] Error in onNextFade for ${next}:`, err)
-            }
-            if (next === VIEWS.landing) {
-                checkAndShowP2PPrompt()
             }
         })
     })
@@ -194,6 +192,19 @@ export async function showMainUI(data) {
         ConfigManager.setSupportUrl(data.rawDistribution.supportUrl)
     }
     setTimeout(async () => {
+        // Stop loading monitors because we are now transitioning to the main UI/Agreements
+        window._loadingMonitorPaused = true
+        if (window._loadingTimer) {
+            clearTimeout(window._loadingTimer)
+            window._loadingTimer = null
+        }
+        if (window._failsafeTimer) {
+            clearTimeout(window._failsafeTimer)
+            window._failsafeTimer = null
+        }
+        const loadingStatusText = document.getElementById('loadingStatusText')
+        if (loadingStatusText) loadingStatusText.style.display = 'none'
+
         console.log('[UIBinder] Showing main container...')
         document.getElementById('frameBar').style.backgroundColor = 'rgba(0, 0, 0, 0.5)'
         document.body.style.backgroundImage = `url('assets/images/backgrounds/${document.body.getAttribute('bkid')}.jpg')`
@@ -213,47 +224,13 @@ export async function showMainUI(data) {
             currentView = VIEWS.agreement
             const agreementEl = document.querySelector(VIEWS.agreement)
             if (agreementEl) show(agreementEl)
+        } else if (!ConfigManager.hasAcceptedP2PLegalAgreement()) {
+            console.log('[UIBinder] P2P legal agreement not accepted. Showing P2P agreement view.')
+            currentView = VIEWS.p2pAgreement
+            const p2pAgreementEl = document.querySelector(VIEWS.p2pAgreement)
+            if (p2pAgreementEl) show(p2pAgreementEl)
         } else {
-            // If this is enabled in a development environment we'll get ratelimited.
-            // The relaunch frequency is usually far too high.
-            if (!isDev && isLoggedIn) {
-                validateSelectedAccount()
-            }
-
-            if (ConfigManager.isFirstLaunch()) {
-                console.log('[UIBinder] First launch detected. Jumping directly to nickname login.')
-                loginCancelEnabled(false)
-                window.loginViewOnSuccess = VIEWS.landing
-                window.loginViewOnCancel = VIEWS.loginOptions
-                currentView = VIEWS.login
-                const loginEl = document.querySelector(VIEWS.login)
-                if (loginEl) show(loginEl)
-            } else {
-                if (isLoggedIn) {
-                    currentView = VIEWS.landing
-                    const landingEl = document.querySelector(VIEWS.landing)
-                    if (landingEl) {
-                        show(landingEl)
-                        console.log('[UIBinder] Landing container shown.')
-                        const distro = await DistroAPI.getDistribution()
-                        if (distro) {
-                            console.log('[UIBinder] Distribution loaded, initializing landing...')
-                            onDistroRefresh(distro)
-                        } else {
-                            console.warn('[UIBinder] Distribution failed to load, showing landing in limited mode.')
-                        }
-                        toggleLaunchArea(false)
-                        checkAndShowP2PPrompt()
-                    }
-                } else {
-                    loginOptionsCancelEnabled(false)
-                    window.loginOptionsViewOnLoginSuccess = VIEWS.landing
-                    window.loginOptionsViewOnLoginCancel = VIEWS.loginOptions
-                    currentView = VIEWS.loginOptions
-                    const loginOptionsEl = document.querySelector(VIEWS.loginOptions)
-                    if (loginOptionsEl) show(loginOptionsEl)
-                }
-            }
+            await finishOnboarding()
         }
 
         setTimeout(() => {
@@ -267,6 +244,68 @@ export async function showMainUI(data) {
 
     }, 750)
 }
+
+/**
+ * Finalize onboarding and transition to login or landing.
+ */
+export async function finishOnboarding() {
+    const isLoggedIn = Object.keys(ConfigManager.getAuthAccounts()).length > 0
+    const isDev = process.env.NODE_ENV === 'development'
+
+    // If this is enabled in a development environment we'll get ratelimited.
+    // The relaunch frequency is usually far too high.
+    if (!isDev && isLoggedIn) {
+        validateSelectedAccount()
+    }
+
+    if (ConfigManager.isFirstLaunch()) {
+        console.log('[UIBinder] First launch detected. Jumping directly to nickname login.')
+        loginCancelEnabled(false)
+        window.loginViewOnSuccess = VIEWS.landing
+        window.loginViewOnCancel = VIEWS.loginOptions
+        
+        const nextView = VIEWS.login
+        if (currentView) {
+            switchView(currentView, nextView)
+        } else {
+            currentView = nextView
+            const el = document.querySelector(nextView)
+            if (el) show(el)
+        }
+    } else {
+        if (isLoggedIn) {
+            const nextView = VIEWS.landing
+            if (currentView) {
+                switchView(currentView, nextView)
+            } else {
+                currentView = nextView
+                const el = document.querySelector(nextView)
+                if (el) show(el)
+            }
+            
+            console.log('[UIBinder] Initializing landing...')
+            const distro = await DistroAPI.getDistribution()
+            if (distro) {
+                onDistroRefresh(distro)
+            }
+            toggleLaunchArea(false)
+        } else {
+            loginOptionsCancelEnabled(false)
+            window.loginOptionsViewOnLoginSuccess = VIEWS.landing
+            window.loginOptionsViewOnLoginCancel = VIEWS.loginOptions
+            
+            const nextView = VIEWS.loginOptions
+            if (currentView) {
+                switchView(currentView, nextView)
+            } else {
+                currentView = nextView
+                const el = document.querySelector(nextView)
+                if (el) show(el)
+            }
+        }
+    }
+}
+window.finishOnboarding = finishOnboarding
 
 export function showFatalStartupError() {
     setTimeout(() => {
@@ -762,56 +801,9 @@ async function devModeToggle() {
 
 
 
+
 /**
- * Check if the P2P prompt should be showed.
- */
-export async function checkAndShowP2PPrompt() {
-    if (!ConfigManager.getP2PPromptShown() && !isOverlayVisible()) {
-
-        if (ConfigManager.isFirstLaunch()) {
-            ConfigManager.setP2PPromptShown(true)
-            ConfigManager.setLocalOptimization(true)
-            ConfigManager.setGlobalOptimization(true)
-            ConfigManager.setP2PUploadEnabled(true)
-            ConfigManager.markFirstLaunchCompleted()
-            await ConfigManager.save()
-            await ipcRenderer.invoke('p2p:configUpdate')
-            return
-        }
-
-        const title = Lang.queryJS('uibinder.p2p.promptTitle')
-        const desc = Lang.queryJS('uibinder.p2p.promptDesc')
-        const enableBtn = Lang.queryJS('uibinder.p2p.enableButton')
-        const disableBtn = Lang.queryJS('uibinder.p2p.disableButton')
-        const settingsNotice = Lang.queryJS('uibinder.p2p.settingsNotice')
-
-        setOverlayContent(title, desc + '<br><br><span style="color: #aaa; font-size: 12px;">' + settingsNotice + '</span>', enableBtn, disableBtn)
-
-        setOverlayHandler(async () => {
-            ConfigManager.setP2PPromptShown(true)
-            ConfigManager.setLocalOptimization(true)
-            ConfigManager.setGlobalOptimization(true)
-            ConfigManager.setP2PUploadEnabled(true)
-            ConfigManager.markFirstLaunchCompleted()
-            await ConfigManager.save()
-            toggleOverlay(false)
-            await ipcRenderer.invoke('p2p:configUpdate') // Notify Main Process
-        })
-
-        setMiddleButtonHandler(async () => {
-            ConfigManager.setP2PPromptShown(true)
-            ConfigManager.setLocalOptimization(false)
-            ConfigManager.setGlobalOptimization(false)
-            ConfigManager.setP2PUploadEnabled(false)
-            ConfigManager.markFirstLaunchCompleted()
-            await ConfigManager.save()
-            toggleOverlay(false)
-            await ipcRenderer.invoke('p2p:configUpdate') // Notify Main Process
-        })
-
-        toggleOverlay(true, false)
-    }
-}
+ * Prepare the settings UI.
 
 /**
  * Prepare the settings UI.

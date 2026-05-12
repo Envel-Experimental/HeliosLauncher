@@ -17,6 +17,7 @@ export const loggerUICore = LoggerUtil.getLogger('UICore')
 export const loggerAutoUpdater = LoggerUtil.getLogger('AutoUpdater')
 
 let latestLoadingStatus = null
+window._loadingMonitorPaused = false
 
 /**
  * Update the loading status text on the splash screen.
@@ -33,13 +34,17 @@ export function setLoadingStatus(key) {
 
     console.log(`[UICore] Loading Status: ${key} (${localized}) [Elapsed: ${elapsed}ms]`)
 
+    if (window._loadingMonitorPaused) {
+        return
+    }
+
     if (elapsed >= 6000) {
         el.innerHTML = `Загрузка: ${localized}`
         el.style.display = 'block'
     } else if (!window._loadingTimer) {
         window._loadingTimer = setTimeout(() => {
             const elDelayed = document.getElementById('loadingStatusText')
-            if (elDelayed && latestLoadingStatus) {
+            if (elDelayed && latestLoadingStatus && !window._loadingMonitorPaused) {
                 const loc = Lang.queryJS(latestLoadingStatus) || latestLoadingStatus
                 elDelayed.innerHTML = `Загрузка: ${loc}`
                 elDelayed.style.display = 'block'
