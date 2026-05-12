@@ -426,8 +426,8 @@ body[data-platform="darwin"] #frameContentDarwin {
     align-items: center;
     height: 100%;
     width: 100%;
-    background: rgba(0, 0, 0, 0.85);
-    backdrop-filter: blur(10px);
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(8px);
     z-index: 1000;
     overflow: hidden;
 }
@@ -442,10 +442,10 @@ body[data-platform="darwin"] #frameContentDarwin {
     max-width: 550px;
     max-height: 90%;
     padding: 30px;
-    background: rgba(25, 25, 25, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #1e1e1e;
+    border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 16px;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.8);
     text-align: center;
     overflow-y: auto;
     scrollbar-width: thin;
@@ -550,8 +550,8 @@ body[data-platform="darwin"] #frameContentDarwin {
 }
 
 .agreementCheckboxContainer input:checked ~ .agreementCheckmark {
-    background-color: #2e8dff;
-    border-color: #2e8dff;
+    background-color: #28a745;
+    border-color: #28a745;
 }
 
 .agreementCheckmark:after {
@@ -577,7 +577,7 @@ body[data-platform="darwin"] #frameContentDarwin {
 }
 
 #agreementButton {
-    background: #2e8dff;
+    background: #28a745;
     color: white;
     font-weight: bold;
     letter-spacing: 1px;
@@ -587,6 +587,7 @@ body[data-platform="darwin"] #frameContentDarwin {
     cursor: pointer;
     transition: all 0.2s ease;
     flex-shrink: 0;
+    box-shadow: 0 10px 20px rgba(40, 167, 69, 0.2);
 }
 
 #agreementButton:disabled {
@@ -597,9 +598,9 @@ body[data-platform="darwin"] #frameContentDarwin {
 }
 
 #agreementButton:not(:disabled):hover {
-    background: #4da1ff;
+    background: #218838;
     transform: scale(1.02);
-    box-shadow: 0 12px 25px rgba(46, 141, 255, 0.3);
+    box-shadow: 0 12px 25px rgba(40, 167, 69, 0.3);
 }
 
 #agreementButton:not(:disabled):active {
