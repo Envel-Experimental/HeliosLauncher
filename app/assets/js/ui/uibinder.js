@@ -22,7 +22,8 @@ export const VIEWS = {
     login: '#loginContainer',
     settings: '#settingsContainer',
     welcome: '#welcomeContainer',
-    waiting: '#waitingContainer'
+    waiting: '#waitingContainer',
+    agreement: '#agreementContainer'
 }
 
 // The currently shown view container.
@@ -205,45 +206,53 @@ export async function showMainUI(data) {
         }
 
         const isLoggedIn = Object.keys(ConfigManager.getAuthAccounts()).length > 0
+        const hasAcceptedAgreement = await ConfigManager.hasAcceptedAgreement()
 
-        // If this is enabled in a development environment we'll get ratelimited.
-        // The relaunch frequency is usually far too high.
-        if (!isDev && isLoggedIn) {
-            validateSelectedAccount()
-        }
-
-        if (ConfigManager.isFirstLaunch()) {
-            console.log('[UIBinder] First launch detected. Jumping directly to nickname login.')
-            loginCancelEnabled(false)
-            window.loginViewOnSuccess = VIEWS.landing
-            window.loginViewOnCancel = VIEWS.loginOptions
-            currentView = VIEWS.login
-            const loginEl = document.querySelector(VIEWS.login)
-            if (loginEl) show(loginEl)
+        if (!hasAcceptedAgreement) {
+            console.log('[UIBinder] Mandatory agreement not accepted. Showing agreement view.')
+            currentView = VIEWS.agreement
+            const agreementEl = document.querySelector(VIEWS.agreement)
+            if (agreementEl) show(agreementEl)
         } else {
-            if (isLoggedIn) {
-                currentView = VIEWS.landing
-                const landingEl = document.querySelector(VIEWS.landing)
-                if (landingEl) {
-                    show(landingEl)
-                    console.log('[UIBinder] Landing container shown.')
-                    const distro = await DistroAPI.getDistribution()
-                    if (distro) {
-                        console.log('[UIBinder] Distribution loaded, initializing landing...')
-                        onDistroRefresh(distro)
-                    } else {
-                        console.warn('[UIBinder] Distribution failed to load, showing landing in limited mode.')
-                    }
-                    toggleLaunchArea(false)
-                    checkAndShowP2PPrompt()
-                }
+            // If this is enabled in a development environment we'll get ratelimited.
+            // The relaunch frequency is usually far too high.
+            if (!isDev && isLoggedIn) {
+                validateSelectedAccount()
+            }
+
+            if (ConfigManager.isFirstLaunch()) {
+                console.log('[UIBinder] First launch detected. Jumping directly to nickname login.')
+                loginCancelEnabled(false)
+                window.loginViewOnSuccess = VIEWS.landing
+                window.loginViewOnCancel = VIEWS.loginOptions
+                currentView = VIEWS.login
+                const loginEl = document.querySelector(VIEWS.login)
+                if (loginEl) show(loginEl)
             } else {
-                loginOptionsCancelEnabled(false)
-                window.loginOptionsViewOnLoginSuccess = VIEWS.landing
-                window.loginOptionsViewOnLoginCancel = VIEWS.loginOptions
-                currentView = VIEWS.loginOptions
-                const loginOptionsEl = document.querySelector(VIEWS.loginOptions)
-                if (loginOptionsEl) show(loginOptionsEl)
+                if (isLoggedIn) {
+                    currentView = VIEWS.landing
+                    const landingEl = document.querySelector(VIEWS.landing)
+                    if (landingEl) {
+                        show(landingEl)
+                        console.log('[UIBinder] Landing container shown.')
+                        const distro = await DistroAPI.getDistribution()
+                        if (distro) {
+                            console.log('[UIBinder] Distribution loaded, initializing landing...')
+                            onDistroRefresh(distro)
+                        } else {
+                            console.warn('[UIBinder] Distribution failed to load, showing landing in limited mode.')
+                        }
+                        toggleLaunchArea(false)
+                        checkAndShowP2PPrompt()
+                    }
+                } else {
+                    loginOptionsCancelEnabled(false)
+                    window.loginOptionsViewOnLoginSuccess = VIEWS.landing
+                    window.loginOptionsViewOnLoginCancel = VIEWS.loginOptions
+                    currentView = VIEWS.loginOptions
+                    const loginOptionsEl = document.querySelector(VIEWS.loginOptions)
+                    if (loginOptionsEl) show(loginOptionsEl)
+                }
             }
         }
 

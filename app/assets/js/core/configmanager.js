@@ -633,3 +633,40 @@ exports.setSupportUrl = (url) => {
 
 exports.getLastLauncherVersion = () => { if (config) return config.lastLauncherVersion; return null }
 exports.setLastLauncherVersion = (version) => { if (config) config.lastLauncherVersion = version }
+
+/**
+ * Check if the user has accepted the mandatory agreement.
+ * 
+ * @returns {Promise<boolean>} True if accepted, false otherwise.
+ */
+exports.hasAcceptedAgreement = async function () {
+    const launcherDir = await exports.getLauncherDirectory()
+    const agreementPath = path.join(launcherDir, 'agreement.json')
+    try {
+        await fs.access(agreementPath)
+        return true
+    } catch (e) {
+        return false
+    }
+}
+
+/**
+ * Accept the mandatory agreement and record the event.
+ */
+exports.acceptAgreement = async function () {
+    const launcherDir = await exports.getLauncherDirectory()
+    const agreementPath = path.join(launcherDir, 'agreement.json')
+    const now = new Date()
+    
+    const agreementData = {
+        acceptedAt: now.toISOString(),
+        timestamp: now.getTime(),
+        version: exports.getLastLauncherVersion() || 'unknown',
+        platform: os.platform(),
+        arch: os.arch(),
+        accepted: true
+    }
+    
+    await fs.writeFile(agreementPath, JSON.stringify(agreementData, null, 4))
+    logger.info('Mandatory agreement accepted and recorded.')
+}

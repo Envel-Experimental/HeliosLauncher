@@ -84,6 +84,7 @@ const welcome = require('./ui/views/welcome.js')
 const login = require('./ui/views/login.js')
 const loginOptions = require('./ui/views/loginOptions.js')
 const overlay = require('./ui/views/overlay.js')
+const agreement = require('./ui/views/agreement.js')
 
 // 5. STAGE FOUR: Global Export Merge
 console.log('[Renderer] Stage Four: Merging Exports')
@@ -95,6 +96,7 @@ Object.assign(window, overlay)
 Object.assign(window, settings)
 Object.assign(window, welcome)
 Object.assign(window, login)
+Object.assign(window, agreement)
 
 // 6. STAGE FIVE: Manual Wrapper Linkage
 console.log('[Renderer] Stage Five: Wrapper Linkage')

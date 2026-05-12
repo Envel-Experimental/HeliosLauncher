@@ -152,6 +152,37 @@
         </div>
     </div>
     <div id="main">
+        <div id="agreementContainer" style="display: none;">
+            <div id="agreementContent">
+                <img id="agreementImageSeal" src="assets/images/icon.png" />
+                <span id="agreementHeader">Соглашение с пользователем</span>
+                <span id="agreementDescription">Для использования лаунчера, доступа к серверам и участия в занятиях вам необходимо ознакомиться и согласиться с нашими правилами и политиками.</span>
+                
+                <div id="agreementLinks">
+                    <a href="http://f-launcher.ru/rules" class="agreementLink">Правила сообщества</a>
+                    <a href="http://f-launcher.ru/license" class="agreementLink">Лицензия ПО</a>
+                    <a href="http://f-launcher.ru/terms" class="agreementLink">Условия пользования</a>
+                    <a href="http://f-launcher.ru/privacy" class="agreementLink">Политика конфиденциальности</a>
+                </div>
+
+                <div id="agreementConfirmation">
+                    <label class="agreementCheckboxContainer">
+                        <input type="checkbox" id="agreementCheckbox">
+                        <span class="agreementCheckmark"></span>
+                        <span class="agreementCheckboxText">Я подтверждаю, что ознакомлен и согласен со всеми документами</span>
+                    </label>
+                </div>
+
+                <button id="agreementButton" disabled>
+                    <div id="agreementButtonContent">
+                        <span>ПРИНЯТЬ И ПРОДОЛЖИТЬ</span>
+                        <svg id="agreementSVG" viewBox="0 0 24.87 13.97">
+                            <polyline class="arrowLine" points="0.71 13.26 12.56 1.41 24.16 13.02" />
+                        </svg>
+                    </div>
+                </button>
+            </div>
+        </div>
         <div id="welcomeContainer" style="display: none;">
             <!--<div class="cloudDiv">
         <div class="cloudTop"></div>

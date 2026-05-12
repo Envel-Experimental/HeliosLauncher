@@ -413,6 +413,219 @@ body[data-platform="darwin"] #frameContentDarwin {
 
 /*******************************************************************************
  *                                                                             *
+ * Agreement View                                                              *
+ *                                                                             *
+ ******************************************************************************/
+
+#agreementContainer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    width: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(10px);
+    z-index: 1000;
+    overflow: hidden;
+}
+
+#agreementContent {
+    font-family: "Roboto", serif;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    width: 90%;
+    max-width: 550px;
+    max-height: 90%;
+    padding: 30px;
+    background: rgba(25, 25, 25, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+    text-align: center;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+#agreementContent::-webkit-scrollbar {
+    width: 6px;
+}
+
+#agreementContent::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+#agreementImageSeal {
+    height: 60px;
+    width: 60px;
+    margin-bottom: 15px;
+    flex-shrink: 0;
+}
+
+#agreementHeader {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    color: #fff;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+}
+
+#agreementDescription {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 20px;
+    line-height: 1.4;
+    flex-shrink: 0;
+}
+
+#agreementLinks {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    width: 100%;
+    margin-bottom: 25px;
+    flex-shrink: 0;
+}
+
+.agreementLink {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 10px;
+    border-radius: 8px;
+    color: #fff;
+    text-decoration: none;
+    font-size: 13px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.agreementLink:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+}
+
+#agreementConfirmation {
+    margin-bottom: 25px;
+    width: 100%;
+    flex-shrink: 0;
+}
+
+.agreementCheckboxContainer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 13px;
+    user-select: none;
+}
+
+.agreementCheckboxContainer input {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+    height: 0;
+    width: 0;
+}
+
+.agreementCheckmark {
+    height: 18px;
+    width: 18px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    margin-right: 10px;
+    position: relative;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.agreementCheckboxContainer input:checked ~ .agreementCheckmark {
+    background-color: #2e8dff;
+    border-color: #2e8dff;
+}
+
+.agreementCheckmark:after {
+    content: "";
+    position: absolute;
+    display: none;
+    left: 6px;
+    top: 2px;
+    width: 4px;
+    height: 8px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.agreementCheckboxContainer input:checked ~ .agreementCheckmark:after {
+    display: block;
+}
+
+.agreementCheckboxText {
+    color: rgba(255, 255, 255, 0.8);
+    text-align: left;
+}
+
+#agreementButton {
+    background: #2e8dff;
+    color: white;
+    font-weight: bold;
+    letter-spacing: 1px;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+#agreementButton:disabled {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.3);
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+#agreementButton:not(:disabled):hover {
+    background: #4da1ff;
+    transform: scale(1.02);
+    box-shadow: 0 12px 25px rgba(46, 141, 255, 0.3);
+}
+
+#agreementButton:not(:disabled):active {
+    transform: scale(0.98);
+}
+
+#agreementButtonContent {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+#agreementSVG {
+    width: 18px;
+    height: 18px;
+    transform: rotate(90deg);
+}
+
+#agreementSVG .arrowLine {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 3px;
+}
+
+/*******************************************************************************
+ *                                                                             *
  * Login View (login.ejs)                                                      *
  *                                                                             *
  ******************************************************************************/
