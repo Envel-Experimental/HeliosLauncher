@@ -181,11 +181,16 @@ if (launchButton) {
                     await asyncSystemScan(server.effectiveJavaOptions)
                 }
             }
+            const sysInfo = window.HeliosAPI?.system?.getSystemInfo() || {}
             Analytics.capture('Game Launch Started', {
                 serverId: ConfigManager.getSelectedServer(),
                 server_name: server.name,
                 mc_version: server.minecraftVersion,
-                module_count: server.modules.length
+                module_count: server.modules.length,
+                // Additional useful info
+                cpu_model: sysInfo.cpus?.[0]?.model || 'Unknown',
+                ram_total: sysInfo.totalmem ? Math.round(sysInfo.totalmem / 1024 / 1024 / 1024) + 'GB' : 'Unknown',
+                java_path: jExe
             })
         } catch (err) {
             loggerLanding.error('Unhandled error in during launch process.', err)

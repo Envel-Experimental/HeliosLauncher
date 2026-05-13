@@ -110,7 +110,8 @@ const DEFAULT_CONFIG = {
         maxRAM: '3G'
     },
     supportUrl: null,
-    lastLauncherVersion: null
+    lastLauncherVersion: null,
+    totalLaunches: 0
 }
 
 let configPath = null
@@ -278,6 +279,10 @@ exports.load = async function () {
         }
 
         config = validateKeySet(DEFAULT_CONFIG, config)
+
+        // Increment total launches
+        config.totalLaunches = (config.totalLaunches || 0) + 1
+        console.log(`[ConfigManager] Launch #${config.totalLaunches}`)
 
         // Smart RAM distribution logic
         // If maxRAM is default or not set, try to allocate 3GB, but within 70% and 12GB limits.
@@ -633,6 +638,8 @@ exports.setSupportUrl = (url) => {
 
 exports.getLastLauncherVersion = () => { if (config) return config.lastLauncherVersion; return null }
 exports.setLastLauncherVersion = (version) => { if (config) config.lastLauncherVersion = version }
+
+exports.getTotalLaunches = () => config?.totalLaunches || 0
 
 /**
  * Check if the user has accepted the mandatory agreement.

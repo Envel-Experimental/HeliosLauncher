@@ -5,115 +5,124 @@ const HWID = require('./HWID')
 const POSTHOG_KEY = 'phc_CeNtDkFd4kWMrpf7YH4gfA7zTzZhGZMw37Da25tSmPD3'
 const POSTHOG_HOST = 'https://eu.i.posthog.com'
 
+const APTABASE_KEY = 'A-EU-8381248616'
+const APTABASE_HOST = undefined // Set to your self-hosted URL if needed (e.g., 'https://aptabase.example.com')
+
 const isRenderer = process.type === 'renderer'
+const Aptabase = isRenderer ? require('@aptabase/electron/renderer') : require('@aptabase/electron/main')
 
 class Analytics {
     constructor() {
         this.enabled = true
         this.distinctId = null
         this.release = undefined
+
+        // Initialize Aptabase (Main process only)
+        // Must be done before Electron 'ready' event
+        if (!isRenderer) {
+            try {
+                const fs = require('fs')
+                const path = require('path')
+                const versionPath = path.join(__dirname, '..', '..', '..', 'version.json')
+                
+                if (fs.existsSync(versionPath)) {
+                    const versionData = JSON.parse(fs.readFileSync(versionPath, 'utf-8'))
+                    this.release = versionData.release
+                }
+
+                const AptabaseMain = require('@aptabase/electron/main')
+                AptabaseMain.initialize(APTABASE_KEY, { 
+                    host: APTABASE_HOST,
+                    appVersion: this.release
+                })
+                console.log(`[Analytics] Aptabase initialized (Version: ${this.release})`)
+            } catch (e) {
+                console.error('[Analytics] Aptabase init failed:', e.message)
+            }
+        }
     }
 
     async init() {
         if (!this.enabled) return
 
         try {
-            const versionData = require('../../version.json')
-            this.release = versionData.release
-        } catch (e) {
-            this.release = undefined
-        }
-
-        // Identification Logic
-        let hwid = HWID.getHWID()
-        const storedToken = ConfigManager.getClientToken()
-
-        if (hwid.startsWith('fallback_') && storedToken) {
-            // If HWID failed but we have a stored token, prefer the stored one for continuity
-            this.distinctId = storedToken
-        } else {
-            this.distinctId = hwid
-            // Update stored token if it's missing or if we have a fresh stable HWID
-            if (!storedToken || (!hwid.startsWith('fallback_') && storedToken !== hwid)) {
-                ConfigManager.setClientToken(hwid)
-                await ConfigManager.save()
+            if (isRenderer) {
+                const { ipcRenderer } = require('electron')
+                this.release = ipcRenderer.sendSync('app:getReleaseSync')
             }
-        }
+            
+            let hwid = HWID.getHWID()
+            const storedToken = ConfigManager.getClientToken()
 
-        if (isRenderer) {
-            const sysInfo = ipcRenderer.sendSync('system:getSystemInfoSync')
-            const javaConfig = ConfigManager.getJavaConfig()
-            const currentVersion = ipcRenderer.sendSync('app:getVersionSync')
-            const lastVersion = ConfigManager.getLastLauncherVersion()
-
-            // Track Launcher Updated or First Launch
-            if (!lastVersion) {
-                this.capture('Launcher First Launch', { version: currentVersion })
-                ConfigManager.setLastLauncherVersion(currentVersion)
-                await ConfigManager.save()
-            } else if (lastVersion !== currentVersion) {
-                this.capture('Launcher Updated', {
-                    from_version: lastVersion,
-                    to_version: currentVersion
-                })
-                ConfigManager.setLastLauncherVersion(currentVersion)
-                await ConfigManager.save()
+            if (hwid.startsWith('fallback_') && storedToken) {
+                this.distinctId = storedToken
+            } else {
+                this.distinctId = hwid
+                if (!storedToken || (!hwid.startsWith('fallback_') && storedToken !== hwid)) {
+                    ConfigManager.setClientToken(hwid)
+                    await ConfigManager.save()
+                }
             }
 
-            this.capture('Launcher Loaded', {
-                // These properties will be set on the person in PostHog
-                $set: {
+            if (isRenderer) {
+                const { ipcRenderer } = require('electron')
+                const sysInfo = ipcRenderer.sendSync('system:getSystemInfoSync')
+                const javaConfig = ConfigManager.getJavaConfig()
+                const currentVersion = ipcRenderer.sendSync('app:getVersionSync')
+                const lastVersion = ConfigManager.getLastLauncherVersion()
+
+                // Track Launcher Updated or First Launch
+                if (!lastVersion) {
+                    this.capture('Launcher First Launch', { version: currentVersion })
+                    ConfigManager.setLastLauncherVersion(currentVersion)
+                    await ConfigManager.save()
+                } else if (lastVersion !== currentVersion) {
+                    this.capture('Launcher Updated', {
+                        from_version: lastVersion,
+                        to_version: currentVersion
+                    })
+                    ConfigManager.setLastLauncherVersion(currentVersion)
+                    await ConfigManager.save()
+                }
+
+                this.capture('Launcher Loaded', {
+                    // These properties will be set on the person in PostHog
+                    $set: {
+                        os_platform: sysInfo.platform,
+                        os_version: require('os').release(),
+                        os_arch: sysInfo.arch,
+                        launcher_version: currentVersion,
+                        cpu_model: sysInfo.cpus[0]?.model || 'Unknown',
+                        cpu_count: sysInfo.cpus.length,
+                        ram_total: Math.round(sysInfo.totalmem / 1024 / 1024 / 1024) + 'GB',
+                        screen_res: `${window.screen.width}x${window.screen.height}`,
+                        hwid: hwid
+                    },
+                    // OS & Launcher
                     os_platform: sysInfo.platform,
+                    os_version: require('os').release(),
                     os_arch: sysInfo.arch,
                     launcher_version: currentVersion,
+
+                    // CPU & RAM
                     cpu_model: sysInfo.cpus[0]?.model || 'Unknown',
                     cpu_count: sysInfo.cpus.length,
                     ram_total: Math.round(sysInfo.totalmem / 1024 / 1024 / 1024) + 'GB',
+                    ram_free_at_start: Math.round(sysInfo.freemem / 1024 / 1024 / 1024) + 'GB',
+
+                    // Display
                     screen_res: `${window.screen.width}x${window.screen.height}`,
-                    hwid: hwid
-                },
-                // OS & Launcher
-                os_platform: sysInfo.platform,
-                os_arch: sysInfo.arch,
-                launcher_version: currentVersion,
+                    screen_ratio: window.devicePixelRatio,
 
-                // CPU & RAM
-                cpu_model: sysInfo.cpus[0]?.model || 'Unknown',
-                cpu_count: sysInfo.cpus.length,
-                ram_total: Math.round(sysInfo.totalmem / 1024 / 1024 / 1024) + 'GB',
-                ram_free_at_start: Math.round(sysInfo.freemem / 1024 / 1024 / 1024) + 'GB',
-
-                // Display
-                screen_res: `${window.screen.width}x${window.screen.height}`,
-                screen_ratio: window.devicePixelRatio,
-
-                // Launcher Settings
-                java_min_ram: javaConfig.minRAM,
-                java_max_ram: javaConfig.maxRAM,
-                p2p_enabled: ConfigManager.getP2PUploadEnabled(),
-                p2p_limit: ConfigManager.getP2PUploadLimit()
-            })
-
-            // Start heartbeat every 5 minutes
-            setInterval(async () => {
-                let p2pStats = {}
-                try {
-                    const info = await ipcRenderer.invoke('p2p:getInfo')
-                    const stats = await ipcRenderer.invoke('p2p:getStats')
-                    p2pStats = {
-                        p2p_active_connections: info.connections,
-                        p2p_total_uploaded: stats.all?.uploaded || 0,
-                        p2p_total_downloaded: stats.all?.downloaded || 0
-                    }
-                } catch (e) {
-                    // P2P might not be initialized
-                }
-
-                this.capture('Heartbeat', {
-                    session_duration_minutes: 5,
-                    ...p2pStats
+                    // Launcher Settings
+                    java_min_ram: javaConfig.minRAM,
+                    java_max_ram: javaConfig.maxRAM,
+                    p2p_enabled: ConfigManager.getP2PUploadEnabled(),
+                    p2p_limit: ConfigManager.getP2PUploadLimit()
                 })
-            }, 5 * 60 * 1000)
+            }
+        } catch (e) {
+            console.error('[Analytics] Failed to initialize:', e)
         }
     }
 
@@ -123,7 +132,9 @@ class Analytics {
      * @param {Object} properties Additional properties
      */
     async capture(event, properties = {}) {
-        if (!this.enabled || !this.distinctId) return
+        if (!this.enabled) return
+
+        if (!this.distinctId) return
 
         const payload = {
             event: event,
@@ -137,6 +148,29 @@ class Analytics {
                 release: this.release
             },
             timestamp: new Date().toISOString()
+        }
+
+        try {
+            // Aptabase Tracking
+            // Enhance properties with some global context that Aptabase might want for every event
+            const enhancedProperties = {
+                ...properties,
+                os: process.platform,
+                os_version: require('os').release(),
+                arch: process.arch,
+                release: this.release,
+                app_version: this.release, // Duplicate for clarity in Aptabase
+                is_renderer: isRenderer,
+                selected_server: ConfigManager.getSelectedServer() || 'none',
+                hwid: this.distinctId,
+                total_launches: ConfigManager.getTotalLaunches(),
+                is_first_launch: ConfigManager.isFirstLaunch()
+            }
+            Aptabase.trackEvent(event, enhancedProperties)
+        } catch (e) {
+            if (isRenderer ? window.isDev : !require('electron').app.isPackaged) {
+                console.error('[Analytics] Error sending to Aptabase:', e)
+            }
         }
 
         try {

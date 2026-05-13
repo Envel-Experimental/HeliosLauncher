@@ -116,6 +116,13 @@ export async function updateSelectedServer(serv) {
     
     await ConfigManager.save()
     console.log('[UIBinder] updateSelectedServer: Config saved to disk.')
+
+    if (serv != null && typeof Analytics !== 'undefined') {
+        Analytics.capture('Server Selected', {
+            serverId: serv.rawServer.id,
+            server_name: serv.rawServer.name
+        })
+    }
     
     const serverSelectionBtn = document.getElementById('server_selection_button')
     if (serverSelectionBtn) {

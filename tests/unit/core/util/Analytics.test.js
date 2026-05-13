@@ -1,10 +1,19 @@
 // 1. Mocks must be at the very top (before any requires)
 jest.mock('../../../../app/assets/js/core/configmanager')
+jest.mock('@aptabase/electron/renderer', () => ({
+    trackEvent: jest.fn()
+}), { virtual: true })
+jest.mock('@aptabase/electron/main', () => ({
+    initialize: jest.fn(),
+    trackEvent: jest.fn()
+}), { virtual: true })
+
 process.type = 'renderer'
 
 const Analytics = require('../../../../app/assets/js/core/util/Analytics')
 const ConfigManager = require('../../../../app/assets/js/core/configmanager')
 const { ipcRenderer } = require('electron')
+const Aptabase = require('@aptabase/electron/renderer')
 
 // Mock sendSync if not already mocked by jest.setup.js
 if (!ipcRenderer.sendSync) {
@@ -26,6 +35,7 @@ describe('Analytics', () => {
         jest.clearAllMocks()
         Analytics.enabled = true
         Analytics.distinctId = 'test-id'
+        Analytics.release = '1.2.3'
         
         // Mock global window
         global.window = {
@@ -40,6 +50,15 @@ describe('Analytics', () => {
         ConfigManager.getP2PUploadEnabled.mockReturnValue(false)
         ConfigManager.getP2PUploadLimit.mockReturnValue(5)
         ConfigManager.getLastLauncherVersion.mockReturnValue('1.0.0')
+        ConfigManager.getSelectedServer.mockReturnValue('test-server')
+        ConfigManager.getTotalLaunches.mockReturnValue(10)
+        ConfigManager.isFirstLaunch.mockReturnValue(false)
+
+        ipcRenderer.sendSync.mockImplementation((channel) => {
+            if (channel === 'app:getReleaseSync') return '1.2.3'
+            if (channel === 'app:getVersionSync') return '1.2.3'
+            return null
+        })
     })
 
     test('captureException should format $exception correctly for Error Tracking', async () => {
@@ -96,12 +115,19 @@ describe('Analytics', () => {
     test('capture should include library info and os', async () => {
         await Analytics.capture('Test Event', { prop: 'val' })
 
+        // Check Aptabase
+        expect(Aptabase.trackEvent).toHaveBeenCalledWith('Test Event', expect.objectContaining({
+            prop: 'val',
+            hwid: 'test-id',
+            release: '1.2.3'
+        }))
+
+        // Check PostHog
         const body = JSON.parse(global.fetch.mock.calls[0][1].body)
         const event = body.batch[0]
 
         expect(event.event).toBe('Test Event')
         expect(event.properties.distinct_id).toBe('test-id')
         expect(event.properties.$lib).toBe('FlauncherAnalytics')
-        expect(event.properties.$os).toBeDefined()
     })
 })

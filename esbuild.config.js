@@ -14,7 +14,7 @@ const fs = require('fs')
 const versionData = {
     version: pkg.version,
     buildHash: buildHash,
-    release: `FLauncher@${pkg.version}+${buildHash}`
+    release: `${pkg.version}+${buildHash}`
 }
 
 if (!fs.existsSync(path.join(__dirname, 'app', 'assets'))) {

@@ -3,7 +3,7 @@ const SentryService = require('./app/main/SentryService')
 SentryService.init()
 
 console.log('[Main] Application entry point reached (index.js)')
-const { app, protocol, session, powerMonitor } = require('electron')
+const { app, protocol, session, powerMonitor, ipcMain } = require('electron')
 const WindowManager = require('./app/main/WindowManager')
 const IpcRegistry = require('./app/main/IpcRegistry')
 const ConfigManager = require('./app/assets/js/core/configmanager')
@@ -18,6 +18,15 @@ const Analytics = require('./app/assets/js/core/util/Analytics')
 if (!app.requestSingleInstanceLock()) {
     app.quit()
 } else {
+    // Handle version requests
+    ipcMain.on('app:getVersionSync', (event) => {
+        event.returnValue = app.getVersion()
+    })
+
+    ipcMain.on('app:getReleaseSync', (event) => {
+        const Analytics = require('./app/assets/js/core/util/Analytics')
+        event.returnValue = Analytics.release || app.getVersion()
+    })
     app.on('second-instance', () => {
         const win = WindowManager.getMainWindow()
         if (win) {
@@ -60,6 +69,10 @@ app.on('ready', async () => {
         console.log('[Main] Loading configuration...')
         await ConfigManager.load()
         console.log('[Main] Configuration loaded.')
+
+        // 5. Initialize Analytics
+        await Analytics.init()
+        console.log('[Main] Analytics initialized.')
 
         console.log('[Main] Initializing UI...')
         WindowManager.setupMenu()
