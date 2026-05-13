@@ -92,8 +92,9 @@ describe('ConfigManager Detailed Tests', () => {
             const mockUserData = path.join('MockUserData', 'config.json')
 
             jest.spyOn(fsSync, 'existsSync').mockImplementation((p) => {
-                if (p.includes(mockLauncherDir)) return false
-                if (p.includes(mockUserData)) return true
+                const normalizedP = p.replace(/\\/g, '/')
+                if (normalizedP.includes('MockLauncherDir/config.json')) return false
+                if (normalizedP.includes('MockUserData/config.json')) return true
                 return false
             })
             util.safeReadJson.mockResolvedValue({ settings: {} })

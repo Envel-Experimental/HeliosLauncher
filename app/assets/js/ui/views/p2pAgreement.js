@@ -1,5 +1,5 @@
 if (p2pAgreementEnableButton) {
-    p2pAgreementEnableButton.addEventListener('click', (e) => {
+    p2pAgreementEnableButton.addEventListener('click', async (e) => {
         ConfigManager.setLocalOptimization(true)
         ConfigManager.setGlobalOptimization(true)
         ConfigManager.setP2PUploadEnabled(true)
@@ -10,8 +10,8 @@ if (p2pAgreementEnableButton) {
         }
         
         // Run heavy tasks in background without blocking UI
-        ConfigManager.save()
-        ipcRenderer.invoke('p2p:configUpdate')
+        ConfigManager.save().then(() => {}).catch(err => console.error(err))
+        ipcRenderer.invoke('p2p:configUpdate').then(() => {}).catch(err => console.error(err))
         
         // Transition UI immediately
         finishOnboarding()
@@ -19,7 +19,7 @@ if (p2pAgreementEnableButton) {
 }
 
 if (p2pAgreementDisableButton) {
-    p2pAgreementDisableButton.addEventListener('click', (e) => {
+    p2pAgreementDisableButton.addEventListener('click', async (e) => {
         ConfigManager.setLocalOptimization(false)
         ConfigManager.setGlobalOptimization(false)
         ConfigManager.setP2PUploadEnabled(false)
@@ -30,8 +30,8 @@ if (p2pAgreementDisableButton) {
         }
 
         // Run heavy tasks in background without blocking UI
-        ConfigManager.save()
-        ipcRenderer.invoke('p2p:configUpdate')
+        ConfigManager.save().then(() => {}).catch(err => console.error(err))
+        ipcRenderer.invoke('p2p:configUpdate').then(() => {}).catch(err => console.error(err))
 
         // Transition UI immediately
         finishOnboarding()

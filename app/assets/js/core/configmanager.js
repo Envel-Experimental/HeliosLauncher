@@ -3,7 +3,6 @@ const fs = require('fs/promises')
 const { LoggerUtil } = require('./util/LoggerUtil')
 const os = require('os')
 const path = require('path')
-const { retry, move } = require('./util')
 const pathutil = require('./pathutil')
 const SecurityUtils = require('./util/SecurityUtils')
 
@@ -236,6 +235,7 @@ exports.load = async function () {
         await fs.mkdir(path.dirname(configPath), { recursive: true })
         if (fsSync.existsSync(configPathLEGACY)) {
             console.log('[ConfigManager] Migrating legacy config...')
+            const { move } = require('./util')
             await move(configPathLEGACY, configPath)
         } else {
             console.log('[ConfigManager] Creating default config...')
