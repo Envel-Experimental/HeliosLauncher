@@ -4,8 +4,8 @@ The launcher includes a modular analytics service located at `app/assets/js/core
 
 ## Current Status
 - **Status**: 🟢 ENABLED
-- **Implementation**: PostHog active.
-- **Data Collection**: Active in `landing.js`.
+- **Implementation**: Bugsink (Sentry-compatible) active.
+- **Data Collection**: Error tracking and basic event reporting via Sentry.
 
 ## Tracked Events
 

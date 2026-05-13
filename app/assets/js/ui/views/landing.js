@@ -181,18 +181,8 @@ if (launchButton) {
                     await asyncSystemScan(server.effectiveJavaOptions)
                 }
             }
-            Analytics.capture('Game Launch Started', {
-                serverId: ConfigManager.getSelectedServer(),
-                server_name: server.name,
-                mc_version: server.minecraftVersion,
-                module_count: server.modules.length
-            })
         } catch (err) {
-            loggerLanding.error('Unhandled error in during launch process.', err)
-            Analytics.capture('Game Launch Failed', {
-                serverId: ConfigManager.getSelectedServer(),
-                error: err.message || err.toString()
-            })
+            loggerLanding.error('Unhandled error during launch process.', err)
             Analytics.captureException(err)
             showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), Lang.queryJS('landing.launch.failureText'))
         }

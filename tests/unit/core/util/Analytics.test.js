@@ -1,9 +1,17 @@
 // 1. Mocks must be at the very top (before any requires)
 jest.mock('../../../../app/assets/js/core/configmanager')
+jest.mock('../../../../app/assets/js/core/util/SentryWrapper', () => ({
+    SafeSentry: {
+        captureException: jest.fn(),
+        captureMessage: jest.fn()
+    }
+}))
+
 process.type = 'renderer'
 
 const Analytics = require('../../../../app/assets/js/core/util/Analytics')
 const ConfigManager = require('../../../../app/assets/js/core/configmanager')
+const { SafeSentry } = require('../../../../app/assets/js/core/util/SentryWrapper')
 const { ipcRenderer } = require('electron')
 
 // Mock sendSync if not already mocked by jest.setup.js
@@ -12,14 +20,6 @@ if (!ipcRenderer.sendSync) {
 } else if (!ipcRenderer.sendSync.mockImplementation) {
     ipcRenderer.sendSync = jest.fn()
 }
-
-// Mock global fetch
-global.fetch = jest.fn(() =>
-    Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({}),
-    })
-)
 
 describe('Analytics', () => {
     beforeEach(() => {
@@ -42,26 +42,15 @@ describe('Analytics', () => {
         ConfigManager.getLastLauncherVersion.mockReturnValue('1.0.0')
     })
 
-    test('captureException should format $exception correctly for Error Tracking', async () => {
+    test('captureException should call SafeSentry.captureException', async () => {
         const testError = new Error('Disk full')
-        testError.name = 'ENOSPC'
-        testError.stack = 'ENOSPC: Disk full\n    at exports.save (app/assets/js/core/configmanager.js:326:15)'
         
         await Analytics.captureException(testError)
 
-        const callArgs = JSON.parse(fetch.mock.calls[0][1].body)
-        const event = callArgs.batch[0]
-
-        expect(event.event).toBe('$exception')
-        expect(event.properties.$exception_list).toBeDefined()
-        expect(event.properties.$exception_list[0].type).toBe('ENOSPC')
-        expect(event.properties.$exception_list[0].value).toBe('Disk full')
-        expect(event.properties.$exception_list[0].stacktrace.type).toBe('raw')
-        expect(event.properties.$exception_list[0].stacktrace.frames.length).toBeGreaterThan(0)
-        expect(event.properties.$exception_list[0].stacktrace.frames[0].function).toBe('exports.save')
+        expect(SafeSentry.captureException).toHaveBeenCalledWith(testError)
     })
 
-    test('init should capture "Launcher Loaded" with system info', async () => {
+    test('init should update HWID and version but NOT capture "Launcher Loaded" (PostHog removed)', async () => {
         ConfigManager.getClientToken.mockReturnValue('existing-token')
         
         ipcRenderer.sendSync.mockImplementation((channel) => {
@@ -81,27 +70,12 @@ describe('Analytics', () => {
         await Analytics.init()
 
         expect(Analytics.distinctId).toBe('existing-token')
-        
-        // Find the "Launcher Loaded" call
-        const call = global.fetch.mock.calls.find(call => call[1].body.includes('Launcher Loaded'))
-        expect(call).toBeDefined()
-        
-        const body = JSON.parse(call[1].body)
-        const event = body.batch[0]
-        expect(event.properties.$set).toBeDefined()
-        expect(event.properties.$set.os_platform).toBe('win32')
-        expect(event.properties.$set.launcher_version).toBe('1.1.0')
+        // No Sentry message for loading anymore
+        expect(SafeSentry.captureMessage).not.toHaveBeenCalled()
     })
 
-    test('capture should include library info and os', async () => {
+    test('capture should be a no-op (PostHog removed)', async () => {
         await Analytics.capture('Test Event', { prop: 'val' })
-
-        const body = JSON.parse(global.fetch.mock.calls[0][1].body)
-        const event = body.batch[0]
-
-        expect(event.event).toBe('Test Event')
-        expect(event.properties.distinct_id).toBe('test-id')
-        expect(event.properties.$lib).toBe('FlauncherAnalytics')
-        expect(event.properties.$os).toBeDefined()
+        expect(SafeSentry.captureMessage).not.toHaveBeenCalled()
     })
 })

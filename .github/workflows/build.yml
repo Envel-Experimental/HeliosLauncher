@@ -95,17 +95,6 @@ jobs:
           SHA_SHORT=$(git rev-parse --short HEAD)
           echo "release=FLauncher@$VERSION+$SHA_SHORT" >> $GITHUB_OUTPUT
 
-      - name: Upload to PostHog
-        if: success() && runner.os == 'Linux' && github.event.head_commit.message != '1'
-        continue-on-error: true
-        uses: PostHog/upload-source-maps@v2.0.0
-        with:
-          directory: ./app/dist
-          project-id: 166635
-          api-key: ${{ secrets.POSTHOG_API_KEY }}
-          host: https://eu.posthog.com
-          release-name: ${{ steps.release_info.outputs.release }}
-          release-version: ${{ github.sha }}
 
       - name: Build and Distribute
         if: runner.os == 'Windows' || github.event.head_commit.message != '1'
@@ -114,9 +103,9 @@ jobs:
           CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
           POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: "foxford-dc"
-          SENTRY_PROJECT: "node"
+          SENTRY_AUTH_TOKEN: ${{ secrets.BUGSINK_AUTH_TOKEN }}
+          SENTRY_ORG: "bugsinkhasnoorgs"
+          SENTRY_PROJECT: "ignoredfornow"
         shell: bash
         run: |
           # 1. Метаданные релиза
@@ -124,12 +113,14 @@ jobs:
           SHA_SHORT=$(git rev-parse --short HEAD)
           RELEASE_NAME="FLauncher@$VERSION+$SHA_SHORT"
 
-          # 2. Sentry (Загружаем только с Linux, так как код идентичен)
+          # 2. Bugsink (Загружаем только с Linux, так как код идентичен)
           if [ "$RUNNER_OS" == "Linux" ]; then
-            echo "Uploading to Sentry..."
-            npx -y @sentry/cli sourcemaps upload ./app/dist ./app/assets/js \
+            echo "Uploading to Bugsink..."
+            npx -y @sentry/cli --url https://flauncher.bugsink.com/ sourcemaps upload ./app/dist ./app/assets/js \
+              --org bugsinkhasnoorgs \
+              --project ignoredfornow \
               --release "$RELEASE_NAME" \
-              --rewrite || echo "Sentry upload failed, but continuing..."
+              --rewrite || echo "Bugsink upload failed, but continuing..."
           fi
 
           # 3. Сборка дистрибутива

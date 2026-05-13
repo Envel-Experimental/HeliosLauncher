@@ -20,31 +20,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. Use the official Sentry action to create a release and upload artifacts.
-      - name: Create Sentry release and upload source files
-        uses: getsentry/action-release@v1
+      # 2. Upload source files to Bugsink
+      - name: Upload to Bugsink
         env:
-          # The token you added to Repository Secrets
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          # Your organization slug from Sentry settings
-          SENTRY_ORG: "foxford-dc"
-          # Your project slug from Sentry settings
-          SENTRY_PROJECT: "node"
-        with:
-          environment: production
+          SENTRY_AUTH_TOKEN: ${{ secrets.BUGSINK_AUTH_TOKEN }}
+        run: |
+          VERSION="${{ inputs.version }}"
+          RELEASE_NAME="FLauncher@$VERSION"
           
-          # Construct the release name to match standard Electron Sentry format: "AppName@Version".
-          # If this doesn't match what the app sends at runtime, source maps won't work.
-          version: "FLauncher@${{ inputs.version }}"
+          echo "Uploading to Bugsink (Release: $RELEASE_NAME)..."
           
-          # Since you are not using Webpack/Vite (no minification), we upload
-          # the raw source files from the root directory ('./').
-          # This allows Sentry to display the actual code lines in stack traces.
-          sourcemaps: './'
-          
-          # Prevent the workflow from failing if it doesn't find specific .map files
-          # (because we are uploading raw JS files, not generated maps).
-          ignore_missing: true
-          
-          # Prevent failure if the directory seems empty (safety check).
-          ignore_empty: true
+          npx -y @sentry/cli --url https://flauncher.bugsink.com/ sourcemaps upload ./ \
+            --org bugsinkhasnoorgs \
+            --project ignoredfornow \
+            --release "$RELEASE_NAME" \
+            --rewrite \
+            --ignore-missing

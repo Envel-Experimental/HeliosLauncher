@@ -23,7 +23,7 @@ describe('SentryService', () => {
         SentryService.init()
         
         expect(Sentry.init).toHaveBeenCalledWith(expect.objectContaining({
-            dsn: 'https://f02442d2a0733ac2c810b8d8d7f4a21e@o4508545424359424.ingest.de.sentry.io/4508545432027216',
+            dsn: 'https://a09dd50b0b264fbca8b31a451d1e0227@flauncher.bugsink.com/1',
             enabled: true
         }))
     })
