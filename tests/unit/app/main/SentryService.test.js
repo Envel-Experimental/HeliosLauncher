@@ -23,7 +23,8 @@ describe('SentryService', () => {
         SentryService.init()
         
         expect(Sentry.init).toHaveBeenCalledWith(expect.objectContaining({
-            dsn: 'https://f02442d2a0733ac2c810b8d8d7f4a21e@o4508545424359424.ingest.de.sentry.io/4508545432027216',
+            dsn: 'http://fl_fc465ee421684c3f90cf4e04bb280d4f@localhost:3000/1',
+            tunnel: 'http://localhost:3000/api/flauncher-test/envelope/?sentry_key=fl_fc465ee421684c3f90cf4e04bb280d4f',
             enabled: true
         }))
     })

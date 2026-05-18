@@ -42,23 +42,13 @@ describe('Analytics', () => {
         ConfigManager.getLastLauncherVersion.mockReturnValue('1.0.0')
     })
 
-    test('captureException should format $exception correctly for Error Tracking', async () => {
+    test('captureException should be a safe no-op and not call fetch', async () => {
         const testError = new Error('Disk full')
         testError.name = 'ENOSPC'
-        testError.stack = 'ENOSPC: Disk full\n    at exports.save (app/assets/js/core/configmanager.js:326:15)'
         
         await Analytics.captureException(testError)
 
-        const callArgs = JSON.parse(fetch.mock.calls[0][1].body)
-        const event = callArgs.batch[0]
-
-        expect(event.event).toBe('$exception')
-        expect(event.properties.$exception_list).toBeDefined()
-        expect(event.properties.$exception_list[0].type).toBe('ENOSPC')
-        expect(event.properties.$exception_list[0].value).toBe('Disk full')
-        expect(event.properties.$exception_list[0].stacktrace.type).toBe('raw')
-        expect(event.properties.$exception_list[0].stacktrace.frames.length).toBeGreaterThan(0)
-        expect(event.properties.$exception_list[0].stacktrace.frames[0].function).toBe('exports.save')
+        expect(fetch).not.toHaveBeenCalled()
     })
 
     test('init should capture "Launcher Loaded" with system info', async () => {
@@ -86,8 +76,7 @@ describe('Analytics', () => {
         const call = global.fetch.mock.calls.find(call => call[1].body.includes('Launcher Loaded'))
         expect(call).toBeDefined()
         
-        const body = JSON.parse(call[1].body)
-        const event = body.batch[0]
+        const event = JSON.parse(call[1].body)
         expect(event.properties.$set).toBeDefined()
         expect(event.properties.$set.os_platform).toBe('win32')
         expect(event.properties.$set.launcher_version).toBe('1.1.0')
@@ -96,8 +85,7 @@ describe('Analytics', () => {
     test('capture should include library info and os', async () => {
         await Analytics.capture('Test Event', { prop: 'val' })
 
-        const body = JSON.parse(global.fetch.mock.calls[0][1].body)
-        const event = body.batch[0]
+        const event = JSON.parse(global.fetch.mock.calls[0][1].body)
 
         expect(event.event).toBe('Test Event')
         expect(event.properties.distinct_id).toBe('test-id')

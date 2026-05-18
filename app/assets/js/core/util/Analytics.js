@@ -2,8 +2,9 @@ const { ipcRenderer, ipcMain } = require('electron')
 const ConfigManager = require('../configmanager')
 const HWID = require('./HWID')
 
-const POSTHOG_KEY = 'phc_CeNtDkFd4kWMrpf7YH4gfA7zTzZhGZMw37Da25tSmPD3'
-const POSTHOG_HOST = 'https://eu.i.posthog.com'
+const FORTENLOG_KEY = 'fl_fc465ee421684c3f90cf4e04bb280d4f'
+const FORTENLOG_HOST = 'http://localhost:3000'
+const PROJECT_ID = 'flauncher-test'
 
 const isRenderer = process.type === 'renderer'
 
@@ -94,6 +95,15 @@ class Analytics {
                 p2p_limit: ConfigManager.getP2PUploadLimit()
             })
 
+            // Test event to immediately verify FortenLog schemaless telemetry ingestion
+            this.capture('desktop_preference_saved', {
+                audio_device_out: 'SteelSeries Arctis 7',
+                microphone_gain_multiplier: 1.5,
+                custom_ui_scaling: '125%',
+                stealth_mode_enabled: true,
+                last_clicked_button: 'apply_voice_settings_btn'
+            })
+
             // Start heartbeat every 5 minutes
             setInterval(async () => {
                 let p2pStats = {}
@@ -118,7 +128,7 @@ class Analytics {
     }
 
     /**
-     * Send an event to PostHog
+     * Send an event to FortenLog
      * @param {string} event Name of the event
      * @param {Object} properties Additional properties
      */
@@ -126,10 +136,12 @@ class Analytics {
         if (!this.enabled || !this.distinctId) return
 
         const payload = {
+            api_key: FORTENLOG_KEY,
             event: event,
             properties: {
                 ...properties,
                 distinct_id: this.distinctId,
+                project: PROJECT_ID,
                 $lib: 'FlauncherAnalytics',
                 $lib_version: '1.2.0',
                 $os: process.platform,
@@ -141,23 +153,21 @@ class Analytics {
 
         try {
             // fetch is available in Node 18+ and in Browser
-            const response = await fetch(`${POSTHOG_HOST}/batch/`, {
+            const response = await fetch(`${FORTENLOG_HOST}/capture/`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'X-FortenLog-Request': 'true' // Magical CSRF bypass header for FortenLog
                 },
-                body: JSON.stringify({
-                    api_key: POSTHOG_KEY,
-                    batch: [payload]
-                })
+                body: JSON.stringify(payload)
             })
 
             if (!response.ok && (isRenderer ? window.isDev : !require('electron').app.isPackaged)) {
-                console.warn('[Analytics] PostHog request failed:', response.status, response.statusText)
+                console.warn('[Analytics] FortenLog request failed:', response.status, response.statusText)
             }
         } catch (e) {
             if (isRenderer ? window.isDev : !require('electron').app.isPackaged) {
-                console.error('[Analytics] Error sending to PostHog:', e)
+                console.error('[Analytics] Error sending to FortenLog:', e)
             }
         }
     }
@@ -167,43 +177,7 @@ class Analytics {
      * @param {Error|string} error 
      */
     captureException(error) {
-        if (!error) return
-
-        // Filter out noisy errors
-        if (error.code === 'EPERM' || error.code === 'EBUSY' || error.code === 'ENOSPC') {
-            return
-        }
-
-        const message = error instanceof Error ? error.message : error
-        if (typeof message === 'string' && (
-            message.includes('fs:statfs') ||
-            message.includes('is not signed by the application owner') ||
-            message.includes('ERR_CONNECTION_RESET')
-        )) {
-            return
-        }
-
-        const type = error instanceof Error ? error.name : 'Error'
-        const stack = error instanceof Error ? error.stack : ''
-
-        this.capture('$exception', {
-            $exception_list: [
-                {
-                    type: type,
-                    value: message,
-                    stacktrace: {
-                        type: 'raw',
-                        frames: this._parseStack(stack)
-                    },
-                    mechanism: {
-                        handled: false,
-                        type: 'generic'
-                    }
-                }
-            ],
-            $exception_level: 'error',
-            release: this.release
-        })
+        // Disabled: all errors are handled exclusively by SentryService to prevent duplication in FortenLog
     }
 
     _parseStack(stack) {
