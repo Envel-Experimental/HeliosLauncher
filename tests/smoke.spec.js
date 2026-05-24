@@ -4,7 +4,7 @@ const { test, expect } = require('@playwright/test');
 test.describe('Application Startup Smoke Test', () => {
     let electronApp;
 
-    // Тайм-аут 2 минуты
+    // 2-minute timeout
     test.setTimeout(120000);
 
     test.beforeAll(async () => {
@@ -51,7 +51,7 @@ test.describe('Application Startup Smoke Test', () => {
 
         console.log('Starting UI loop...');
         const startTime = Date.now();
-        // 90 секунд на всё про всё
+        // 90 seconds timeout for the loop
         const timeout = 90000;
         // Fail-fast check for bundle existence
         const fs = require('fs');
@@ -67,32 +67,32 @@ test.describe('Application Startup Smoke Test', () => {
 
         while (Date.now() - startTime < timeout) {
             
-            // 0. ПРОВЕРКА FAILSAFE (если приложение зависло на старте)
+            // 0. FAILSAFE CHECK (if the app hung on start)
             const failsafeMarker = window.locator('text=Initialization is taking longer than expected');
             if (await failsafeMarker.count() > 0) {
-                 // Если видим маркер фейлсейфа, значит бандл не запустился вовремя
+                 // If failsafe marker is visible, it means the bundle didn't start in time
                  const statusText = await window.locator('#loadingStatusText').innerText();
                  throw new Error(`Startup Hang detected by Failsafe! Current Status: ${statusText}`);
             }
 
-            // 1. ПРОВЕРКА УСПЕХА
+            // 1. SUCCESS CHECK
             if (await launchButton.isVisible() || await serverSelect.isVisible() || await loginUsername.isVisible() || await loginOptions.isVisible()) {
                 console.log('PASS: Application reached a stable functional state (Landing or Login).');
                 return;
             }
 
-            // 2. ОБРАБОТКА ОВЕРЛЕЕВ
+            // 2. OVERLAY PROCESSING
             if (await overlay.isVisible()) {
                 const text = await overlay.innerText();
                 const cleanText = text.replace(/\n/g, ' ');
 
-                // Ошибка сети -> Тоже победа (приложение отработало штатно)
+                // Network error -> Also a win (app worked as intended)
                 if (cleanText.includes('сервера недоступны') || cleanText.includes('Network error')) {
                     console.log('PASS: Critical Network Error confirmed.');
                     return; 
                 }
 
-                // Предупреждение о памяти
+                // Memory limit warning
                 if (cleanText.includes('Технические проблемы') || cleanText.includes('оперативной памяти')) {
                     console.log('Overlay: Low RAM detected. Clicking "Continue"...');
                     
@@ -100,12 +100,12 @@ test.describe('Application Startup Smoke Test', () => {
                         try {
                             await continueButton.click();
                             
-                            // Ждем, пока оверлей исчезнет
+                            // Wait for the overlay to disappear
                             try {
                                 await expect(overlay).toBeHidden({ timeout: 5000 });
                                 console.log('PASS: Low RAM overlay dismissed. App is interactive!');
-                                // ВЫХОДИМ С ПОБЕДОЙ. Мы нажали кнопку, приложение отреагировало. 
-                                // Ждать загрузки файлов не обязательно для Smoke-теста.
+                                // EXIT WITH SUCCESS. Button was clicked and app reacted.
+                                // No need to wait for files to download for the Smoke test.
                                 return;
                             } catch (e) {
                                 console.log('Warning: Overlay stuck, trying loop again...');
@@ -114,6 +114,32 @@ test.describe('Application Startup Smoke Test', () => {
                             console.log('Click failed:', e.message);
                         }
                     }
+                }
+            }
+
+            // 3. LICENSE AGREEMENTS PROCESSING
+            const agreementContainer = window.locator('#agreementContainer');
+            if (await agreementContainer.isVisible()) {
+                console.log('Agreement screen detected. Accepting...');
+                const checkbox = window.locator('#agreementCheckbox');
+                const button = window.locator('#agreementButton');
+                if (await checkbox.isVisible() && !(await checkbox.isChecked())) {
+                    await checkbox.check();
+                    await window.waitForTimeout(200);
+                }
+                if (await button.isVisible() && !(await button.isDisabled())) {
+                    await button.click();
+                    await window.waitForTimeout(500);
+                }
+            }
+
+            const p2pAgreementContainer = window.locator('#p2pAgreementContainer');
+            if (await p2pAgreementContainer.isVisible()) {
+                console.log('P2P Agreement screen detected. Enabling...');
+                const enableBtn = window.locator('#p2pAgreementEnableButton');
+                if (await enableBtn.isVisible()) {
+                    await enableBtn.click();
+                    await window.waitForTimeout(500);
                 }
             }
 
