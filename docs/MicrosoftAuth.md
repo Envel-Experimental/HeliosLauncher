@@ -1,52 +1,150 @@
 # Microsoft Authentication
 
-Authenticating with Microsoft is fully supported by Flauncher.
+FLauncher authenticates users via Microsoft's OAuth 2.0 **device-code flow**. This avoids embedding a browser WebView and eliminates the need for a redirect URI, making it compatible with both packaged and dev builds.
 
-## Acquiring an Azure Client ID
+**Service**: `app/main/MicrosoftAuthService.js`  
+**Core logic**: `app/assets/js/core/microsoft/` + `app/assets/js/core/authmanager.js`
 
-1. Navigate to https://portal.azure.com
-2. In the search bar, search for **Azure Active Directory**.
-3. In Azure Active Directory, go to **App Registrations** on the left pane (Under *Manage*).
-4. Click **New Registration**.
-    - Set **Name** to be your launcher's name.
-    - Set **Supported account types** to *Accounts in any organizational directory (Any Azure AD directory - Multitenant) and personal Microsoft accounts (e.g. Skype, Xbox)*
-    - Leave **Redirect URI** blank.
-    - Register the application.
-5. You should be on the application's management page. If not, Navigate back to **App Registrations**. Select the application you just registered.
-6. Click **Authentication** on the left pane (Under *Manage*).
-7. Click **Add Platform**.
-    - Select **Mobile and desktop applications**.
-    - Choose `https://login.microsoftonline.com/common/oauth2/nativeclient` as the **Redirect URI**.
-    - Select **Configure** to finish adding the platform.
-8. Go to **Credentials & secrets**.
-    - Select **Client secrets**.
-    - Click **New client secret**.
-    - Set a description.
-    - Click **Add**.
-    - Don't copy the client secret, adding one is just a requirement from Microsoft.
-8. Navigate back to **Overview**.
-9. Copy **Application (client) ID**.
+---
 
+## OAuth Device-Code Flow
 
-## Adding the Azure Client ID to Flauncher.
+```
+UI clicks "Login with Microsoft"
+       │
+       ▼
+IPC: auth:microsoft:startDeviceCode
+       │
+       ▼
+MicrosoftAuthService
+    POST https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode
+    Body: client_id=<azure_app_id>&scope=XboxLive.signin offline_access
+       │
+       ▼
+Response: { device_code, user_code, verification_url, expires_in, interval }
+    → Send user_code + verification_url to Renderer via IPC
+    → Renderer displays: "Go to <url> and enter code <user_code>"
+       │
+       ▼
+Start polling loop (every interval seconds):
+    POST https://login.microsoftonline.com/consumers/oauth2/v2.0/token
+    Body: grant_type=urn:ietf:params:oauth2:grant-type:device_code
+          &client_id=<azure_app_id>
+          &device_code=<device_code>
+       │
+       ├─► 400 authorization_pending → keep polling
+       ├─► 400 expired_token → abort, show error
+       └─► 200 OK → Microsoft token received
+```
 
-In `app/assets/js/ipcconstants.js` you'll find **`AZURE_CLIENT_ID`**. Set it to your application's id.
+---
 
-Note: Azure Client ID is NOT a secret value and **can** be stored in git. Reference: https://stackoverflow.com/questions/57306964/are-azure-active-directorys-tenantid-and-clientid-considered-secrets
+## Token Exchange Chain
 
-Then relaunch your app, and login. You'll be greeted with an error message, because the app isn't whitelisted yet. Microsoft needs some activity on the app before whitelisting it. __Trying to log in before requesting whitelist is mandatory.__
+After receiving the Microsoft OAuth token:
 
-## Requesting whitelisting from Microsoft
+```
+Microsoft Access Token
+       │
+       ▼
+POST https://user.auth.xboxlive.com/user/authenticate
+Body: { Properties: { AuthMethod: 'RPS', SiteName: 'user.auth.xboxlive.com',
+                      RpsTicket: 'd=<ms_access_token>' },
+        RelyingParty: 'http://auth.xboxlive.com', TokenType: 'JWT' }
+       │
+       ▼
+XBL Token + UserHash (uhs)
+       │
+       ▼
+POST https://xsts.auth.xboxlive.com/xsts/authorize
+Body: { Properties: { SandboxId: 'RETAIL', UserTokens: [xbl_token] },
+        RelyingParty: 'rp://api.minecraftservices.com/', TokenType: 'JWT' }
+       │
+       ▼
+XSTS Token
+       │
+       ▼
+POST https://api.minecraftservices.com/authentication/login_with_xbox
+Body: { identityToken: 'XBL3.0 x=<uhs>;<xsts_token>' }
+       │
+       ▼
+Game Access Token + UUID
+       │
+       ▼
+GET https://api.minecraftservices.com/minecraft/profile
+Headers: Authorization: Bearer <game_access_token>
+       │
+       ▼
+{ id, name }  →  { uuid, displayName }
+```
 
-1. Ensure you have completed every step of this doc page.
-2. Fill [this form](https://aka.ms/mce-reviewappid) with the required information. Remember this is a new appID for approval. You can find both the Client ID and the Tenant ID on the overview page in the Azure Portal.
-3. Give Microsoft some time to review your app.
-4. Once you have received Microsoft's approval, allow up to 24 hours for the changes to apply.
+---
 
-----
+## Token Storage
 
-You can now authenticate with Microsoft through the launcher.
+Tokens are stored in `ConfigManager.authenticationDatabase`:
 
-References:
-- https://docs.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app
-- https://help.minecraft.net/hc/en-us/articles/16254801392141
+```ts
+interface AuthAccount {
+  uuid: string             // Game profile UUID
+  displayName: string      // In-game name
+  accessToken: string      // Game access token (used in launch args)
+  username: string         // Usually same as displayName
+  type: 'microsoft'
+  expiresAt: number        // Unix timestamp ms
+  microsoft: {
+    access_token: string   // MS OAuth access token
+    refresh_token: string  // MS OAuth refresh token (long-lived)
+    expires_in: number
+    token_type: 'Bearer'
+  }
+}
+```
+
+Tokens are stored in `config.json` as plain JSON. There is no OS keychain integration — tokens are protected only by filesystem permissions.
+
+---
+
+## Token Refresh
+
+On app startup and before each launch, `authmanager.js` checks `expiresAt`:
+
+```
+if (Date.now() >= account.expiresAt - 5 * 60 * 1000):
+    → Refresh using microsoft.refresh_token
+    → POST /oauth2/v2.0/token with grant_type=refresh_token
+    → On success: update account in authenticationDatabase, save config
+    → On failure: mark account as invalid, prompt re-login
+```
+
+The 5-minute buffer prevents the token from expiring during a long download.
+
+---
+
+## Multiple Accounts
+
+The launcher supports multiple authenticated accounts simultaneously. Accounts are stored by UUID in `authenticationDatabase`. `selectedAccount` holds the UUID of the currently active account.
+
+Switching accounts is done from the Settings UI by selecting a different account. No re-authentication is required unless the refresh token has expired.
+
+---
+
+## IPC Channels (Microsoft Auth)
+
+| Channel | Direction | Description |
+|---------|-----------|-------------|
+| `auth:microsoft:startDeviceCode` | Renderer→Main | Start device code flow, returns `{ user_code, verification_url }` |
+| `auth:microsoft:pollStatus` | Renderer→Main | Check if user has completed auth. Returns token or `{ pending: true }` |
+| `auth:microsoft:cancel` | Renderer→Main | Cancel ongoing device code poll |
+| `auth:logout` | Renderer→Main | Remove account from database, save config |
+| `auth:getAccounts` | Renderer→Main | Returns all accounts in `authenticationDatabase` |
+| `auth:selectAccount` | Renderer→Main | Sets `selectedAccount` in config |
+| `auth:refresh` | Renderer→Main | Force refresh tokens for selected account |
+
+---
+
+## Azure Application
+
+The launcher uses a registered Azure AD application for OAuth. The `client_id` is hardcoded in `MicrosoftAuthService.js`. The application is registered as a **public client** (no client secret) with the `XboxLive.signin offline_access` scope.
+
+The app does **not** use PKCE — device-code flow inherently doesn't require it since there is no redirect URI to protect.

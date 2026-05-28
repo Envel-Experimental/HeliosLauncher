@@ -1,72 +1,90 @@
-# Staged Rollouts for Launcher Updates
+# Staged Rollouts
 
-The launcher utilizes `electron-updater` which has built-in support for **Staged Rollouts**. This allows you to release an update to only a percentage of your user base (e.g., 10%) and gradually increase it to ensure stability.
+The distribution system supports **gradual rollouts** — a server can be made available to only a percentage of users before a full release.
+
+---
 
 ## How It Works
 
-1.  **Server-Side Control**: The rollout percentage is controlled entirely by the `latest.yml` (Windows), `latest-mac.yml` (macOS), or `latest-linux.yml` (Linux) files on your update server.
-2.  **Client-Side Logic**: When the launcher checks for updates, it reads the `stagingPercentage` from the YAML file.
-3.  **Deterministic**: The launcher calculates a deterministic value based on the user's Machine ID. This means a user will consistently fall into the same "bucket" relative to the percentage.
-    -   If their calculated value is `< stagingPercentage`, they get the update.
-    -   If not, they don't (until you increase the percentage).
+Each server in `distribution.json` can include a `rollout` field:
 
-## Implementation Guide
-
-To implement a staged rollout for a new version (e.g., `2.5.0`), follow these steps during your release process:
-
-### 1. Build the Update
-Your CI/CD pipeline (GitHub Actions) usually runs `npm run dist` and creates a GitHub Release.
-
-### 2. Prepare for Upload
-Since you are using a convenient custom server (`f-launcher.ru`) alongside GitHub, you likely download the artifacts (`.exe`, `.latest.yml`) from the GitHub Release to upload them to your server.
-
-**Intervention Point:**
-1.  Download `latest.yml` from the GitHub Release.
-2.  Open it in a text editor (Notepad, VS Code).
-3.  **Add the line:** `stagingPercentage: 10`
-4.  Save the file.
-
-### 3. Upload to Server
-Upload the **modified** `latest.yml` (and the new `.exe`/`.dmg`) to your server (`https://f-launcher.ru/fox/new/updates`).
-
-### 4. Monitor and Expand
-```yaml
-version: 2.5.0
-files:
-  - url: FLauncher-Setup-2.5.0.exe
-    sha512: ...
-    size: ...
-path: FLauncher-Setup-2.5.0.exe
-sha512: ...
-releaseDate: '2026-02-18T10:00:00.000Z'
-stagingPercentage: 10  # <--- ADD THIS LINE
+```json
+{
+  "id": "my-server",
+  "rollout": {
+    "percent": 25
+  }
+}
 ```
 
+The launcher deterministically gates access based on the user's stable identity (HWID/clientToken).
 
+---
 
+## Gating Logic
 
+```js
+// Pseudo-code
+const userId = ConfigManager.getClientToken()      // stable HWID or UUID
+const hash = sha256(userId + server.id)            // deterministic per user+server
+const bucket = parseInt(hash.slice(0, 8), 16) % 100  // 0–99
+const canAccess = bucket < server.rollout.percent
+```
 
-> [!IMPORTANT]
-> **Provider Priority**:
-> For Staged Rollouts to work, the launcher **must** check your custom server (`generic` provider) first, not GitHub.
-> Ensure your `electron-builder.yml` lists the `generic` provider **before** the `github` provider in the `publish` section. (Use this order):
->
-> ```yaml
-> publish:
->   - provider: generic
->     url: 'https://f-launcher.ru/fox/new/updates'
->   - provider: github
->     ...
-> ```
+- `percent: 0` → nobody sees the server.
+- `percent: 100` → everyone sees the server (default when field is omitted).
+- `percent: 25` → deterministic 25% of users see the server (same users every time).
 
+The hash is seeded with both `userId` and `server.id`, so the same user gets consistent 0/1 outcomes across restarts, and different servers produce different buckets for the same user.
 
+---
 
-## Technical Details
+## Rollout Percent Values
 
-*   **`allowPrerelease` Bypass**: Staged rollouts apply to **stable** releases. If a user has "Allow Prereleases" enabled, they might bypass staging.
-*   **Force Update**: Users who manually click "Check for Updates" might still be subject to the staging percentage depending on implementation.
+| Value | Meaning |
+|-------|---------|
+| `0` | Disabled / not visible |
+| `1–99` | Gradual rollout (% of user base) |
+| `100` | Full release (or omit the field entirely) |
 
-## Rollback Strategy
-If you discover a bug:
-1.  **Halt**: Stop increasing the percentage.
-2.  **Revert**: Upload a newer version number (e.g., `2.5.1`) containing the stable code, or remove the buggy version entry from `latest.yml`.
+---
+
+## Distribution Versioning
+
+The `distribution.json` includes a `version` and `timestamp` field:
+
+```json
+{
+  "version": "1.2.3",
+  "timestamp": "2024-06-01T12:00:00.000Z",
+  ...
+}
+```
+
+`timestamp` is used for:
+1. **Anti-replay protection**: The launcher rejects remote distributions with an older timestamp than the cached local one. See [distro.md](./distro.md#anti-replay-protection).
+2. **Cache invalidation**: If the remote timestamp is newer, the remote distribution replaces the local cache.
+
+`version` is informational — it appears in logs and diagnostics but is not used for comparison logic.
+
+---
+
+## Rolling Back a Release
+
+To roll back, publish a new distribution with:
+- An **increased `timestamp`** (must be newer than the current live version).
+- The affected server entry updated or reverted.
+- A **new Ed25519 signature** (see [signing_guide.md](./signing_guide.md)).
+
+You cannot "downgrade" to an older `distribution.json` because the anti-replay check will reject it.
+
+---
+
+## Testing Staged Rollouts Locally
+
+Place a `distribution_dev.json` in the launcher data directory with `rollout.percent` set to any value. When the app is run from source (`npm start`, `!app.isPackaged`), it reads this file instead of the remote distribution. The rollout gating logic still runs against the local user's HWID.
+
+To force a specific user into a rollout:
+1. Set a fixed `clientToken` in `config.json`.
+2. Pre-compute the bucket for that token + server ID.
+3. Set `percent` above the bucket value.

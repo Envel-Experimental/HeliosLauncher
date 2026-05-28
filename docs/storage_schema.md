@@ -1,72 +1,160 @@
-# Storage Schema & Data Classification
+# Storage Schema
 
-This document details the file storage architecture, data sources, and security classification for the Launcher.
-
-## 🟢 Data Legend
-| Status | Class | Origin | Description |
-| :--- | :--- | :--- | :--- |
-| 🛡️ | **Sensitive** | Internet Only | Critical private data (configs, logs, tokens). No P2P. |
-| 📦 | **Public** | P2P + Internet | Game assets, libraries, runtimes. Fully shareable. |
-| 📝 | **Mutable** | Local Only | User-installed mods, options, and save files. No P2P. |
-| 📡 | **Control** | Internet Only | Bootstrap, distribution indices, version manifests. |
+All files written to disk by FLauncher, their locations, formats, and lifecycle.
 
 ---
 
-## 📂 Directory Structure
+## Base Directory
 
-```text
-.foxford/
-├── 📡 config.json              # Main launcher settings (RAM, login paths)
-├── 📡 distribution.json        # Manifest of servers/files (HTTPS only)
-├── 🛡️ config.json              # App data (Login tokens - CRITICAL SENSITIVITY)
-├── 🛡️ peers.json               # P2P peer cache (Connection info)
-│
-├── 📦 common/                  # Global Data Cache (Read-Only Proxy)
-│   ├── 📡 assets/indexes/      # Asset Index JSONs (Minecraft metadata)
-│   ├── 📦 assets/objects/      # Sharded assets (Sounds, Textures, Lang)
-│   ├── 📡 assets/log_configs/  # Launch XMLs
-│   ├── 📦 libraries/           # Maven libraries (.jar, .dll)
-│   └── 📦 runtime/             # Game JREs (java.exe, javaw.exe)
-│
-├── 📝 instances/               # User-specific Environment
-│   └── [server_id]/
-│       ├── 📝 options.txt      # User keybindings/settings (Never Overwrite)
-│       ├── 📦 mods/            # Instance mods (May be P2P if in distro)
-│       ├── 📝 config/          # Mod settings (User modified)
-│       └── 🛡️ logs/            # Crash reports and session logs
-│
-└── 📦 icons/                   # Server brand thumbnails
+Determined by `ConfigManager.getLauncherDirectory()`:
+
+| Platform | Default Path |
+|----------|-------------|
+| Windows | `%APPDATA%\.foxford\` |
+| macOS | `~/Library/Application Support/.foxford/` |
+| Linux | `~/.foxford/` |
+
+Users can override via `settings.launcher.dataDirectory` in config. The override path is resolved through `pathutil.js`.
+
+---
+
+## File Inventory
+
+### `config.json`
+**Path**: `<launcherDir>/config.json`  
+**Format**: JSON  
+**Written by**: `ConfigManager.save()`  
+**Read by**: `ConfigManager.load()` (Main and Renderer)  
+**Content**: Full launcher configuration. See [ConfigManager.md](./ConfigManager.md) for schema.  
+**Lifecycle**: Created on first run with defaults. Never deleted automatically.
+
+---
+
+### `distribution.json`
+**Path**: `<launcherDir>/distribution.json`  
+**Format**: JSON  
+**Written by**: `DistributionAPI.writeDistributionToDisk()`  
+**Read by**: `DistributionAPI.pullLocal()`  
+**Content**: Cached server distribution manifest fetched from remote.  
+**Lifecycle**: Overwritten on successful remote fetch + signature verification. Kept as fallback if remote is unavailable.
+
+---
+
+### `distribution_dev.json`
+**Path**: `<launcherDir>/distribution_dev.json`  
+**Format**: JSON  
+**Written by**: Developer manually places this file.  
+**Read by**: `DistributionAPI` in dev mode (`!app.isPackaged`).  
+**Content**: Local override distribution for development testing.  
+**Lifecycle**: Not managed by the launcher. Must be created/deleted manually.
+
+---
+
+### `peers.json`
+**Path**: `<launcherDir>/peers.json`  
+**Format**: JSON  
+**Written by**: `PeerPersistence`  
+**Read by**: `P2PEngine.start()`  
+**Content**: Array of previously seen peer addresses/keys for fast reconnection.  
+**Lifecycle**: Updated periodically while P2P is running. Loaded at startup to skip DHT discovery cold-start.
+
+---
+
+### `stats.json`
+**Path**: `<launcherDir>/stats.json`  
+**Format**: JSON  
+**Written by**: `StatsManager`  
+**Read by**: `StatsManager` on startup  
+**Content**:
+```json
+{
+  "all": { "uploaded": 12345678, "downloaded": 98765432 },
+  "month": { "uploaded": 1234567, "downloaded": 9876543, "year": 2024, "month": 1 },
+  "week": { "uploaded": 123456, "downloaded": 987654, "year": 2024, "week": 5 }
+}
 ```
+**Lifecycle**: Written on each significant transfer event. Month/week windows reset automatically based on calendar comparison.
 
 ---
 
-## 🛠️ Data Sourcing Matrix
-
-| File Type | Protocol | P2P Priority | Seeder Logic |
-| :--- | :--- | :--- | :--- |
-| **Distribution Index** | HTTPS | ❌ Blocked | Never distributed via P2P. |
-| **Client Jar** | P2P/HTTPS | 🚀 High | Served from `versions/`. |
-| **Asset Objects** | P2P/HTTPS | 🚀 High | Served from `common/assets/objects/`. |
-| **Libraries** | P2P/HTTPS | 🚀 High | Served from `common/libraries/`. |
-| **Java Runtime** | P2P/HTTPS | 🚀 High | Served from `common/runtime/`. |
-| **Instance Configs** | Local | ❌ Blocked | Blocked by Security Whitelist. |
-| **Private Tokens** | Local | ❌ Blocked | Blacklisted by name (`config.json`). |
+### `runtime/<arch>/`
+**Path**: `<launcherDir>/runtime/<arch>/` (e.g. `runtime/x64/`)  
+**Written by**: `JavaGuard` (extraction step)  
+**Content**: Extracted JDK directory (e.g. `jdk-21.0.3+9/`) and the downloaded archive before extraction.  
+**Lifecycle**: Archive deleted after extraction. JDK directory kept until a new version is installed or user clears it.
 
 ---
 
-## 🔒 Security & Fair Usage Logic
+### `common/`
+**Path**: `<launcherDir>/common/`  
+**Written by**: `DownloadEngine` via `DistributionIndexProcessor` and `MojangIndexProcessor`  
+**Content**:
+```
+common/
+├── versions/
+│   └── 1.20.1/
+│       ├── 1.20.1.json      ← version manifest
+│       └── 1.20.1.jar       ← game client JAR
+├── assets/
+│   ├── indexes/
+│   │   └── 17.json          ← asset index
+│   └── objects/
+│       └── ab/
+│           └── ab1234...    ← hashed asset objects (sounds, textures)
+└── libraries/
+    └── <maven-path>/
+        └── artifact.jar
+```
+**Lifecycle**: Files are downloaded on first play or when corrupted. Verified on every launch by `FullRepair`.
 
-### 1. Seeder Protection (The "Soft Ban")
-- **Token Bucket**: Every IP has a 5GB burst credit limit.
-- **Regeneration**: Credits recover at **2MB/s**.
-- **Action**: If credits empty, seeder returns `MSG_ERROR: Busy`.
+---
 
-### 2. File Path Resolution
-The client requests files using **Physical Relative Paths** (e.g., `common/assets/objects/35/3503...`).
-- **Seeder Check**: The seeder verifies `path.isAbsolute(rel) === false` and `rel.startsWith('..') === false`.
-- **Whitelist**: Only `assets`, `libraries`, `versions`, `common`, `icons`, `minecraft` are allowed.
-- **Blacklist**: Explicitly blocks `config.json`, `distribution.json`, `peers.json`, `version_manifest_v2.json`.
+### `instances/<serverId>/`
+**Path**: `<launcherDir>/instances/<serverId>/`  
+**Written by**: `DownloadEngine`, game process  
+**Content**:
+```
+instances/server-id/
+├── mods/           ← server-managed mods (togglable in UI)
+├── config/         ← game config files (from distribution)
+├── resourcepacks/
+├── saves/          ← game save data (written by the game)
+├── screenshots/
+├── logs/
+└── crash-reports/  ← read by GameCrashHandler
+```
+**Lifecycle**: Instance directory created on first launch of a server. `saves/`, `screenshots/` etc. are user data and must never be deleted automatically.
 
-### 3. Mutual Trust
-- **Validation**: Every file received via P2P is validated by its **Hash (MD5/SHA1)** before use.
-- **Corruption Fix**: If P2P fails validation twice, the launcher falls back to **HTTPS**.
+---
+
+## Electron / System Files
+
+### `app.getPath('userData')`
+Electron's default userData path (different from `.foxford`). Used by:
+- `electron-updater` for update cache
+- Sentry for offline event queue
+
+| Platform | Path |
+|----------|------|
+| Windows | `%APPDATA%\FLauncher` |
+| macOS | `~/Library/Application Support/FLauncher` |
+| Linux | `~/.config/FLauncher` |
+
+---
+
+## Temp Files
+
+### Native library extraction
+**Path**: OS temp directory + unique subfolder (e.g. `os.tmpdir()/flauncher-natives-<hash>/`)  
+**Content**: Extracted `.dll` / `.so` / `.dylib` files needed for launch.  
+**Lifecycle**: Created before game launch, deleted after the game process exits (best-effort).
+
+---
+
+## File Write Safety
+
+- `config.json`: written with `fs.writeFile()` directly. No atomic rename. Risk: partial write on crash → config reset to defaults.
+- `distribution.json`: written with `fs.writeFile()`. Same caveat.
+- All other files: written by `DownloadEngine` which verifies hash after write. Corrupted files are detected on next launch and re-downloaded.
+
+> **Known limitation**: `config.json` and `distribution.json` writes are not atomic. A power loss during write could corrupt these files. The launcher handles missing/invalid config by recreating defaults. A corrupted `distribution.json` is handled by falling back to the remote fetch.

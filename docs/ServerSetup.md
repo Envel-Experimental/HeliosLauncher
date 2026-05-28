@@ -1,141 +1,203 @@
-# Server-Side Setup Guide
+# Server Setup
 
-This document describes how to set up the server infrastructure required for the Launcher's **Auto-Update System** and **Java Runtime Mirroring**.
-
-## 1. Auto-Update System (Backup Mirror)
-
-The launcher uses `github` as the primary update source.
-This configuration adds a **Backup Mirror** using the `generic` provider.
-If GitHub is unreachable, the launcher will check:
-`https://f-launcher.ru/fox/new/updates`
-
-### Required Files
-When you build the launcher using `npm run dist`, `electron-builder` generates several files in the `dist` directory. You must upload these to your server.
-
-#### For Windows:
--   `latest.yml`: Contains version info and sha512 checksums. **Critical for updates.**
--   `Flauncher-setup-X.Y.Z.exe`: The installer file.
-
-#### For macOS:
--   `latest-mac.yml`: Equivalent to `latest.yml` but for macOS.
--   `Flauncher-setup-X.Y.Z.dmg`: The DMG file.
--   `Flauncher-setup-X.Y.Z-mac.zip`: Zip update file (often used for auto-updates).
-
-#### For Linux:
--   `latest-linux.yml`: Equivalent to `latest.yml`.
--   `Flauncher-X.Y.Z.AppImage`: The AppImage file.
-
-### Update Metadata Files (`latest.yml`)
-
-These files (`latest.yml`, `latest-mac.yml`, `latest-linux.yml`) are **generated automatically** by `electron-builder` when you run `npm run dist`. You usually do not clean write them by hand, but you must upload them.
-
-However, if you need to understand their structure or debug issues, here is what they look like:
-
-#### `latest.yml` (Windows)
-```yaml
-version: 2.4.0
-files:
-  - url: Flauncher-setup-2.4.0.exe
-    sha512: <LONG_BASE64_STRING>
-    size: 65432100
-path: Flauncher-setup-2.4.0.exe
-sha512: <LONG_BASE64_STRING>
-releaseDate: '2026-02-05T12:00:00.000Z'
-```
-
-#### `latest-mac.yml` (macOS)
-```yaml
-version: 2.4.0
-files:
-  - url: Flauncher-setup-2.4.0-mac.zip
-    sha512: <LONG_BASE64_STRING>
-    size: 65432100
-  - url: Flauncher-setup-2.4.0.dmg
-    sha512: <LONG_BASE64_STRING>
-    size: 67432100
-path: Flauncher-setup-2.4.0-mac.zip
-sha512: <LONG_BASE64_STRING>
-releaseDate: '2026-02-05T12:00:00.000Z'
-```
-
-**Key Fields:**
-*   `version`: The version number of the update.
-*   `path`: The primary file to download (relative to the YAML file).
-*   `sha512`: The checksum of the file to verify integrity. **Critical**.
-*   `releaseDate`: Timestamp.
-
-### Directory Structure Example
-Your web server at `https://f-launcher.ru/fox/new/updates/` should serve exactly these filenames:
-
-```
-/updates/
-├── latest.yml                  <-- Windows metadata
-├── Flauncher-setup-2.4.0.exe   <-- Windows installer
-├── latest-mac.yml              <-- macOS metadata
-├── Flauncher-setup-2.4.0.dmg   <-- macOS installer
-├── Flauncher-setup-2.4.0-mac.zip <-- macOS zip (required for auto-update)
-└── ...
-```
-
-**Important:**
-*   The `url` inside the YAML files is usually just the filename (e.g., `Flauncher-setup-2.4.0.exe`).
-*   This means the EXE/DMG must be in the **same folder** as the YAML file on your server.
+How to add a new game server to the launcher.
 
 ---
 
-## 2. Java Runtime Mirroring
+## Overview
 
-The launcher supports mirroring Java Runtimes (JDKs/JREs). 
-**Note:** The launcher will attempt to download from Official sources (BellSoft/GitHub/Adoptium) *first*. 
-If those fail, it will check the `java_manifest` URL defined in `network/config.js` as a **fallback**.
+The launcher is driven entirely by `distribution.json`. To add a server, you edit the distribution, sign it, and publish it. No code changes needed.
 
-### Configuration
-The launcher checks the `java_manifest` URL defined in `network/config.js`.
-Default: `https://f-launcher.ru/fox/new/mirror/java/manifest.json`
+---
 
-### Manifest Structure (`manifest.json`)
-You must host a JSON file that maps OS/Arch/Version to a download URL.
+## Step 1: Prepare Server Modules
 
-**Format:**
+Collect all files the launcher needs to download for this server:
+
+- Game loader JAR (Forge/Fabric)
+- Mod files
+- Config files
+- Resource packs (if any)
+
+For each file you need:
+- The file itself (to compute MD5 and size)
+- A stable download URL
+
+---
+
+## Step 2: Compute File Metadata
+
+For each file:
+
+```bash
+# MD5 hash
+md5sum mymod-1.0.0.jar
+# → abc123def456... mymod-1.0.0.jar
+
+# File size in bytes
+wc -c < mymod-1.0.0.jar
+# → 12345678
+```
+
+Or with PowerShell:
+```powershell
+(Get-FileHash mymod-1.0.0.jar -Algorithm MD5).Hash.ToLower()
+(Get-Item mymod-1.0.0.jar).Length
+```
+
+---
+
+## Step 3: Write the Server Entry
+
+Add a server object to `distribution.json` under `"servers"`:
+
 ```json
 {
-  "windows": {
-    "x64": {
-      "8": {
-        "url": "https://f-launcher.ru/fox/new/mirror/java/jdk-8-win-x64.zip",
-        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "type": "temurin"
+  "id": "my-server-1.20",
+  "name": "My Server",
+  "description": "A brief description",
+  "icon": "https://cdn.example.com/server-icon.png",
+  "version": "1.0.0",
+  "address": "play.example.com:25565",
+  "minecraftVersion": "1.20.1",
+  "mainServer": false,
+  "autoconnect": false,
+  "javaOptions": {
+    "supported": ">=21.0.0 <22",
+    "suggestedMajor": 21,
+    "distribution": "graalvm"
+  },
+  "rollout": {
+    "percent": 100
+  },
+  "modules": [
+    {
+      "id": "net.minecraftforge:forge:47.3.0@jar",
+      "name": "Forge 47.3.0",
+      "type": "ForgeHosted",
+      "artifact": {
+        "size": 8765432,
+        "MD5": "abc123def456abc123def456abc123de",
+        "path": "net/minecraftforge/forge/47.3.0/forge-47.3.0.jar",
+        "url": "https://cdn.example.com/forge-47.3.0.jar"
       },
-      "17": {
-        "url": "https://f-launcher.ru/fox/new/mirror/java/jdk-17-win-x64.zip",
-        "sha256": "...",
-        "type": "graalvm"
-      },
-      "21": {
-        "url": "https://f-launcher.ru/fox/new/mirror/java/jdk-21-win-x64.zip",
-        "sha256": "..."
-      }
+      "classpath": true,
+      "required": { "value": true, "def": true },
+      "subModules": []
     },
-    "arm64": { ... }
-  },
-  "linux": {
-    "x64": { ... },
-    "arm64": { ... }
-  },
-  "darwin": {
-    "x64": { ... },
-    "arm64": { ... }
-  }
+    {
+      "id": "com.example:mymod:1.0.0@jar",
+      "name": "My Mod",
+      "type": "ForgeMod",
+      "artifact": {
+        "size": 12345678,
+        "MD5": "def456abc123def456abc123def456ab",
+        "path": "mods/mymod-1.0.0.jar",
+        "url": "https://cdn.example.com/mymod-1.0.0.jar"
+      },
+      "required": { "value": false, "def": true }
+    }
+  ]
 }
 ```
 
-### Hosting Java Binaries
-1.  Download the required JDKs (Jre 8, JDK 17, JDK 21) for all platforms.
-2.  Upload them to your mirror (e.g., `/mirror/java/`).
-3.  Calculate their SHA256 hashes.
-4.  Update `manifest.json` with the new URLs and Hashes.
+### Key Fields
 
-### How it Works
-1.  Launcher attempts to resolve Java 17 via Official APIs (BellSoft/GitHub).
-2.  **If that fails**, it checks `manifest.json`.
-3.  If `windows.x64.17` exists in the manifest, it uses the provided `url` and `sha256`.
+| Field | Notes |
+|-------|-------|
+| `id` | Must be unique across all servers. Used as config key. |
+| `mainServer` | Only one server should have `true`. Others get `false` automatically. |
+| `javaOptions.supported` | semver range. The launcher validates the available JVM against this. |
+| `javaOptions.suggestedMajor` | Downloaded if no valid JVM found locally. |
+| `module.id` | Maven coordinate: `group:artifact:version@ext` |
+| `module.type` | `ForgeHosted`, `Fabric`, `ForgeMod`, `FabricMod`, `Library`, `File` |
+| `module.artifact.path` | Relative path from `commonDir/libraries` (for libs) or instance dir (for mods/files) |
+| `module.required.value` | If `false`, user can toggle in Settings |
+| `module.required.def` | Default enabled state for optional mods |
+
+---
+
+## Step 4: Update Timestamp and Version
+
+Always update these fields before publishing:
+
+```json
+{
+  "version": "1.1.0",
+  "timestamp": "2024-06-01T12:00:00.000Z",
+  ...
+}
+```
+
+`timestamp` must be **newer** than the currently live distribution, or the anti-replay check will reject it.
+
+---
+
+## Step 5: Sign the Distribution
+
+```bash
+# Sign (Python example)
+python sign_distro.py distribution.json distro_private.pem distribution.json.sig
+```
+
+See [signing_guide.md](./signing_guide.md) for full signing instructions.
+
+---
+
+## Step 6: Publish
+
+Upload both files to your CDN/server:
+
+```
+https://f-launcher.ru/fox/new/distribution.json
+https://f-launcher.ru/fox/new/distribution.json.sig
+```
+
+Both files must be served with appropriate CORS headers if accessed cross-origin.
+
+---
+
+## Module Path Conventions
+
+### Libraries (ForgeHosted, Fabric, Library)
+Path is relative to `<commonDir>/libraries/`. Use Maven-style paths:
+```
+net/minecraftforge/forge/47.3.0/forge-47.3.0.jar
+```
+
+### Mods (ForgeMod, FabricMod)
+Path is relative to the instance directory: `mods/<filename>.jar`
+
+### Config files (File)
+Path is relative to the instance directory: `config/<filename>.toml`
+
+### Sub-modules
+Sub-modules are dependencies of a module (e.g. Forge's own bundled libraries). They follow the same schema and are placed on the classpath if `classpath: true`.
+
+---
+
+## Staging a Rollout
+
+To release to a subset of users first:
+
+```json
+"rollout": { "percent": 10 }
+```
+
+Increase gradually:
+- Day 1: 10%
+- Day 3: 25%
+- Day 7: 50%
+- Day 14: 100%
+
+Each change requires a new signed distribution with an updated timestamp. See [staged_rollouts.md](./staged_rollouts.md).
+
+---
+
+## Testing Locally
+
+1. Create `distribution_dev.json` in `%APPDATA%\.foxford\` (or platform equivalent).
+2. Run the launcher from source (`npm start`).
+3. It will load `distribution_dev.json` instead of fetching from the remote.
+
+The dev distribution does not need a valid signature — signature checking is skipped when the launcher is running unpackaged.
