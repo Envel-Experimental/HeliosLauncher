@@ -1,7 +1,7 @@
 module.exports = {
   roots: ['<rootDir>/tests'],
   testMatch: ['**/tests/**/*.test.js'],
-  collectCoverageFrom: ['app/**/*.js'],
+  collectCoverageFrom: ['app/**/*.js', 'network/**/*.js'],
   coverageDirectory: 'coverage',
   coverageReporters: ['html', 'text'],
   testEnvironment: 'node',
