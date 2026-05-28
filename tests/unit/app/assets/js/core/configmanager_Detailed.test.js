@@ -174,8 +174,8 @@ describe('ConfigManager Detailed Tests', () => {
 
     describe('fetchWithTimeout', () => {
         test('should reject on timeout', async () => {
-            global.fetch.mockReturnValue(new Promise(() => {})) // Never resolves
-            
+            global.fetch.mockReturnValue(new Promise(() => { })) // Never resolves
+
             await expect(ConfigManager.fetchWithTimeout('http://test', {}, 100))
                 .rejects.toThrow('timeout')
         })

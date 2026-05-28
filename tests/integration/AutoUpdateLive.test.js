@@ -61,5 +61,5 @@ describe('AutoUpdate REAL-WORLD Audit', () => {
         console.log('==================================================\n')
 
         expect(Array.isArray(releases)).toBe(true)
-    })
+    }, 20000)
 })

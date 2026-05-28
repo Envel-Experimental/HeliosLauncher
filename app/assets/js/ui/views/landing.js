@@ -708,7 +708,7 @@ if (typeof safeSetOnClick === 'function') {
             if (serv) {
                 const serverId = serv.rawServer.id
                 const instancePath = path.join(await ConfigManager.getInstanceDirectory(), serverId)
-                await shell.openPath(instancePath)
+                await ipcRenderer.invoke('shell:openPath', instancePath)
             }
         } catch (err) {
             if (window.loggerLanding) {

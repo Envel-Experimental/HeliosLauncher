@@ -1732,7 +1732,7 @@ export function bindDropinModFileSystemButton() {
     const fsBtn = document.getElementById('settingsDropinFileSystemButton')
     fsBtn.onclick = async () => {
         await ipcRenderer.invoke('fs:mkdir', CACHE_SETTINGS_MODS_DIR, { recursive: true })
-        shell.openPath(CACHE_SETTINGS_MODS_DIR)
+        await ipcRenderer.invoke('shell:openPath', CACHE_SETTINGS_MODS_DIR)
     }
     fsBtn.ondragenter = e => {
         e.dataTransfer.dropEffect = 'move'
@@ -1866,7 +1866,7 @@ export function bindShaderpackButton() {
     spBtn.onclick = async () => {
         const p = sysPath.join(CACHE_SETTINGS_INSTANCE_DIR, 'shaderpacks')
         await ipcRenderer.invoke('fs:mkdir', p, { recursive: true })
-        shell.openPath(p)
+        await ipcRenderer.invoke('shell:openPath', p)
     }
     spBtn.ondragenter = e => {
         e.dataTransfer.dropEffect = 'move'

@@ -4,7 +4,7 @@ import globals from "globals";
 export default [
     js.configs.recommended,
     {
-        ignores: ["node_modules/", "app/dist/", "coverage/", "app/assets/js/libs/"],
+        ignores: ["node_modules/", "app/dist/", "coverage/", "app/assets/js/libs/", "test-results/", "playwright-report/"],
     },
     {
         // Core Logic and Main Process Files
