@@ -159,19 +159,28 @@ class P2PEngine extends EventEmitter {
 
         // Periodic Memory Cleanup
         if (process.env.NODE_ENV !== 'test') {
+            const { MEMORY_CLEANUP_INTERVAL_MS, STRIKE_EXPIRY_MS } = require('./constants')
             this.memoryCleanupInterval = setInterval(() => {
                 this.usageTracker.cleanup()
-                // Cleanup strikes older than 30 mins
+                
+                // Cleanup strikes older than STRIKE_EXPIRY_MS
                 const now = Date.now()
-                if (this._lastCleanup && now - this._lastCleanup < 1800000) return
-                this._lastCleanup = now
-
-                for (const ip of this.peerStrikes.keys()) {
-                    // If strikes are high, they are likely in blacklist (which has its own timer)
-                    // We just clear the strike counter periodically to save memory
-                    this.peerStrikes.delete(ip)
+                if (!this._lastCleanup || now - this._lastCleanup >= STRIKE_EXPIRY_MS) {
+                    this._lastCleanup = now
+                    for (const ip of this.peerStrikes.keys()) {
+                        this.peerStrikes.delete(ip)
+                    }
                 }
-            }, 300000);
+
+                // Prune hanging requests
+                const timeoutVal = (Config.PROTOCOL && Config.PROTOCOL.TIMEOUT) ? Config.PROTOCOL.TIMEOUT : 60000
+                for (const [reqId, req] of this.requests.entries()) {
+                    if (now - req.timestamp > timeoutVal * 2) {
+                        req.reject(new Error('Hanging request pruned by memory manager'))
+                        this.requests.delete(reqId)
+                    }
+                }
+            }, MEMORY_CLEANUP_INTERVAL_MS);
             if (this.memoryCleanupInterval.unref) this.memoryCleanupInterval.unref();
         }
 
@@ -286,6 +295,17 @@ class P2PEngine extends EventEmitter {
     }
 
     async start() {
+        if (!ConfigManager.isLoaded()) {
+            await new Promise(resolve => {
+                const check = setInterval(() => {
+                    if (ConfigManager.isLoaded()) {
+                        clearInterval(check)
+                        resolve(true)
+                    }
+                }, 50)
+            })
+        }
+
         if (!ConfigManager.getSettings().deliveryOptimization?.globalOptimization) {
             // console.log('[P2PEngine] Global Optimization Disabled. Not starting.')
             this.stop()
@@ -373,6 +393,7 @@ class P2PEngine extends EventEmitter {
             for (const t of this.blacklistTimeouts.values()) clearTimeout(t)
             this.blacklistTimeouts.clear()
         }
+        this.blacklistTimeouts = new Map()
         // Clear all requests and their timeouts
         for (const req of Array.from(this.requests.values())) {
             req.reject(new Error('P2P Engine stopped'))
@@ -732,9 +753,6 @@ class P2PEngine extends EventEmitter {
                     console.warn(`[P2PEngine] Peer ${bestPeer.getIP()} failed for ${identifier}. Trying next... (${err.message})`)
                 }
 
-                // If it was a "Not Found" or "Busy", we just continue the loop to the next peer.
-                // Small sleep to avoid instant hammering
-                await new Promise(r => setTimeout(r, 200))
                 if (this.stopping || !this.swarm) return
             }
         }
@@ -755,7 +773,8 @@ class P2PEngine extends EventEmitter {
         return new Promise((resolve, reject) => {
             // VULNERABILITY FIX: Hard Cap mechanisms for Requests Map
             // Prevent Memory Leak / Explosion via API abuse
-            if (this.requests.size >= 500) {
+            const { MAX_SERVER_QUEUE_SIZE } = require('./constants')
+            if (this.requests.size >= MAX_SERVER_QUEUE_SIZE) {
                 reject(new Error('P2P Engine Overloaded (Request Cap Reached)'))
                 return
             }
@@ -1033,10 +1052,14 @@ class P2PEngine extends EventEmitter {
             console.error(`[P2P Security] BLACKLISTING ID: ${id} for suspicious behavior.`)
             this.blacklist.add(id)
             if (!this.blacklistTimeouts) this.blacklistTimeouts = new Map()
+            const { BLACKLIST_DURATION_MS } = require('./constants')
             const tId = setTimeout(() => {
+                if (this.stopping || !this.swarm) return
                 this.blacklist.delete(id)
-                this.blacklistTimeouts.delete(id)
-            }, 600000)
+                if (this.blacklistTimeouts) {
+                    this.blacklistTimeouts.delete(id)
+                }
+            }, BLACKLIST_DURATION_MS)
             this.blacklistTimeouts.set(id, tId)
         }
 
@@ -1105,7 +1128,8 @@ class P2PEngine extends EventEmitter {
         if (!this.serverQueue) this.serverQueue = []
 
         // Max Queue Size Protection (DoS)
-        if (this.serverQueue.length > 500) {
+        const { MAX_SERVER_QUEUE_SIZE } = require('./constants')
+        if (this.serverQueue.length > MAX_SERVER_QUEUE_SIZE) {
             peer.sendError(reqId, 'Server Busy (Queue Full)')
             return
         }
@@ -1396,8 +1420,9 @@ class P2PEngine extends EventEmitter {
             return
         }
 
-        const fastPeers = activeUploadPeers.filter(p => p.currentTransferSpeed > 512000) // > 500 KB/s
-        const slowPeers = activeUploadPeers.filter(p => p.currentTransferSpeed < 128000) // < 125 KB/s
+        const { SEEDER_HEALTH_FAST_LIMIT_BPS, SEEDER_HEALTH_SLOW_LIMIT_BPS } = require('./constants')
+        const fastPeers = activeUploadPeers.filter(p => p.currentTransferSpeed > SEEDER_HEALTH_FAST_LIMIT_BPS) // > 500 KB/s
+        const slowPeers = activeUploadPeers.filter(p => p.currentTransferSpeed < SEEDER_HEALTH_SLOW_LIMIT_BPS) // < 125 KB/s
 
         if (fastPeers.length > 0) {
             this.selfStrikes = 0

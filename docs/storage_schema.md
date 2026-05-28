@@ -25,7 +25,7 @@ Users can override via `settings.launcher.dataDirectory` in config. The override
 **Format**: JSON  
 **Written by**: `ConfigManager.save()`  
 **Read by**: `ConfigManager.load()` (Main and Renderer)  
-**Content**: Full launcher configuration. See [ConfigManager.md](./ConfigManager.md) for schema.  
+**Content**: Full launcher configuration (Minecraft access tokens are encrypted on disk; Microsoft OAuth access/refresh tokens are stored in plaintext). See [ConfigManager.md](./ConfigManager.md) for schema.  
 **Lifecycle**: Created on first run with defaults. Never deleted automatically.
 
 ---
@@ -153,8 +153,8 @@ Electron's default userData path (different from `.foxford`). Used by:
 
 ## File Write Safety
 
-- `config.json`: written with `fs.writeFile()` directly. No atomic rename. Risk: partial write on crash → config reset to defaults.
-- `distribution.json`: written with `fs.writeFile()`. Same caveat.
-- All other files: written by `DownloadEngine` which verifies hash after write. Corrupted files are detected on next launch and re-downloaded.
+- `config.json`: Written atomically using `safeWriteJson()` (writes to a temporary file `<config>.tmp.<timestamp>.<random>`, then performs a retry-backed `fs.rename` up to 5 times). This prevents partial writes on crash or power loss.
+- `distribution.json`: Written with `fs.writeFile()` directly. No atomic rename.
+- All other files: Written by `DownloadEngine` which verifies hash after write. Corrupted files are detected on next launch and re-downloaded.
 
-> **Known limitation**: `config.json` and `distribution.json` writes are not atomic. A power loss during write could corrupt these files. The launcher handles missing/invalid config by recreating defaults. A corrupted `distribution.json` is handled by falling back to the remote fetch.
+> **Known limitation**: `distribution.json` writes are not atomic. A power loss during write could corrupt this file. A corrupted `distribution.json` is automatically handled on the next launch by falling back to a remote fetch.

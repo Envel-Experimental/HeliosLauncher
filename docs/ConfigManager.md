@@ -155,7 +155,7 @@ await ConfigManager.save()    // Write current in-memory config to disk (atomic 
 ConfigManager.isLoaded()      // → boolean
 ```
 
-`save()` uses `fs.writeFile` directly to the config path. It does **not** use atomic swap (write to temp + rename) — this is a known limitation.
+`save()` uses `safeWriteJson()` to perform an atomic write (writes to a temporary file, then performs a retry-backed rename). This prevents file corruption in case of a crash or power loss during the save process.
 
 `load()` validates the loaded JSON against defaults. Missing keys are filled in from `DEFAULT_CONFIG`. No schema migration is performed — adding new keys with defaults is backward-compatible; removing keys is not.
 

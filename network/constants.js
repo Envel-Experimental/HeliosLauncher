@@ -31,5 +31,11 @@ module.exports = {
     STEP_UP_INTERVAL_MS: 5000,        // Update every 5s
     ADDITIVE_INCREASE_MBPS: 0.5,      // AIMD Step: +0.5 Mbps
     SLOW_START_MULTIPLIER: 1.5,       // Exponential growth multiplier
-    MAX_ADAPTIVE_SLOTS: 6             // Strict cap on simultaneous upload slots
+    MAX_ADAPTIVE_SLOTS: 6,             // Strict cap on simultaneous upload slots
+    MEMORY_CLEANUP_INTERVAL_MS: 300000, // 5 minutes interval for memory cleanup
+    STRIKE_EXPIRY_MS: 1800000,          // 30 minutes strike age
+    SEEDER_HEALTH_FAST_LIMIT_BPS: 512000, // 500 KB/s fast peer limit
+    SEEDER_HEALTH_SLOW_LIMIT_BPS: 128000, // 125 KB/s slow peer limit
+    MAX_SERVER_QUEUE_SIZE: 500,         // DoS protection queue limit
+    BLACKLIST_DURATION_MS: 600000       // 10 minutes blacklist ban
 }
