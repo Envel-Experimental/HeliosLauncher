@@ -78,9 +78,11 @@ process.traceDeprecation = true
 
 // Disable eval function in production.
 if (!isDev) {
+    /* eslint-disable no-eval */
     window.eval = global.eval = function () {
         throw new Error('Sorry, this app does not support window.eval().')
     }
+    /* eslint-enable no-eval */
 }
 
 // Display warning when devtools window is opened.

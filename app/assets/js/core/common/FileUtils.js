@@ -149,7 +149,7 @@ async function extractZip(archivePath, destDir, onEntry) {
             try {
                 await runCommand('powershell', ['-NoProfile', '-EncodedCommand', encodedCmd]);
             } catch (psErr) {
-                throw new Error(`[FileUtils] Failed to extract zip. Both 'tar' and 'powershell' failed or are unavailable. PowerShell Error: ${psErr.message}`);
+                throw new Error(`[FileUtils] Failed to extract zip. Both 'tar' and 'powershell' failed or are unavailable. PowerShell Error: ${psErr.message}`, { cause: psErr });
             }
         }
     } else {
@@ -174,7 +174,7 @@ async function extractZip(archivePath, destDir, onEntry) {
                         const { stdout } = await runCommand('powershell', ['-NoProfile', '-EncodedCommand', encodedCmd]);
                         entries = stdout.toString().split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
                     } catch (psErr) {
-                        throw new Error(`[FileUtils] Failed to read zip entries. Both 'tar' and 'powershell' failed or are unavailable. Error: ${psErr.message}`);
+                        throw new Error(`[FileUtils] Failed to read zip entries. Both 'tar' and 'powershell' failed or are unavailable. Error: ${psErr.message}`, { cause: psErr });
                     }
                 }
             } else {
@@ -229,7 +229,7 @@ async function readFileFromZip(archivePath, entryName) {
                 const { stdout } = await runCommand('powershell', ['-NoProfile', '-EncodedCommand', encodedCmd]);
                 return typeof stdout === 'string' ? Buffer.from(stdout, 'utf-8') : stdout;
             } catch (psErr) {
-                throw new Error(`[FileUtils] Failed to read file from zip. Both 'tar' and 'powershell' failed or are unavailable. Error: ${psErr.message}`);
+                throw new Error(`[FileUtils] Failed to read file from zip. Both 'tar' and 'powershell' failed or are unavailable. Error: ${psErr.message}`, { cause: psErr });
             }
         }
     } else {

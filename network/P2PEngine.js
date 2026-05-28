@@ -117,6 +117,8 @@ class P2PEngine extends EventEmitter {
         this.blacklist = new Set() // IP/PubKey strings
         /** @type {Map<string, number>} */
         this.peerStrikes = new Map() // Peer IP -> strikes count
+        /** @type {Map<string, ReturnType<typeof setTimeout>>} */
+        this.blacklistTimeouts = new Map() // peerId -> expiry timeout handle
         this.setMaxListeners(100)
         this.usageTracker = new UsageTracker()
 

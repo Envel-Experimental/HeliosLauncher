@@ -305,7 +305,7 @@ async function latestOpenJDK(major, dataDir, distribution) {
                 }
             }
         } catch (e) {
-            throw new Error(`Official resolution failed: ${e.message}`)
+            throw new Error(`Official resolution failed: ${e.message}`, { cause: e })
         }
         
         if (result) {

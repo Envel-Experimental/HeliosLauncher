@@ -292,13 +292,17 @@ class IpcRegistry {
         })
 
 
-        ipcMain.handle('shell:openPath', async (event, path) => {
-            return await shell.openPath(path)
+        ipcMain.handle('shell:openPath', async (event, targetPath) => {
+            const safePath = this._sandboxShellPath(targetPath)
+            if (!safePath) return 'Access denied: path outside launcher directory'
+            return await shell.openPath(safePath)
         })
 
-        ipcMain.handle('shell:trashItem', async (event, path) => {
+        ipcMain.handle('shell:trashItem', async (event, targetPath) => {
+            const safePath = this._sandboxShellPath(targetPath)
+            if (!safePath) return { result: false, error: 'Access denied: path outside launcher directory' }
             try {
-                await shell.trashItem(path)
+                await shell.trashItem(safePath)
                 return { result: true }
             } catch (e) {
                 return { result: false, error: e.message }
@@ -306,6 +310,30 @@ class IpcRegistry {
         })
 
         ipcMain.handle('mirrors:fetchHealth', async (event, url) => {
+            // SSRF Protection: only allow HTTPS to external hosts
+            if (typeof url !== 'string') return { ok: false, error: 'Invalid URL', latency: 9999 }
+            let parsedUrl
+            try {
+                parsedUrl = new URL(url)
+            } catch {
+                return { ok: false, error: 'Malformed URL', latency: 9999 }
+            }
+            if (parsedUrl.protocol !== 'https:') {
+                return { ok: false, error: 'Only HTTPS mirrors are allowed', latency: 9999 }
+            }
+            // Block loopback / link-local / private ranges at hostname level
+            const host = parsedUrl.hostname
+            if (
+                host === 'localhost' || host === '127.0.0.1' || host === '::1' ||
+                host.endsWith('.local') ||
+                /^10\./.test(host) ||
+                /^192\.168\./.test(host) ||
+                /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+                host === '169.254.169.254' // AWS/GCP metadata
+            ) {
+                return { ok: false, error: 'Private/loopback hosts are not allowed', latency: 9999 }
+            }
+
             const start = Date.now()
             try {
                 const controller = new AbortController()
@@ -373,7 +401,8 @@ class IpcRegistry {
 
     isValidHost(host) {
         if (typeof host !== 'string' || !host) return false
-        return /^[0-9A-Za-z\.\-\:\[\]%]+$/.test(host)
+        // Only allow hostname/IP chars — exclude % which has no valid use in ping args
+        return /^[0-9A-Za-z\.\-\:\[\]]+$/.test(host)
     }
 
     parsePingLatency(output, platform) {
@@ -383,6 +412,37 @@ class IpcRegistry {
         } catch (e) {
             return null
         }
+    }
+
+    /**
+     * Validates that a shell path resolves within the launcher directory.
+     * Returns the resolved path on success, or null on violation.
+     * @param {string} targetPath
+     * @returns {string|null}
+     */
+    _sandboxShellPath(targetPath) {
+        if (typeof targetPath !== 'string' || !targetPath) return null
+        const path = require('path')
+        const ConfigManager = require('../assets/js/core/configmanager')
+        let launcherDir
+        try {
+            launcherDir = ConfigManager.getLauncherDirectorySync()
+        } catch {
+            return null
+        }
+        if (!launcherDir) return null
+        const resolvedBase = path.resolve(launcherDir)
+        let resolved
+        try {
+            resolved = path.resolve(targetPath)
+        } catch {
+            return null
+        }
+        if (resolved === resolvedBase || resolved.startsWith(resolvedBase + path.sep)) {
+            return resolved
+        }
+        console.warn(`[IpcRegistry] shell path sandbox violation: "${targetPath}" is outside launcher dir`)
+        return null
     }
 }
 

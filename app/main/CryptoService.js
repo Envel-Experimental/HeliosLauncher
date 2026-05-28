@@ -1,11 +1,28 @@
 const { ipcMain } = require('electron')
 const crypto = require('crypto')
 
+/** Allowed hash algorithms — prevents use of deprecated/weak algos */
+const ALLOWED_HASH_ALGORITHMS = new Set(['sha1', 'sha256', 'sha512', 'sha384', 'md5'])
+
+/**
+ * Validates that the requested algorithm is in the allowlist.
+ * @param {string} algorithm
+ * @returns {boolean}
+ */
+function isAllowedAlgorithm(algorithm) {
+    return typeof algorithm === 'string' && ALLOWED_HASH_ALGORITHMS.has(algorithm.toLowerCase())
+}
+
 class CryptoService {
     init() {
         ipcMain.on('crypto:hashSync', (event, algorithm, data) => {
+            if (!isAllowedAlgorithm(algorithm)) {
+                console.warn(`[CryptoService] Rejected disallowed hash algorithm: ${algorithm}`)
+                event.returnValue = null
+                return
+            }
             try {
-                const hash = crypto.createHash(algorithm).update(data).digest('hex')
+                const hash = crypto.createHash(algorithm.toLowerCase()).update(data).digest('hex')
                 event.returnValue = hash
             } catch (e) {
                 console.error(`[CryptoService] Sync hash failed for ${algorithm}:`, e)
@@ -14,25 +31,28 @@ class CryptoService {
         })
 
         ipcMain.handle('crypto:hash', async (event, algorithm, data) => {
+            if (!isAllowedAlgorithm(algorithm)) {
+                console.warn(`[CryptoService] Rejected disallowed hash algorithm: ${algorithm}`)
+                return null
+            }
             try {
-                if (!algorithm || !data) {
-                    console.error(`[CryptoService] Invalid hash request: algo=${algorithm}, data=${data ? 'present' : 'missing'}`)
+                if (!data) {
+                    console.error(`[CryptoService] Invalid hash request: data missing`)
                     return null
                 }
-                console.debug(`[CryptoService] Async hash requested for ${algorithm}`)
-                return crypto.createHash(algorithm).update(data).digest('hex')
+                return crypto.createHash(algorithm.toLowerCase()).update(data).digest('hex')
             } catch (e) {
                 console.error(`[CryptoService] Hash failed for ${algorithm}:`, e)
                 return null
             }
         })
-        
+
         ipcMain.handle('crypto:verify', async (event, algorithm, data, key, signature) => {
             try {
                 // Handle different data formats (Hex strings or Buffers)
                 const dataBuf = Buffer.isBuffer(data) ? data : Buffer.from(data, 'hex')
                 const sigBuf = Buffer.isBuffer(signature) ? signature : Buffer.from(signature, 'hex')
-                
+
                 return crypto.verify(algorithm, dataBuf, key, sigBuf)
             } catch (e) {
                 console.error(`[CryptoService] Verify failed:`, e)

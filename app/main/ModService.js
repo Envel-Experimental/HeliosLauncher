@@ -11,6 +11,33 @@ const SHADER_OPTION = /shaderPack=(.+)/
 const SHADER_DIR = 'shaderpacks'
 const SHADER_CONFIG = 'optionsshaders.txt'
 
+/**
+ * Ensures that `targetPath` stays within `baseDir`.
+ * Returns the resolved absolute path on success, throws on traversal.
+ * @param {string} baseDir
+ * @param {string} targetPath
+ * @returns {string}
+ */
+function assertWithinBase(baseDir, targetPath) {
+    const resolvedBase = path.resolve(baseDir)
+    const resolved = path.resolve(baseDir, targetPath)
+    if (resolved !== resolvedBase && !resolved.startsWith(resolvedBase + path.sep)) {
+        throw new Error(`Path traversal detected: "${targetPath}" escapes base directory`)
+    }
+    return resolved
+}
+
+/**
+ * Returns the instance directory root (launcher dir + /instances).
+ * Used to validate instanceDir paths passed from renderer.
+ * @returns {string}
+ */
+function getInstancesRoot() {
+    return ConfigManager.getInstanceDirectorySync
+        ? ConfigManager.getInstanceDirectorySync()
+        : path.join(ConfigManager.getLauncherDirectorySync(), 'instances')
+}
+
 class ModService {
     init() {
         // Mods
@@ -82,10 +109,14 @@ class ModService {
     async addDropinMods(filePaths, modsDir) {
         await fs.mkdir(modsDir, { recursive: true })
 
+        if (!Array.isArray(filePaths)) return false
+
         for (let filePath of filePaths) {
+            if (typeof filePath !== 'string') continue
             const fileName = path.basename(filePath)
             if (MOD_REGEX.exec(fileName) != null) {
-                const destPath = path.join(modsDir, fileName)
+                // Destination must stay within modsDir
+                const destPath = assertWithinBase(modsDir, fileName)
                 try {
                     await fs.rename(filePath, destPath)
                 } catch (err) {
@@ -102,8 +133,16 @@ class ModService {
     }
 
     async toggleDropinMod(modsDir, fullName, enable) {
-        const oldPath = path.join(modsDir, fullName)
-        const newPath = path.join(modsDir, enable ? fullName.substring(0, fullName.indexOf(DISABLED_EXT)) : fullName + DISABLED_EXT)
+        if (typeof fullName !== 'string') throw new Error('Invalid fullName')
+
+        // Security: ensure we stay within modsDir
+        const oldPath = assertWithinBase(modsDir, fullName)
+
+        const baseName = enable
+            ? fullName.substring(0, fullName.indexOf(DISABLED_EXT))
+            : fullName + DISABLED_EXT
+        const newPath = assertWithinBase(modsDir, baseName)
+
         await fs.rename(oldPath, newPath)
         return true
     }
@@ -142,6 +181,12 @@ class ModService {
     }
 
     async setEnabledShaderpack(instanceDir, pack) {
+        if (typeof pack !== 'string') throw new Error('Invalid pack name')
+        // Validate pack is just a filename (no traversal)
+        if (pack !== 'OFF' && (pack.includes('..') || path.isAbsolute(pack))) {
+            throw new Error('Invalid shader pack name')
+        }
+
         await fs.mkdir(instanceDir, { recursive: true })
         const optionsShaders = path.join(instanceDir, SHADER_CONFIG)
         let buf
@@ -159,10 +204,13 @@ class ModService {
         const p = path.join(instanceDir, SHADER_DIR)
         await fs.mkdir(p, { recursive: true })
 
+        if (!Array.isArray(filePaths)) return false
+
         for (let filePath of filePaths) {
+            if (typeof filePath !== 'string') continue
             const fileName = path.basename(filePath)
             if (SHADER_REGEX.exec(fileName) != null) {
-                const destPath = path.join(p, fileName)
+                const destPath = assertWithinBase(p, fileName)
                 try {
                     await fs.rename(filePath, destPath)
                 } catch (err) {

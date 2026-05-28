@@ -58,24 +58,30 @@ export default [
             }
         },
         rules: {
-            "no-unused-vars": "off", 
+            "no-unused-vars": "warn",
             "no-undef": "error",
             "no-empty": "warn",
             "no-constant-condition": "warn",
             "no-useless-escape": "off",
-            "no-async-promise-executor": "warn",
+            "no-async-promise-executor": "error",
             "no-useless-catch": "off",
             "no-useless-assignment": "off",
             "no-control-regex": "off",
-            "no-redeclare": "warn",
-            "preserve-caught-error": "off" // New in ESLint 10, disabling to avoid large refactoring
+            "no-redeclare": "error",
+            // Security rules
+            "no-eval": "error",
+            "no-implied-eval": "error",
+            "no-new-func": "error",
+            "no-script-url": "error",
+            "no-proto": "error",
+            "no-extend-native": "error",
         }
     },
     {
         // UI Files - Special handling for legacy global-heavy scripts
         files: ["app/assets/js/ui/**/*.js"],
         rules: {
-            "no-undef": "off" 
+            "no-undef": "off"
         }
-  }
+    }
 ];

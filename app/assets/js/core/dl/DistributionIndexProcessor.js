@@ -156,7 +156,7 @@ class DistributionIndexProcessor extends IndexProcessor {
             return false;
         }
         catch (err) {
-            throw new Error('Forge version is complex (changed).. launcher requires a patch.');
+            throw new Error('Forge version is complex (changed).. launcher requires a patch.', { cause: err });
         }
     }
 }

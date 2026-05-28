@@ -137,7 +137,7 @@ class ProcessBuilder {
         try {
             fs.accessSync(javaPath, fs.constants.X_OK)
         } catch (e) {
-            throw new Error('Проблема с доступом к файлам Java (недостаточно прав).')
+            throw new Error('Проблема с доступом к файлам Java (недостаточно прав).', { cause: e })
         }
 
         const child = child_process.spawn(javaPath, args, {

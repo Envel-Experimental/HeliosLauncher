@@ -22,6 +22,12 @@ jest.mock('fs', () => ({
     existsSync: jest.fn()
 }))
 
+jest.mock('../../../app/assets/js/core/configmanager', () => ({
+    getLauncherDirectorySync: jest.fn().mockReturnValue('/'),
+    getInstanceDirectorySync: jest.fn().mockReturnValue('/instances'),
+    getDataDirectory: jest.fn().mockReturnValue('/')
+}))
+
 const ModService = require('../../../app/main/ModService')
 const { ipcMain } = require('electron')
 const fs = require('fs/promises')
@@ -77,8 +83,8 @@ describe('ModService', () => {
             
             expect(result).toBe(true)
             expect(fs.mkdir).toHaveBeenCalledWith('/mods', { recursive: true })
-            expect(fs.rename).toHaveBeenCalledWith('/tmp/mod1.jar', path.join('/mods', 'mod1.jar'))
-            expect(fs.copyFile).toHaveBeenCalledWith('/tmp/mod2.jar', path.join('/mods', 'mod2.jar'))
+            expect(fs.rename).toHaveBeenCalledWith('/tmp/mod1.jar', path.resolve('/mods', 'mod1.jar'))
+            expect(fs.copyFile).toHaveBeenCalledWith('/tmp/mod2.jar', path.resolve('/mods', 'mod2.jar'))
             expect(fs.unlink).toHaveBeenCalledWith('/tmp/mod2.jar')
         })
     })
@@ -87,16 +93,16 @@ describe('ModService', () => {
         it('should disable an enabled mod', async () => {
             await ModService.toggleDropinMod('/mods', 'mod.jar', false)
             expect(fs.rename).toHaveBeenCalledWith(
-                path.join('/mods', 'mod.jar'),
-                path.join('/mods', 'mod.jar.disabled')
+                path.resolve('/mods', 'mod.jar'),
+                path.resolve('/mods', 'mod.jar.disabled')
             )
         })
 
         it('should enable a disabled mod', async () => {
             await ModService.toggleDropinMod('/mods', 'mod.jar.disabled', true)
             expect(fs.rename).toHaveBeenCalledWith(
-                path.join('/mods', 'mod.jar.disabled'),
-                path.join('/mods', 'mod.jar')
+                path.resolve('/mods', 'mod.jar.disabled'),
+                path.resolve('/mods', 'mod.jar')
             )
         })
     })

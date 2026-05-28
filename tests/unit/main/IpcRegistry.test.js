@@ -229,7 +229,7 @@ describe('IpcRegistry', () => {
 
     describe('Shell IPCs', () => {
         it('should handle shell:trashItem', async () => {
-            const result = await handlers['shell:trashItem']({}, '/test.file')
+            const result = await handlers['shell:trashItem']({}, '/launcher/test.file')
             expect(result.result).toBe(true)
         })
 
@@ -248,7 +248,7 @@ describe('IpcRegistry', () => {
 
         it('should handle mirrors:fetchHealth', async () => {
             global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200 })
-            const result = await handlers['mirrors:fetchHealth']({}, 'http://mirror')
+            const result = await handlers['mirrors:fetchHealth']({}, 'https://mirror.example.com')
             expect(result.ok).toBe(true)
             expect(result.latency).toBeDefined()
         })

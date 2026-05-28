@@ -213,7 +213,7 @@ class HeliosModule {
             return MavenUtil.getMavenComponents(this.rawModule.id);
         }
         catch (err) {
-            throw new Error(`Failed to resolve maven components for module ${this.rawModule.name} (${this.rawModule.id}) of type ${this.rawModule.type}. Reason: ${err.message}`);
+            throw new Error(`Failed to resolve maven components for module ${this.rawModule.name} (${this.rawModule.id}) of type ${this.rawModule.type}. Reason: ${err.message}`, { cause: err });
         }
     }
 
