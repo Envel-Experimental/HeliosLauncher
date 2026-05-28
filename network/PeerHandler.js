@@ -385,7 +385,7 @@ class PeerHandler {
                         hash = String(data.h || '').trim()
                         relPath = (data.p && typeof data.p === 'string') ? data.p.trim() : null
                         fileId = (data.id && typeof data.id === 'string') ? data.id.trim() : null
-                        if (data.s && typeof data.s === 'number' && Number.isFinite(data.s) && Number.isInteger(data.s) && data.s > 0 && data.s < 256 * 1024 * 1024 * 1024) {
+                        if (data.s && typeof data.s === 'number' && Number.isFinite(data.s) && Number.isInteger(data.s) && data.s > 0 && data.s < 2 * 1024 * 1024 * 1024) {
                             startOffset = data.s
                         }
                     }
