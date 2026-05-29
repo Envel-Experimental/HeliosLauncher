@@ -4,15 +4,15 @@ if (p2pAgreementEnableButton) {
         ConfigManager.setGlobalOptimization(true)
         ConfigManager.setP2PUploadEnabled(true)
         ConfigManager.acceptP2PLegalAgreement()
-        
+
         if (ConfigManager.isFirstLaunch()) {
             ConfigManager.markFirstLaunchCompleted()
         }
-        
+
         // Run heavy tasks in background without blocking UI
-        ConfigManager.save().then(() => {}).catch(err => console.error(err))
-        ipcRenderer.invoke('p2p:configUpdate').then(() => {}).catch(err => console.error(err))
-        
+        ConfigManager.save().then(() => { }).catch(err => console.error(err))
+        ipcRenderer.invoke('p2p:configUpdate').then(() => { }).catch(err => console.error(err))
+
         // Transition UI immediately
         finishOnboarding()
     })
@@ -30,8 +30,8 @@ if (p2pAgreementDisableButton) {
         }
 
         // Run heavy tasks in background without blocking UI
-        ConfigManager.save().then(() => {}).catch(err => console.error(err))
-        ipcRenderer.invoke('p2p:configUpdate').then(() => {}).catch(err => console.error(err))
+        ConfigManager.save().then(() => { }).catch(err => console.error(err))
+        ipcRenderer.invoke('p2p:configUpdate').then(() => { }).catch(err => console.error(err))
 
         // Transition UI immediately
         finishOnboarding()

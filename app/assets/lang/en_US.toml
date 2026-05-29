@@ -19,7 +19,7 @@ settingsButton = "НАСТРОЙКИ"
 
 [ejs.login]
 loginCancelText = "Отмена"
-loginSubheader = "ВХОД В MINECRAFT"
+loginSubheader = "ВХОД В ФЛАУНЧЕР"
 loginEmailError = "* Неверное значение"
 loginEmailPlaceholder = "ИМЯ ПОЛЬЗОВАТЕЛЯ"
 loginPasswordError = "* Обязательно"

@@ -68,6 +68,7 @@ class RateLimiter {
     throttle() {
         const limiter = this
 
+        /** @type {Transform & { _pendingCallback?: (() => void) | null }} */
         const stream = new Transform({
             // 64 KB high-water mark matches typical TCP segment size.
             // Keeps the Node.js internal buffer tight so backpressure propagates fast.

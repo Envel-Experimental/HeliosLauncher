@@ -258,8 +258,24 @@ export async function finishOnboarding() {
         validateSelectedAccount()
     }
 
-    if (ConfigManager.isFirstLaunch()) {
-        console.log('[UIBinder] First launch detected. Jumping directly to nickname login.')
+    if (isLoggedIn) {
+        const nextView = VIEWS.landing
+        if (currentView) {
+            switchView(currentView, nextView)
+        } else {
+            currentView = nextView
+            const el = document.querySelector(nextView)
+            if (el) show(el)
+        }
+        
+        console.log('[UIBinder] Initializing landing...')
+        const distro = await DistroAPI.getDistribution()
+        if (distro) {
+            onDistroRefresh(distro)
+        }
+        toggleLaunchArea(false)
+    } else {
+        console.log('[UIBinder] No logged in accounts. Jumping directly to nickname login.')
         loginCancelEnabled(false)
         window.loginViewOnSuccess = VIEWS.landing
         window.loginViewOnCancel = VIEWS.loginOptions
@@ -271,37 +287,6 @@ export async function finishOnboarding() {
             currentView = nextView
             const el = document.querySelector(nextView)
             if (el) show(el)
-        }
-    } else {
-        if (isLoggedIn) {
-            const nextView = VIEWS.landing
-            if (currentView) {
-                switchView(currentView, nextView)
-            } else {
-                currentView = nextView
-                const el = document.querySelector(nextView)
-                if (el) show(el)
-            }
-            
-            console.log('[UIBinder] Initializing landing...')
-            const distro = await DistroAPI.getDistribution()
-            if (distro) {
-                onDistroRefresh(distro)
-            }
-            toggleLaunchArea(false)
-        } else {
-            loginOptionsCancelEnabled(false)
-            window.loginOptionsViewOnLoginSuccess = VIEWS.landing
-            window.loginOptionsViewOnLoginCancel = VIEWS.loginOptions
-            
-            const nextView = VIEWS.loginOptions
-            if (currentView) {
-                switchView(currentView, nextView)
-            } else {
-                currentView = nextView
-                const el = document.querySelector(nextView)
-                if (el) show(el)
-            }
         }
     }
 }

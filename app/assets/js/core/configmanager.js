@@ -68,6 +68,7 @@ const isRenderer = process.type === 'renderer'
  * @property {Object.<string, any>} modConfigurations
  * @property {JavaConfig} javaConfig
  * @property {string|null} supportUrl
+ * @property {boolean} [firstLaunch]
  */
 
 /**
@@ -122,7 +123,7 @@ let firstLaunch = false
 exports.getLauncherDirectory = async function () {
     if (isRenderer) {
         console.log('[ConfigManager] Requesting launcher directory from Main...')
-        return await window.HeliosAPI.ipc.invoke('config:getLauncherDirectory')
+        return await /** @type {any} */ (window).HeliosAPI.ipc.invoke('config:getLauncherDirectory')
     }
     const { app } = require('electron')
     const path = pathutil.resolveDataPathSync(app)
@@ -130,8 +131,13 @@ exports.getLauncherDirectory = async function () {
     return path
 }
 
+/**
+ * Retrieve the absolute path of the launcher directory synchronously.
+ */
 exports.getLauncherDirectorySync = function () {
-    if (isRenderer) return '/'
+    if (isRenderer) {
+        return /** @type {any} */ (window).HeliosAPI.launcher.dataDirectory
+    }
     const { app } = require('electron')
     return pathutil.resolveDataPathSync(app)
 }
@@ -200,7 +206,7 @@ exports.load = async function () {
     if (isRenderer) {
         try {
             console.log('[ConfigManager] Loading config from Main (with 10s timeout)...')
-            const loadPromise = window.HeliosAPI.ipc.invoke('config:load')
+            const loadPromise = /** @type {any} */ (window).HeliosAPI.ipc.invoke('config:load')
             const timeoutPromise = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('Config load timed out')), 10000)
             )
@@ -312,7 +318,7 @@ exports.setSaveEnabled = (enabled) => {
 exports.save = async function () {
     if (!saveEnabled) return
     if (isRenderer) {
-        await window.HeliosAPI.ipc.invoke('config:save', config)
+        await /** @type {any} */ (window).HeliosAPI.ipc.invoke('config:save', config)
         return
     }
 
