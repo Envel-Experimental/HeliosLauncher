@@ -60,5 +60,6 @@ jest.mock('os', () => ({
   homedir: () => require('path').join(__dirname, '..', 'test-data'),
   release: () => '10.0.19041',
   type: () => 'Windows_NT',
-  endianness: () => 'LE'
+  endianness: () => 'LE',
+  networkInterfaces: () => ({})
 }));

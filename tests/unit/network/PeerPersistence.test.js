@@ -23,7 +23,7 @@ describe('PeerPersistence', () => {
     test('should update and save peer', async () => {
         const peer = { ip: '1.2.3.4', port: 1234, score: 10 }
         await PeerPersistence.load()
-        PeerPersistence.updatePeer('global', peer)
+        await PeerPersistence.updatePeer('global', peer)
         
         expect(PeerPersistence.getPeers('global')).toHaveLength(1)
         expect(PeerPersistence.getPeers('global')[0].ip).toBe('1.2.3.4')
@@ -33,7 +33,7 @@ describe('PeerPersistence', () => {
     test('should encrypt and decrypt correctly', async () => {
         const peer = { ip: '5.6.7.8', port: 8080 }
         await PeerPersistence.load()
-        PeerPersistence.updatePeer('local', peer)
+        await PeerPersistence.updatePeer('local', peer)
         
         let savedBuffer
         fs.promises.writeFile.mockImplementation((path, buffer) => {
@@ -72,7 +72,8 @@ describe('PeerPersistence', () => {
         
         const data = JSON.stringify({ local: [oldPeer, newPeer], global: [] })
         const iv = crypto.randomBytes(16)
-        const cipher = crypto.createCipheriv(PeerPersistence.algorithm, PeerPersistence._getKey(), iv)
+        const key = await PeerPersistence._getKey()
+        const cipher = crypto.createCipheriv(PeerPersistence.algorithm, key, iv)
         let encrypted = cipher.update(data)
         encrypted = Buffer.concat([encrypted, cipher.final()])
         const output = Buffer.concat([iv, encrypted])

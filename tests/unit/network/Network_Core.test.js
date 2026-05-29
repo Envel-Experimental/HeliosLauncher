@@ -69,9 +69,10 @@ describe('Network Core Modules', () => {
     })
 
     describe('StatsManager', () => {
-        test('should record and persist stats', () => {
+        test('should record and persist stats', async () => {
             // Mock fs
-            jest.spyOn(fs, 'writeFileSync').mockImplementation()
+            const writeFileMock = jest.spyOn(fs.promises, 'writeFile').mockResolvedValue(undefined)
+            const renameMock = jest.spyOn(fs.promises, 'rename').mockResolvedValue(undefined)
             jest.spyOn(fs, 'readFileSync').mockReturnValue(JSON.stringify({ totalUploaded: 100, totalDownloaded: 100 }))
             jest.spyOn(fs, 'existsSync').mockReturnValue(true)
 
@@ -82,7 +83,11 @@ describe('Network Core Modules', () => {
             expect(stats.up).toBe(150)
             expect(stats.down).toBe(150)
             
-            expect(fs.writeFileSync).toHaveBeenCalled()
+            // Wait for saveAsync promise to resolve since it's kicked off inside record()
+            await Promise.resolve()
+            await Promise.resolve()
+            
+            expect(writeFileMock).toHaveBeenCalled()
             jest.restoreAllMocks()
         })
     })

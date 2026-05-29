@@ -54,7 +54,7 @@ describe('P2PEngine - Network Orchestration Tests', () => {
             info,
             rtt: 100,
             remoteWeight: 1,
-            currentTransferSpeed: 1024,
+            currentDownloadSpeed: 1024,
             isLocal: jest.fn().mockReturnValue(false),
             getIP: jest.fn().mockReturnValue('1.1.1.1'),
             getID: jest.fn().mockReturnValue('peer1')
@@ -133,14 +133,17 @@ describe('P2PEngine - Network Orchestration Tests', () => {
 
     describe('Bandwidth & Limits (AIMD Logic)', () => {
         test('updateDynamicLimits should increase limit when congestion is low', () => {
-            p2pEngine.currentUploadLimitMbps = 5
-            p2pEngine.congestionDetected = false
-            p2pEngine.slowStart = true
-            p2pEngine.lastStepUpTime = 0 
+            const NodeAdapter = require('@network/NodeAdapter')
+            jest.spyOn(NodeAdapter, 'getProfile').mockReturnValue({ name: 'HIGH', maxPeers: 30 })
+
+            p2pEngine.bandwidth.currentUploadLimitMbps = 5
+            p2pEngine.bandwidth.congestionDetected = false
+            p2pEngine.bandwidth.slowStart = true
+            p2pEngine.bandwidth.lastStepUpTime = 0 
 
             p2pEngine.updateDynamicLimits()
 
-            expect(p2pEngine.currentUploadLimitMbps).toBe(7.5)
+            expect(p2pEngine.bandwidth.currentUploadLimitMbps).toBe(7.5)
         })
     })
 })

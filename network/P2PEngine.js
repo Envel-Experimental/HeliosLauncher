@@ -1,1231 +1,223 @@
 // @ts-check
+'use strict'
+
 const Hyperswarm = require('hyperswarm')
 const HyperDHT = require('hyperdht')
 const b4a = require('b4a')
-const os = require('os')
 const crypto = require('crypto')
 const { EventEmitter } = require('events')
 const { Readable } = require('stream')
+
 const Config = require('./config')
 const NodeAdapter = require('./NodeAdapter')
 const ConfigManager = require('../app/assets/js/core/configmanager')
 const PeerHandler = require('./PeerHandler')
-const TrafficState = require('./TrafficState')
 const PeerPersistence = require('./PeerPersistence')
 const StatsManager = require('./StatsManager')
-
-// Fixed topic for the "Zombie" network
-const { SWARM_TOPIC_SEED } = require('./constants')
 const isDev = require('../app/assets/js/core/isdev')
 
-// Fixed topic for the "Zombie" network
+const SecurityManager = require('./services/SecurityManager')
+const BandwidthManager = require('./services/BandwidthManager')
+const QueueProcessor = require('./services/QueueProcessor')
+const HealthMonitor = require('./services/HealthMonitor')
+
+const { SWARM_TOPIC_SEED, MAX_SERVER_QUEUE_SIZE, MEMORY_CLEANUP_INTERVAL_MS } = require('./constants')
+
+// Stable DHT topic for the "Zombie" network
 const SWARM_TOPIC = crypto.createHash('sha256').update(SWARM_TOPIC_SEED).digest()
-
-class UsageTracker {
-    constructor() {
-        this.data = new Map() // IP -> { credits: number, lastUpdate: number }
-    }
-
-    /**
-     * @param {string} key 
-     * @returns {number}
-     */
-    getCredits(key) {
-        const { MAX_CREDITS_PER_IP, CREDIT_REGEN_RATE } = require('./constants')
-        let entry = this.data.get(key)
-
-        if (!entry) {
-            // Memory Guard: Cap tracker size
-            if (this.data.size > 5000) {
-                const firstKey = this.data.keys().next().value
-                this.data.delete(firstKey)
-            }
-            entry = { credits: MAX_CREDITS_PER_IP * 0.5, lastUpdate: Date.now() } // Start with 2.5GB for new IPs
-            this.data.set(key, entry)
-            return entry.credits
-        }
-
-        // Apply Regeneration
-        const now = Date.now()
-        const elapsedSec = (now - entry.lastUpdate) / 1000
-        const regen = elapsedSec * CREDIT_REGEN_RATE
-
-        entry.credits = Math.min(MAX_CREDITS_PER_IP, entry.credits + regen)
-        entry.lastUpdate = now
-
-        return entry.credits
-    }
-
-    /**
-     * @param {string} key 
-     * @param {number} amountMB 
-     */
-    consume(key, amountMB) {
-        const current = this.getCredits(key)
-        const entry = this.data.get(key)
-        if (entry) {
-            entry.credits = Math.max(0, current - (typeof amountMB === 'number' ? amountMB : 0))
-        }
-    }
-
-    /**
-     * @param {string} key 
-     * @param {number} amountMB 
-     * @returns {boolean}
-     */
-    reserve(key, amountMB) {
-        const current = this.getCredits(key)
-        if (current >= amountMB) {
-            const entry = this.data.get(key)
-            entry.credits -= amountMB
-            return true
-        }
-        return false
-    }
-
-    /**
-     * @param {string} key 
-     * @param {number} amountMB 
-     */
-    refund(key, amountMB) {
-        const { MAX_CREDITS_PER_IP } = require('./constants')
-        const entry = this.data.get(key)
-        if (entry) {
-            entry.credits = Math.min(MAX_CREDITS_PER_IP, entry.credits + amountMB)
-        }
-    }
-
-    cleanup() {
-        const now = Date.now()
-        // Remove entries older than 2 hours
-        for (const [key, entry] of this.data.entries()) {
-            if (now - entry.lastUpdate > 7200000) {
-                this.data.delete(key)
-            }
-        }
-    }
-}
 
 class P2PEngine extends EventEmitter {
     constructor() {
         super()
-        /** @type {PeerHandler[]} */
-        this.peers = [] // Array of PeerHandler
-        /** @type {Map<number, { stream: Readable, peer: PeerHandler, expectedSize: number, timestamp: number, bytesReceived: number, resolve: Function, reject: Function }>} */
-        this.requests = new Map() // reqId -> { stream: Readable, timeout: Timer }
-        /** @type {Set<string>} */
-        this.blacklist = new Set() // IP/PubKey strings
-        /** @type {Map<string, number>} */
-        this.peerStrikes = new Map() // Peer IP -> strikes count
-        /** @type {Map<string, ReturnType<typeof setTimeout>>} */
-        this.blacklistTimeouts = new Map() // peerId -> expiry timeout handle
         this.setMaxListeners(100)
-        this.usageTracker = new UsageTracker()
 
+        /** @type {PeerHandler[]} */
+        this.peers = []
+
+        /**
+         * Active download requests: reqId → { stream, peer, expectedSize, timestamp,
+         *                                      bytesReceived, resolve, reject, timeoutId }
+         * @type {Map<number, any>}
+         */
+        this.requests = new Map()
+
+        // ── Mutable counters shared with QueueProcessor ──────────────────────
+        // (object reference so QueueProcessor sees live values)
+        this._counters = { activeUploads: 0, adaptiveSlotCount: 5 }
+
+        // ── Sub-services ─────────────────────────────────────────────────────
+        this.security = new SecurityManager()
+        this.bandwidth = new BandwidthManager({ getPeers: () => this.peers })
+        this.queue = new QueueProcessor(this._counters)
+        this.health = new HealthMonitor({
+            getPeers: () => this.peers,
+            onReconfigure: () => this.reconfigureSwarm(),
+            onRestart: () => this.stop().then(() => {
+                this._restartTimer = setTimeout(() => this.start(), 2000)
+                if (this._restartTimer.unref) this._restartTimer.unref()
+            })
+        })
+
+        // ── Engine state ─────────────────────────────────────────────────────
         this.starting = false
         this.stopping = false
+        this.profile = NodeAdapter.getProfile()
+
         /** @type {Promise<boolean> | null} */
         this._discoveryPromise = null
-        this.profile = NodeAdapter.getProfile()
-        this.activeUploads = 0
-        /** @type {Map<string, number>} */
-        this.uploadCounts = new Map() // IP -> Count
-        this.adaptiveSlotCount = 5
-        this.minDeltaRTT = 0
-        this.lastStableLimit = 0
-        this.slowStart = true
-        this.currentLimitIsSlowStart = true
-
-        this.totalUploaded = 0
-        this.totalDownloaded = 0
-
-        this.totalUploadedLocal = 0
-        this.totalUploadedGlobal = 0
-        this.totalDownloadedLocal = 0
-        this.totalDownloadedGlobal = 0
+        this._discoveryLogThrottled = false
 
         // Batching
-        this.batchQueue = new WeakMap() // Peer -> Array<{ reqId, hash }>
+        this.batchQueue = new WeakMap()
         this.batchFlushScheduled = false
+        /** @type {ReturnType<typeof setTimeout> | null} */
+        this._batchFlushTimer = null
 
-        // Circuit Breaker (Panic Mode)
-        this.panicMode = false
-        this.attackCounter = 0
-        this.stressScore = 0
-        this.passiveReason = null
+        // Upload session tracking (needed by PeerHandler)
+        /** @type {Map<string, number>} */
+        this.uploadCounts = new Map()
 
-        this.raceManager = null
-        this.discoveryLogThrottled = false
+        /** @type {ReturnType<typeof setInterval> | null} */
+        this._memCleanupInterval = null
+        /** @type {ReturnType<typeof setInterval> | null} */
+        this._scoreUpdateInterval = null
 
-        // Periodic Memory Cleanup
+        /** @type {ReturnType<typeof setTimeout> | null} */
+        this._restartTimer = null
+        /** @type {ReturnType<typeof setTimeout> | null} */
+        this._dhtReadyTimer = null
+        /** @type {ReturnType<typeof setTimeout> | null} */
+        this._discoveryTimer = null
+
+        // ── Periodic memory cleanup ───────────────────────────────────────────
         if (process.env.NODE_ENV !== 'test') {
-            const { MEMORY_CLEANUP_INTERVAL_MS, STRIKE_EXPIRY_MS } = require('./constants')
-            this.memoryCleanupInterval = setInterval(() => {
-                this.usageTracker.cleanup()
-                
-                // Cleanup strikes older than STRIKE_EXPIRY_MS
-                const now = Date.now()
-                if (!this._lastCleanup || now - this._lastCleanup >= STRIKE_EXPIRY_MS) {
-                    this._lastCleanup = now
-                    for (const ip of this.peerStrikes.keys()) {
-                        this.peerStrikes.delete(ip)
-                    }
-                }
-
-                // Prune hanging requests
-                const timeoutVal = (Config.PROTOCOL && Config.PROTOCOL.TIMEOUT) ? Config.PROTOCOL.TIMEOUT : 60000
-                for (const [reqId, req] of this.requests.entries()) {
-                    if (now - req.timestamp > timeoutVal * 2) {
-                        req.reject(new Error('Hanging request pruned by memory manager'))
-                        this.requests.delete(reqId)
-                    }
-                }
-            }, MEMORY_CLEANUP_INTERVAL_MS);
-            if (this.memoryCleanupInterval.unref) this.memoryCleanupInterval.unref();
-        }
-
-        // Dynamic Bandwidth Management
-        this.currentDownloadSpeed = 0
-        this.currentUploadSpeed = 0
-        this.currentDownloadSpeedLocal = 0
-        this.currentUploadSpeedLocal = 0
-        this.downloadBytesLocal = 0
-        this.downloadBytesGlobal = 0
-        this.uploadBytesLocal = 0
-        this.uploadBytesGlobal = 0
-        this.maxObservedDownloadSpeed = 0
-        this.highBandwidthMode = false
-        this.lastLimitUpdate = 0
-        
-        // Limit Persistence (v3.1): Start from 50% of last stable or 5Mbps
-        const userMax = ConfigManager.isLoaded() ? ConfigManager.getP2PUploadLimit() : 15
-        const initialLimit = this.lastStableLimit > 0 ? Math.max(1, Math.min(userMax, this.lastStableLimit * 0.5)) : Math.min(userMax, 5)
-        this.currentUploadLimitMbps = initialLimit
-        
-        this.lastStepUpTime = Date.now()
-        this.congestionDetected = false
-
-        // Speed & Resource Monitor (Every 2 seconds)
-        if (process.env.NODE_ENV !== 'test') {
-            this.speedMonitorInterval = setInterval(() => {
-                this.currentDownloadSpeed = this.downloadBytesGlobal / 2 // B/s
-                this.currentUploadSpeed = this.uploadBytesGlobal / 2 // B/s
-                this.currentDownloadSpeedLocal = this.downloadBytesLocal / 2 // B/s
-                this.currentUploadSpeedLocal = this.uploadBytesLocal / 2 // B/s
-
-                this.downloadBytesLocal = 0
-                this.downloadBytesGlobal = 0
-                this.uploadBytesLocal = 0
-                this.uploadBytesGlobal = 0
-
-                if (this.currentDownloadSpeed > this.maxObservedDownloadSpeed) {
-                    this.maxObservedDownloadSpeed = this.currentDownloadSpeed
-                }
-
-                // High Bandwidth Detection (> 10 MB/s)
-                if (this.currentDownloadSpeed > 10 * 1024 * 1024) {
-                    if (!this.highBandwidthMode) {
-                        this.highBandwidthMode = true
-                        if (isDev) console.log('[P2PEngine] High Bandwidth Detected (>10MB/s). Unlocking higher upload limits.')
-                    }
-                }
-
-                // Periodically Re-evaluate Upload Limits (Every 30s)
-                const now = Date.now()
-                if (now - this.lastLimitUpdate > 30000) {
-                    this.updateDynamicLimits()
-                    this.lastLimitUpdate = now
-                }
-
-                // Network Change Monitor (Every ~10s)
-                if (now % 10000 < 2000) {
-                    const currentFingerprint = this._getNetworkFingerprint()
-                    if (this.lastNetworkFingerprint && currentFingerprint !== this.lastNetworkFingerprint) {
-                        console.log('[P2PEngine] Network interface change detected! Restarting Swarm...')
-                        this.lastNetworkFingerprint = currentFingerprint
-                        this.stop().then(() => {
-                            this._restartTimeout = setTimeout(() => this.start(), 2000)
-                            if (this._restartTimeout.unref) this._restartTimeout.unref()
-                        })
-                    } else if (!this.lastNetworkFingerprint) {
-                        this.lastNetworkFingerprint = currentFingerprint
-                    }
-                }
-
-                // Seeder Health Consensus - Every 30s
-                if (now - (this.lastHealthCheck || 0) > 30000) {
-                    this.checkSeederHealth()
-                    this.lastHealthCheck = now
-                }
-
-                // Record Stats
-                if (this.uploadBytesGlobal > 0 || this.downloadBytesGlobal > 0 || this.uploadBytesLocal > 0 || this.downloadBytesLocal > 0) {
-                    StatsManager.record(
-                        this.uploadBytesGlobal + this.uploadBytesLocal,
-                        this.downloadBytesGlobal + this.downloadBytesLocal
-                    )
-                }
-
-                // System Stress Monitor (v3.3)
-                const load = os.loadavg()
-                const cpus = os.cpus().length
-                const isStressed = load[0] > (cpus * 0.8)
-
-                if (isStressed) {
-                    this.stressScore++
-                    if (this.stressScore >= 5) { // 5 * 2s = 10s
-                        if (!this.healthCheckPassive) {
-                            console.error('[P2PEngine] SYSTEM STRESS DETECTED (>80% Load for 10s). Switching to Passive Mode to save resources.')
-                            this.healthCheckPassive = true
-                            this.healthCheckPassiveStart = Date.now()
-                            this.passiveReason = 'stress'
-                            this.reconfigureSwarm()
-                        }
-                    }
-                } else {
-                    this.stressScore = Math.max(0, this.stressScore - 1)
-                }
-            }, 2000)
-            if (this.speedMonitorInterval.unref) this.speedMonitorInterval.unref()
+            this._startMemoryCleanup()
+            // Sub-services: start only in non-test env
+            this.security.start(MEMORY_CLEANUP_INTERVAL_MS)
+            this.bandwidth.start()
+            this.health.start()
+            this._startPeerScoreUpdater()
         }
     }
 
-    setRaceManager(rm) {
-        this.raceManager = rm
-    }
+    // ── Convenience passthrough getters for backward-compat with PeerHandler ──
+
+    get usageTracker() { return this.security.usageTracker }
+    get blacklist() { return this.security.blacklist }
+    get peerStrikes() { return this.security.strikes }
+    get activeUploads() { return this._counters.activeUploads }
+    set activeUploads(v) { this._counters.activeUploads = v }
+    get adaptiveSlotCount() { return this._counters.adaptiveSlotCount }
+    set adaptiveSlotCount(v) { this._counters.adaptiveSlotCount = v }
+    get currentUploadLimitMbps() { return this.bandwidth.currentUploadLimitMbps }
+    get currentDownloadSpeed() { return this.bandwidth.downloadSpeed }
+    get currentUploadSpeed() { return this.bandwidth.uploadSpeed }
+    get currentDownloadSpeedLocal() { return this.bandwidth.downloadSpeedLocal }
+    get currentUploadSpeedLocal() { return this.bandwidth.uploadSpeedLocal }
+    get totalUploaded() { return this.bandwidth.totalUploaded }
+    set totalUploaded(v) { this.bandwidth.totalUploaded = v }
+    get totalDownloaded() { return this.bandwidth.totalDownloaded }
+    get totalUploadedLocal() { return this.bandwidth.totalUploadedLocal }
+    get totalUploadedGlobal() { return this.bandwidth.totalUploadedGlobal }
+    get totalDownloadedLocal() { return this.bandwidth.totalDownloadedLocal }
+    get totalDownloadedGlobal() { return this.bandwidth.totalDownloadedGlobal }
+    get uploadBytesLocal() { return this.bandwidth.uploadBytesLocal }
+    set uploadBytesLocal(v) { this.bandwidth.uploadBytesLocal = v }
+    get uploadBytesGlobal() { return this.bandwidth.uploadBytesGlobal }
+    set uploadBytesGlobal(v) { this.bandwidth.uploadBytesGlobal = v }
+    get downloadBytesLocal() { return this.bandwidth.downloadBytesLocal }
+    set downloadBytesLocal(v) { this.bandwidth.downloadBytesLocal = v }
+    get downloadBytesGlobal() { return this.bandwidth.downloadBytesGlobal }
+    set downloadBytesGlobal(v) { this.bandwidth.downloadBytesGlobal = v }
+    get totalUploadedLocal_acc() { return this.bandwidth.totalUploadedLocal }
+    get totalUploadedGlobal_acc() { return this.bandwidth.totalUploadedGlobal }
+    get healthCheckPassive() { return this.health.isPassive }
+    get passiveReason() { return this.health.passiveReason }
+
+    // ─── Lifecycle ────────────────────────────────────────────────────────────
 
     async start() {
         if (!ConfigManager.isLoaded()) {
-            await new Promise(resolve => {
-                const check = setInterval(() => {
-                    if (ConfigManager.isLoaded()) {
-                        clearInterval(check)
-                        resolve(true)
-                    }
-                }, 50)
-            })
+            await this._waitForConfig()
         }
 
         if (!ConfigManager.getSettings().deliveryOptimization?.globalOptimization) {
-            // console.log('[P2PEngine] Global Optimization Disabled. Not starting.')
             this.stop()
             return
         }
 
-        if (this.swarm || this.starting) return // Already running or starting
+        if (this.swarm || this.starting) return
 
         this.starting = true
         this.stopping = false
         try {
             await PeerPersistence.load()
-            await this.init()
+            await this._init()
         } catch (e) {
-            console.error('[P2PEngine] Unhandled exception during P2PEngine initialization. Gracefully degrading to HTTP-only.', e)
+            console.error('[P2PEngine] Init failed. Degrading to HTTP-only.', e)
             this.stop()
             return
         } finally {
             this.starting = false
         }
 
-        // Pre-warming: Add known peers to DHT routing table immediately
-        const knownPeers = PeerPersistence.getPeers('global')
-        if (knownPeers.length > 0) {
-            console.log(`[P2PEngine] Pre-warming: Adding ${knownPeers.length} persistent peers to DHT...`)
-            for (const p of knownPeers) {
-                try {
-                    let ip = p.ip
-                    if (!ip || typeof ip !== 'string') continue
-
-                    // Unmap IPv4-mapped IPv6 addresses (::ffff:x.x.x.x)
-                    if (ip.startsWith('::ffff:')) {
-                        ip = ip.substring(7)
-                    }
-
-                    if (this.dht) {
-                        // dht-rpc's addNode/id only supports IPv4 strings presently
-                        // Skip if it still looks like an IPv6 address
-                        if (ip.includes(':')) continue
-
-                        this.dht.addNode({ host: ip, port: p.port })
-                    }
-                } catch (e) {
-                    console.warn(`[P2PEngine] Failed to add persistent node ${p.ip}:${p.port} to DHT:`, e.message)
-                }
-            }
-        }
-
+        this._prewarmDHT()
         this.reconfigureSwarm()
     }
 
     async stop() {
         this.starting = false
         this.stopping = true
-        if (this.memoryCleanupInterval) {
-            clearInterval(this.memoryCleanupInterval)
-            this.memoryCleanupInterval = null
-        }
-        if (this.speedMonitorInterval) {
-            clearInterval(this.speedMonitorInterval)
-            this.speedMonitorInterval = null
-        }
-        if (this._dhtReadyTimeout) {
-            clearTimeout(this._dhtReadyTimeout)
-            this._dhtReadyTimeout = null
-        }
-        if (this._discoveryTimeout) {
-            clearTimeout(this._discoveryTimeout)
-            this._discoveryTimeout = null
-        }
-        if (this._batchFlushTimeout) {
-            clearTimeout(this._batchFlushTimeout)
-            this._batchFlushTimeout = null
-            this.batchFlushScheduled = false
-        }
-        if (this._restartTimeout) {
-            clearTimeout(this._restartTimeout)
-            this._restartTimeout = null
-        }
-        if (this._panicTimeout) {
-            clearTimeout(this._panicTimeout)
-            this._panicTimeout = null
-        }
-        if (this.blacklistTimeouts) {
-            for (const t of this.blacklistTimeouts.values()) clearTimeout(t)
-            this.blacklistTimeouts.clear()
-        }
-        this.blacklistTimeouts = new Map()
-        // Clear all requests and their timeouts
-        for (const req of Array.from(this.requests.values())) {
+
+        // ── Clear all pending request timeouts first ──────────────────────────
+        for (const req of this.requests.values()) {
+            if (req.timeoutId) clearTimeout(req.timeoutId)
             req.reject(new Error('P2P Engine stopped'))
         }
         this.requests.clear()
 
+        // ── Timers ───────────────────────────────────────────────────────────
+        this._clearTimer('_memCleanupInterval', true)
+        this._clearTimer('_scoreUpdateInterval', true)
+        this._clearTimer('_dhtReadyTimer')
+        this._clearTimer('_discoveryTimer')
+        this._clearTimer('_batchFlushTimer')
+        this._clearTimer('_restartTimer')
+        this.batchFlushScheduled = false
+
+        // ── Sub-services ─────────────────────────────────────────────────────
+        this.security.destroy()
+        this.bandwidth.destroy()
+        this.queue.destroy()
+        this.health.destroy()
+
+        // ── Hyperswarm ───────────────────────────────────────────────────────
         if (this.swarm) {
-            // console.log('[P2PEngine] Stopping...')
             const swarm = this.swarm
-            this.swarm = null // Nullify immediately to prevent new operations
-            this.peers = [] // Clear peers immediately
-            try {
-                await swarm.destroy()
-            } catch (e) { /* Swarm destruction failure ignored */ }
+            this.swarm = null
+            this.peers = []
+            try { await swarm.destroy() } catch (_) { /* ignore */ }
         }
 
-        const ResourceMonitor = require('./ResourceMonitor')
-        ResourceMonitor.stop()
-
+        // ── HyperDHT ─────────────────────────────────────────────────────────
         if (this.dht) {
-            try {
-                await this.dht.destroy()
-            } catch (e) { /* DHT destruction failure ignored */ }
+            try { await this.dht.destroy() } catch (_) { /* ignore */ }
             this.dht = null
         }
-        if (this.speedMonitorInterval) {
-            clearInterval(this.speedMonitorInterval);
-            this.speedMonitorInterval = null;
-        }
-        if (this._dhtReadyTimeout) {
-            clearTimeout(this._dhtReadyTimeout);
-            this._dhtReadyTimeout = null;
-        }
-        if (this._restartTimeout) {
-            clearTimeout(this._restartTimeout);
-            this._restartTimeout = null;
-        }
-        if (this.memoryCleanupInterval) {
-            clearInterval(this.memoryCleanupInterval);
-            this.memoryCleanupInterval = null;
-        }
 
-        this.stressScore = 0
-        this.passiveReason = null
         this.stopping = false
     }
 
-    /**
-     * @param {string} ip 
-     * @returns {boolean}
-     */
-    isLocalIP(ip) {
-        if (!ip) return false
-        if (ip.startsWith('::ffff:')) ip = ip.substring(7)
+    // ─── Network info (for UI) ────────────────────────────────────────────────
 
-        if (ip.includes(':')) {
-            return ip === '::1' || ip.startsWith('fe80:') || ip.toLowerCase().startsWith('fc') || ip.toLowerCase().startsWith('fd')
-        }
-
-        const parts = ip.split('.')
-        if (parts.length !== 4) return false
-
-        const num = ((parseInt(parts[0], 10) << 24) |
-                     (parseInt(parts[1], 10) << 16) |
-                     (parseInt(parts[2], 10) << 8) |
-                      parseInt(parts[3], 10)) >>> 0;
-
-        if ((num & 0xff000000) >>> 0 === 0x0a000000) return true; // 10.0.0.0/8
-        if ((num & 0xffff0000) >>> 0 === 0xc0a80000) return true; // 192.168.0.0/16
-        if ((num & 0xfff00000) >>> 0 === 0xac100000) return true; // 172.16.0.0/12
-        if ((num & 0xff000000) >>> 0 === 0x7f000000) return true; // 127.0.0.0/8
-        if ((num & 0xffff0000) >>> 0 === 0xa9fe0000) return true; // 169.254.0.0/16
-        if ((num & 0xffc00000) >>> 0 === 0x64400000) return true; // 100.64.0.0/10
-
-        return false
-    }
-
-    async init() {
-        try {
-            // Initialize Stats Manager
-            const launcherDir = ConfigManager.getLauncherDirectorySync()
-            StatsManager.init(launcherDir)
-
-            if (Config.BOOTSTRAP_URL) {
-                try {
-                    const res = await fetch(Config.BOOTSTRAP_URL)
-                    if (res.ok) {
-                        const remoteNodes = await res.json()
-                        if (Array.isArray(remoteNodes) && remoteNodes.length > 0) {
-                            Config.BOOTSTRAP_NODES = remoteNodes
-                            // console.log('[P2PEngine] Updated bootstrap nodes from remote source.')
-                        }
-                    }
-                } catch (e) {
-                    // console.warn('[P2PEngine] Failed to fetch remote bootstrap nodes, using fallback.')
-                }
-            }
-
-            this.dht = new HyperDHT({
-                ephemeral: true,
-                bootstrap: Config.BOOTSTRAP_NODES.map(n => ({
-                    host: n.host,
-                    port: n.port,
-                    publicKey: n.publicKey ? b4a.from(n.publicKey, 'hex') : undefined
-                }))
-            })
-
-            this.dht.on('error', (err) => {
-                // console.error('[P2PEngine] HyperDHT Error:', err)
-            })
-
-            if (isDev) {
-                /*
-                this.dht.on('node', (node) => {
-                    console.debug(`[P2P Debug] DHT Node connected: ${node.host}:${node.port}`)
-                })
-                this.dht.on('warning', (err) => {
-                    console.debug(`[P2P Debug] DHT Warning:`, err.message)
-                })
-                */
-            }
-
-            this.dht.on('ready', () => {
-                const nodesCount = this._getRoutingTableSize()
-                if (isDev) {
-                    console.debug(`[P2P Debug] DHT Ready. Bootstrapped: ${this.dht.bootstrapped}. Routing Nodes: ${nodesCount}`)
-                    /*
-                    // Deep inspect
-                    try {
-                        const internals = {
-                            bootstraps: this.dht.io?.clientSocket?.unref ? 'UDP Socket Active' : 'Unknown',
-                            concurrency: this.dht.concurrency,
-                            kbucket: this.dht.kbucket?.count()
-                        }
-                        console.debug('[P2P Debug] DHT Internals:', internals)
-                    } catch (e) {
-                        console.debug('[P2P Debug] Inspection error', e)
-                    }
-                    */
-                }
-
-                this._dhtReadyTimeout = setTimeout(() => {
-                    this._dhtReadyTimeout = null
-                    if (!this.dht) return // VULNERABILITY FIX: Prevent null pointer if engine stopped
-
-                    const currentNodes = this._getRoutingTableSize()
-                    // if (isDev) console.debug(`[P2P Debug] DHT Status after 5s. Bootstrapped: ${this.dht.bootstrapped}. Routing Nodes: ${currentNodes}`)
-                    if (currentNodes === 0 && !this.dht.bootstrapped) {
-                        console.warn(`[P2PEngine] [WARNING] No DHT connections established after 5s.`)
-                    }
-                }, 5000)
-                if (this._dhtReadyTimeout.unref) this._dhtReadyTimeout.unref()
-            })
-
-            this.swarm = new Hyperswarm({
-                dht: this.dht,
-                local: true,
-                mdns: true,
-                maxPeers: this.profile.maxPeers * 2 // Give extra slots for local peers
-            })
-
-            this.swarm.on('connection', (socket, info) => {
-                const peer = new PeerHandler(socket, this, info)
-
-                let ip = (info.peer && info.peer.host) || socket.remoteAddress || (socket.rawStream && socket.rawStream.remoteAddress) || 'unknown'
-                if (ip.startsWith('::ffff:')) ip = ip.substring(7)
-
-                const peerId = peer.getID()
-                if (this.blacklist.has(peerId)) {
-                    if (isDev) console.warn(`[P2P Security] Rejecting blacklisted peer: ${peerId}`)
-                    socket.destroy()
-                    return
-                }
-
-                const isLocal = this.isLocalIP(ip)
-                const type = isLocal ? 'LOCAL (LAN)' : 'GLOBAL (WAN)'
-                const peerInfoStr = info.peer ? `${info.peer.host}:${info.peer.port}` : 'unknown'
-
-                if (isDev && ip === 'unknown') {
-                    // Only log WAN peers or unknown in debug, LAN is too noisy
-                    // console.log(`%c[P2PEngine] Connection Established: [${type}] ${ip} (Remote: ${peerInfoStr})`, 'color: #00ff00; font-weight: bold')
-                }
-
-                /*
-                if (isDev) {
-                    console.debug(`[P2P Debug] Peer added. CID: ${b4a.toString(info.publicKey, 'hex').substring(0, 8)}. Type: ${type}`)
-                }
-                */
-
-                if (this.peers.length > this.profile.maxPeers) {
-                    if (isDev) console.debug(`[P2P Debug] Rejecting connection: Max peers reached (${this.profile.maxPeers})`)
-                    socket.destroy()
-                    return
-                }
-
-                // Increase listeners for high-concurrency requests (e.g. music streaming)
-                socket.setMaxListeners(100)
-
-                this.peers.push(peer)
-                this.emit('peer_added', peer)
-            })
-
-            // Join the topic
-            const shouldAnnounce = !this.profile.passive && !NodeAdapter.isCritical() && (ConfigManager.getP2PUploadEnabled() || ConfigManager.getLocalOptimization())
-
-            const discovery = this.swarm.join(SWARM_TOPIC, {
-                server: shouldAnnounce,
-                client: true
-            })
-
-            // Initialize Global Rate Limiter
-            // Initial Dynamic Limit application
-            this.updateDynamicLimits(true)
-
-            await discovery.flushed()
-            console.log(`[P2PEngine] P2P Service Started. Debug Mode: ${isDev}`)
-            if (shouldAnnounce) {
-                if (ConfigManager.getLocalOptimization()) console.log(`[P2PEngine] Local Network: Active (Announcing via MDNS)`)
-                if (ConfigManager.getP2PUploadEnabled()) console.log(`[P2PEngine] Global Network: Active (Announcing via DHT)`)
-                else console.log(`[P2PEngine] Global Network: Downloads Only (Upload Disabled)`)
-            } else {
-                console.log(`[P2PEngine] Passive Mode (Client Only - Not Announcing)`)
-            }
-
-        } catch (err) {
-            console.error('[P2PEngine] Init failed:', err)
-        }
-    }
-
-    /**
-     * Get current load status of the P2P engine.
-     * @returns {'normal' | 'overloaded'}
-     */
-    getLoadStatus() {
-        // If we have more than 50 active streams or high latency, consider overloaded
-        const activeStreams = this.peers.reduce((acc, peer) => acc + (peer.activeStreams || 0), 0)
-        if (activeStreams > 32) return 'overloaded'
-        return 'normal'
-    }
-
-
-
-    /**
-     * @param {string} hash 
-     * @param {number} expectedSize 
-     * @param {string | null} relPath 
-     * @param {string | null} fileId 
-     * @param {number} startOffset 
-     * @returns {Readable}
-     */
-    requestFile(hash, expectedSize = 0, relPath = null, fileId = null, startOffset = 0) {
-        // if (isDev) console.debug(`[P2P Debug] requestFile called for ${hash.substring(0, 8)} (${fileId || 'n/a'}) Offset: ${startOffset}`)
-        const stream = new Readable({
-            read() { }
-        })
-
-        // Use a persistent task to handle the request (allows waiting for peers)
-        this._handleRequestAsync(stream, hash, expectedSize, relPath, fileId, startOffset).catch(err => {
-            if (!stream.destroyed) stream.emit('error', err)
-        })
-
-        return stream
-    }
-
-    async _handleRequestAsync(stream, hash, expectedSize, relPath, fileId, startOffset) {
-        const attemptedPeers = new Set()
-
-        // Dynamic retry limit: Try at least 10 times or all available peers
-        const getMaxAttempts = () => Math.max(10, this.peers.length + 2)
-
-        for (let i = 0; i < getMaxAttempts(); i++) {
-            // Check for peers & Wait if needed
-            if (this.peers.length === 0) {
-                if (isDev && !this.discoveryLogThrottled) {
-                    // console.debug(`[P2P] No peers available. Starting discovery wait...`)
-                    this.discoveryLogThrottled = true
-                }
-
-                if (!this._discoveryPromise) {
-                    this._discoveryPromise = new Promise(resolve => {
-                        const onConn = () => { this.off('peer_added', onConn); clearTimeout(this._discoveryTimeout); this._discoveryPromise = null; resolve(true) }
-                        this._discoveryTimeout = setTimeout(() => { this.off('peer_added', onConn); this._discoveryPromise = null; resolve(false) }, 10000)
-                        this.once('peer_added', onConn)
-                    })
-                }
-                await this._discoveryPromise
-            }
-
-            if (this.peers.length === 0) {
-                if (i >= 2) { // Give a few chances for discovery
-                    stream.emit('error', new Error('No peers available after discovery wait'))
-                    return
-                }
-                continue
-            }
-
-            // Select Best Peer among those not yet tried
-            let bestPeer = null
-            let maxScore = -1
-
-            const availablePeers = this.peers.filter(p => !attemptedPeers.has(p))
-
-            if (availablePeers.length === 0) {
-                // If we've tried everyone and failed, but still have attempts left,
-                // we might want to wait a bit for new peers or just fail.
-                // if (isDev) console.debug(`[P2P] All ${attemptedPeers.size} available peers already tried.`)
-                stream.emit('error', new Error('All available peers failed'))
-                return
-            }
-
-            for (const p of availablePeers) {
-                const weight = p.remoteWeight || 1
-                const rtt = p.rtt || 200
-                let speedFactor = 1.0
-                if (p.currentTransferSpeed) {
-                    speedFactor = Math.max(0.1, p.currentTransferSpeed / 102400)
-                    speedFactor = Math.min(10.0, speedFactor)
-                }
-                let lanFactor = p.isLocal() ? 100.0 : 1.0
-
-                const score = (weight * weight) * (10000 / (rtt + 10)) * speedFactor * lanFactor
-                if (score > maxScore) {
-                    maxScore = score
-                    bestPeer = p
-                }
-            }
-
-            if (!bestPeer) {
-                stream.emit('error', new Error('Peer selection failed'))
-                return
-            }
-
-            attemptedPeers.add(bestPeer)
-
-            // RACE CONDITION FIX: Ensure socket is still open before attempting request
-            if (bestPeer.socket.destroyed) {
-                if (isDev) console.warn(`[P2PEngine] Peer ${bestPeer.getIP()} disconnected before request could be sent. Retrying...`)
-                continue
-            }
-
-            try {
-                await this._executeSingleRequest(bestPeer, stream, hash, expectedSize, relPath, fileId, startOffset)
-                return // Success
-            } catch (err) {
-                // If some data was sent, we HAVE to fail the stream because DownloadEngine needs to reset the file.
-                if (err.bytesReceived > 0) {
-                    if (isDev) console.error(`[P2PEngine] Mid-transfer failure from ${bestPeer.getID()} (${err.bytesReceived} bytes): ${err.message}`)
-                    // Only penalize if it was a security limit violation (malicious)
-                    const isMalicious = err.message.includes('security limit')
-                    this.penalizePeer(bestPeer, isMalicious)
-                    stream.emit('error', err)
-                    return
-                }
-
-                if (isDev && !err.message.includes('Timeout') && !err.message.includes('Not Found')) {
-                    const identifier = hash ? hash.substring(0, 8) : (fileId || relPath || 'unknown');
-                    console.warn(`[P2PEngine] Peer ${bestPeer.getIP()} failed for ${identifier}. Trying next... (${err.message})`)
-                }
-
-                if (this.stopping || !this.swarm) return
-            }
-        }
-
-        stream.emit('error', new Error('Download failed after exhausted peer list'))
-    }
-
-    /**
-     * @param {PeerHandler} peer 
-     * @param {Readable} stream 
-     * @param {string} hash 
-     * @param {number} expectedSize 
-     * @param {string | null} relPath 
-     * @param {string | null} fileId 
-     * @param {number} startOffset 
-     */
-    _executeSingleRequest(peer, stream, hash, expectedSize, relPath, fileId, startOffset = 0) {
-        return new Promise((resolve, reject) => {
-            // VULNERABILITY FIX: Hard Cap mechanisms for Requests Map
-            // Prevent Memory Leak / Explosion via API abuse
-            const { MAX_SERVER_QUEUE_SIZE } = require('./constants')
-            if (this.requests.size >= MAX_SERVER_QUEUE_SIZE) {
-                reject(new Error('P2P Engine Overloaded (Request Cap Reached)'))
-                return
-            }
-
-            // Generate Random Request ID (collision avoidance)
-            let reqId
-            do {
-                reqId = crypto.randomBytes(4).readUInt32BE(0)
-            } while (this.requests.has(reqId) || reqId === 0)
-
-            let timeoutId = null
-            let isFinalized = false
-
-            const cleanup = () => {
-                peer.socket.off('error', onSocketError)
-                peer.socket.off('close', onSocketError)
-                stream.off('close', onStreamAbort)
-                stream.off('error', onStreamAbort)
-                if (timeoutId) {
-                    clearTimeout(timeoutId)
-                    timeoutId = null
-                }
-            }
-
-            const finalize = (action, value) => {
-                if (isFinalized) return
-                isFinalized = true
-                cleanup()
-                this.requests.delete(reqId)
-                action(value)
-            }
-
-            const customResolve = (v) => finalize(resolve, v)
-            const customReject = (e) => finalize(reject, e)
-
-            const onSocketError = (err) => {
-                const req = this.requests.get(reqId)
-                const error = new Error(`Peer socket closed/errored: ${err ? err.message : 'Unknown error'}`)
-                if (req) Object.assign(error, { bytesReceived: req.bytesReceived })
-                customReject(error)
-            }
-
-            const onStreamAbort = () => {
-                const req = this.requests.get(reqId)
-                const error = new Error('P2P Request aborted (stream closed)')
-                if (req) Object.assign(error, { bytesReceived: req.bytesReceived })
-                customReject(error)
-            }
-
-            peer.socket.once('error', onSocketError)
-            peer.socket.once('close', onSocketError)
-            stream.once('close', onStreamAbort)
-            stream.once('error', onStreamAbort)
-
-            // Register Request
-            timeoutId = setTimeout(() => {
-                const req = this.requests.get(reqId)
-                const err = new Error('P2P Timeout')
-                if (req) Object.assign(err, { bytesReceived: req.bytesReceived })
-                customReject(err)
-            }, Config.PROTOCOL.TIMEOUT)
-
-            this.requests.set(reqId, {
-                stream,
-                peer,
-                expectedSize,
-                timestamp: Date.now(),
-                bytesReceived: startOffset, // Initialize with offset so size checks are correct
-                resolve: customResolve,
-                reject: customReject,
-                timeoutId
-            })
-
-            // Sending request
-            const useBatching = peer.batchSupport && (expectedSize > 0 && expectedSize < 1024 * 1024) && !relPath
-
-            if (useBatching) {
-                let batches = this.batchQueue.get(peer)
-                if (!batches) {
-                    batches = []
-                    this.batchQueue.set(peer, batches)
-                }
-                batches.push({ reqId, hash })
-
-                if (!this.batchFlushScheduled) {
-                    this.batchFlushScheduled = true
-                    this._batchFlushTimeout = setTimeout(() => this.flushBatches(), 20)
-                }
-            } else {
-                try {
-                    peer.sendRequest(reqId, hash, relPath, fileId, startOffset)
-                } catch (e) {
-                    customReject(e)
-                    return
-                }
-            }
-        })
-    }
-
-    handleIncomingData(reqId, data, senderPeer) {
-        // Strict Validation
-        if (typeof reqId !== 'number' || !b4a.isBuffer(data)) return
-
-        const req = this.requests.get(reqId)
-        if (req) {
-            // VULNERABILITY FIX 1: ReqID Spoofing Protection
-            if (req.peer !== senderPeer) {
-                return
-            }
-
-            req.bytesReceived = (req.bytesReceived || 0) + data.length
-
-            if (req.peer.isLocal()) {
-                this.totalDownloadedLocal += data.length
-            } else {
-                this.totalDownloadedGlobal += data.length
-            }
-
-            this.totalDownloaded += data.length
-
-            // VULNERABILITY FIX ("Infinite File"): Size Check with Tolerance
-            // We allow 1MB extra to account for minor file updates, metadata overhead, or network jitter.
-            const tolerance = 1048576 // 1MB
-            if (req.expectedSize > 0 && req.bytesReceived > (req.expectedSize + tolerance)) {
-                if (isDev) console.error(`[P2P Security] Peer ${req.peer.getIP()} sent too many bytes! Received: ${req.bytesReceived}, Expected: ${req.expectedSize}`)
-                /** @type {Error & { bytesReceived?: number }} */
-                const err = new Error('File size exceeded security limit')
-                err.bytesReceived = req.bytesReceived
-                req.reject(err) // Fix: Reject the request to propagate error
-                return
-            }// Track for Speed Monitor
-            if (req.peer.isLocal()) {
-                this.downloadBytesLocal += data.length
-            } else {
-                this.downloadBytesGlobal += data.length
-            }
-
-            req.stream.push(data)
-        }
-    }
-
-    handleIncomingEnd(reqId, senderPeer) {
-        const req = this.requests.get(reqId)
-        if (req) {
-            if (req.peer !== senderPeer) return;
-
-            // Strict Size Validation
-            if (req.expectedSize > 0 && req.bytesReceived !== req.expectedSize) {
-                /** @type {Error & { bytesReceived?: number }} */
-                const err = new Error(`Incomplete transfer: Received ${req.bytesReceived} of ${req.expectedSize}`)
-                err.bytesReceived = req.bytesReceived
-                req.reject(err)
-                return
-            }
-
-            req.stream.push(null) // EOF
-            req.resolve()
-
-            const duration = (Date.now() - req.timestamp) / 1000
-            if (duration > 0 && req.bytesReceived > 102400) {
-                const speed = req.bytesReceived / duration
-                // @ts-ignore
-                req.peer.lastTransferSpeed = speed
-            }
-        }
-    }
-
-    handleIncomingError(reqId, messageBuffer, senderPeer) {
-        const req = this.requests.get(reqId)
-        if (req) {
-            if (req.peer !== senderPeer) return;
-
-            const msg = messageBuffer.toString('utf-8')
-            /** @type {Error & { bytesReceived?: number }} */
-            const err = new Error(`Peer error: ${msg}`)
-            err.bytesReceived = req.bytesReceived
-            req.reject(err)
-        }
-    }
-
-    flushBatches() {
-        this.batchFlushScheduled = false
-        this._batchFlushTimeout = null
-        for (const peer of this.peers) {
-            const initialRequests = this.batchQueue.get(peer)
-            if (!initialRequests) continue
-
-            if (peer.socket.destroyed) {
-                this.batchQueue.delete(peer)
-                continue
-            }
-
-            let requests = initialRequests
-            while (requests.length > 0) {
-                const chunk = requests.slice(0, 50) // BATCH_SIZE_LIMIT
-                requests = requests.slice(50)
-                try {
-                    peer.sendBatchRequest(chunk)
-                } catch (e) {
-                    console.error('[P2PEngine] Failed to send batch', e)
-                }
-            }
-            this.batchQueue.delete(peer)
-        }
-    }
-
-    reportUploadStats(speed, isError) {
-        if (!this.uploadHistory) this.uploadHistory = []
-
-        if (isError) {
-            const weight = NodeAdapter.penaltyWeight()
-            if (isDev) console.warn(`[P2PEngine] Upload performance penalty applied. Current Weight: ${weight}`)
-
-            if (NodeAdapter.isCritical()) {
-                console.error('[P2PEngine] CRITICAL performance drop! Stopping announcement to preserve system resources.')
-                this.reconfigureSwarm()
-            }
-            return
-        }
-
-        this.uploadHistory.push(speed)
-        if (this.uploadHistory.length > 5) this.uploadHistory.shift()
-
-        const avg = this.uploadHistory.reduce((a, b) => a + b, 0) / this.uploadHistory.length
-
-        // Fix: Do not downgrade to LOW based on speed alone.
-        // A "Slow" upload often means the RECEIVER is slow, not us.
-        // We should rely on 'isRealFailure' penalties to handle broken nodes.
-        if (avg > 1048576) { // > 1MB/s
-            NodeAdapter.boostWeight()
-        }
-    }
-
-    reconfigureSwarm() {
-        if (!this.swarm || this.stopping || this.swarm.destroyed) return
-        const topic = SWARM_TOPIC
-        // If critical (game running) OR health check failed (passive mode), disable server announcement
-        const isCritical = NodeAdapter.isCritical()
-        const isSelfIsolated = this.healthCheckPassive
-
-        const shouldAnnounce = !this.profile.passive && !isCritical && !isSelfIsolated && (ConfigManager.getP2PUploadEnabled() || ConfigManager.getLocalOptimization())
-
-        if (isDev && isSelfIsolated) console.warn('[P2PEngine] Swarm Reconfigure: Self-Isolated (Passive Mode enforced)')
-
-        // console.log(`[P2PEngine] Reconfiguring Swarm. Announcing: ${shouldAnnounce}`)
-        this.swarm.join(topic, { client: true, server: shouldAnnounce })
-    }
-
-    penalizePeer(peer, isMalicious = true) {
-        const id = peer.getID()
-        if (id === 'unknown') {
-            peer.socket.destroy()
-            return
-        }
-
-        if (!isMalicious) {
-            if (isDev) console.log(`[P2P] Disconnecting peer ${id} due to network issue (No penalty)`)
-            peer.socket.destroy()
-            return
-        }
-
-        const strikes = (this.peerStrikes.get(id) || 0) + 1
-
-        // Memory Guard: Cap strike tracker
-        if (this.peerStrikes.size > 2000) {
-            const firstKey = this.peerStrikes.keys().next().value
-            this.peerStrikes.delete(firstKey)
-        }
-
-        this.peerStrikes.set(id, strikes)
-
-        if (isDev) console.warn(`[P2P Security] Penalizing peer ${id}. Strikes: ${strikes}/3`)
-
-        if (strikes >= 3) {
-            console.error(`[P2P Security] BLACKLISTING ID: ${id} for suspicious behavior.`)
-            this.blacklist.add(id)
-            if (!this.blacklistTimeouts) this.blacklistTimeouts = new Map()
-            const { BLACKLIST_DURATION_MS } = require('./constants')
-            const tId = setTimeout(() => {
-                if (this.stopping || !this.swarm) return
-                this.blacklist.delete(id)
-                if (this.blacklistTimeouts) {
-                    this.blacklistTimeouts.delete(id)
-                }
-            }, BLACKLIST_DURATION_MS)
-            this.blacklistTimeouts.set(id, tId)
-        }
-
-        // Always disconnect the peer on a strike
-        peer.socket.destroy()
-    }
-
-    triggerCircuitBreaker() {
-        if (this.panicMode) return
-        this.attackCounter++
-
-        if (this.attackCounter >= 5) { // Increased threshold for global panic
-            console.error('[P2PEngine] GLOBAL CIRCUIT BREAKER TRIGGERED! Stopping P2P temporarily.')
-
-            this.panicMode = true
-            this.stop()
-            this._panicTimeout = setTimeout(() => {
-                this.panicMode = false
-                this.attackCounter = 0
-                this.start()
-            }, 300000)
-        }
-    }
-
-    getUploadCountForIP(ip) {
-        return this.uploadCounts.get(ip) || 0
-    }
-
-    incrementUploadCountForIP(ip) {
-        const count = this.getUploadCountForIP(ip)
-        this.uploadCounts.set(ip, count + 1)
-    }
-
-    decrementUploadCountForIP(ip) {
-        const count = this.getUploadCountForIP(ip)
-        if (count > 1) {
-            this.uploadCounts.set(ip, count - 1)
-        } else {
-            this.uploadCounts.delete(ip)
-        }
-    }
-
-    _getRoutingTableSize() {
-        if (!this.dht) return 0
-        const dhtAny = /** @type {any} */(this.dht)
-        const candidates = [
-            this.dht.nodes,
-            dhtAny.routingTable,
-            dhtAny.table,
-            dhtAny._dht?.nodes,
-            dhtAny.kbucket
-        ]
-
-        for (const table of candidates) {
-            if (!table) continue
-            if (typeof table.size === 'number') return table.size
-            if (Array.isArray(table)) return table.length
-            if (typeof table.count === 'function') return table.count()
-            if (typeof table.toArray === 'function') return table.toArray().length
-            if (typeof table.length === 'number') return table.length
-        }
-        return 0
-    }
-
-    queueRequest(peer, reqId, hash, relPath, fileId, startOffset = 0) {
-        if (!this.serverQueue) this.serverQueue = []
-
-        // Max Queue Size Protection (DoS)
-        const { MAX_SERVER_QUEUE_SIZE } = require('./constants')
-        if (this.serverQueue.length > MAX_SERVER_QUEUE_SIZE) {
-            peer.sendError(reqId, 'Server Busy (Queue Full)')
-            return
-        }
-
-        this.serverQueue.push({ peer, reqId, hash, relPath, fileId, startOffset, timestamp: Date.now() })
-        this.processServerQueue()
-    }
-
-    processServerQueue() {
-        if (!this.serverQueue || this.serverQueue.length === 0) return
-
-        const max = (typeof this.adaptiveSlotCount === 'number') ? this.adaptiveSlotCount : 5
-
-        while (this.activeUploads < max && this.serverQueue.length > 0) {
-            const req = this.serverQueue.shift()
-            // Check if peer is still alive
-            if (req.peer.socket.destroyed) continue
-
-            // Check if request is stale (> 30s)
-            if (Date.now() - req.timestamp > 30000) continue
-
-            // Execute
-            req.peer.executeRequest(req.reqId, req.hash, req.relPath, req.fileId, req.startOffset)
-        }
-    }
-
-    onUploadFinished() {
-        this.processServerQueue()
-    }
-
-    pruneQueue(peer) {
-        if (!this.serverQueue || this.serverQueue.length === 0) return
-
-        const initialSize = this.serverQueue.length
-        this.serverQueue = this.serverQueue.filter(req => req.peer !== peer)
-
-        // if (isDev && this.serverQueue.length < initialSize) {
-        //    console.debug(`[P2PEngine] Pruned ${initialSize - this.serverQueue.length} zombie requests from queue for ${peer.getIP()}`)
-        // }
-    }
-
-    /**
-     * @param {number} baseLimit 
-     * @returns {number}
-     */
-    getOptimalConcurrency(baseLimit) {
-        const { MIN_PARALLEL_DOWNLOADS, MAX_PARALLEL_DOWNLOADS, PEER_CONCURRENCY_FACTOR } = require('./constants')
-        const ResourceMonitor = require('./ResourceMonitor')
-
-        // ensure initialized
-        ResourceMonitor.start()
-
-        const peerCount = this.peers.length
-
-        // 1. Peer-based Scaling
-        let dynamic = baseLimit
-        if (peerCount > 0) {
-            dynamic = Math.max(MIN_PARALLEL_DOWNLOADS, peerCount * PEER_CONCURRENCY_FACTOR)
-        }
-
-        // 2. CPU-based Throttling (Dynamic Concurrency)
-        const cpuUsage = ResourceMonitor.getCPUUsage() // 0-100
-        let stressLimit = MAX_PARALLEL_DOWNLOADS
-
-        if (cpuUsage > 90) {
-            stressLimit = 8 // CRITICAL STRESS -> Min
-        } else if (cpuUsage > 70) {
-            // Linear scaling from 70% (32) to 90% (8) approx
-            // But simpler: Drop to 16
-            stressLimit = 16
-        } else if (cpuUsage > 50) {
-            stressLimit = 24
-        }
-
-        // 3. Network Load Throttling (Ambition Control)
-        const loadStatus = this.getLoadStatus()
-        if (loadStatus === 'overloaded') {
-            stressLimit = Math.min(stressLimit, 12)
-        }
-
-        // Final Calculation: Min of PeerCap and StressCap, but never below Absolute Min
-        const final = Math.min(dynamic, stressLimit)
-
-        return Math.max(MIN_PARALLEL_DOWNLOADS, Math.min(MAX_PARALLEL_DOWNLOADS, final))
-    }
-
-
+    setRaceManager(rm) { this.raceManager = rm }
 
     getNetworkInfo() {
-        if (!this.totalUploaded) this.totalUploaded = 0
         const routingNodes = this._getRoutingTableSize()
-
         const isEffectivelyPassive = this.profile.passive || !ConfigManager.getP2PUploadEnabled() || NodeAdapter.isCritical()
 
         const localPeers = this.peers.filter(p => {
-            const ip = p.socket.remoteAddress || p.info?.peer?.host || (p.socket.rawStream && p.socket.rawStream.remoteAddress)
+            const ip = p.socket.remoteAddress || p.info?.peer?.host || (p.socket.rawStream?.remoteAddress)
             return this.isLocalIP(ip)
         }).length
         const globalPeers = Math.max(0, this.peers.length - localPeers)
@@ -1236,237 +228,736 @@ class P2PEngine extends EventEmitter {
             globalPeers,
             topic: SWARM_TOPIC.toString('hex').substring(0, 8),
             requests: this.requests.size,
-            // queue: this.serverQueue ? this.serverQueue.length : 0, // Helpful metric
-            uploads: this.activeUploads,
-            uploaded: this.totalUploaded,
-            uploadedLocal: this.totalUploadedLocal || 0,
-            uploadedGlobal: this.totalUploadedGlobal || 0,
-            downloaded: this.totalDownloaded || 0,
-            downloadedLocal: this.totalDownloadedLocal || 0,
-            downloadedGlobal: this.totalDownloadedGlobal || 0,
+            uploads: this._counters.activeUploads,
+            uploaded: this.bandwidth.totalUploaded,
+            uploadedLocal: this.bandwidth.totalUploadedLocal,
+            uploadedGlobal: this.bandwidth.totalUploadedGlobal,
+            downloaded: this.bandwidth.totalDownloaded,
+            downloadedLocal: this.bandwidth.totalDownloadedLocal,
+            downloadedGlobal: this.bandwidth.totalDownloadedGlobal,
             dhtNodes: routingNodes,
             bootstrapNodes: Config.BOOTSTRAP_NODES.length,
             bootstrapped: this.dht ? this.dht.bootstrapped : false,
             running: !!this.swarm,
-            listening: !!this.swarm, // Added for UI compatibility
+            listening: !!this.swarm,
             mode: isEffectivelyPassive ? 'Passive (Leech)' : 'Active (Seed)',
             profile: this.profile.name,
-            downloadSpeed: this.currentDownloadSpeed || 0,
-            uploadSpeed: this.currentUploadSpeed || 0,
-            downloadSpeedLocal: this.currentDownloadSpeedLocal || 0,
-            uploadSpeedLocal: this.currentUploadSpeedLocal || 0
+            downloadSpeed: this.bandwidth.downloadSpeed,
+            uploadSpeed: this.bandwidth.uploadSpeed,
+            downloadSpeedLocal: this.bandwidth.downloadSpeedLocal,
+            uploadSpeedLocal: this.bandwidth.uploadSpeedLocal
         }
     }
 
+    getLoadStatus() {
+        return this.bandwidth.getLoadStatus()
+    }
+
+    // ─── Peer management ─────────────────────────────────────────────────────
+
     removePeer(peer) {
-        // Prune any pending server requests from this peer (DoS protection)
-        this.pruneQueue(peer)
-
-        // Clear batch queue
-        if (this.batchQueue.has(peer)) {
-            this.batchQueue.delete(peer)
-        }
-
+        this.queue.pruneForPeer(peer)
+        if (this.batchQueue.has(peer)) this.batchQueue.delete(peer)
         const idx = this.peers.indexOf(peer)
         if (idx > -1) this.peers.splice(idx, 1)
-
         this.emit('peer_removed', peer)
     }
 
+    /** @param {string} ip */
+    isLocalIP(ip) {
+        if (!ip) return false
+        if (ip.startsWith('::ffff:')) ip = ip.substring(7)
 
-    /**
-     * Update metrics using native UDX RTT
-     * @param {any} peer
-     * @param {number} rtt
-     */
-    onPeerRTTUpdate(peer, rtt) {
-        if (peer.isLocal()) return
+        if (ip.includes(':')) {
+            return ip === '::1' || ip.startsWith('fe80:') ||
+                ip.toLowerCase().startsWith('fc') || ip.toLowerCase().startsWith('fd')
+        }
 
-        const { RTT_CONGESTION_DELTA_MS } = require('./constants')
-        
-        // Calculate Delta for THIS peer
-        const delta = rtt - (/** @type {any} */(peer).baselineRTT || rtt)
-        
-        // We calculate MedianDelta during the updateDynamicLimits loop to be more accurate
-        // Here we just ensure we have data
+        const parts = ip.split('.')
+        if (parts.length !== 4) return false
+        const n = ((parseInt(parts[0], 10) << 24) |
+                   (parseInt(parts[1], 10) << 16) |
+                   (parseInt(parts[2], 10) << 8) |
+                    parseInt(parts[3], 10)) >>> 0
+
+        if ((n & 0xff000000) >>> 0 === 0x0a000000) return true // 10.0.0.0/8
+        if ((n & 0xffff0000) >>> 0 === 0xc0a80000) return true // 192.168.0.0/16
+        if ((n & 0xfff00000) >>> 0 === 0xac100000) return true // 172.16.0.0/12
+        if ((n & 0xff000000) >>> 0 === 0x7f000000) return true // 127.0.0.0/8
+        if ((n & 0xffff0000) >>> 0 === 0xa9fe0000) return true // 169.254.0.0/16
+        if ((n & 0xffc00000) >>> 0 === 0x64400000) return true // 100.64.0.0/10
+        return false
     }
 
-    triggerCongestionBackoff() {
-        const { MIN_UPLOAD_LIMIT_MBPS } = require('./constants')
-        // Save the limit before cutting as a reference for "stable"
-        this.lastStableLimit = this.currentUploadLimitMbps
-        
-        // Multiplicative Decrease
-        this.currentUploadLimitMbps = Math.max(MIN_UPLOAD_LIMIT_MBPS, this.currentUploadLimitMbps * 0.5)
-        this.slowStart = false // Exit Slow Start on FIRST congestion
-        this.lastStepUpTime = Date.now() + 10000 
-        this.updateDynamicLimits(true)
+    // ─── Security (delegates to SecurityManager) ─────────────────────────────
+
+    penalizePeer(peer, isMalicious = true) {
+        const id = peer.getID()
+        if (id === 'unknown') { peer.socket.destroy(); return }
+
+        const blacklisted = this.security.penalize(id, isMalicious)
+        // Always disconnect on any penalty (whether blacklisted or not)
+        peer.socket.destroy()
+
+        if (blacklisted) {
+            // Also kick the peer if it's still in the active list
+            this.removePeer(peer)
+        }
+    }
+
+    triggerCircuitBreaker() {
+        this.security.triggerCircuitBreaker(
+            () => this.stop(),
+            () => this.start()
+        )
+    }
+
+    // ─── Upload accounting (called from PeerHandler) ──────────────────────────
+
+    getUploadCountForIP(ip) { return this.uploadCounts.get(ip) || 0 }
+
+    incrementUploadCountForIP(ip) {
+        this.uploadCounts.set(ip, (this.uploadCounts.get(ip) || 0) + 1)
+    }
+
+    decrementUploadCountForIP(ip) {
+        const c = this.uploadCounts.get(ip) || 0
+        if (c > 1) this.uploadCounts.set(ip, c - 1)
+        else this.uploadCounts.delete(ip)
+    }
+
+    onUploadFinished() { this.queue.onUploadFinished() }
+
+    // ─── Server-side queue (delegates to QueueProcessor) ─────────────────────
+
+    queueRequest(peer, reqId, hash, relPath, fileId, startOffset = 0) {
+        this.queue.enqueue(peer, reqId, hash, relPath, fileId, startOffset)
+    }
+
+    pruneQueue(peer) { this.queue.pruneForPeer(peer) }
+
+    // ─── Bandwidth delegates ──────────────────────────────────────────────────
+
+    reportUploadStats(speed, isError) {
+        if (!this.uploadHistory) this.uploadHistory = []
+        if (isError) {
+            const weight = NodeAdapter.penaltyWeight()
+            if (isDev) console.warn(`[P2PEngine] Upload penalty. Weight: ${weight}`)
+            if (NodeAdapter.isCritical()) {
+                console.error('[P2PEngine] CRITICAL drop! Stopping announcement.')
+                this.reconfigureSwarm()
+            }
+            return
+        }
+        this.uploadHistory.push(speed)
+        if (this.uploadHistory.length > 5) this.uploadHistory.shift()
+        const avg = this.uploadHistory.reduce((a, b) => a + b, 0) / this.uploadHistory.length
+        if (avg > 1_048_576) NodeAdapter.boostWeight()
     }
 
     updateDynamicLimits(force = false) {
-        if (!ConfigManager.isLoaded()) return
-        if (!ConfigManager.getP2PUploadEnabled()) return
-
-        const { 
-            STEP_UP_INTERVAL_MS,
-            ADDITIVE_INCREASE_MBPS,
-            SLOW_START_MULTIPLIER,
-            MAX_ADAPTIVE_SLOTS,
-            RTT_CONGESTION_DELTA_MS
-        } = require('./constants')
-
-        const userMaxLimit = ConfigManager.getP2PUploadLimit()
-        const absoluteMax = Math.max(1, userMaxLimit) // Absolute ceiling from settings
-
-        const now = Date.now()
-
-        // 0. Calculate Median Delta among WAN peers
-        const wanPeers = this.peers.filter(p => !p.isLocal() && p.rtt > 0)
-        if (wanPeers.length > 0) {
-            const deltas = wanPeers.map(p => p.rtt - (/** @type {any} */(p).baselineRTT || p.rtt)).sort((a, b) => a - b)
-            const medianDelta = deltas[Math.floor(deltas.length / 2)]
-
-            if (medianDelta > RTT_CONGESTION_DELTA_MS) {
-                if (!this.congestionDetected) {
-                    if (isDev) console.warn(`[P2PEngine] LOCAL CONGESTION detected via WAN Median Delta: ${medianDelta}ms.`)
-                    this.congestionDetected = true
-                    this.triggerCongestionBackoff()
-                    return // triggerCongestionBackoff calls updateDynamicLimits(true)
-                }
-            }
-        }
-
-        // 1. Step-Up Logic (Slow Start vs AIMD)
-        if (!this.congestionDetected && now - this.lastStepUpTime > STEP_UP_INTERVAL_MS) {
-            if (this.currentUploadLimitMbps < absoluteMax) {
-                if (this.slowStart) {
-                    // Exponential Increase
-                    this.currentUploadLimitMbps = Math.min(absoluteMax, this.currentUploadLimitMbps * SLOW_START_MULTIPLIER)
-                    if (isDev) console.log(`[P2PEngine] Slow Start: New limit ${this.currentUploadLimitMbps.toFixed(1)} Mbps.`)
-                } else {
-                    // Additive Increase
-                    this.currentUploadLimitMbps = Math.min(absoluteMax, this.currentUploadLimitMbps + ADDITIVE_INCREASE_MBPS)
-                    if (isDev) console.log(`[P2PEngine] AIMD Increase: New limit ${this.currentUploadLimitMbps.toFixed(1)} Mbps.`)
-                }
-                this.lastStepUpTime = now
-                
-                // Track highest stable limit (v3.1)
-                if (this.currentUploadLimitMbps > this.lastStableLimit) {
-                    this.lastStableLimit = this.currentUploadLimitMbps
-                }
-            } else if (this.currentUploadLimitMbps > absoluteMax) {
-                // If user lowered the limit in settings while we were higher
-                this.currentUploadLimitMbps = absoluteMax
-            }
-        }
-
-        // Reset congestion metrics for next evaluation cycle
-        this.congestionDetected = false
-
-        // 3. Resource & Load Check
-        const profile = this.profile
-        const canBoost = (profile.name === 'MID' || profile.name === 'HIGH')
-        const load = os.loadavg()
-        const cpus = os.cpus().length
-        const isStressed = load[0] > (cpus * 0.8)
-
-        let finalLimitMbps = this.currentUploadLimitMbps
-
-        // 3. Hardware Profile Enforcements (v3.2)
-        if (profile.name === 'LOW') {
-            finalLimitMbps = 0 // Seeding disabled for LOW profile
-        } else if (profile.name === 'MID') {
-            finalLimitMbps = Math.min(finalLimitMbps, 5) // Cap MID at 5Mbps
-        }
-        
-        // 3.5. Final User Ceiling (Ensures settings are ALWAYS respected)
-        finalLimitMbps = Math.min(finalLimitMbps, absoluteMax)
-
-        // 4. Load-based throttling (additional safety)
-        if (isStressed) {
-            finalLimitMbps = Math.min(finalLimitMbps, 2) // Drastic cut under load
-        }
-
-        // 4. Strict Slot Management (Anti-Fragmentation)
-        this.adaptiveSlotCount = MAX_ADAPTIVE_SLOTS 
-
-        // Apply Limit
-        const RateLimiter = require('../app/assets/js/core/util/RateLimiter')
-        RateLimiter.update(finalLimitMbps * 125000, true)
-
-        if (isDev && (force || finalLimitMbps !== this._lastFinalLimit)) {
-            console.debug(`[P2PEngine] Dynamic Upload Limit: ${finalLimitMbps.toFixed(1)} Mbps (Slots: ${this.adaptiveSlotCount})`)
-            this._lastFinalLimit = finalLimitMbps
-        }
+        // Trigger the bandwidth manager's update immediately (e.g. during init)
+        // The manager's own timer handles periodic updates.
+        try { this.bandwidth._updateLimits(force) } catch (_) { /* ignore if not ready */ }
     }
 
-    checkSeederHealth() {
-        if (this.healthCheckPassive) {
-            const timeout = this.passiveReason === 'stress' ? 600000 : 3600000 // 10 mins vs 1 hour
-            if (Date.now() - this.healthCheckPassiveStart > timeout) {
-                console.log(`[P2PEngine] Health Check: Probation period ended (${this.passiveReason}). Re-enabling active mode.`)
-                this.healthCheckPassive = false
-                this.selfStrikes = 0
-                this.passiveReason = null
-                this.reconfigureSwarm()
-            }
-            return
-        }
-
-        const activeUploadPeers = this.peers.filter(p => p.currentTransferSpeed > 0)
-
-        if (activeUploadPeers.length < 3) {
-            if (this.selfStrikes > 0) this.selfStrikes--
-            return
-        }
-
-        const { SEEDER_HEALTH_FAST_LIMIT_BPS, SEEDER_HEALTH_SLOW_LIMIT_BPS } = require('./constants')
-        const fastPeers = activeUploadPeers.filter(p => p.currentTransferSpeed > SEEDER_HEALTH_FAST_LIMIT_BPS) // > 500 KB/s
-        const slowPeers = activeUploadPeers.filter(p => p.currentTransferSpeed < SEEDER_HEALTH_SLOW_LIMIT_BPS) // < 125 KB/s
-
-        if (fastPeers.length > 0) {
-            this.selfStrikes = 0
-            return
-        }
-
-        if (slowPeers.length === activeUploadPeers.length) {
-            this.selfStrikes = (this.selfStrikes || 0) + 1
-            console.warn(`[P2PEngine] Health Check: Warning! ${activeUploadPeers.length}/${activeUploadPeers.length} peers are slow. Self-Strike ${this.selfStrikes}/3.`)
-
-            if (this.selfStrikes >= 3) {
-                console.error(`[P2PEngine] Health Check: CONSENSUS OF FAILURE (3 Strikes). Self-isolating to protect Swarm.`)
-                this.healthCheckPassive = true
-                this.healthCheckPassiveStart = Date.now()
-                this.passiveReason = 'health'
-                this.reconfigureSwarm()
-            }
-        } else {
-            if (this.selfStrikes > 0) this.selfStrikes--
-        }
+    getOptimalConcurrency(baseLimit) {
+        return this.bandwidth.getOptimalConcurrency(baseLimit)
     }
 
-    _getNetworkFingerprint() {
-        const interfaces = os.networkInterfaces()
-        let fingerprint = ''
-        const sortedKeys = Object.keys(interfaces).sort()
-        
-        // List of interfaces to ignore because they are highly dynamic/virtual
-        const ignoreList = ['awdl', 'utun', 'llw', 'gif', 'stf']
+    onPeerRTTUpdate(peer, rtt) {
+        this.bandwidth.onPeerRTTUpdate(peer, rtt)
+    }
 
-        for (const key of sortedKeys) {
-            // macOS specific: skip dynamic virtual interfaces
-            if (process.platform === 'darwin' && ignoreList.some(ignore => key.startsWith(ignore))) {
+    // ─── Swarm reconfiguration ────────────────────────────────────────────────
+
+    reconfigureSwarm() {
+        if (!this.swarm || this.stopping || this.swarm.destroyed) return
+        const isCritical = NodeAdapter.isCritical()
+        const isSelfIsolated = this.health.isPassive
+        const shouldAnnounce = !this.profile.passive && !isCritical && !isSelfIsolated &&
+            (ConfigManager.getP2PUploadEnabled() || ConfigManager.getLocalOptimization())
+        this.swarm.join(SWARM_TOPIC, { client: true, server: shouldAnnounce })
+    }
+
+    // ─── File download (client side) ─────────────────────────────────────────
+
+    /**
+     * @param {string} hash
+     * @param {number} expectedSize
+     * @param {string|null} relPath
+     * @param {string|null} fileId
+     * @param {number} startOffset
+     * @returns {Readable}
+     */
+    requestFile(hash, expectedSize = 0, relPath = null, fileId = null, startOffset = 0) {
+        const stream = new Readable({ read() {} })
+        this._handleRequestAsync(stream, hash, expectedSize, relPath, fileId, startOffset)
+            .catch(err => { if (!stream.destroyed) stream.emit('error', err) })
+        return stream
+    }
+
+    async _handleRequestAsync(stream, hash, expectedSize, relPath, fileId, startOffset) {
+        const attempted = new Set()
+        const getMaxAttempts = () => Math.max(10, this.peers.length + 2)
+
+        for (let i = 0; i < getMaxAttempts(); i++) {
+            // ── Wait for peers if needed ──────────────────────────────────────
+            if (this.peers.length === 0) {
+                if (!this._discoveryPromise) {
+                    this._discoveryPromise = new Promise(resolve => {
+                        const onConn = () => {
+                            this.off('peer_added', onConn)
+                            clearTimeout(this._discoveryTimer)
+                            this._discoveryTimer = null
+                            this._discoveryPromise = null
+                            resolve(true)
+                        }
+                        this._discoveryTimer = setTimeout(() => {
+                            this.off('peer_added', onConn)
+                            this._discoveryPromise = null
+                            resolve(false)
+                        }, 10_000)
+                        this.once('peer_added', onConn)
+                    })
+                }
+                await this._discoveryPromise
+            }
+
+            if (this.peers.length === 0) {
+                if (i >= 2) {
+                    // CRITICAL FIX: destroy() cleans up V8 buffers; emit('error') alone
+                    // leaves the Readable open and leaks memory until GC (never guaranteed).
+                    stream.destroy(new Error('No peers available after discovery wait'))
+                    return
+                }
                 continue
             }
 
-            const iface = interfaces[key]
-            for (const details of iface) {
-                if (!details.internal && (details.family === 'IPv4' || /** @type {any} */(details.family) === 4)) {
-                    fingerprint += `${key}:${details.address}|`
+            // ── Select best untried peer ──────────────────────────────────────
+            const available = this.peers.filter(p => !attempted.has(p))
+            if (available.length === 0) {
+                stream.destroy(new Error('All available peers failed'))
+                return
+            }
+
+            // ── Parallel Top-3 race ───────────────────────────────────────────
+            const top = this._selectTopPeers(available, 3)
+            top.forEach(p => attempted.add(p))
+
+            const raceResult = await this._raceRequests(top, stream, hash, expectedSize, relPath, fileId, startOffset)
+
+            if (raceResult.success) return
+
+            // All top-3 failed; check if mid-transfer failure (can't retry)
+            if (raceResult.midTransfer) {
+                // CRITICAL FIX: destroy() releases all internal buffers immediately.
+                // emit('error') without destroy() leaves the Readable alive indefinitely.
+                stream.destroy(raceResult.error)
+                return
+            }
+
+            if (this.stopping || !this.swarm) return
+        }
+
+        stream.destroy(new Error('Download failed after exhausted peer list'))
+    }
+
+    /**
+     * Race up to `n` peers for the same request.
+     * Returns { success: true } or { success: false, midTransfer, error }.
+     *
+     * @param {PeerHandler[]} peers
+     * @param {Readable} stream
+     * @param {string} hash
+     * @param {number} expectedSize
+     * @param {string|null} relPath
+     * @param {string|null} fileId
+     * @param {number} startOffset
+     * @returns {Promise<{ success: boolean, midTransfer?: boolean, error?: Error }>}
+     */
+    async _raceRequests(peers, stream, hash, expectedSize, relPath, fileId, startOffset) {
+        if (peers.length === 1) {
+            // No actual race needed for a single peer
+            const peer = peers[0]
+            if (peer.socket.destroyed) return { success: false }
+            try {
+                await this._executeSingleRequest(peer, stream, hash, expectedSize, relPath, fileId, startOffset)
+                return { success: true }
+            } catch (err) {
+                if (err.bytesReceived > 0) {
+                    const isMalicious = err.message.includes('security limit')
+                    this.penalizePeer(peer, isMalicious)
+                    return { success: false, midTransfer: true, error: err }
                 }
+                return { success: false }
             }
         }
-        return fingerprint
+
+        // True race: wrap each peer in an AbortController
+        const controllers = peers.map(() => ({ aborted: false }))
+        let resolved = false
+
+        const attempt = (peer, ctrl) => new Promise((resolve, reject) => {
+            if (peer.socket.destroyed) { reject(new Error('Socket destroyed')); return }
+            this._executeSingleRequest(peer, stream, hash, expectedSize, relPath, fileId, startOffset, ctrl)
+                .then(() => {
+                    if (!resolved && !ctrl.aborted) { resolved = true; resolve({ success: true, peer }) }
+                })
+                .catch(err => {
+                    if (resolved) return
+                    reject(err)
+                })
+        })
+
+        try {
+            // Promise.any: resolves with first success, rejects only if ALL fail
+            const result = await Promise.any(peers.map((p, i) => attempt(p, controllers[i])))
+
+            // Abort losing peers to save bandwidth
+            peers.forEach((p, i) => {
+                if (p !== result.peer) {
+                    controllers[i].aborted = true
+                    for (const [rId, req] of Array.from(this.requests.entries())) {
+                        if (req.peer === p && req.stream === stream) {
+                            req.reject(new Error('Request cancelled (race finished)'))
+                            try {
+                                p.sendError(rId, 'Aborted')
+                            } catch (_) {}
+                        }
+                    }
+                }
+            })
+
+            return result
+        } catch (aggErr) {
+            // All failed — check if any was a mid-transfer failure
+            const errors = aggErr.errors || []
+            const midErr = errors.find(e => e && e.bytesReceived > 0)
+            if (midErr) {
+                // CRITICAL FIX: If the stream was cancelled by RaceManager because HTTP won
+                // the race, isGracefulCancel is set. We must NOT penalize the peer in that
+                // case — it was working fine but lost the race to a faster HTTP mirror.
+                if (stream.isGracefulCancel) {
+                    return { success: false }
+                }
+                const failedPeer = peers[errors.indexOf(midErr)]
+                const isMalicious = midErr.message.includes('security limit')
+                if (failedPeer) this.penalizePeer(failedPeer, isMalicious)
+                return { success: false, midTransfer: true, error: midErr }
+            }
+            return { success: false }
+        }
+    }
+
+    /**
+     * @param {PeerHandler} peer
+     * @param {Readable} stream
+     * @param {string} hash
+     * @param {number} expectedSize
+     * @param {string|null} relPath
+     * @param {string|null} fileId
+     * @param {number} startOffset
+     * @param {any} [ctrl]
+     * @returns {Promise<void>}
+     */
+    _executeSingleRequest(peer, stream, hash, expectedSize, relPath, fileId, startOffset = 0, ctrl = null) {
+        return new Promise((resolve, reject) => {
+            if (ctrl && ctrl.aborted) {
+                reject(new Error('Request cancelled (race aborted)'))
+                return
+            }
+            if (this.requests.size >= MAX_SERVER_QUEUE_SIZE) {
+                reject(new Error('P2P Engine Overloaded (Request Cap Reached)'))
+                return
+            }
+
+            // ── Collision-safe request ID ──────────────────────────────────
+            let reqId
+            do { reqId = crypto.randomBytes(4).readUInt32BE(0) }
+            while (this.requests.has(reqId) || reqId === 0)
+
+            let isFinalized = false
+
+            const cleanup = () => {
+                peer.socket.off('error', onSocketError)
+                peer.socket.off('close', onSocketError)
+                stream.off('close', onStreamAbort)
+                stream.off('error', onStreamAbort)
+                const req = this.requests.get(reqId)
+                if (req && req.timeoutId) { clearTimeout(req.timeoutId); }
+            }
+
+            const finalize = (action, value) => {
+                if (isFinalized) return
+                isFinalized = true
+                cleanup()
+                this.requests.delete(reqId)
+                action(value)
+            }
+
+            const customResolve = v => finalize(resolve, v)
+            const customReject = e => finalize(reject, e)
+
+            const onSocketError = (err) => {
+                const req = this.requests.get(reqId)
+                const error = new Error(`Peer socket closed/errored: ${err ? err.message : 'Unknown'}`)
+                if (req) Object.assign(error, { bytesReceived: req.bytesReceived })
+                customReject(error)
+            }
+
+            const onStreamAbort = () => {
+                const req = this.requests.get(reqId)
+                const error = new Error('P2P Request aborted (stream closed)')
+                if (req) Object.assign(error, { bytesReceived: req.bytesReceived })
+                try {
+                    peer.sendError(reqId, 'Aborted')
+                } catch (_) {}
+                customReject(error)
+            }
+
+            peer.socket.once('error', onSocketError)
+            peer.socket.once('close', onSocketError)
+            stream.once('close', onStreamAbort)
+            stream.once('error', onStreamAbort)
+
+            // ── Timeout ────────────────────────────────────────────────────
+            const timeoutId = setTimeout(() => {
+                const req = this.requests.get(reqId)
+                const err = new Error('P2P Timeout')
+                if (req) Object.assign(err, { bytesReceived: req.bytesReceived })
+                customReject(err)
+            }, Config.PROTOCOL.TIMEOUT)
+
+            // CRITICAL FIX: Verify abort flag right before registering and sending request
+            if (ctrl && ctrl.aborted) {
+                clearTimeout(timeoutId)
+                customReject(new Error('Request cancelled (race aborted before send)'))
+                return
+            }
+
+            this.requests.set(reqId, {
+                stream, peer, expectedSize,
+                timestamp: Date.now(),
+                bytesReceived: startOffset,
+                resolve: customResolve,
+                reject: customReject,
+                timeoutId   // ← stored so memory-manager can clear it
+            })
+
+            // ── Dispatch request ───────────────────────────────────────────
+            const useBatching = peer.batchSupport && expectedSize > 0 && expectedSize < 1_048_576 && !relPath
+            if (useBatching) {
+                let batches = this.batchQueue.get(peer)
+                if (!batches) { batches = []; this.batchQueue.set(peer, batches) }
+                batches.push({ reqId, hash })
+                if (!this.batchFlushScheduled) {
+                    this.batchFlushScheduled = true
+                    this._batchFlushTimer = setTimeout(() => this.flushBatches(), 20)
+                }
+            } else {
+                try {
+                    peer.sendRequest(reqId, hash, relPath, fileId, startOffset)
+                } catch (e) {
+                    customReject(e)
+                }
+            }
+        })
+    }
+
+    // ─── Incoming data handlers (called from PeerHandler) ─────────────────────
+
+    handleIncomingData(reqId, data, senderPeer) {
+        if (typeof reqId !== 'number' || !b4a.isBuffer(data)) return
+        const req = this.requests.get(reqId)
+        if (!req || req.peer !== senderPeer) return
+
+        req.bytesReceived = (req.bytesReceived || 0) + data.length
+        senderPeer.downloadBytesActive = (senderPeer.downloadBytesActive || 0) + data.length
+        this.bandwidth.totalDownloaded += data.length
+
+        if (req.peer.isLocal()) {
+            this.bandwidth.totalDownloadedLocal += data.length
+            this.bandwidth.downloadBytesLocal += data.length
+        } else {
+            this.bandwidth.totalDownloadedGlobal += data.length
+            this.bandwidth.downloadBytesGlobal += data.length
+        }
+
+        // ── Infinite-file protection ──────────────────────────────────────────
+        const TOLERANCE = 1_048_576 // 1 MB
+        if (req.expectedSize > 0 && req.bytesReceived > req.expectedSize + TOLERANCE) {
+            if (isDev) console.error(`[P2PEngine] Peer ${req.peer.getIP()} sent too many bytes!`)
+            const err = Object.assign(new Error('File size exceeded security limit'), { bytesReceived: req.bytesReceived })
+            req.reject(err)
+            return
+        }
+
+        req.stream.push(data)
+    }
+
+    handleIncomingEnd(reqId, senderPeer) {
+        const req = this.requests.get(reqId)
+        if (!req || req.peer !== senderPeer) return
+
+        if (req.expectedSize > 0 && req.bytesReceived !== req.expectedSize) {
+            const err = Object.assign(
+                new Error(`Incomplete transfer: got ${req.bytesReceived} of ${req.expectedSize}`),
+                { bytesReceived: req.bytesReceived }
+            )
+            req.reject(err)
+            return
+        }
+
+        req.stream.push(null) // EOF
+        req.resolve()
+
+        const duration = (Date.now() - req.timestamp) / 1000
+        if (duration > 0 && req.bytesReceived > 102_400) {
+            req.peer.lastTransferSpeed = req.bytesReceived / duration
+        }
+    }
+
+    handleIncomingError(reqId, messageBuffer, senderPeer) {
+        const req = this.requests.get(reqId)
+        if (!req || req.peer !== senderPeer) return
+        const err = Object.assign(
+            new Error(`Peer error: ${messageBuffer.toString('utf-8')}`),
+            { bytesReceived: req.bytesReceived }
+        )
+        req.reject(err)
+    }
+
+    // ─── Batch flushing ───────────────────────────────────────────────────────
+
+    flushBatches() {
+        this.batchFlushScheduled = false
+        this._batchFlushTimer = null
+        for (const peer of this.peers) {
+            const requests = this.batchQueue.get(peer)
+            if (!requests || peer.socket.destroyed) { this.batchQueue.delete(peer); continue }
+            // Filter out aborted requests before sending them
+            const activeRequests = requests.filter(r => this.requests.has(r.reqId))
+            if (activeRequests.length === 0) { this.batchQueue.delete(peer); continue }
+            let remaining = activeRequests
+            while (remaining.length > 0) {
+                const chunk = remaining.slice(0, 50)
+                remaining = remaining.slice(50)
+                try { peer.sendBatchRequest(chunk) } catch (e) { console.error('[P2PEngine] Batch send failed:', e) }
+            }
+            this.batchQueue.delete(peer)
+        }
+    }
+
+    // ─── Private — init helpers ───────────────────────────────────────────────
+
+    async _init() {
+        try {
+            StatsManager.init(ConfigManager.getLauncherDirectorySync())
+
+            // Bootstrap node refresh
+            if (Config.BOOTSTRAP_URL) {
+                try {
+                    const res = await fetch(Config.BOOTSTRAP_URL)
+                    if (res.ok) {
+                        const nodes = await res.json()
+                        if (Array.isArray(nodes) && nodes.length > 0) Config.BOOTSTRAP_NODES = nodes
+                    }
+                } catch (_) { /* use cached nodes */ }
+            }
+
+            this.dht = new HyperDHT({
+                ephemeral: true,
+                bootstrap: Config.BOOTSTRAP_NODES.map(n => ({
+                    host: n.host, port: n.port,
+                    publicKey: n.publicKey ? b4a.from(n.publicKey, 'hex') : undefined
+                }))
+            })
+            this.dht.on('error', () => { /* suppressed */ })
+
+            this.dht.on('ready', () => {
+                if (isDev) {
+                    const size = this._getRoutingTableSize()
+                    console.debug(`[P2PEngine] DHT Ready. Bootstrapped: ${this.dht.bootstrapped}. Nodes: ${size}`)
+                }
+                this._dhtReadyTimer = setTimeout(() => {
+                    this._dhtReadyTimer = null
+                    if (!this.dht) return
+                    if (this._getRoutingTableSize() === 0 && !this.dht.bootstrapped) {
+                        console.warn('[P2PEngine] No DHT connections established after 5 s.')
+                    }
+                }, 5000)
+                if (this._dhtReadyTimer.unref) this._dhtReadyTimer.unref()
+            })
+
+            this.swarm = new Hyperswarm({
+                dht: this.dht,
+                local: true,
+                mdns: true,
+                maxPeers: this.profile.maxPeers * 2
+            })
+
+            this.swarm.on('connection', (socket, info) => this._onConnection(socket, info))
+
+            const shouldAnnounce = !this.profile.passive && !NodeAdapter.isCritical() &&
+                (ConfigManager.getP2PUploadEnabled() || ConfigManager.getLocalOptimization())
+
+            const discovery = this.swarm.join(SWARM_TOPIC, { server: shouldAnnounce, client: true })
+
+            this.bandwidth._updateLimits(true) // Apply initial limit
+
+            await discovery.flushed()
+            console.log(`[P2PEngine] P2P Service Started. Debug: ${isDev}`)
+            if (shouldAnnounce) {
+                if (ConfigManager.getLocalOptimization()) console.log('[P2PEngine] Local Network: Active (MDNS)')
+                if (ConfigManager.getP2PUploadEnabled()) console.log('[P2PEngine] Global Network: Active (DHT)')
+                else console.log('[P2PEngine] Global Network: Downloads Only')
+            } else {
+                console.log('[P2PEngine] Passive Mode (Client Only)')
+            }
+        } catch (err) {
+            console.error('[P2PEngine] Init failed:', err)
+            throw err
+        }
+    }
+
+    _onConnection(socket, info) {
+        const peer = new PeerHandler(socket, this, info)
+
+        let ip = (info.peer?.host) || socket.remoteAddress || socket.rawStream?.remoteAddress || 'unknown'
+        if (ip.startsWith('::ffff:')) ip = ip.substring(7)
+
+        const peerId = peer.getID()
+        if (this.security.isBlacklisted(peerId)) {
+            if (isDev) console.warn(`[P2PEngine] Rejecting blacklisted peer: ${peerId}`)
+            socket.destroy()
+            return
+        }
+
+        if (this.peers.length > this.profile.maxPeers) {
+            if (isDev) console.debug(`[P2PEngine] Max peers reached. Rejecting.`)
+            socket.destroy()
+            return
+        }
+
+        socket.setMaxListeners(100)
+        this.peers.push(peer)
+        this.emit('peer_added', peer)
+    }
+
+    _prewarmDHT() {
+        const known = PeerPersistence.getPeers('global')
+        if (!known.length || !this.dht) return
+
+        console.log(`[P2PEngine] Pre-warming: ${known.length} persistent peers.`)
+        for (const p of known) {
+            try {
+                let ip = p.ip
+                if (!ip || typeof ip !== 'string') continue
+                if (ip.startsWith('::ffff:')) ip = ip.substring(7)
+                if (ip.includes(':')) continue // skip IPv6
+                this.dht.addNode({ host: ip, port: p.port })
+            } catch (e) {
+                console.warn(`[P2PEngine] Failed to add persistent node ${p.ip}:${p.port}:`, e.message)
+            }
+        }
+    }
+
+    _startMemoryCleanup() {
+        this._memCleanupInterval = setInterval(() => {
+            // Prune hanging requests — IMPORTANT: clear timeoutId to avoid memory leak
+            const timeoutVal = Config.PROTOCOL?.TIMEOUT ?? 60_000
+            const cutoff = Date.now() - timeoutVal * 2
+            for (const [reqId, req] of this.requests.entries()) {
+                if (req.timestamp < cutoff) {
+                    if (req.timeoutId) clearTimeout(req.timeoutId)
+                    req.reject(new Error('Hanging request pruned by memory manager'))
+                    this.requests.delete(reqId)
+                }
+            }
+        }, MEMORY_CLEANUP_INTERVAL_MS)
+        if (this._memCleanupInterval.unref) this._memCleanupInterval.unref()
+    }
+
+    _startPeerScoreUpdater() {
+        this._scoreUpdateInterval = setInterval(() => {
+            for (const p of this.peers) {
+                this._calculatePeerScore(p)
+            }
+        }, 3000)
+        if (this._scoreUpdateInterval.unref) this._scoreUpdateInterval.unref()
+    }
+
+    _calculatePeerScore(p) {
+        const weight = p.remoteWeight || 1
+        const rtt = p.rtt || 200
+        const activeSpeed = p.currentDownloadSpeed || 0
+        const histSpeed = p.lastTransferSpeed || 0
+        const maxSpeed = Math.max(activeSpeed, histSpeed)
+
+        // Normalize speed: 100 KB/s → 1, 1 MB/s → 10, cap at 20 (2 MB/s)
+        const speedFactor = maxSpeed ? Math.min(20, Math.max(0.1, maxSpeed / 102_400)) : 1
+
+        // LAN bonus: local peers get 10x boost but not 100x — avoids number overflow
+        // that dominated the score and made it hard to compare WAN peers meaningfully.
+        const lanBonus = p.isLocal() ? 10 : 1
+
+        // Linear weight — weight² was causing HIGH-profile peers to dominate even
+        // when their RTT was 10x worse than a nearby MID-profile peer.
+        p.cachedScore = weight * (1000 / (rtt + 5)) * speedFactor * lanBonus
+    }
+
+    /**
+     * Select up to `n` best peers by score (weight, RTT, speed, LAN bonus).
+     * @param {PeerHandler[]} candidates
+     * @param {number} n
+     * @returns {PeerHandler[]}
+     */
+    _selectTopPeers(candidates, n) {
+        return candidates
+            .map(p => {
+                if (p.cachedScore === undefined) {
+                    this._calculatePeerScore(p)
+                }
+                return { peer: p, score: p.cachedScore }
+            })
+            .sort((a, b) => b.score - a.score)
+            .slice(0, n)
+            .map(x => x.peer)
+    }
+
+    _waitForConfig() {
+        return new Promise(resolve => {
+            const iv = setInterval(() => {
+                if (ConfigManager.isLoaded()) { clearInterval(iv); resolve(true) }
+            }, 50)
+        })
+    }
+
+    _getRoutingTableSize() {
+        if (!this.dht) return 0
+        const d = /** @type {any} */(this.dht)
+        for (const table of [this.dht.nodes, d.routingTable, d.table, d._dht?.nodes, d.kbucket]) {
+            if (!table) continue
+            if (typeof table.size === 'number') return table.size
+            if (Array.isArray(table)) return table.length
+            if (typeof table.count === 'function') return table.count()
+            if (typeof table.toArray === 'function') return table.toArray().length
+            if (typeof table.length === 'number') return table.length
+        }
+        return 0
+    }
+
+    /**
+     * @param {string} name  Property name of the timer
+     * @param {boolean} [isInterval]
+     */
+    _clearTimer(name, isInterval = false) {
+        const t = this[name]
+        if (t) {
+            isInterval ? clearInterval(t) : clearTimeout(t)
+            this[name] = null
+        }
     }
 }
 

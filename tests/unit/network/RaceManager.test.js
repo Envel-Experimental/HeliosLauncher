@@ -61,6 +61,8 @@ describe('RaceManager - High Fidelity Tests', () => {
     })
 
     afterEach(() => {
+        if (RaceManager.successFlushTimer) clearTimeout(RaceManager.successFlushTimer)
+        if (RaceManager.failureFlushTimer) clearTimeout(RaceManager.failureFlushTimer)
         jest.clearAllTimers()
         jest.useRealTimers()
     })
@@ -148,36 +150,41 @@ describe('RaceManager - High Fidelity Tests', () => {
     describe('Integrity & Security', () => {
         
         test('Scenario: P2P Hash Mismatch', async () => {
-            const originalData = Buffer.from('correct data')
-            const corruptData = Buffer.from('corrupt data')
-            const correctHash = crypto.createHash('sha1').update(originalData).digest('hex')
-            
-            const mockReq = createMockRequest('https://files.com/test.jar', correctHash)
-            global.fetch.mockReturnValue(new Promise(() => {}))
+            jest.useRealTimers()
+            try {
+                const originalData = Buffer.from('correct data')
+                const corruptData = Buffer.from('corrupt data')
+                const correctHash = crypto.createHash('sha1').update(originalData).digest('hex')
+                
+                const mockReq = createMockRequest('https://files.com/test.jar', correctHash)
+                global.fetch.mockReturnValue(new Promise(() => {}))
 
-            const p2pStream = new PassThrough()
-            P2PEngine.requestFile.mockReturnValue(p2pStream)
+                const p2pStream = new PassThrough()
+                P2PEngine.requestFile.mockReturnValue(p2pStream)
 
-            const resultPromise = RaceManager.handle(mockReq)
-            
-            await Promise.resolve()
-            p2pStream.emit('readable')
-            const result = await resultPromise
-            
-            const verifierStream = result.p2pStream
-            
-            // Listen for error
-            let caughtError
-            verifierStream.on('error', err => caughtError = err)
-            
-            // Push data
-            p2pStream.push(corruptData)
-            p2pStream.push(null)
+                const resultPromise = RaceManager.handle(mockReq)
+                
+                await Promise.resolve()
+                p2pStream.emit('readable')
+                const result = await resultPromise
+                
+                const verifierStream = result.p2pStream
+                
+                // Listen for error
+                let caughtError
+                verifierStream.on('error', err => caughtError = err)
+                
+                // Push data
+                p2pStream.push(corruptData)
+                p2pStream.push(null)
 
-            // Wait for flush
-            await new Promise(resolve => verifierStream.on('close', resolve))
+                // Wait for flush
+                await new Promise(resolve => verifierStream.on('close', resolve))
 
-            expect(caughtError.code).toBe('HASH_MISMATCH')
+                expect(caughtError.code).toBe('HASH_MISMATCH')
+            } finally {
+                jest.useFakeTimers()
+            }
         })
 
         test('Scenario: P2P Only Mode enforcement', async () => {
@@ -214,13 +221,39 @@ describe('RaceManager - High Fidelity Tests', () => {
             })
 
             const resultPromise = RaceManager.handle(mockReq)
-            
+
             await Promise.resolve()
             p2pStream.emit('readable')
-            
+
             await resultPromise
-            
+
             expect(abortSignal.aborted).toBe(true)
+        })
+
+        // ── REGRESSION: isGracefulCancel prevents false seeder penalty ─────────
+
+        test('REGRESSION: P2P stream gets isGracefulCancel=true when HTTP wins', async () => {
+            // Before fix: RaceManager.handle() called globalP2PStream.destroy() without
+            // setting isGracefulCancel. P2PEngine saw a mid-transfer abort and penalized
+            // the seeder even though it was working fine.
+            // After fix: isGracefulCancel=true tells P2PEngine to skip penalizePeer().
+            const hash = crypto.randomBytes(20).toString('hex')
+            const mockReq = createMockRequest('https://files.com/test.jar', hash)
+
+            const p2pStream = new PassThrough()
+            P2PEngine.requestFile.mockReturnValue(p2pStream)
+
+            // HTTP resolves immediately
+            global.fetch.mockResolvedValue({ ok: true, body: new PassThrough() })
+
+            const resultPromise = RaceManager.handle(mockReq)
+            await Promise.resolve()
+            await Promise.resolve()
+
+            await resultPromise
+
+            // P2P stream was destroyed — verify it had isGracefulCancel set BEFORE destroy
+            expect(p2pStream.isGracefulCancel).toBe(true)
         })
     })
 })

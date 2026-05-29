@@ -1,5 +1,8 @@
 // 1. Mocks must be at the very top (before any requires)
 jest.mock('../../../../app/assets/js/core/configmanager')
+jest.mock('../../../../app/assets/js/core/util/HWID', () => ({
+    getHWID: jest.fn().mockReturnValue('fallback_test_hwid')
+}))
 process.type = 'renderer'
 
 const Analytics = require('../../../../app/assets/js/core/util/Analytics')

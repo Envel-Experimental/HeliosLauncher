@@ -21,10 +21,19 @@ class PeerPersistence {
             global: []
         };
         this.loaded = false;
+        /** @type {Buffer | null} */
+        this._derivedKey = null;
     }
 
     _getKey() {
-        return crypto.scryptSync(this.secret, this.salt, 32);
+        if (this._derivedKey) return Promise.resolve(this._derivedKey);
+        return new Promise((resolve, reject) => {
+            crypto.scrypt(this.secret, this.salt, 32, (err, key) => {
+                if (err) return reject(err);
+                this._derivedKey = key;
+                resolve(key);
+            });
+        });
     }
 
     async load() {
@@ -35,9 +44,11 @@ class PeerPersistence {
                 const encrypted = await fs.promises.readFile(this.filePath);
 
                 // Decrypt
+                if (encrypted.length < 17) throw new Error('File too short');
                 const iv = encrypted.slice(0, 16);
                 const data = encrypted.slice(16);
-                const decipher = crypto.createDecipheriv(this.algorithm, this._getKey(), iv);
+                const key = await this._getKey();
+                const decipher = crypto.createDecipheriv(this.algorithm, key, iv);
                 let decrypted = decipher.update(data);
                 decrypted = Buffer.concat([decrypted, decipher.final()]);
 
@@ -77,24 +88,24 @@ class PeerPersistence {
     async save() {
         if (!this.loaded) return; // Don't overwrite if not loaded
 
-        const json = JSON.stringify(this.cache);
-
-        // Encrypt
-        const iv = crypto.randomBytes(16);
-        const cipher = crypto.createCipheriv(this.algorithm, this._getKey(), iv);
-        let encrypted = cipher.update(json);
-        encrypted = Buffer.concat([encrypted, cipher.final()]);
-
-        const output = Buffer.concat([iv, encrypted]);
-
-        // Atomic Write
-        const tempPath = this.filePath + '.tmp';
         try {
+            const json = JSON.stringify(this.cache);
+
+            // Encrypt
+            const iv = crypto.randomBytes(16);
+            const key = await this._getKey();
+            const cipher = crypto.createCipheriv(this.algorithm, key, iv);
+            let encrypted = cipher.update(json);
+            encrypted = Buffer.concat([encrypted, cipher.final()]);
+
+            const output = Buffer.concat([iv, encrypted]);
+
+            // Atomic Write
+            const tempPath = this.filePath + '.tmp';
             await fs.promises.writeFile(tempPath, output);
             await fs.promises.rename(tempPath, this.filePath);
         } catch (err) {
             console.error('[PeerPersistence] Failed to save peers', err);
-            try { await fs.promises.unlink(tempPath); } catch (e) { /* Ignored: cleanup failure */ }
         }
     }
 
@@ -130,7 +141,7 @@ class PeerPersistence {
             .slice(0, 100);
 
         // Save async (debounce could be added but simple for now)
-        this.save().catch(e => { /* Ignored: fire and forget */ });
+        return this.save().catch(() => {});
     }
 
     getPeers(type) {

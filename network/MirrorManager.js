@@ -128,16 +128,18 @@ class MirrorManager {
                 return statusScore[a.status] - statusScore[b.status]
             }
 
-            // 2. Latency comparison with "Fox Bonus"
+            // 2. Latency comparison with "Fox Loyalty Bonus"
+            // 50 ms is enough to prefer our own mirror when conditions are roughly equal,
+            // but won't override a 400+ ms real latency gap in favour of a lagging server.
+            const FOX_LOYALTY_BONUS_MS = 50
             const getAdjustedLatency = (entry) => {
                 const name = (entry.config.name || '').toLowerCase()
                 const dist = (entry.config.distribution || '').toLowerCase()
                 const manifest = (entry.config.version_manifest || '').toLowerCase()
-                
+
                 let lat = entry.latency
                 if (name.includes('fox') || dist.includes('f-launcher.ru') || manifest.includes('f-launcher.ru')) {
-                    // Give 500ms "loyalty bonus" to our mirror
-                    lat -= 500 
+                    lat -= FOX_LOYALTY_BONUS_MS
                 }
                 return lat
             }

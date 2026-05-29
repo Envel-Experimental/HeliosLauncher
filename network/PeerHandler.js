@@ -14,6 +14,9 @@ const {
 
 const TrafficState = require('./TrafficState')
 const isDev = require('../app/assets/js/core/isdev')
+const RateLimiter = require('../app/assets/js/core/util/RateLimiter')
+
+const hashCache = new Map()
 
 class PeerHandler {
     /**
@@ -28,13 +31,21 @@ class PeerHandler {
         /** @type {Buffer[]} */
         this.chunks = []
         this.chunksLen = 0
+        this.chunkIndex = 0
+        this.chunkOffset = 0
         this.processing = false
         this.batchSupport = false
         this.resumptionSupport = true // Always supported in this version
         this.remoteWeight = 0
         this.rtt = 0
-        this.currentTransferSpeed = 0
+        this.currentUploadSpeed = 0
+        this.currentDownloadSpeed = 0
+        this.downloadBytesActive = 0
+        this.lastDownloadIntervalBytes = 0
+        this.lastDownloadIntervalTime = Date.now()
         this.baselineRTT = 0
+        /** @type {Map<number, { stream: any, source: any, cleanup: () => void }>} */
+        this.uploads = new Map()
 
         // VULNERABILITY FIX (Slowloris): 30s Timeout
         this.socket.setTimeout(30000)
@@ -55,14 +66,14 @@ class PeerHandler {
             this.processChunks()
         })
 
-        socket.on('error', (err) => {
-            // console.error('Peer socket error:', err.message)
+        const handleClose = () => {
+            if (this.metricsInterval) {
+                clearInterval(this.metricsInterval)
+            }
             this.engine.removePeer(this)
-        })
-
-        socket.on('close', () => {
-            this.engine.removePeer(this)
-        })
+        }
+        socket.on('error', handleClose)
+        socket.on('close', handleClose)
 
         // Initialize Real Paths for Security Checks
         try {
@@ -88,8 +99,6 @@ class PeerHandler {
 
         // Send Hello with local weight
         this.sendHello()
-
-        // sendHello already called above
         
         // Start Metric Observation
         this.metricsInterval = setInterval(() => {
@@ -129,15 +138,19 @@ class PeerHandler {
                 if (this.chunksLen < 9) break
 
                 // FIX: DoS Vulnerability (Fragmentation)
-                // If the first chunk is too small for the header, consolidate chunks.
+                // If the current chunk is too small for the header, consolidate remaining chunks.
                 // This ensures we don't repeatedly traverse a list of small buffers (O(N^2))
-                if (this.chunks[0].length < 9) {
-                    this.chunks = [/** @type {Buffer} */(/** @type {any} */(b4a.concat(this.chunks)))]
+                const currentChunk = this.chunks[this.chunkIndex]
+                const availableInCurrent = currentChunk.length - this.chunkOffset
+                if (availableInCurrent < 9) {
+                    const remaining = this.chunks.slice(this.chunkIndex)
+                    if (this.chunkOffset > 0) {
+                        remaining[0] = remaining[0].subarray(this.chunkOffset)
+                    }
+                    this.chunks = [/** @type {Buffer} */(/** @type {any} */(b4a.concat(remaining)))]
+                    this.chunkIndex = 0
+                    this.chunkOffset = 0
                 }
-
-                // Peek at the header without consuming info if we don't have the full body yet
-                // We can't easily "peek" across chunks without stitching some if the header is split.
-                // However, header is small (9 bytes).
 
                 // Optimized peek for header size
                 const header = this._peekBytes(9)
@@ -176,12 +189,28 @@ class PeerHandler {
     _peekBytes(n) {
         if (this.chunksLen < n) throw new Error('Not enough data')
 
-        if (this.chunks[0].length >= n) {
-            return /** @type {Buffer} */(/** @type {any} */(this.chunks[0].subarray(0, n)))
+        const currentChunk = this.chunks[this.chunkIndex]
+        const availableInCurrent = currentChunk.length - this.chunkOffset
+
+        if (availableInCurrent >= n) {
+            return /** @type {Buffer} */(/** @type {any} */(currentChunk.subarray(this.chunkOffset, this.chunkOffset + n)))
         }
 
         // Header spans multiple chunks - rare but possible
-        return /** @type {Buffer} */(/** @type {any} */(b4a.concat(this.chunks).subarray(0, n)))
+        const res = b4a.alloc(n)
+        let offset = 0
+        let idx = this.chunkIndex
+        let startOff = this.chunkOffset
+        while (offset < n) {
+            const chunk = this.chunks[idx]
+            const available = chunk.length - startOff
+            const toCopy = Math.min(n - offset, available)
+            chunk.copy(res, offset, startOff, startOff + toCopy)
+            offset += toCopy
+            idx++
+            startOff = 0
+        }
+        return /** @type {Buffer} */(/** @type {any} */(res))
     }
 
     /**
@@ -194,13 +223,18 @@ class PeerHandler {
 
         this.chunksLen -= n
 
-        // Fast path: fully contained in first chunk
-        if (this.chunks[0].length === n) {
-            return /** @type {Buffer} */(/** @type {any} */(this.chunks.shift()))
-        }
-        if (this.chunks[0].length > n) {
-            const buf = /** @type {Buffer} */(/** @type {any} */(this.chunks[0].subarray(0, n)))
-            this.chunks[0] = /** @type {Buffer} */(/** @type {any} */(this.chunks[0].subarray(n)))
+        const currentChunk = this.chunks[this.chunkIndex]
+        const availableInCurrent = currentChunk.length - this.chunkOffset
+
+        // Fast path: fully contained in the current chunk
+        if (availableInCurrent >= n) {
+            const buf = /** @type {Buffer} */(/** @type {any} */(currentChunk.subarray(this.chunkOffset, this.chunkOffset + n)))
+            this.chunkOffset += n
+            if (this.chunkOffset === currentChunk.length) {
+                this.chunkIndex++
+                this.chunkOffset = 0
+                this._cleanupChunks()
+            }
             return buf
         }
 
@@ -208,19 +242,27 @@ class PeerHandler {
         const res = /** @type {Buffer} */(b4a.alloc(n))
         let offset = 0
         while (offset < n) {
-            const chunk = this.chunks[0]
-            const remaining = n - offset
-            if (chunk.length <= remaining) {
-                chunk.copy(res, offset)
-                offset += chunk.length
-                this.chunks.shift()
-            } else {
-                chunk.copy(res, offset, 0, remaining)
-                this.chunks[0] = /** @type {Buffer} */(chunk.subarray(remaining))
-                offset += remaining
+            const chunk = this.chunks[this.chunkIndex]
+            const available = chunk.length - this.chunkOffset
+            const toCopy = Math.min(n - offset, available)
+            chunk.copy(res, offset, this.chunkOffset, this.chunkOffset + toCopy)
+            offset += toCopy
+            this.chunkOffset += toCopy
+
+            if (this.chunkOffset === chunk.length) {
+                this.chunkIndex++
+                this.chunkOffset = 0
             }
         }
+        this._cleanupChunks()
         return res
+    }
+
+    _cleanupChunks() {
+        if (this.chunkIndex > 128) {
+            this.chunks = this.chunks.slice(this.chunkIndex)
+            this.chunkIndex = 0
+        }
     }
 
     /**
@@ -236,12 +278,26 @@ class PeerHandler {
             case MSG_DATA:
                 this.engine.handleIncomingData(reqId, payload, this) // Pass verified peer
                 break
-            case MSG_ERROR:
-                this.engine.handleIncomingError(reqId, payload, this)
+            case MSG_ERROR: {
+                const uploadErr = this.uploads.get(reqId)
+                if (uploadErr) {
+                    if (isDev) console.debug(`[PeerHandler] Client cancelled upload for reqId ${reqId} via MSG_ERROR`)
+                    uploadErr.cleanup()
+                } else {
+                    this.engine.handleIncomingError(reqId, payload, this)
+                }
                 break
-            case MSG_END:
-                this.engine.handleIncomingEnd(reqId, this)
+            }
+            case MSG_END: {
+                const uploadEnd = this.uploads.get(reqId)
+                if (uploadEnd) {
+                    if (isDev) console.debug(`[PeerHandler] Client cancelled upload for reqId ${reqId} via MSG_END`)
+                    uploadEnd.cleanup()
+                } else {
+                    this.engine.handleIncomingEnd(reqId, this)
+                }
                 break
+            }
             case MSG_HELLO:
                 this.handleHello(payload)
                 break;
@@ -304,6 +360,25 @@ class PeerHandler {
             return
         }
 
+        // Calculate download speed dynamically based on incoming traffic
+        const now = Date.now()
+        const timeStep = (now - this.lastDownloadIntervalTime) / 1000
+        if (timeStep >= 2) {
+            const bytesStep = this.downloadBytesActive - this.lastDownloadIntervalBytes
+            this.currentDownloadSpeed = Math.max(0, bytesStep / timeStep)
+            this.lastDownloadIntervalBytes = this.downloadBytesActive
+            this.lastDownloadIntervalTime = now
+        }
+
+        // If no active requests exist for this peer, reset download speed
+        const hasActiveDownloads = Array.from(this.engine.requests.values()).some(req => req.peer === this)
+        if (!hasActiveDownloads) {
+            this.currentDownloadSpeed = 0
+            this.downloadBytesActive = 0
+            this.lastDownloadIntervalBytes = 0
+            this.lastDownloadIntervalTime = now
+        }
+
         // UDX/Hyperswarm provide RTT in rawStream
         const nativeRTT = this.socket.rawStream ? this.socket.rawStream.rtt : 0
         
@@ -352,113 +427,120 @@ class PeerHandler {
      * @param {Buffer} payload 
      */
     async handleRequest(reqId, payload) {
-        // Seeder Logic
-        let hash = payload.toString('utf-8')
-        let relPath = null
-        let fileId = null
-        let startOffset = 0
+        try {
+            // Seeder Logic
+            let hash = payload.toString('utf-8')
+            let relPath = null
+            let fileId = null
+            let startOffset = 0
 
-        // Detect JSON Payload (Starts with '{')
-        if (payload.length > 0 && payload[0] === 123) { // 123 is '{'
-            if (payload.length > 1024) { // 1KB Max for JSON payload
-                this.sendError(reqId, 'JSON Payload Too Large')
-                return
-            }
-
-            try {
-                const str = payload.toString('utf-8')
-                const data = JSON.parse(str)
-
-                // STRUCTURAL VALIDATION: Ensure flat object (Schema Validation)
-                // We expect { h: string, p: string, id: string }
-                if (data && typeof data === 'object' && !Array.isArray(data) && data.h) {
-                    // Prevent Nested Objects (Depth > 1 prohibited)
-                    let isNested = false
-                    for (const key in data) {
-                        if (typeof data[key] === 'object' && data[key] !== null) {
-                            isNested = true
-                            break
-                        }
-                    }
-
-                    if (!isNested) {
-                        hash = String(data.h || '').trim()
-                        relPath = (data.p && typeof data.p === 'string') ? data.p.trim() : null
-                        fileId = (data.id && typeof data.id === 'string') ? data.id.trim() : null
-                        if (data.s && typeof data.s === 'number' && Number.isFinite(data.s) && Number.isInteger(data.s) && data.s > 0 && data.s < 2 * 1024 * 1024 * 1024) {
-                            startOffset = data.s
-                        }
-                    }
+            // Detect JSON Payload (Starts with '{')
+            if (payload.length > 0 && payload[0] === 123) { // 123 is '{'
+                if (payload.length > 1024) { // 1KB Max for JSON payload
+                    this.sendError(reqId, 'JSON Payload Too Large')
+                    return
                 }
-            } catch (e) {
-                // If it's not valid JSON, treat as raw hash (the '7b' fix)
-                hash = payload.toString('utf-8').trim()
+
+                try {
+                    const str = payload.toString('utf-8')
+                    const data = JSON.parse(str)
+
+                    // STRUCTURAL VALIDATION: Ensure flat object (Schema Validation)
+                    // We expect { h: string, p: string, id: string }
+                    if (data && typeof data === 'object' && !Array.isArray(data) && typeof data.h === 'string') {
+                        // Prevent Nested Objects (Depth > 1 prohibited)
+                        let isNested = false
+                        for (const key in data) {
+                            if (typeof data[key] === 'object' && data[key] !== null) {
+                                isNested = true
+                                break
+                            }
+                        }
+
+                        if (!isNested) {
+                            hash = data.h.trim()
+                            relPath = (data.p && typeof data.p === 'string') ? data.p.trim() : null
+                            fileId = (data.id && typeof data.id === 'string') ? data.id.trim() : null
+                            if (data.s && typeof data.s === 'number' && Number.isFinite(data.s) && Number.isInteger(data.s) && data.s > 0 && data.s < 2 * 1024 * 1024 * 1024) {
+                                startOffset = data.s
+                            }
+                        }
+                    }
+                } catch (e) {
+                    // If it's not valid JSON, treat as raw hash (the '7b' fix)
+                    hash = payload.toString('utf-8').trim()
+                }
             }
-        }
 
-        // Sanitize hash to prevent directory traversal
-        // Support SHA1 (40 chars) and MD5 (32 chars)
-        if (hash) {
-            if (!/^([a-f0-9]{64}|[a-f0-9]{40})$/i.test(hash)) {
-                this.sendError(reqId, 'Invalid hash (Only SHA-1 and SHA-256 allowed)')
-                return
-            }
-        } else if (!fileId && !relPath) {
-            this.sendError(reqId, 'Missing Identification (Hash or FileId required)')
-            return
-        }
-
-        // Sanitize relPath (Allow a-z, 0-9, /, ., _, -)
-        if (relPath) {
-            relPath = relPath.trim()
-            // Basic sanitization: No '..'
-            if (relPath.includes('..')) relPath = null // Security Risk
-            if (path.isAbsolute(relPath)) relPath = null // Local path leakage
-        }
-
-        if (fileId) {
-            fileId = fileId.trim()
-            if (fileId.includes('..')) fileId = null
-            if (path.isAbsolute(fileId)) fileId = null
-        }
-
-        hash = hash.trim()
-
-        let remoteIP = this.socket.remoteAddress || this.socket.remoteHost || (this.socket.rawStream && this.socket.rawStream.remoteAddress)
-        if (!remoteIP && this.info && this.info.peer) remoteIP = this.info.peer.host
-        if (!remoteIP) remoteIP = 'unknown'
-
-        if (isDev) {
-            // console.log(`%c[P2PEngine] Connection Established with ${remoteIP}`, 'color: #00ff00; font-weight: bold')
-            const identifier = hash ? hash.substring(0, 8) : (fileId || 'n/a');
-            // console.debug(`[P2P Debug] Received Request ${reqId} for ${identifier}...`)
-        }
-
-        const isGlobalUpload = ConfigManager.getP2PUploadEnabled()
-        const isLocalUpload = ConfigManager.getLocalOptimization() && this.engine.isLocalIP(remoteIP)
-
-        // Bypass limits for LAN peers
-        if (!isLocalUpload) {
-            // 2. Fair Usage Check (Soft Ban)
-            const { MIN_CREDITS_TO_START } = require('./constants')
-            // USE PEER ID (Public Key) if available to solve NAT issues, fallback to IP
-            const usageKey = this.getID()
-            const credits = this.engine.usageTracker.getCredits(usageKey)
-
-            if (credits < MIN_CREDITS_TO_START) {
-                if (isDev) console.warn(`[P2P FairUsage] Soft-banning ${usageKey} (Credits: ${credits.toFixed(1)} MB)`)
-                this.sendError(reqId, 'Busy (Fair Usage Cooling)')
+            // Sanitize hash to prevent directory traversal
+            // Support SHA1 (40 chars) and MD5 (32 chars)
+            if (hash) {
+                if (!/^([a-f0-9]{64}|[a-f0-9]{40})$/i.test(hash)) {
+                    this.sendError(reqId, 'Invalid hash (Only SHA-1 and SHA-256 allowed)')
+                    return
+                }
+            } else if (!fileId && !relPath) {
+                this.sendError(reqId, 'Missing Identification (Hash or FileId required)')
                 return
             }
 
-            // Queue request via Engine
-            this.engine.queueRequest(this, reqId, hash, relPath, fileId, startOffset)
-            return // Stop execution here, wait for queue processing
-        }
+            // Sanitize relPath (Allow a-z, 0-9, /, ., _, -)
+            if (relPath) {
+                relPath = relPath.trim()
+                // Basic sanitization: No '..'
+                if (relPath.includes('..')) relPath = null // Security Risk
+                if (path.isAbsolute(relPath)) relPath = null // Local path leakage
+            }
 
-        // LAN peers bypass queue/limits largely, but we could still queue them?
-        // For now, let LAN bypass queue for max speed.
-        this.executeRequest(reqId, hash, relPath, fileId, startOffset)
+            if (fileId) {
+                fileId = fileId.trim()
+                if (fileId.includes('..')) fileId = null
+                if (path.isAbsolute(fileId)) fileId = null
+            }
+
+            if (hash) {
+                hash = hash.trim()
+            }
+
+            let remoteIP = this.socket.remoteAddress || this.socket.remoteHost || (this.socket.rawStream && this.socket.rawStream.remoteAddress)
+            if (!remoteIP && this.info && this.info.peer) remoteIP = this.info.peer.host
+            if (!remoteIP) remoteIP = 'unknown'
+
+            if (isDev) {
+                // console.log(`%c[P2PEngine] Connection Established with ${remoteIP}`, 'color: #00ff00; font-weight: bold')
+                const identifier = hash ? hash.substring(0, 8) : (fileId || 'n/a');
+                // console.debug(`[P2P Debug] Received Request ${reqId} for ${identifier}...`)
+            }
+
+            const isGlobalUpload = ConfigManager.getP2PUploadEnabled()
+            const isLocalUpload = ConfigManager.getLocalOptimization() && this.engine.isLocalIP(remoteIP)
+
+            // Bypass limits for LAN peers
+            if (!isLocalUpload) {
+                // 2. Fair Usage Check (Soft Ban)
+                const { MIN_CREDITS_TO_START } = require('./constants')
+                // USE PEER ID (Public Key) if available to solve NAT issues, fallback to IP
+                const usageKey = this.getID()
+                const credits = this.engine.usageTracker.getCredits(usageKey)
+
+                if (credits < MIN_CREDITS_TO_START) {
+                    if (isDev) console.warn(`[P2P FairUsage] Soft-banning ${usageKey} (Credits: ${credits.toFixed(1)} MB)`)
+                    this.sendError(reqId, 'Busy (Fair Usage Cooling)')
+                    return
+                }
+
+                // Queue request via Engine
+                this.engine.queueRequest(this, reqId, hash, relPath, fileId, startOffset)
+                return // Stop execution here, wait for queue processing
+            }
+
+            // LAN peers bypass queue/limits largely, but we could still queue them?
+            // For now, let LAN bypass queue for max speed.
+            this.executeRequest(reqId, hash, relPath, fileId, startOffset)
+        } catch (e) {
+            if (isDev) console.error('[PeerHandler] Error handling request:', e)
+            this.sendError(reqId, 'Internal error')
+        }
     }
 
     /**
@@ -520,19 +602,21 @@ class PeerHandler {
                 }
 
                 try {
-                    if (fs.existsSync(p)) {
-                        // VULNERABILITY FIX: Symlink Path Traversal
-                        // Resolve the *actual* path on disk to ensure it's not a symlink to outside
-                        const realP = fs.realpathSync(p)
-                        if (this._isRealPathSecure(realP)) {
-                            foundPath = realP
-                            break
-                        } else {
-                            if (isDev) console.warn(`[P2P Security] Symlink redirection detected! ${p} -> ${realP}`)
-                        }
+                    // VULNERABILITY FIX: Symlink Path Traversal
+                    // Resolve the *actual* path on disk to ensure it's not a symlink to outside.
+                    // Using async fs.promises.realpath directly avoids both existSync and realpathSync blocking the Event Loop.
+                    // If the path does not exist, realpath throws ENOENT which is caught.
+                    const realP = await fs.promises.realpath(p)
+                    if (this._isRealPathSecure(realP)) {
+                        foundPath = realP
+                        break
+                    } else {
+                        if (isDev) console.warn(`[P2P Security] Symlink redirection detected! ${p} -> ${realP}`)
                     }
                 } catch (e) {
-                    if (isDev) console.error(`[P2P Debug] Error checking path ${p}:`, e.message)
+                    if (e.code !== 'ENOENT') {
+                        if (isDev) console.error(`[P2P Debug] Error checking path ${p}:`, e.message)
+                    }
                 }
             }
 
@@ -556,8 +640,8 @@ class PeerHandler {
                     }
                 }
 
-                // Get File Size for Credits
-                const stat = fs.statSync(foundPath)
+                // Get File Size for Credits (using async fs.promises.stat to avoid blocking event loop)
+                const stat = await fs.promises.stat(foundPath)
                 const sizeMB = stat.size / 1024 / 1024
                 const usageKey = this.getID()
 
@@ -578,11 +662,17 @@ class PeerHandler {
                     // console.debug(`[P2P] Serving ${foundPath} to ${remoteIP}`)
                 }
 
+                // Register active upload
+                this.uploads.set(reqId, {
+                    stream,
+                    source: null,
+                    cleanup: () => cleanup()
+                })
+
                 // VULNERABILITY FIX 3: Global Rate Limiter Bug
                 // Do NOT call RateLimiter.update() here, as it sets it for EVERYONE.
                 // Instead, we use the singleton instance and pipe through it ONLY if needed.
                 // @ts-ignore
-                const RateLimiter = require('../app/assets/js/core/util/RateLimiter')
 
                 /** @type {import('stream').Readable} */
                 let source = stream
@@ -592,6 +682,9 @@ class PeerHandler {
                     // Limiter is a Transform stream
                     source = /** @type {any} */(stream.pipe(RateLimiter.throttle()))
                 }
+
+                const activeUpload = this.uploads.get(reqId)
+                if (activeUpload) activeUpload.source = source
 
                 // Performance Monitoring
                 const startTime = Date.now()
@@ -658,9 +751,9 @@ class PeerHandler {
                             lastIntervalTime = now
 
                             const currentSpeed = bytesStep / timeStep
-                            this.currentTransferSpeed = currentSpeed // Expose for Seeder Health Consensus
-
-                            if (currentSpeed < 128000) { // < 125 KB/s
+                            this.currentUploadSpeed = currentSpeed // Expose for upload speed tracking
+ 
+                             if (currentSpeed < 128000) { // < 125 KB/s
                                 this.watchdogStrikes = (this.watchdogStrikes || 0) + 1
                                 if (isDev) console.warn(`[P2PEngine] Peer ${remoteIP} slow (${currentSpeed.toFixed(0)} B/s). Strike ${this.watchdogStrikes}/3`)
 
@@ -686,11 +779,16 @@ class PeerHandler {
                     if (cleanupDone) return
                     cleanupDone = true
 
-                    this.socket.removeListener('close', onSocketClose)
-                    this.socket.removeListener('error', onSocketClose)
-                    this.socket.removeListener('drain', onDrain)
-                    clearInterval(watchdog)
-                    clearInterval(this.metricsInterval)
+                    this.uploads.delete(reqId)
+
+                     this.socket.removeListener('close', onSocketClose)
+                     this.socket.removeListener('error', onSocketClose)
+                     this.socket.removeListener('drain', onDrain)
+                     clearInterval(watchdog)
+ 
+                     if (this.uploads.size === 0) {
+                         this.currentUploadSpeed = 0
+                     }
 
                     // Robust Stream Destruction
                     if (!stream.destroyed) stream.destroy()
@@ -878,22 +976,18 @@ class PeerHandler {
         this.socket.write(b4a.concat([header, payload]))
     }
 
-    /**
-     * @param {Array<{reqId: number, hash: string}>} requests 
-     */
     sendBatchRequest(requests) {
         // requests: Array<{ reqId, hash }>
         // Payload: Count(2) + [ReqId(4) + Len(1) + Hash(N)]...
 
+        const mapped = requests.map(req => ({
+            reqId: req.reqId,
+            hashBuf: /** @type {Buffer} */(b4a.from(req.hash, 'utf-8'))
+        }))
+
         let totalSize = 2;
-        for (const req of requests) {
-            totalSize += 4 + 1 + req.hash.length; // Use length of the hash string directly as we convert later? Buffer.byteLength is safer for utf8
-        }
-        // Wait, wait. Buffer.byteLength(req.hash). earlier in P2PEngine it was Buffer.byteLength
-        // Let's stick to Buffer.byteLength
-        totalSize = 2;
-        for (const req of requests) {
-            totalSize += 4 + 1 + Buffer.byteLength(req.hash, 'utf-8');
+        for (const item of mapped) {
+            totalSize += 4 + 1 + item.hashBuf.length;
         }
 
         const payload = /** @type {Buffer} */(b4a.alloc(totalSize));
@@ -901,14 +995,13 @@ class PeerHandler {
         payload.writeUInt16BE(requests.length, offset);
         offset += 2;
 
-        for (const req of requests) {
-            payload.writeUInt32BE(req.reqId, offset);
+        for (const item of mapped) {
+            payload.writeUInt32BE(item.reqId, offset);
             offset += 4;
-            const hashBuf = /** @type {Buffer} */(b4a.from(req.hash, 'utf-8'));
-            payload.writeUInt8(hashBuf.length, offset);
+            payload.writeUInt8(item.hashBuf.length, offset);
             offset += 1;
-            hashBuf.copy(payload, offset)
-            offset += hashBuf.length
+            item.hashBuf.copy(payload, offset)
+            offset += item.hashBuf.length
         }
 
         const header = /** @type {Buffer} */(b4a.alloc(9))
@@ -978,11 +1071,11 @@ class PeerHandler {
 
             const isWhitelisted = whitelist.includes(firstPart)
 
-            // Allow Root Files (if not blacklisted above)
+            // Allow only strictly whitelisted Root Files
             // e.g. pack.mcmeta, instance.cfg
-            if (parts.length === 1 && !isWhitelisted) {
-                // We already checked blacklist above.
-                return true
+            if (parts.length === 1) {
+                const allowedRootFiles = ['pack.mcmeta', 'instance.cfg']
+                return allowedRootFiles.includes(fileName)
             }
 
             return isWhitelisted
@@ -1031,20 +1124,45 @@ class PeerHandler {
         }
     }
 
-    /**
-     * Efficiently calculate file hash using streams
-     * @param {string} filePath 
-     * @param {'sha1' | 'sha256'} algo 
-     * @returns {Promise<string>}
-     */
-    _calculateFileHash(filePath, algo) {
-        return new Promise((resolve, reject) => {
-            const hash = crypto.createHash(algo)
-            const stream = fs.createReadStream(filePath)
-            stream.on('data', (data) => hash.update(data))
-            stream.on('end', () => resolve(hash.digest('hex')))
-            stream.on('error', (err) => reject(err))
-        })
+    async _calculateFileHash(filePath, algo) {
+        try {
+            const stat = await fs.promises.stat(filePath)
+            const cacheKey = `${filePath}:${algo}`
+            const cached = hashCache.get(cacheKey)
+            if (cached && cached.mtime === stat.mtimeMs && cached.size === stat.size) {
+                return cached.hash
+            }
+
+            const hashVal = await new Promise((resolve, reject) => {
+                const hash = crypto.createHash(algo)
+                const stream = fs.createReadStream(filePath)
+                stream.on('error', reject)
+
+                if (typeof stream[Symbol.asyncIterator] === 'function') {
+                    const consume = async () => {
+                        for await (const chunk of stream) {
+                            hash.update(chunk)
+                        }
+                    }
+                    consume()
+                        .then(() => resolve(hash.digest('hex')))
+                        .catch(reject)
+                } else {
+                    stream.on('data', (data) => hash.update(data))
+                    stream.on('end', () => resolve(hash.digest('hex')))
+                }
+            })
+
+            hashCache.set(cacheKey, {
+                hash: hashVal,
+                mtime: stat.mtimeMs,
+                size: stat.size
+            })
+
+            return hashVal
+        } catch (e) {
+            throw e
+        }
     }
 }
 

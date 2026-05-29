@@ -289,7 +289,13 @@ class RaceManager {
                 return this._createVerifiedStream(winner.result, algo, hash, expectedSize)
             } else {
                 // HTTP Won
-                if (globalP2PStream) globalP2PStream.destroy() // Cancel Global P2P
+                if (globalP2PStream) {
+                    // CRITICAL FIX: Mark the stream as intentionally cancelled so _raceRequests
+                    // in P2PEngine won't penalize a seeder that was actually working fine —
+                    // it just lost the race to an HTTP mirror that happened to respond first.
+                    globalP2PStream.isGracefulCancel = true
+                    globalP2PStream.destroy()
+                }
 
                 // Only log HTTP wins if we actually have peers, otherwise it's expected
                 const P2PEngine = require('./P2PEngine')
@@ -304,7 +310,10 @@ class RaceManager {
             }
         } catch (err) {
             // All failed? Should not happen if HTTP is valid.
-            if (globalP2PStream) globalP2PStream.destroy()
+            if (globalP2PStream) {
+                globalP2PStream.isGracefulCancel = true
+                globalP2PStream.destroy()
+            }
             abortController.abort()
 
             if (err.name === 'AggregateError') {
