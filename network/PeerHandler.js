@@ -371,7 +371,9 @@ class PeerHandler {
         }
 
         // If no active requests exist for this peer, reset download speed
-        const hasActiveDownloads = Array.from(this.engine.requests.values()).some(req => req.peer === this)
+        const hasActiveDownloads = this.engine && this.engine.requests
+            ? Array.from(this.engine.requests.values()).some(req => req.peer === this)
+            : false
         if (!hasActiveDownloads) {
             this.currentDownloadSpeed = 0
             this.downloadBytesActive = 0
