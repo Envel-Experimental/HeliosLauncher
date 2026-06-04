@@ -174,27 +174,42 @@ class Analytics {
             return
         }
 
-        const message = error instanceof Error ? error.message : error
+        let message = error instanceof Error ? error.message : error
+        let type = error instanceof Error ? error.name : 'Error'
+        let stack = error instanceof Error ? error.stack : ''
+
+        if (typeof error === 'string') {
+            // Check if this string is actually a stack trace
+            if (error.includes('\n') && error.includes('at ')) {
+                stack = error
+                const firstLine = error.split('\n')[0]
+                const match = firstLine.match(/^([a-zA-Z_$][a-zA-Z0-9_$]*Error): (.*)$/)
+                if (match) {
+                    type = match[1]
+                    message = match[2]
+                } else {
+                    message = firstLine
+                }
+            }
+        }
+
         if (typeof message === 'string' && (
-            message.includes('fs:statfs') ||
-            message.includes('is not signed by the application owner') ||
-            message.includes('ERR_CONNECTION_RESET')
+            message.toLowerCase().includes('fs:statfs') ||
+            message.toLowerCase().includes('is not signed by the application owner') ||
+            message.toLowerCase().includes('err_connection_reset')
         )) {
             return
         }
-
-        const type = error instanceof Error ? error.name : 'Error'
-        const stack = error instanceof Error ? error.stack : ''
 
         this.capture('$exception', {
             $exception_list: [
                 {
                     type: type,
                     value: message,
-                    stacktrace: {
+                    stacktrace: stack ? {
                         type: 'raw',
                         frames: this._parseStack(stack)
-                    },
+                    } : undefined,
                     mechanism: {
                         handled: false,
                         type: 'generic'

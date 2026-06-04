@@ -40,6 +40,11 @@ describe('JavaGuard Detailed Tests', () => {
             DISTRO_PUB_KEYS: []
         }))
 
+        jest.doMock('../../../../../network/config', () => ({
+            MOJANG_MIRRORS: [],
+            DISTRO_PUB_KEYS: []
+        }), { virtual: true })
+
         jest.doMock('@core/util/SignatureUtils', () => ({
             verifyDistribution: jest.fn().mockReturnValue(true)
         }))

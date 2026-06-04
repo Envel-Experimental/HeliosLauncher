@@ -107,4 +107,20 @@ describe('Analytics', () => {
         expect(event.properties.$lib).toBe('FlauncherAnalytics')
         expect(event.properties.$os).toBeDefined()
     })
+
+    test('captureException should handle string stack trace and extract message & frames', async () => {
+        const stringStack = 'TypeError: Cannot read property foo of undefined\n    at RenderView.render (app/assets/js/ui/views/landing.js:45:12)\n    at init (app/assets/js/renderer-entry.js:140:10)'
+        
+        await Analytics.captureException(stringStack)
+
+        const callArgs = JSON.parse(fetch.mock.calls[0][1].body)
+        const event = callArgs.batch[0]
+
+        expect(event.event).toBe('$exception')
+        expect(event.properties.$exception_list[0].type).toBe('TypeError')
+        expect(event.properties.$exception_list[0].value).toBe('Cannot read property foo of undefined')
+        expect(event.properties.$exception_list[0].stacktrace.frames.length).toBe(2)
+        expect(event.properties.$exception_list[0].stacktrace.frames[0].function).toBe('init')
+        expect(event.properties.$exception_list[0].stacktrace.frames[1].function).toBe('RenderView.render')
+    })
 })

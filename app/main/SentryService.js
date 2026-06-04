@@ -67,6 +67,25 @@ class SentryService {
     }
 
     captureException(error) {
+        if (typeof error === 'string') {
+            if (error.includes('\n') && error.includes('at ')) {
+                const firstLine = error.split('\n')[0]
+                const msg = firstLine.replace(/^[a-zA-Z_$][a-zA-Z0-9_$]*Error:\s*/, '')
+                const reconstructedError = new Error(msg)
+                reconstructedError.stack = error
+                
+                const match = firstLine.match(/^([a-zA-Z_$][a-zA-Z0-9_$]*Error):/)
+                if (match) {
+                    reconstructedError.name = match[1]
+                }
+                
+                Sentry.captureException(reconstructedError)
+                return
+            } else {
+                Sentry.captureException(new Error(error))
+                return
+            }
+        }
         Sentry.captureException(error)
     }
 }

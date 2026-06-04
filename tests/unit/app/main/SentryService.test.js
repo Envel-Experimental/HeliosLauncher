@@ -76,4 +76,24 @@ describe('SentryService', () => {
         SentryService.captureException(error)
         expect(Sentry.captureException).toHaveBeenCalledWith(error)
     })
+
+    test('captureException should reconstruct stack trace and call Sentry with Error object', () => {
+        const stringStack = 'ReferenceError: x is not defined\n    at init (renderer-entry.js:14:5)'
+        SentryService.captureException(stringStack)
+        
+        expect(Sentry.captureException).toHaveBeenCalledWith(expect.any(Error))
+        const capturedError = Sentry.captureException.mock.calls[0][0]
+        expect(capturedError.name).toBe('ReferenceError')
+        expect(capturedError.message).toBe('x is not defined')
+        expect(capturedError.stack).toBe(stringStack)
+    })
+
+    test('captureException should wrap plain message strings in an Error object', () => {
+        const msg = 'Something went wrong'
+        SentryService.captureException(msg)
+        
+        expect(Sentry.captureException).toHaveBeenCalledWith(expect.any(Error))
+        const capturedError = Sentry.captureException.mock.calls[0][0]
+        expect(capturedError.message).toBe(msg)
+    })
 })
