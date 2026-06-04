@@ -370,8 +370,16 @@ class GameCrashHandler {
             const modsDir = path.join(this.gameDir, 'mods')
             try {
                 const dropinMods = await DropinModUtil.scanForDropinMods(modsDir, this.server.rawServer.minecraftVersion)
-                for (const mod of dropinMods) {
-                    await ipcRenderer.invoke('fs:unlink', path.join(modsDir, mod.fullName))
+                if (Array.isArray(dropinMods)) {
+                    for (const mod of dropinMods) {
+                        const filePath = path.join(modsDir, mod.fullName)
+                        if (process.type === 'renderer') {
+                            await window.HeliosAPI.ipc.invoke('fs:unlink', filePath)
+                        } else {
+                            const fsSync = require('fs')
+                            if (fsSync.existsSync(filePath)) fsSync.unlinkSync(filePath)
+                        }
+                    }
                 }
             } catch (e) {
                 logger.warn('Failed to delete drop-in mods', e)
@@ -393,8 +401,12 @@ class GameCrashHandler {
             this.handleJavaRepair()
         } else {
             // Config file corruption
-            const configPath = path.join(this.gameDir, 'config', crashAnalysis.file)
-            if (fs.existsSync(configPath)) {
+            const configPath = path.resolve(this.gameDir, 'config', crashAnalysis.file || '')
+            const configDir = path.join(this.gameDir, 'config')
+            const relative = path.relative(configDir, configPath)
+            const isSafe = relative && !relative.startsWith('..') && !path.isAbsolute(relative)
+
+            if (isSafe && fs.existsSync(configPath)) {
                 const disabledPath = configPath + '.disabled'
                 if (fs.existsSync(disabledPath)) fs.unlinkSync(disabledPath)
                 fs.renameSync(configPath, disabledPath)

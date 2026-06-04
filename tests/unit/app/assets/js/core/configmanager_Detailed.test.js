@@ -41,6 +41,18 @@ describe('ConfigManager Detailed Tests', () => {
             safeReadJson: jest.fn(),
             safeWriteJson: jest.fn().mockResolvedValue()
         }))
+        jest.doMock('@app/assets/js/core/util', () => ({
+            retry: jest.fn((fn) => fn()),
+            move: jest.fn().mockResolvedValue(),
+            safeReadJson: jest.fn(),
+            safeWriteJson: jest.fn().mockResolvedValue()
+        }))
+        jest.doMock('./util', () => ({
+            retry: jest.fn((fn) => fn()),
+            move: jest.fn().mockResolvedValue(),
+            safeReadJson: jest.fn(),
+            safeWriteJson: jest.fn().mockResolvedValue()
+        }), { virtual: true })
 
         jest.doMock('@core/pathutil', () => ({
             resolveDataPathSync: jest.fn().mockReturnValue('C:\\MockLauncherDir')
