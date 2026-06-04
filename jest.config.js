@@ -6,6 +6,8 @@ module.exports = {
   coverageReporters: ['html', 'text'],
   testEnvironment: 'node',
   moduleNameMapper: {
+    '^.*network/config$': '<rootDir>/network/config.js',
+    '^.*network/MirrorManager$': '<rootDir>/network/MirrorManager.js',
     '^@app/assets/js/(?!core/|ui/|mocks/|errorPreload|preloader|renderer-entry)(.*)$': '<rootDir>/app/assets/js/core/$1.js',
     '^@app/(.*)$': '<rootDir>/app/$1',
     '^@core/(.*)$': '<rootDir>/app/assets/js/core/$1',

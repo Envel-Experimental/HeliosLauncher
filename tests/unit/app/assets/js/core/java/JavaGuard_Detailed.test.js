@@ -29,23 +29,11 @@ describe('JavaGuard Detailed Tests', () => {
             Platform: { WIN32: 'win32', DARWIN: 'darwin', LINUX: 'linux' },
             resolveNativeArch: jest.fn(() => 'x64')
         }))
-
-        const configPath = require.resolve('../../../../../../../network/config')
-        const mirrorManagerPath = require.resolve('../../../../../../../network/MirrorManager')
-
-        jest.doMock(mirrorManagerPath, () => ({
-            getSortedMirrors: jest.fn().mockReturnValue([]),
-            initialized: true
-        }))
         jest.doMock('@network/MirrorManager', () => ({
             getSortedMirrors: jest.fn().mockReturnValue([]),
             initialized: true
         }))
 
-        jest.doMock(configPath, () => ({
-            MOJANG_MIRRORS: [],
-            DISTRO_PUB_KEYS: []
-        }))
         jest.doMock('@network/config', () => ({
             MOJANG_MIRRORS: [],
             DISTRO_PUB_KEYS: []

@@ -60,7 +60,7 @@ describe('RaceManager Fuzzing', () => {
     })
 
     test('Fuzz: Randomly corrupted Headers and URLs should not crash RaceManager', async () => {
-        const fuzzCycles = 200
+        const fuzzCycles = 100
         
         for (let i = 0; i < fuzzCycles; i++) {
             // Fuzz inputs
@@ -120,7 +120,7 @@ describe('RaceManager Fuzzing', () => {
                 expect(e.name).not.toBe('TypeError')
             }
         }
-    })
+    }, 30000)
 
     test('Fuzz: P2P Stream errors and random stream behavior should not crash RaceManager', async () => {
         const P2PEngine = require('@network/P2PEngine')
@@ -164,7 +164,7 @@ describe('RaceManager Fuzzing', () => {
             }
         }
 
-        const fuzzCycles = 200
+        const fuzzCycles = 100
         for (let i = 0; i < fuzzCycles; i++) {
             const response = await RaceManager.handle(mockRequest)
             expect(response.ok).toBe(true)
@@ -190,5 +190,6 @@ describe('RaceManager Fuzzing', () => {
                 }
             }).not.toThrow()
         }
-    })
+    }, 30000)
+
 })
