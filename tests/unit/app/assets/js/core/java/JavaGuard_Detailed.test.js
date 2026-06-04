@@ -26,7 +26,8 @@ describe('JavaGuard Detailed Tests', () => {
 
         jest.doMock('@core/java/JavaUtils', () => ({
             javaExecFromRoot: jest.fn((p) => path.join(p, 'bin', 'java.exe')),
-            Platform: { WIN32: 'win32', DARWIN: 'darwin', LINUX: 'linux' }
+            Platform: { WIN32: 'win32', DARWIN: 'darwin', LINUX: 'linux' },
+            resolveNativeArch: jest.fn(() => 'x64')
         }))
 
         jest.doMock('@network/MirrorManager', () => ({

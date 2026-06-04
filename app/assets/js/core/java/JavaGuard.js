@@ -6,7 +6,7 @@ const semver = require('semver');
 const { LoggerUtil } = require('../util/LoggerUtil');
 const { HashAlgo } = require('../dl/Asset');
 const { extractZip, extractTarGz } = require('../common/FileUtils');
-const { Platform, javaExecFromRoot, ensureJavaDirIsRoot } = require('./JavaUtils');
+const { Platform, javaExecFromRoot, ensureJavaDirIsRoot, resolveNativeArch } = require('./JavaUtils');
 const { JdkDistribution } = require('../common/DistributionClasses');
 
 const log = LoggerUtil.getLogger('JavaGuard');
@@ -121,7 +121,7 @@ async function resolveJvmSettings(paths) {
 }
 
 function filterApplicableJavaPaths(resolvedSettings, semverRange) {
-    const arm = process.arch === 'arm64';
+    const arm = resolveNativeArch() === 'arm64';
     const jvmDetailsUnfiltered = Object.entries(resolvedSettings)
         .filter(([, settings]) => parseInt(settings['sun.arch.data.model']) === 64)
         .filter(([, settings]) => arm ? (settings['os.arch'] === 'aarch64' || settings['os.arch'] === 'arm64') : true)
@@ -257,7 +257,7 @@ async function latestOpenJDK(major, dataDir, distribution) {
             const manifest = await loadJavaMirrorManifest(mirror.java_manifest)
             if (manifest) {
                 const os = process.platform === Platform.WIN32 ? 'windows' : (process.platform === Platform.DARWIN ? 'mac' : process.platform)
-                const arch = process.arch === 'arm64' ? 'aarch64' : 'x64'
+                const arch = resolveNativeArch() === 'arm64' ? 'aarch64' : 'x64'
                 const field = (distribution === 'installer' && os === 'windows') ? 'installer' : major.toString()
 
                 if (manifest[os] && manifest[os][arch] && manifest[os][arch][field]) {
@@ -343,7 +343,7 @@ async function latestGraalVM(major, dataDir) {
 }
 
 async function latestLibericaNIK(major, dataDir) {
-    const arch = process.arch === 'arm64' ? 'aarch64' : 'x64'; // Liberica uses specific arch names
+    const arch = resolveNativeArch() === 'arm64' ? 'aarch64' : 'x64'; // Liberica uses specific arch names
     const os = process.platform === 'win32' ? 'windows' : (process.platform === 'darwin' ? 'macos' : 'linux');
     const bitness = '64';
     const packageType = process.platform === 'win32' ? 'zip' : 'tar.gz';
@@ -373,7 +373,7 @@ async function latestLibericaNIK(major, dataDir) {
 }
 
 async function latestGraalVM_GitHub(major, dataDir) {
-    const arch = process.arch === 'arm64' ? 'aarch64' : 'x64';
+    const arch = resolveNativeArch() === 'arm64' ? 'aarch64' : 'x64';
     let sanitizedOS;
     let ext;
 
@@ -449,7 +449,7 @@ async function latestGraalVM_GitHub(major, dataDir) {
 async function latestAdoptium(major, dataDir, distribution = null) {
     const isInstaller = distribution === 'installer';
     const sanitizedOS = process.platform === Platform.WIN32 ? 'windows' : (process.platform === Platform.DARWIN ? 'mac' : process.platform);
-    const arch = process.arch === 'arm64' ? 'aarch64' : 'x64';
+    const arch = resolveNativeArch() === 'arm64' ? 'aarch64' : 'x64';
     const url = `https://api.adoptium.net/v3/assets/latest/${major}/hotspot?vendor=eclipse`;
     try {
         const res = await fetchWithTimeout(url);
@@ -501,7 +501,7 @@ async function latestAdoptium(major, dataDir, distribution = null) {
 
 async function latestCorretto(major, dataDir) {
     let sanitizedOS, ext;
-    const arch = process.arch === 'arm64' ? 'aarch64' : 'x64';
+    const arch = resolveNativeArch() === 'arm64' ? 'aarch64' : 'x64';
     switch (process.platform) {
         case Platform.WIN32:
             sanitizedOS = 'windows';

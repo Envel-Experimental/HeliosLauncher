@@ -30,11 +30,15 @@ jest.mock('../../../../app/assets/js/core/util/LoggerUtil', () => ({
     }
 }))
 
-// Mock JavaUtils
+// resolveNativeArch is tested separately and mocked here for isolation.
+// The mock is a factory so individual tests can override it via mockReturnValue.
+const mockResolveNativeArch = jest.fn(() => process.arch)
+
 jest.mock('../../../../app/assets/js/core/java/JavaUtils', () => ({
     Platform: { WIN32: 'win32', DARWIN: 'darwin', LINUX: 'linux' },
     javaExecFromRoot: jest.fn(p => p),
-    ensureJavaDirIsRoot: jest.fn(p => p)
+    ensureJavaDirIsRoot: jest.fn(p => p),
+    resolveNativeArch: mockResolveNativeArch
 }))
 
 // Mock MirrorManager (4 levels up to root)
@@ -61,12 +65,15 @@ jest.mock('../../../../app/assets/js/core/common/FileUtils', () => ({
 }))
 
 const JavaGuard = require('../../../../app/assets/js/core/java/JavaGuard')
+const JavaUtils = require('../../../../app/assets/js/core/java/JavaUtils')
 
 describe('JavaGuard', () => {
 
     beforeEach(() => {
         jest.clearAllMocks()
         global.fetch.mockReset()
+        // Default: behave like the real process.arch
+        mockResolveNativeArch.mockReturnValue(process.arch)
     })
 
     describe('latestOpenJDK', () => {
@@ -119,6 +126,85 @@ describe('JavaGuard', () => {
             expect(result).toBeDefined()
             expect(result.url).toBe('http://official/java')
         })
+
+        it('should request aarch64 Java from mirror on Windows ARM64 (x64 Electron emulation)', async () => {
+            // Simulate Windows ARM64: process.arch = 'x64' (emulated), but native = arm64
+            mockResolveNativeArch.mockReturnValue('arm64')
+
+            const MirrorManager = require('../../../../network/MirrorManager')
+            MirrorManager.getSortedMirrors.mockReturnValue([{
+                name: 'ARM Mirror',
+                java_manifest: 'http://arm-mirror/manifest.json'
+            }])
+
+            const platform = process.platform === 'win32' ? 'windows' : (process.platform === 'darwin' ? 'mac' : process.platform)
+            const mockManifest = {
+                [platform]: {
+                    aarch64: {
+                        '21': { url: 'http://arm-mirror/java-arm64', size: 500, name: 'jdk21-arm64.zip', sha1: 'arm64sha' }
+                    },
+                    x64: {
+                        '21': { url: 'http://arm-mirror/java-x64', size: 500, name: 'jdk21-x64.zip', sha1: 'x64sha' }
+                    }
+                }
+            }
+
+            global.fetch.mockResolvedValueOnce({
+                ok: true,
+                arrayBuffer: () => Promise.resolve(Buffer.from(JSON.stringify(mockManifest)))
+            })
+
+            const result = await JavaGuard.latestOpenJDK(21, '/data', null)
+            expect(result).toBeDefined()
+            // Must download ARM64 JDK, not x64
+            expect(result.url).toBe('http://arm-mirror/java-arm64')
+            expect(result.id).toBe('jdk21-arm64.zip')
+        })
+
+        it('should request aarch64 Java from Adoptium on Windows ARM64', async () => {
+            mockResolveNativeArch.mockReturnValue('arm64')
+
+            const MirrorManager = require('../../../../network/MirrorManager')
+            MirrorManager.getSortedMirrors.mockReturnValue([]) // no mirrors
+
+            const sanitizedOS = process.platform === 'win32' ? 'windows' : (process.platform === 'darwin' ? 'mac' : process.platform)
+
+            global.fetch.mockImplementation((url) => {
+                if (url.includes('adoptium')) {
+                    return Promise.resolve({
+                        ok: true,
+                        json: () => Promise.resolve([
+                            // x64 entry — should NOT be picked
+                            {
+                                version: { major: 21 },
+                                binary: {
+                                    os: sanitizedOS,
+                                    image_type: 'jdk',
+                                    architecture: 'x64',
+                                    package: { link: 'http://adoptium/java-x64', size: 300, name: 'jdk21-x64.zip', checksum: 'x64sum' }
+                                }
+                            },
+                            // aarch64 entry — should be picked
+                            {
+                                version: { major: 21 },
+                                binary: {
+                                    os: sanitizedOS,
+                                    image_type: 'jdk',
+                                    architecture: 'aarch64',
+                                    package: { link: 'http://adoptium/java-arm64', size: 280, name: 'jdk21-aarch64.zip', checksum: 'arm64sum' }
+                                }
+                            }
+                        ])
+                    })
+                }
+                // BellSoft NIK & GitHub GraalVM will fail → falls back to Adoptium
+                return Promise.reject(new Error('Not found'))
+            })
+
+            const result = await JavaGuard.latestOpenJDK(21, '/data', 'temurin')
+            expect(result).toBeDefined()
+            expect(result.url).toBe('http://adoptium/java-arm64')
+        })
     })
 
     describe('validateSelectedJvm', () => {
@@ -140,6 +226,35 @@ describe('JavaGuard', () => {
             const result = await JavaGuard.validateSelectedJvm('/path/to/java', '>=17')
             expect(result).toBeDefined()
             expect(result.path).toBe('/path/to/java')
+        })
+
+        it('should reject x64 JVM on ARM64 Windows host', async () => {
+            // Native arch is arm64, but the JVM binary reports x64
+            mockResolveNativeArch.mockReturnValue('arm64')
+            fs.access.mockResolvedValueOnce()
+
+            child_process.execFile.mockImplementation((file, args, opts, cb) => {
+                const callback = typeof opts === 'function' ? opts : cb
+                // x64 JVM — should be rejected on arm64 host
+                callback(null, '', '    java.version = 21.0.1\n    java.vendor = Eclipse\n    sun.arch.data.model = 64\n    os.arch = x86_64')
+            })
+
+            const result = await JavaGuard.validateSelectedJvm('/path/to/x64/java', '>=17')
+            expect(result).toBeNull()
+        })
+
+        it('should accept aarch64 JVM on ARM64 Windows host', async () => {
+            mockResolveNativeArch.mockReturnValue('arm64')
+            fs.access.mockResolvedValueOnce()
+
+            child_process.execFile.mockImplementation((file, args, opts, cb) => {
+                const callback = typeof opts === 'function' ? opts : cb
+                callback(null, '', '    java.version = 21.0.1\n    java.vendor = Eclipse\n    sun.arch.data.model = 64\n    os.arch = aarch64')
+            })
+
+            const result = await JavaGuard.validateSelectedJvm('/path/to/arm64/java', '>=17')
+            expect(result).toBeDefined()
+            expect(result.path).toBe('/path/to/arm64/java')
         })
     })
 })

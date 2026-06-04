@@ -83,7 +83,7 @@ class RaceManager {
      * @param {Request} request
      */
     async handle(request) {
-        const url_orig = request.url
+        const url_orig = request.url || ''
         // if (isDev) console.debug(`[RaceManager] handle() called: ${url_orig.substring(0, 100)}`)
         let url = url_orig
 
@@ -243,7 +243,7 @@ class RaceManager {
             // Timeout P2P strictly to avoid waiting too long if HTTP is also slow/failing
             const timeout = setTimeout(() => {
                 cleanup()
-                if (isDev && P2PEngine.peers.length > 0) {
+                if (isDev && P2PEngine.peers.length > 0 && hash) {
                     console.log(`[RaceManager] Global P2P Task Timed Out (Soft) for ${hash.substring(0, 8)}`)
                 }
                 reject(new Error('Global P2P Timeout'))

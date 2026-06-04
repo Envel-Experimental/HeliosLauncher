@@ -4,7 +4,8 @@ const { latestOpenJDK } = require('@app/assets/js/core/java/JavaGuard')
 jest.mock('@app/assets/js/core/java/JavaUtils', () => ({
     Platform: { WIN32: 'win32', DARWIN: 'darwin', LINUX: 'linux' },
     javaExecFromRoot: jest.fn(p => p),
-    ensureJavaDirIsRoot: jest.fn(p => p)
+    ensureJavaDirIsRoot: jest.fn(p => p),
+    resolveNativeArch: jest.fn(() => 'x64')
 }))
 
 jest.mock('@network/config', () => ({
