@@ -35,24 +35,18 @@ describe('ConfigManager Detailed Tests', () => {
             decryptString: jest.fn((s) => s.replace('encrypted_', ''))
         }))
 
-        jest.doMock('@core/util', () => ({
+        const utilPath = path.resolve(__dirname, '../../../../../../app/assets/js/core/util')
+        const mockUtil = {
             retry: jest.fn((fn) => fn()),
             move: jest.fn().mockResolvedValue(),
             safeReadJson: jest.fn(),
             safeWriteJson: jest.fn().mockResolvedValue()
-        }))
-        jest.doMock('@app/assets/js/core/util', () => ({
-            retry: jest.fn((fn) => fn()),
-            move: jest.fn().mockResolvedValue(),
-            safeReadJson: jest.fn(),
-            safeWriteJson: jest.fn().mockResolvedValue()
-        }))
-        jest.doMock('./util', () => ({
-            retry: jest.fn((fn) => fn()),
-            move: jest.fn().mockResolvedValue(),
-            safeReadJson: jest.fn(),
-            safeWriteJson: jest.fn().mockResolvedValue()
-        }), { virtual: true })
+        }
+
+        jest.doMock(utilPath, () => mockUtil)
+        jest.doMock('@core/util', () => mockUtil)
+        jest.doMock('@app/assets/js/core/util', () => mockUtil)
+        jest.doMock('./util', () => mockUtil, { virtual: true })
 
         jest.doMock('@core/pathutil', () => ({
             resolveDataPathSync: jest.fn().mockReturnValue('C:\\MockLauncherDir')

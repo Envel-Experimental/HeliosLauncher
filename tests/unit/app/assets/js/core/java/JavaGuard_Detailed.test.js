@@ -117,7 +117,8 @@ describe('JavaGuard Detailed Tests', () => {
         ])
 
         const currentPlatform = process.platform === 'win32' ? 'windows' : (process.platform === 'darwin' ? 'mac' : process.platform)
-        const arch = process.arch === 'arm64' ? 'aarch64' : 'x64'
+        const nativeArch = JavaUtils.resolveNativeArch()
+        const arch = nativeArch === 'arm64' ? 'aarch64' : 'x64'
 
         global.fetch.mockResolvedValueOnce({
             ok: true,
