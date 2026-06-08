@@ -102,8 +102,8 @@ class Analytics {
                     const stats = await ipcRenderer.invoke('p2p:getStats')
                     p2pStats = {
                         p2p_active_connections: info.connections,
-                        p2p_total_uploaded: stats.all?.uploaded || 0,
-                        p2p_total_downloaded: stats.all?.downloaded || 0
+                        p2p_total_uploaded: stats.all?.up || 0,
+                        p2p_total_downloaded: stats.all?.down || 0
                     }
                 } catch (e) {
                     // P2P might not be initialized
