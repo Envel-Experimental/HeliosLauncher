@@ -147,7 +147,7 @@ class RaceManager {
 
         // 1. HTTP Task
         const httpTask = new Promise((resolve, reject) => {
-            if (ConfigManager.getP2POnlyMode()) {
+            if (ConfigManager.getP2POnlyMode() || ConfigManager.getNoServers()) {
                 reject(new Error('HTTP Blocked: P2P Only Mode is Enabled (Strict)'))
                 return
             }

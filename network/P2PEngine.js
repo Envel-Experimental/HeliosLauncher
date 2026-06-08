@@ -840,7 +840,7 @@ class P2PEngine extends EventEmitter {
             return
         }
 
-        socket.setMaxListeners(100)
+        socket.setMaxListeners(500)
         this.peers.push(peer)
         this.emit('peer_added', peer)
     }
