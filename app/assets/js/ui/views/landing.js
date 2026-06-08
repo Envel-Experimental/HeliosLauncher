@@ -183,8 +183,8 @@ if (launchButton) {
             }
             Analytics.capture('Game Launch Started', {
                 serverId: ConfigManager.getSelectedServer(),
-                server_name: server.name,
-                mc_version: server.minecraftVersion,
+                server_name: server.rawServer.name,
+                mc_version: server.rawServer.minecraftVersion,
                 module_count: server.modules.length
             })
         } catch (err) {
