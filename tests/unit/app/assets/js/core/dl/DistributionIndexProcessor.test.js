@@ -26,6 +26,13 @@ describe('DistributionIndexProcessor', () => {
             }
         }))
 
+        jest.mock('@network/MirrorManager', () => ({
+            getSortedMirrors: jest.fn().mockReturnValue([
+                { distribution: 'https://f-launcher.ru/fox/new/distribution.json' },
+                { distribution: 'https://mirror.nikita.best/distribution.json' }
+            ])
+        }))
+
         DistributionIndexProcessor = require('../../../../../../../app/assets/js/core/dl/DistributionIndexProcessor').DistributionIndexProcessor
         FileUtils = require('../../../../../../../app/assets/js/core/common/FileUtils')
     })
@@ -50,6 +57,31 @@ describe('DistributionIndexProcessor', () => {
             
             await processor.validateModules([mockModule])
             expect(FileUtils.validateLocalFile).toHaveBeenCalled()
+        })
+
+        it('should generate fallbackUrls for modules when mirrors are configured', async () => {
+            FileUtils.validateLocalFile.mockResolvedValueOnce(false)
+            
+            const mockModule = {
+                getPath: jest.fn().mockReturnValue('mod1.jar'),
+                hasSubModules: jest.fn().mockReturnValue(false),
+                rawModule: {
+                    id: 'mod1',
+                    artifact: {
+                        url: 'https://f-launcher.ru/fox/new/files/mod1.jar',
+                        SHA256: 'sha256-hash',
+                        size: 100
+                    }
+                }
+            }
+            
+            const processor = new DistributionIndexProcessor('/common', {
+                getServerById: jest.fn().mockReturnValue({ modules: [mockModule] })
+            }, 'server1')
+            
+            const result = await processor.validateModules([mockModule])
+            expect(result).toHaveLength(1)
+            expect(result[0].fallbackUrls).toContain('https://mirror.nikita.best/files/mod1.jar')
         })
     })
 })
