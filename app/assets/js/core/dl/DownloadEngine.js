@@ -114,13 +114,41 @@ async function downloadQueue(assets, onProgress) {
     let activeDownloads = 0;
     const deferredQueue = [];
 
+    const stats = {
+        p2p_files: 0,
+        p2p_bytes: 0,
+        http_files: 0,
+        http_bytes: 0,
+        local_files: 0,
+        local_bytes: 0,
+        mirrors: {}
+    };
+
     const runDownload = async (asset, forceHTTP = false, instantDefer = false) => {
         const onEachProgress = (transferred) => {
             receivedGlobal += (transferred - receivedTotals[asset.id]);
             receivedTotals[asset.id] = transferred;
             if (onProgress) onProgress(receivedGlobal);
         };
-        await downloadFile(asset, onEachProgress, forceHTTP, instantDefer);
+        const outcome = await downloadFile(asset, onEachProgress, forceHTTP, instantDefer);
+        if (outcome) {
+            if (outcome.source === 'p2p') {
+                stats.p2p_files++;
+                stats.p2p_bytes += outcome.bytes;
+            } else if (outcome.source === 'http') {
+                stats.http_files++;
+                stats.http_bytes += outcome.bytes;
+                const mirrorLabel = getMirrorLabel(outcome.url);
+                if (!stats.mirrors[mirrorLabel]) {
+                    stats.mirrors[mirrorLabel] = { files: 0, bytes: 0 };
+                }
+                stats.mirrors[mirrorLabel].files++;
+                stats.mirrors[mirrorLabel].bytes += outcome.bytes;
+            } else if (outcome.source === 'local') {
+                stats.local_files++;
+                stats.local_bytes += outcome.bytes;
+            }
+        }
     };
 
     let queue = [...assets];
@@ -214,6 +242,23 @@ async function downloadQueue(assets, onProgress) {
         throw criticalError;
     }
 
+    // Send event to PostHog
+    try {
+        const Analytics = require('../util/Analytics');
+        Analytics.capture('Download Campaign Finished', {
+            total_files: assets.length,
+            p2p_files: stats.p2p_files,
+            p2p_bytes: stats.p2p_bytes,
+            http_files: stats.http_files,
+            http_bytes: stats.http_bytes,
+            local_files: stats.local_files,
+            local_bytes: stats.local_bytes,
+            mirrors: stats.mirrors
+        });
+    } catch (e) {
+        // Ignore analytics failures
+    }
+
     return receivedTotals;
 }
 
@@ -245,13 +290,13 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
         if (!asset.force && (isConfig || isInstanceFile)) {
             log.debug(`Skipping validation/download of mutable file: ${decodedPath}`);
             if (onProgress) onProgress(asset.size);
-            return;
+            return { source: 'local', bytes: asset.size };
         }
 
         if (!asset.force && await validateLocalFile(decodedPath, algo, hash, asset.size)) {
             // log.debug(`File already exists and is valid: ${decodedPath}`);
             if (onProgress) onProgress(asset.size); // Account for skipping
-            return;
+            return { source: 'local', bytes: asset.size };
         }
     } catch (e) { /* File doesn't exist, proceed to download */ }
 
@@ -467,7 +512,11 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
 
                 // Report Success to MirrorManager
                 MirrorManager.reportSuccess(currentUrl, Date.now() - downloadStartTime, loaded);
-                return;
+                return {
+                    source: isP2P ? 'p2p' : 'http',
+                    url: currentUrl,
+                    bytes: loaded
+                };
             }
 
             const isInstanceFile = decodedPath.replace(/\\/g, '/').includes('/instances/');
@@ -480,7 +529,11 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
                 if (fsSync.existsSync(tempPath)) {
                     await safeRename(tempPath, decodedPath);
                 }
-                return;
+                return {
+                    source: isP2P ? 'p2p' : 'http',
+                    url: currentUrl,
+                    bytes: loaded
+                };
             }
 
             if (isDev) {
@@ -574,6 +627,20 @@ async function safeRename(oldPath, newPath, retries = 5) {
             }
             throw err;
         }
+    }
+}
+
+function getMirrorLabel(urlStr) {
+    if (!urlStr) return 'unknown';
+    const mirror = MirrorManager._findMirrorByUrl(urlStr);
+    if (mirror && mirror.config && mirror.config.name) {
+        return mirror.config.name;
+    }
+    try {
+        const urlObj = new URL(urlStr);
+        return urlObj.hostname;
+    } catch (e) {
+        return 'unknown';
     }
 }
 
