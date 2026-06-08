@@ -75,6 +75,8 @@ describe('UsageTracker', () => {
 
     it('consume floors at 0 (no negative balance)', () => {
         const t = new UsageTracker()
+        const now = Date.now()
+        jest.spyOn(Date, 'now').mockReturnValue(now)
         t.consume('ip', 999999)
         expect(t.getCredits('ip')).toBe(0)
     })

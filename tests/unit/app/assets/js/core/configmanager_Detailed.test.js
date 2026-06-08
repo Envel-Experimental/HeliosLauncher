@@ -41,6 +41,9 @@ describe('ConfigManager Detailed Tests', () => {
         const winNormalizedUtilPath = utilPath.charAt(0).toUpperCase() + utilPath.slice(1).replace(/\//g, '\\')
         const winLowercaseUtilPath = utilPath.charAt(0).toLowerCase() + utilPath.slice(1).replace(/\//g, '\\')
 
+        // Also mock the exact relative path from configmanager.js which is located in app/assets/js/core/
+        const relativeUtilPath = path.resolve(__dirname, '../../../../../../app/assets/js/core/util')
+
         const mockUtil = {
             retry: jest.fn((fn) => fn()),
             move: jest.fn().mockResolvedValue(),
@@ -55,6 +58,11 @@ describe('ConfigManager Detailed Tests', () => {
         jest.doMock('@core/util', () => mockUtil)
         jest.doMock('@app/assets/js/core/util', () => mockUtil)
         jest.doMock('./util', () => mockUtil, { virtual: true })
+        // Add exact relative path mock for relative require('./util') inside configmanager.js
+        const cmDir = path.resolve(__dirname, '../../../../../../app/assets/js/core')
+        jest.doMock(path.join(cmDir, 'util').replace(/\\/g, '/'), () => mockUtil)
+        jest.doMock(path.join(cmDir, 'util').charAt(0).toUpperCase() + path.join(cmDir, 'util').slice(1).replace(/\\/g, '/'), () => mockUtil)
+        jest.doMock(path.join(cmDir, 'util').charAt(0).toLowerCase() + path.join(cmDir, 'util').slice(1).replace(/\\/g, '/'), () => mockUtil)
 
         jest.doMock('@core/pathutil', () => ({
             resolveDataPathSync: jest.fn().mockReturnValue('C:\\MockLauncherDir')
