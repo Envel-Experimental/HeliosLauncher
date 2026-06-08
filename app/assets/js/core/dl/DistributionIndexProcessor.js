@@ -8,7 +8,7 @@ const { mcVersionAtLeast } = require('../common/MojangUtils');
 const { pLimit } = require('../util/NodeUtil');
 const fs = require('fs/promises');
 const path = require('path');
-const MirrorManager = require('@network/MirrorManager');
+const MirrorManager = require('../../../../../network/MirrorManager');
 
 
 class DistributionIndexProcessor extends IndexProcessor {
