@@ -36,6 +36,11 @@ describe('ConfigManager Detailed Tests', () => {
         }))
 
         const utilPath = path.resolve(__dirname, '../../../../../../app/assets/js/core/util')
+        const normalizedUtilPath = utilPath.charAt(0).toUpperCase() + utilPath.slice(1).replace(/\\/g, '/')
+        const lowercaseUtilPath = utilPath.charAt(0).toLowerCase() + utilPath.slice(1).replace(/\\/g, '/')
+        const winNormalizedUtilPath = utilPath.charAt(0).toUpperCase() + utilPath.slice(1).replace(/\//g, '\\')
+        const winLowercaseUtilPath = utilPath.charAt(0).toLowerCase() + utilPath.slice(1).replace(/\//g, '\\')
+
         const mockUtil = {
             retry: jest.fn((fn) => fn()),
             move: jest.fn().mockResolvedValue(),
@@ -43,7 +48,10 @@ describe('ConfigManager Detailed Tests', () => {
             safeWriteJson: jest.fn().mockResolvedValue()
         }
 
-        jest.doMock(utilPath, () => mockUtil)
+        jest.doMock(normalizedUtilPath, () => mockUtil)
+        jest.doMock(lowercaseUtilPath, () => mockUtil)
+        jest.doMock(winNormalizedUtilPath, () => mockUtil)
+        jest.doMock(winLowercaseUtilPath, () => mockUtil)
         jest.doMock('@core/util', () => mockUtil)
         jest.doMock('@app/assets/js/core/util', () => mockUtil)
         jest.doMock('./util', () => mockUtil, { virtual: true })
