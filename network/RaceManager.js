@@ -20,7 +20,7 @@ class RaceManager {
     }
 
     logSuccess(hash) {
-        if (!isDev) return
+        if (!isDev || !hash) return
         this.successBuffer.push(hash.substring(0, 8))
         if (this.successFlushTimer) return
 
@@ -37,10 +37,10 @@ class RaceManager {
 
     logFailure(hash, relPath, context) {
         // Deduplicate: If hash already in buffer or recently logged, ignore
-        if (this.failureHistory.has(hash)) return
-        if (this.failureBuffer.find(x => x.hash === hash)) return
+        if (hash && this.failureHistory.has(hash)) return
+        if (hash && this.failureBuffer.find(x => x.hash === hash)) return
 
-        const name = relPath ? path.basename(relPath) : hash.substring(0, 8)
+        const name = relPath ? path.basename(relPath) : (hash ? hash.substring(0, 8) : 'unknown')
         this.failureBuffer.push({ hash, name, context })
 
         if (this.failureFlushTimer) clearTimeout(this.failureFlushTimer)
