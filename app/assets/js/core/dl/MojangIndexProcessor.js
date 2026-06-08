@@ -378,6 +378,7 @@ class MojangIndexProcessor extends IndexProcessor {
                 algo: HashAlgo.SHA1,
                 size: logFile.size,
                 url: logFile.url,
+                fallbackUrls: MirrorManager.getSortedMirrors().map(m => m.piston_meta ? logFile.url.replace('https://piston-meta.mojang.com', m.piston_meta) : null).filter(Boolean),
                 path: filePath
             }];
         }
