@@ -393,7 +393,7 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
 
             // Force HTTP after 2 failed attempts or if explicitly requested (deferral)
             // But NOT if we are in P2P Only Mode (where HTTP is blocked anyway)
-            if ((attempt >= 2 || forceHTTP) && !ConfigManager.getP2POnlyMode()) {
+            if ((attempt >= 2 || forceHTTP) && !noServers) {
                 headers.append('X-Skip-P2P', 'true');
             }
 

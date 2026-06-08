@@ -26,6 +26,7 @@ describe('RaceManager - High Fidelity Tests', () => {
         // Mock ConfigManager
         jest.doMock('@core/configmanager', () => ({
             getP2POnlyMode: jest.fn().mockReturnValue(false),
+            getNoServers: jest.fn().mockReturnValue(false),
             getSettings: jest.fn().mockReturnValue({
                 deliveryOptimization: { globalOptimization: true }
             })
