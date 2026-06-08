@@ -362,12 +362,9 @@ async function downloadFile(asset, onProgress, forceHTTP = false, instantDefer =
                                 hostname === 'minecraft.net' || hostname.endsWith('.minecraft.net')
 
                 if (noServers) {
-                    // Block ALL official/primary HTTP sources if "No Servers" is enabled
-                    // (Allowing only P2P or local mirrors if they were somehow explicitly allowed)
-                    // log.debug(`[DownloadEngine] Blocking HTTP URL in "No Servers" Mode: ${currentUrl}`)
-                    continue
+                    // Handled below
                 } else if (noMojang && isMojang) {
-                    // log.debug(`[DownloadEngine] Blocking official URL in "No Mojang" Mode: ${currentUrl}`)
+                    // Block official URL in "No Mojang" Mode
                     continue
                 }
             } catch (e) { /* Invalid URL, ignore blocking */ }

@@ -610,26 +610,34 @@ async function dlAsync(login = true) {
             : err.message
 
         // Provide an option to skip download failures and try to launch anyway
-        const skip = await new Promise((resolve) => {
+        const action = await new Promise((resolve) => {
             setOverlayContent(
                 Lang.queryJS('landing.dlAsync.errorDuringFileDownloadTitle'),
                 errorText + '<br><br>' + Lang.queryJS('landing.dlAsync.skipQuestion'),
-                Lang.queryJS('landing.dlAsync.retryButton'),
-                Lang.queryJS('landing.dlAsync.skipButton')
+                Lang.queryJS('landing.dlAsync.retryButton') || 'Повторить',
+                Lang.queryJS('landing.dlAsync.skipButton') || 'Пропустить',
+                Lang.queryJS('landing.launch.cancelButton') || 'Отмена'
             )
             setOverlayHandler(() => {
                 toggleOverlay(false)
-                toggleLaunchArea(false)
-                resolve(false)
+                resolve('retry')
             })
             setMiddleButtonHandler(() => {
                 toggleOverlay(false)
-                resolve(true)
+                resolve('skip')
             })
-            toggleOverlay(true)
+            setDismissHandler(() => {
+                toggleOverlay(false)
+                toggleLaunchArea(false)
+                resolve('cancel')
+            })
+            toggleOverlay(true, true)
         })
 
-        if (!skip) return
+        if (action === 'cancel') return
+        if (action === 'retry') {
+            return dlAsync(login)
+        }
     }
 
     if (isOfflineLaunch) {
