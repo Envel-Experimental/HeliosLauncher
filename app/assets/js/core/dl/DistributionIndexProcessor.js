@@ -8,6 +8,7 @@ const { mcVersionAtLeast } = require('../common/MojangUtils');
 const { pLimit } = require('../util/NodeUtil');
 const fs = require('fs/promises');
 const path = require('path');
+const MirrorManager = require('@network/MirrorManager');
 
 
 class DistributionIndexProcessor extends IndexProcessor {
@@ -78,13 +79,35 @@ class DistributionIndexProcessor extends IndexProcessor {
                 }
 
                 if (!await validateLocalFile(modulePath, algo, hash, artifact.size)) {
+                    const fallbackUrls = [];
+                    const url = artifact.url;
+                    if (url) {
+                        const sortedMirrors = MirrorManager.getSortedMirrors();
+                        for (const mirror of sortedMirrors) {
+                            if (mirror.distribution) {
+                                const primaryBase = mirror.distribution.substring(0, mirror.distribution.lastIndexOf('/') + 1);
+                                if (url.startsWith(primaryBase)) {
+                                    const relPart = url.substring(primaryBase.length);
+                                    for (const otherMirror of sortedMirrors) {
+                                        if (otherMirror !== mirror && otherMirror.distribution) {
+                                            const fallbackBase = otherMirror.distribution.substring(0, otherMirror.distribution.lastIndexOf('/') + 1);
+                                            fallbackUrls.push(fallbackBase + relPart);
+                                        }
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
                     return {
                         id: module.rawModule.id,
                         force: module.rawModule.force,
                         hash: hash,
                         algo: algo,
                         size: artifact.size,
-                        url: artifact.url,
+                        url: url,
+                        fallbackUrls: fallbackUrls,
                         path: modulePath
                     };
                 }
