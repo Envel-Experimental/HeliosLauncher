@@ -242,6 +242,15 @@ async function downloadQueue(assets, onProgress) {
         throw criticalError;
     }
 
+    // Flatten mirrors stats to prevent PostHog nested object serialization issues
+    const mirrorsPayload = {};
+    for (const [mirrorName, mirrorData] of Object.entries(stats.mirrors)) {
+        // Replace spaces or special characters in hostnames/names with underscores just in case
+        const safeName = mirrorName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+        mirrorsPayload[`mirror_files_${safeName}`] = mirrorData.files;
+        mirrorsPayload[`mirror_bytes_${safeName}`] = mirrorData.bytes;
+    }
+
     // Send event to PostHog
     try {
         const Analytics = require('../util/Analytics');
@@ -253,7 +262,7 @@ async function downloadQueue(assets, onProgress) {
             http_bytes: stats.http_bytes,
             local_files: stats.local_files,
             local_bytes: stats.local_bytes,
-            mirrors: stats.mirrors
+            ...mirrorsPayload
         });
     } catch (e) {
         // Ignore analytics failures
