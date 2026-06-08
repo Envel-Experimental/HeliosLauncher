@@ -256,4 +256,14 @@ describe('RaceManager - High Fidelity Tests', () => {
             expect(p2pStream.isGracefulCancel).toBe(true)
         })
     })
+
+    describe('Null hash safety', () => {
+        test('logSuccess handles null hash gracefully', () => {
+            expect(() => RaceManager.logSuccess(null)).not.toThrow()
+        })
+
+        test('logFailure handles null hash and relPath gracefully', () => {
+            expect(() => RaceManager.logFailure(null, null, 'Some error')).not.toThrow()
+        })
+    })
 })
