@@ -52,7 +52,7 @@
     "constants-browserify": "^1.0.0",
     "electron": "^40.4.1",
     "electron-builder": "^26.7.0",
-    "esbuild": "^0.28.0",
+    "esbuild": "^0.28.1",
     "eslint": "^10.0.0",
     "globals": "^17.6.0",
     "jest": "^30.2.0",
