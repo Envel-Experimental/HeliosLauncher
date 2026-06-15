@@ -45,6 +45,38 @@ class SentryService {
                             return null
                         }
                     }
+
+                    // Duplicate Sentry events to FortenLog (Client DSN)
+                    try {
+                        const eventStr = JSON.stringify(event)
+                        const envelopeHeader = JSON.stringify({
+                            event_id: event.event_id,
+                            sent_at: new Date().toISOString()
+                        })
+                        const itemHeader = JSON.stringify({
+                            type: 'event',
+                            length: Buffer.byteLength(eventStr, 'utf8')
+                        })
+                        const envelope = `${envelopeHeader}\n${itemHeader}\n${eventStr}`
+
+                        fetch('https://fortenlog.nikita.best/api/flauncher/envelope/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/x-sentry-envelope',
+                                'X-Sentry-Auth': 'Sentry sentry_version=7, sentry_key=fl_d11d7795cb144b569026b61f6f22bf1c'
+                            },
+                            body: envelope
+                        }).catch(err => {
+                            if (!isProd) {
+                                console.error('[SentryService] Failed to duplicate event to FortenLog:', err)
+                            }
+                        })
+                    } catch (err) {
+                        if (!isProd) {
+                            console.error('[SentryService] Error triggering duplicate event fetch:', err)
+                        }
+                    }
+
                     return event
                 },
                 beforeBreadcrumb(breadcrumb) {

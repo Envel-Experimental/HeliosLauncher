@@ -63,3 +63,23 @@ jest.mock('os', () => ({
   endianness: () => 'LE',
   networkInterfaces: () => ({})
 }));
+
+const originalFetch = global.fetch;
+
+global.fetch = jest.fn().mockImplementation((url, options) => {
+  const urlStr = typeof url === 'string' ? url : (url && url.toString ? url.toString() : '');
+  if (urlStr.includes('fortenlog.nikita.best') || urlStr.includes('posthog.com')) {
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({}),
+      text: () => Promise.resolve(''),
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(0))
+    });
+  }
+  if (originalFetch) {
+    return originalFetch(url, options);
+  }
+  return Promise.reject(new Error(`Fetch to ${urlStr} not mocked and no original fetch found`));
+});
+

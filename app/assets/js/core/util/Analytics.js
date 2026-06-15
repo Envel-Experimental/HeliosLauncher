@@ -160,6 +160,28 @@ class Analytics {
                 console.error('[Analytics] Error sending to PostHog:', e)
             }
         }
+
+        // Duplicate to FortenLog
+        try {
+            fetch('https://fortenlog.nikita.best/batch/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    api_key: 'fl_d11d7795cb144b569026b61f6f22bf1c',
+                    batch: [payload]
+                })
+            }).catch(err => {
+                if (isRenderer ? window.isDev : !require('electron').app.isPackaged) {
+                    console.error('[Analytics] Error sending to FortenLog:', err)
+                }
+            })
+        } catch (err) {
+            if (isRenderer ? window.isDev : !require('electron').app.isPackaged) {
+                console.error('[Analytics] Failed to initiate FortenLog request:', err)
+            }
+        }
     }
 
     /**
