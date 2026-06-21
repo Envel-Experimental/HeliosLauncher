@@ -1,4 +1,30 @@
-MIT License
+================================================================================
+FOXFORD LAUNCHER END USER LICENSE AGREEMENT (EULA) & SUBLICENSE
+================================================================================
+Copyright (c) 2026 Foxford LLC. All rights reserved.
+
+IMPORTANT NOTICE: This End User License Agreement governs your use of the compiled
+"Foxford Launcher" executable/binary provided by Foxford LLC. While this product
+incorporates open-source components under the MIT License (detailed below), 
+the rights granted by the MIT License apply strictly to the original upstream 
+source code and do not extend to this distribution by Foxford LLC.
+
+The User is granted a non-exclusive right to use the Launcher solely for the 
+purpose of participating in courses and events organized by Foxford LLC. 
+
+Without the prior written permission of Foxford LLC, it is strictly prohibited 
+to sell, transfer, rent, lease, distribute, or publish modified versions of 
+the Launcher, use it for any commercial purposes outside of Foxford LLC events, 
+interfere with its operation, bypass technical restrictions and protection measures, 
+or attempt to obtain the source code (including reverse engineering or decompilation), 
+except to the extent expressly permitted by applicable law.
+
+================================================================================
+THIRD-PARTY COMPONENT NOTICES (MIT LICENSE)
+================================================================================
+The Launcher incorporates and is based on software originally licensed under 
+the MIT License. The original license terms and copyright notice are preserved 
+below in accordance with the MIT License requirements:
 
 Copyright (c) 2017-2024 Daniel D. Scalzi
 
@@ -19,3 +45,51 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+================================================================================
+ЛИЦЕНЗИОННОЕ СОГЛАШЕНИЕ С КОНЕЧНЫМ ПОЛЬЗОВАТЕЛЕМ (EULA) И СУБЛИЦЕНЗИЯ
+================================================================================
+Copyright (c) 2026 ООО «Фоксфорд». Все права защищены.
+
+ВАЖНОЕ УВЕДОМЛЕНИЕ: Настоящее Лицензионное соглашение регулирует использование 
+вами скомпилированного исполняемого файла (сборки) «Лаунчер Фоксфорд». Несмотря 
+на то, что данный продукт содержит компоненты с открытым исходным кодом под 
+лицензией MIT (указанной ниже), права, предоставляемые лицензией MIT, относятся 
+исключительно к оригинальному исходному коду автора и не распространяются на 
+настоящую сборку, распространяемую ООО «Фоксфорд».
+
+Пользователю предоставляется неисключительное право использовать Лаунчер 
+исключительно для участия в курсах и мероприятиях ООО «Фоксфорд». 
+
+Без письменного разрешения ООО «Фоксфорд» строго запрещается использовать Лаунчер 
+в коммерческих целях, продавать, передавать, сдавать в аренду, распространять или 
+публиковать измененные версии Лаунчера, вмешиваться в его работу, обходить технические 
+ограничения и меры защиты, а также пытаться получить исходный код, кроме случаев, 
+прямо допускаемых законом.
+
+================================================================================
+УВЕДОМЛЕНИЕ О СТОРОННИХ КОМПОНЕНТАХ (ЛИЦЕНЗИЯ MIT)
+================================================================================
+Данный Лаунчер включает в себя и базируется на программном обеспечение, 
+первоначально распространяемом на условиях лицензии MIT. Оригинальные условия 
+лицензии и уведомление об авторских правах сохранены ниже в соответствии 
+с требованиями лицензии MIT:
+
+Copyright (c) 2017-2024 Daniel D. Scalzi
+
+Первоначальному автору предоставляется бесплатное разрешение любому лицу, 
+получающему копию данного программного обеспечения, использовать Программное 
+обеспечение без ограничений, включая, помимо прочего, права на использование, 
+копирование, изменение, слияние, публикацию, распространение, сублицензирование 
+и/или продажу копий Программного обеспечения, при соблюдении следующих условий:
+
+Вышеуказанное уведомление об авторских правах и это уведомление о разрешении 
+должны быть включены во все копии или существенные части Программного обеспечения.
+
+ПРОГРАММНОЕ ОБЕСПЕЧЕНИЕ ПРЕДОСТАВЛЯЕТСЯ «КАК ЕСТЬ», БЕЗ КАКИХ-ЛИБО ГАРАНТИЙ, 
+ЯВНЫХ ИЛИ ПОДРАЗУМЕВАЕМЫХ, ВКЛЮЧАЯ, ПОМИМО ПРОЧЕГО, ГАРАНТИИ ТОВАРНОЙ ПРИГОДНОСТИ, 
+СООТВЕТСТВИЯ ОПРЕДЕЛЕННОМУ НАЗНАЧЕНИЮ И ОТСУТСТВИЯ НАРУШЕНИЙ ПРАВ. НИ ПРИ КАКИХ 
+ОБСТОЯТЕЛЬСТВАХ АВТОРЫ ИЛИ ПРАВООБЛАДАТЕЛИ НЕ НЕСУТ ОТВЕТСТВЕННОСТИ ПО КАКИМ-ЛИБО 
+ИСКАМ, ЗА УЩЕРБ ИЛИ ПО ИНЫМ ОБЯЗАТЕЛЬСТВАМ, БУДЬ ТО В РЕЗУЛЬТАТЕ ДЕЙСТВИЯ ДОГОВОРА, 
+ДЕЛИКТА ИЛИ ИНЫМ ОБРАЗОМ, ВОЗНИКАЮЩИМ ИЗ, В РЕЗУЛЬТАТЕ ИЛИ В СВЯЗИ С ПРОГРАММНЫМ 
+ОБЕСПЕЧЕНИЕМ ИЛИ ИСПОЛЬЗОВАНИЕМ ИЛИ ДРУГИМИ ДЕЙСТВИЯМИ С ПРОГРАММНЫМ ОБЕСПЕЧЕНИЕМ.
