@@ -10,7 +10,7 @@ global.ConfigManager = {
     getLauncherDirectorySync: () => './temp',
     getSettings: () => ({}),
     isLoaded: () => true,
-    load: async () => {}
+    load: async () => { }
 }
 
 global.Lang = {
@@ -20,7 +20,7 @@ global.Lang = {
 // 2. MOCK ELECTRON
 const Module = require('module')
 const originalRequire = Module.prototype.require
-Module.prototype.require = function() {
+Module.prototype.require = function () {
     const name = arguments[0]
     if (name === 'electron') {
         return {
@@ -28,7 +28,7 @@ Module.prototype.require = function() {
                 getAppPath: () => path.join(__dirname, '..'),
                 getPath: (n) => path.join(__dirname, '../temp', n)
             },
-            shell: { openExternal: () => {} },
+            shell: { openExternal: () => { } },
             ipcRenderer: { invoke: () => Promise.resolve() },
             remote: { app: { getVersion: () => '1.0.0' } }
         }
@@ -37,7 +37,7 @@ Module.prototype.require = function() {
     if (name.startsWith('@core/')) return originalRequire.apply(this, [path.join(__dirname, '../app/assets/js/core/', name.substring(6) + '.js')])
     if (name.startsWith('@network/')) return originalRequire.apply(this, [path.join(__dirname, '../network/', name.substring(9) + '.js')])
     if (name === '@app/assets/js/core/configmanager') return global.ConfigManager
-    
+
     return originalRequire.apply(this, arguments)
 }
 
@@ -62,7 +62,7 @@ global.fetch = async (url) => {
 
 // 4. RUN TESTS
 async function run() {
-    console.log('\x1b[36m%s\x1b[0m', '=== HeliosLauncher Fix Verification ===\n')
+    console.log('\x1b[36m%s\x1b[0m', '=== Flauncher Fix Verification ===\n')
 
     // Test Case 1: Java Discovery
     try {
@@ -83,10 +83,10 @@ async function run() {
         console.log('\n[Case 2] Testing Download Error Message Capping...')
         const { downloadQueue } = require('../app/assets/js/core/dl/DownloadEngine')
         const assets = Array.from({ length: 12 }, (_, i) => ({ id: `sound_${i}.ogg`, url: 'http://fail', path: `sound_${i}.ogg`, size: 100 }))
-        
+
         // Mock fetch failure
         global.fetch = () => Promise.reject(new Error('Network Fail'))
-        
+
         try {
             await downloadQueue(assets)
         } catch (err) {

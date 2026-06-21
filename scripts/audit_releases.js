@@ -1,6 +1,6 @@
 const https = require('https')
 
-const REPO = 'Envel-Experimental/HeliosLauncher'
+const REPO = 'Envel-Experimental/Flauncher'
 
 function fetchReleases() {
     return new Promise((resolve, reject) => {
@@ -8,7 +8,7 @@ function fetchReleases() {
             hostname: 'api.github.com',
             path: `/repos/${REPO}/releases`,
             headers: {
-                'User-Agent': 'HeliosLauncher-Audit-Tool'
+                'User-Agent': 'Flauncher-Audit-Tool'
             }
         }
 
@@ -32,7 +32,7 @@ async function runAudit() {
 
     try {
         const releases = await fetchReleases()
-        
+
         if (releases.length === 0) {
             console.log('No releases found in this repository.')
             return
@@ -40,11 +40,11 @@ async function runAudit() {
 
         // 1. Находим последний стабильный релиз
         const latestStable = releases.find(r => !r.prerelease && !r.draft)
-        
+
         // 2. Находим последний плавающий релиз (prerelease + STABLE в названии)
-        const latestFloating = releases.find(r => 
-            r.prerelease && 
-            !r.draft && 
+        const latestFloating = releases.find(r =>
+            r.prerelease &&
+            !r.draft &&
             (r.name || r.tag_name || '').toUpperCase().includes('STABLE')
         )
 
@@ -75,7 +75,7 @@ async function runAudit() {
             }
         }
         console.log('--------------------------------------------------')
-        
+
         console.log('\nVERDICT:')
         if (latestFloating && latestStable && latestFloating.published_at > latestStable.published_at) {
             console.log('>>> Rolling mode users will be ahead of Stable users. (Working as intended)')

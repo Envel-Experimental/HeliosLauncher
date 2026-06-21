@@ -125,7 +125,7 @@ class RaceManager {
         if (!hash && !fileId && !relPath) {
             return fetch(url, {
                 headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 HeliosLauncher/1.0'
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Flauncher/1.0'
                 }
             })
         }
@@ -157,10 +157,10 @@ class RaceManager {
                 reject(new Error('HTTP Timeout'));
             }, 10000); // 10s timeout for HTTP
 
-            fetch(url, { 
+            fetch(url, {
                 signal: abortController.signal,
                 headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 HeliosLauncher/1.0',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Flauncher/1.0',
                     'Referer': 'https://minecraft.net/',
                     'Origin': 'https://minecraft.net'
                 }
@@ -193,74 +193,74 @@ class RaceManager {
                     return
                 }
 
-            const P2PEngine = require('./P2PEngine')
+                const P2PEngine = require('./P2PEngine')
 
-            // Ambition Control: If P2P is overloaded, don't even try, let HTTP handle it.
-            const loadStatus = P2PEngine.getLoadStatus()
-            if (loadStatus === 'overloaded') {
-                reject(new Error('P2P Overloaded'))
-                return
-            }
-
-            if (P2PEngine.peers.length === 0 && !ConfigManager.getP2POnlyMode()) {
-                if (!this.discoveryPromise) {
-                    if (isDev) console.log('[RaceManager] No peers found. Starting shared discovery grace period (5s)...')
-                    this.discoveryPromise = new Promise((resolve) => {
-                        const timeout = setTimeout(() => {
-                            P2PEngine.off('peer_added', onPeerFound)
-                            this.discoveryPromise = null
-                            resolve(false)
-                        }, 5000)
-                        const onPeerFound = () => {
-                            clearTimeout(timeout)
-                            this.discoveryPromise = null
-                            resolve(true)
-                        }
-                        P2PEngine.once('peer_added', onPeerFound)
-                    })
-                }
-
-                const found = await this.discoveryPromise
-                if (!found) {
-                    if (globalP2PStream) globalP2PStream.destroy()
-                    reject(new Error('P2P No Peers (Discovery Timeout)'))
+                // Ambition Control: If P2P is overloaded, don't even try, let HTTP handle it.
+                const loadStatus = P2PEngine.getLoadStatus()
+                if (loadStatus === 'overloaded') {
+                    reject(new Error('P2P Overloaded'))
                     return
                 }
-            }
 
-            globalP2PStream = P2PEngine.requestFile(hash, expectedSize, relPath, fileId)
+                if (P2PEngine.peers.length === 0 && !ConfigManager.getP2POnlyMode()) {
+                    if (!this.discoveryPromise) {
+                        if (isDev) console.log('[RaceManager] No peers found. Starting shared discovery grace period (5s)...')
+                        this.discoveryPromise = new Promise((resolve) => {
+                            const timeout = setTimeout(() => {
+                                P2PEngine.off('peer_added', onPeerFound)
+                                this.discoveryPromise = null
+                                resolve(false)
+                            }, 5000)
+                            const onPeerFound = () => {
+                                clearTimeout(timeout)
+                                this.discoveryPromise = null
+                                resolve(true)
+                            }
+                            P2PEngine.once('peer_added', onPeerFound)
+                        })
+                    }
 
-            // Timeout P2P strictly to avoid waiting too long if HTTP is also slow/failing
-            const timeout = setTimeout(() => {
-                cleanup()
-                if (isDev && P2PEngine.peers.length > 0 && hash) {
-                    console.log(`[RaceManager] Global P2P Task Timed Out (Soft) for ${hash.substring(0, 8)}`)
+                    const found = await this.discoveryPromise
+                    if (!found) {
+                        if (globalP2PStream) globalP2PStream.destroy()
+                        reject(new Error('P2P No Peers (Discovery Timeout)'))
+                        return
+                    }
                 }
-                reject(new Error('Global P2P Timeout'))
-            }, 60000) // 60s Soft Timeout for First Byte
 
-            const onReadable = () => {
-                clearTimeout(timeout)
-                cleanup()
-                resolve({ type: 'global_p2p', result: globalP2PStream })
-            }
-            const onError = (err) => {
-                clearTimeout(timeout)
-                cleanup()
-                /* if (isDev && P2PEngine.peers.length > 0 && !err.message.includes('Not Found')) {
-                    console.warn(`[RaceManager] P2P Leg Failed for ${hash.substring(0, 8)}: ${err.message}`)
-                } */
-                reject(err)
-            }
-            const cleanup = () => {
-                globalP2PStream.off('readable', onReadable);
-                globalP2PStream.off('error', onError)
-                // CRITICAL: Add no-op error listener to prevent crash if 
-                // the stream fails later (after we stop caring)
-                globalP2PStream.on('error', () => { /* Ignored: post-finalization failure */ })
-            }
-            globalP2PStream.on('readable', onReadable)
-            globalP2PStream.on('error', onError)
+                globalP2PStream = P2PEngine.requestFile(hash, expectedSize, relPath, fileId)
+
+                // Timeout P2P strictly to avoid waiting too long if HTTP is also slow/failing
+                const timeout = setTimeout(() => {
+                    cleanup()
+                    if (isDev && P2PEngine.peers.length > 0 && hash) {
+                        console.log(`[RaceManager] Global P2P Task Timed Out (Soft) for ${hash.substring(0, 8)}`)
+                    }
+                    reject(new Error('Global P2P Timeout'))
+                }, 60000) // 60s Soft Timeout for First Byte
+
+                const onReadable = () => {
+                    clearTimeout(timeout)
+                    cleanup()
+                    resolve({ type: 'global_p2p', result: globalP2PStream })
+                }
+                const onError = (err) => {
+                    clearTimeout(timeout)
+                    cleanup()
+                    /* if (isDev && P2PEngine.peers.length > 0 && !err.message.includes('Not Found')) {
+                        console.warn(`[RaceManager] P2P Leg Failed for ${hash.substring(0, 8)}: ${err.message}`)
+                    } */
+                    reject(err)
+                }
+                const cleanup = () => {
+                    globalP2PStream.off('readable', onReadable);
+                    globalP2PStream.off('error', onError)
+                    // CRITICAL: Add no-op error listener to prevent crash if 
+                    // the stream fails later (after we stop caring)
+                    globalP2PStream.on('error', () => { /* Ignored: post-finalization failure */ })
+                }
+                globalP2PStream.on('readable', onReadable)
+                globalP2PStream.on('error', onError)
             })().catch(reject)
         })
 

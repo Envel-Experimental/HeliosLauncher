@@ -49,11 +49,11 @@ class MirrorManager {
     }
 
     async _measureLatency(mirrorEntry) {
-        const rawUrl = mirrorEntry.config.version_manifest || 
-                       mirrorEntry.config.assets || 
-                       mirrorEntry.config.java_manifest || 
-                       mirrorEntry.config.distribution
-        
+        const rawUrl = mirrorEntry.config.version_manifest ||
+            mirrorEntry.config.assets ||
+            mirrorEntry.config.java_manifest ||
+            mirrorEntry.config.distribution
+
         if (!rawUrl) {
             mirrorEntry.latency = 9999
             mirrorEntry.status = 'invalid'
@@ -72,7 +72,7 @@ class MirrorManager {
             mirrorEntry.status = 'invalid'
             return
         }
-        
+
         const controller = new AbortController()
         const timeoutId = setTimeout(() => controller.abort(), 5000)
 
@@ -82,7 +82,7 @@ class MirrorManager {
                 signal: controller.signal,
                 cache: 'no-store',
                 headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 HeliosLauncher/1.0',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Flauncher/1.0',
                     'Referer': 'https://minecraft.net/',
                     'Origin': 'https://minecraft.net',
                     'Cache-Control': 'no-cache',
@@ -93,7 +93,7 @@ class MirrorManager {
             clearTimeout(timeoutId)
             const latency = Date.now() - start
             mirrorEntry.lastChecked = Date.now()
-            
+
             if (response.ok) {
                 mirrorEntry.latency = latency
                 mirrorEntry.status = latency < 400 ? 'active' : 'slow'

@@ -3,7 +3,7 @@ const { launchApp, handleInitialOverlays, openSettings, switchSettingsTab, TEST_
 const fs = require('fs');
 const path = require('path');
 
-test.describe('HeliosLauncher E2E Flow', () => {
+test.describe('Flauncher E2E Flow', () => {
     let electronApp;
     let window;
 
@@ -46,7 +46,7 @@ test.describe('HeliosLauncher E2E Flow', () => {
             await switchSettingsTab(window, 'settingsTabJava');
             const maxRamSlider = window.locator('#settingsMaxRAMRange');
             const minRamSlider = window.locator('#settingsMinRAMRange');
-            
+
             // Set RAM values
             await maxRamSlider.evaluate(node => {
                 node.setAttribute('value', "6");
@@ -81,7 +81,7 @@ test.describe('HeliosLauncher E2E Flow', () => {
 
         await test.step('Account: Management (Switch & Delete)', async () => {
             await switchSettingsTab(window, 'settingsTabAccount');
-            
+
             // Wait for account items to load
             const accountLocators = window.locator('.settingsCurrentAccounts .settingsAuthAccount');
             await accountLocators.first().waitFor({ state: 'attached', timeout: 10000 });
@@ -101,7 +101,7 @@ test.describe('HeliosLauncher E2E Flow', () => {
                 // Delete the second account
                 const logoutBtn = secondaryAcc.locator('.settingsAuthAccountLogOut');
                 await logoutBtn.click({ force: true });
-                
+
                 // Wait for it to disappear (Helios uses fadeOut)
                 await expect(secondaryAcc).toBeHidden({ timeout: 10000 });
                 console.log('Account switching and deletion verified via index.');
@@ -115,7 +115,7 @@ test.describe('HeliosLauncher E2E Flow', () => {
 
             const usernameInput = window.locator('#loginUsername');
             await usernameInput.fill('TestUserTwo');
-            
+
             const loginBtn = window.locator('#loginButton');
             await expect(loginBtn).toBeEnabled();
             await loginBtn.click();
@@ -135,27 +135,27 @@ test.describe('HeliosLauncher E2E Flow', () => {
 
             const serverBtn = window.locator('#server_selection_button');
             await serverBtn.click();
-            
+
             const serverList = window.locator('#serverSelectListScrollable');
             await expect(serverList).toBeVisible();
-            
+
             // Wait for server listings to appear
             const serverItems = window.locator('.serverListing');
             await serverItems.first().waitFor({ state: 'attached', timeout: 5000 });
-            
+
             const serverCount = await serverItems.count();
             console.log(`Verified ${serverCount} servers in the list.`);
             expect(serverCount).toBeGreaterThan(0);
-            
+
             await window.keyboard.press('Escape');
         });
 
         await test.step('Game: Attempt Launch Lifecycle', async () => {
             await expect(window.locator('#landingContainer')).toBeVisible();
-            
+
             const launchBtn = window.locator('#launch_button');
             const launchDetails = window.locator('#launch_details');
-            
+
             console.log('Starting launch process...');
 
             // Prepare a promise that resolves when the specific log is detected
@@ -181,7 +181,7 @@ test.describe('HeliosLauncher E2E Flow', () => {
                 logFoundPromise,
                 window.waitForTimeout(300000).then(() => { throw new Error('Timeout waiting for Minecraft log line'); })
             ]);
-            
+
             console.log('Target log detected successfully. Terminating game process...');
             await window.evaluate(() => {
                 if (window.activeMinecraftProcess) {

@@ -144,6 +144,9 @@ export function updateSelectedAccount(authUser) {
     }
     const userText = document.getElementById('user_text')
     if (userText) userText.innerHTML = username
+
+    // Notify React components
+    window.dispatchEvent(new CustomEvent('account-changed', { detail: authUser }));
 }
 
 export async function showMainUI(data) {

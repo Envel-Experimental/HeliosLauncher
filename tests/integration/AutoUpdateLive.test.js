@@ -1,37 +1,26 @@
 const https = require('https')
 
-// Helper to fetch real data from GitHub
-function getRealReleases() {
-    return new Promise((resolve, reject) => {
-        const options = {
-            hostname: 'api.github.com',
-            path: '/repos/Envel-Experimental/HeliosLauncher/releases?per_page=100',
-            headers: { 'User-Agent': 'HeliosLauncher-Integration-Test' }
-        }
-        https.get(options, (res) => {
-            let data = ''
-            res.on('data', d => data += d)
-            res.on('end', () => {
-                if (res.statusCode !== 200) reject(new Error(`GitHub Error: ${res.statusCode}`))
-                resolve(JSON.parse(data))
-            })
-        }).on('error', reject)
-    })
+async function getRealReleases() {
+    const res = await fetch('https://api.github.com/repos/Envel-Experimental/Flauncher/releases?per_page=100', {
+        headers: { 'User-Agent': 'Flauncher-Integration-Test' }
+    });
+    if (!res.ok) throw new Error(`GitHub Error: ${res.status}`);
+    return res.json();
 }
 
 describe('AutoUpdate REAL-WORLD Audit', () => {
-    
+
     it('should report the ACTUAL state of GitHub releases', async () => {
         const releases = await getRealReleases()
-        
+
         console.log('\n==================================================')
         console.log('       LIVE GITHUB RELEASE AUDIT (NON-FAKE)       ')
         console.log('==================================================')
 
         const latestStable = releases.find(r => !r.prerelease && !r.draft)
-        const latestFloating = releases.find(r => 
-            r.prerelease && 
-            !r.draft && 
+        const latestFloating = releases.find(r =>
+            r.prerelease &&
+            !r.draft &&
             (r.name || '').toUpperCase().includes('STABLE')
         )
 

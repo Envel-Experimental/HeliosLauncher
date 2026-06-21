@@ -26,7 +26,7 @@ describe('ConfigManager Detailed Tests', () => {
         jest.doMock('electron', () => ({
             app: {
                 getPath: jest.fn().mockReturnValue('C:\\MockUserData'),
-                getName: jest.fn().mockReturnValue('HeliosLauncher')
+                getName: jest.fn().mockReturnValue('Flauncher')
             }
         }), { virtual: true })
 

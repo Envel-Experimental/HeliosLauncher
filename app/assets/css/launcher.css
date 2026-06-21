@@ -2221,11 +2221,13 @@ input:checked+.toggleSwitchSlider:before {
     border: 1px solid rgb(241, 55, 55);
     color: rgb(241, 55, 55);
     background: none;
-    font-size: 12px;
-    border-radius: 3px;
+    font-size: 13px;
+    border-radius: 4px;
+    padding: 6px 12px;
     font-family: "Roboto", serif;
-    font-weight: 500;
+    font-weight: 600;
     font-style: normal;
+    white-space: nowrap;
     transition: 0.25s ease;
     cursor: pointer;
     outline: none;
@@ -2233,15 +2235,16 @@ input:checked+.toggleSwitchSlider:before {
 
 .settingsAuthAccountLogOut:hover,
 .settingsAuthAccountLogOut:focus {
-    box-shadow: 0px 0px 20px rgb(241, 55, 55);
-    background: rgba(241, 55, 55, 0.25);
+    box-shadow: 0px 0px 15px rgba(241, 55, 55, 0.5);
+    background: rgb(241, 55, 55);
+    color: #fff;
 }
 
 .settingsAuthAccountLogOut:active {
-    box-shadow: 0px 0px 20px rgb(185, 47, 47);
-    background: rgba(185, 47, 47, 0.25);
+    box-shadow: 0px 0px 10px rgba(185, 47, 47, 0.5);
+    background: rgb(185, 47, 47);
     border: 1px solid rgb(185, 47, 47);
-    color: rgb(185, 47, 47);
+    color: #fff;
 }
 
 .settingsAuthAccount:hover .settingsAuthAccountLogOut {
@@ -3096,6 +3099,7 @@ input:checked+.toggleSwitchSlider:before {
     color: #f68a33;
     text-transform: uppercase;
     letter-spacing: 1.2px;
+    display: block;
 }
 
 #settingsAboutCurrentVersionValue {

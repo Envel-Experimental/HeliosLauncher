@@ -7,13 +7,15 @@ const { LoggerUtil } = require('@core/util/LoggerUtil')
 const Lang = require('@core/langloader')
 const ConfigManager = require('@core/configmanager')
 const AuthManager = require('@core/authmanager')
+const DistroAPI = require('@core/distromanager')
 const { isDisplayableError } = require('@core/common/RestResponse')
 
-window.LoggerUtil = LoggerUtil
-window.Lang = Lang
-window.ConfigManager = ConfigManager
-window.AuthManager = AuthManager
-window.isDisplayableError = isDisplayableError
+window.LoggerUtil = window.LoggerUtil || LoggerUtil
+window.Lang = window.Lang || Lang
+window.ConfigManager = window.ConfigManager || ConfigManager
+window.AuthManager = window.AuthManager || AuthManager
+window.DistroAPI = window.DistroAPI || DistroAPI
+window.isDisplayableError = window.isDisplayableError || isDisplayableError
 window.global = window
 
 if (typeof window.HeliosAPI !== 'undefined') {
@@ -23,13 +25,13 @@ if (typeof window.HeliosAPI !== 'undefined') {
 }
 
 // Global Distribution Types Injection
-const { 
-    HeliosDistribution, 
-    HeliosServer, 
-    HeliosModule, 
-    Type, 
-    Platform, 
-    JdkDistribution 
+const {
+    HeliosDistribution,
+    HeliosServer,
+    HeliosModule,
+    Type,
+    Platform,
+    JdkDistribution
 } = require('@core/common/DistributionClasses')
 
 window.HeliosDistribution = HeliosDistribution
@@ -80,7 +82,7 @@ const baseProcess = {
 const processHandler = {
     get: (target, prop) => {
         if (prop in target) return target[prop]
-        
+
         // Data properties that should be falsy if missing
         if (typeof prop === 'string' && (prop === 'defaultApp' || prop === 'electron')) {
             return undefined
@@ -95,4 +97,4 @@ const processHandler = {
 
 window.process = new Proxy(baseProcess, processHandler)
 
-console.log('HeliosLauncher: Global Dependencies Injected (New Structure)')
+console.log('Flauncher: Global Dependencies Injected (New Structure)')
