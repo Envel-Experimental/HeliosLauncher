@@ -212,7 +212,10 @@ export async function showMainUI(data) {
         console.log('[UIBinder] Showing main container...')
         document.body.classList.add('main-ui-active')
         const fallbackImg = document.getElementById('background-fallback-img')
-        if (fallbackImg) fallbackImg.style.display = 'block'
+        if (fallbackImg) {
+            fallbackImg.style.display = 'block'
+            fallbackImg.style.opacity = '1'
+        }
         document.getElementById('frameBar').style.backgroundColor = 'transparent'
         show(document.getElementById('main'))
         console.log('[UIBinder] Main container visibility set to show.')
@@ -836,20 +839,30 @@ function initBackgroundVideo() {
 
     let isPaused = ConfigManager.getBackgroundVideoPaused()
 
-    const updateUI = (paused) => {
+    let isStartupDelay = true;
+    setTimeout(() => {
+        isStartupDelay = false;
+        if (!ConfigManager.getBackgroundVideoPaused() && document.hasFocus()) {
+            vid.play().catch(() => {});
+        }
+    }, 3500); // 3.5 seconds delay to allow launcher to initialize smoothly
+
+    const updateUI = (paused, overrideDelay = false) => {
+        if (overrideDelay) isStartupDelay = false;
+        
         if (paused) {
             vid.pause()
             pauseIcon.style.display = 'none'
             playIcon.style.display = 'block'
         } else {
-            // Only play if window is focused
-            if (document.hasFocus()) {
+            pauseIcon.style.display = 'block'
+            playIcon.style.display = 'none'
+            // Only play if window is focused and not during startup delay
+            if (document.hasFocus() && !isStartupDelay) {
                 vid.play().catch(err => {
                     console.warn('[UIBinder] Video play interrupted or failed:', err)
                 })
             }
-            pauseIcon.style.display = 'block'
-            playIcon.style.display = 'none'
         }
     }
 
@@ -857,10 +870,10 @@ function initBackgroundVideo() {
     updateUI(isPaused)
 
     btn.onclick = () => {
-        const nowPaused = !vid.paused
+        const nowPaused = !ConfigManager.getBackgroundVideoPaused()
         ConfigManager.setBackgroundVideoPaused(nowPaused)
         ConfigManager.save()
-        updateUI(nowPaused)
+        updateUI(nowPaused, true) // override delay on user interaction
     }
 
     // Auto-pause when window is hidden to save resources
@@ -870,7 +883,7 @@ function initBackgroundVideo() {
     })
 
     window.addEventListener('focus', () => {
-        if (!ConfigManager.getBackgroundVideoPaused()) {
+        if (!ConfigManager.getBackgroundVideoPaused() && !isStartupDelay) {
             vid.play().catch(() => {})
         }
     })
@@ -878,7 +891,7 @@ function initBackgroundVideo() {
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) {
             vid.pause()
-        } else if (!ConfigManager.getBackgroundVideoPaused()) {
+        } else if (!ConfigManager.getBackgroundVideoPaused() && !isStartupDelay) {
             vid.play().catch(() => {})
         }
     })
