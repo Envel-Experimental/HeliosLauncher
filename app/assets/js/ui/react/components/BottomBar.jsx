@@ -123,7 +123,10 @@ const BottomBar = () => {
       if (progressBar) {
         progressObserver = new MutationObserver(() => {
           const currentProgress = document.getElementById('launch_progress')
-          if (currentProgress) setLaunchPercent(Number(currentProgress.value) || null)
+          if (currentProgress) {
+            const val = Number(currentProgress.value);
+            setLaunchPercent(isNaN(val) ? null : val);
+          }
         })
         progressObserver.observe(progressBar, { attributes: true })
       }
@@ -338,7 +341,11 @@ const BottomBar = () => {
           disabled={isCooldown || launchStatus != null}
           style={{
             width: '260px',
-            padding: '16px',
+            height: '56px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '0 16px',
             fontSize: launchStatus ? '13px' : '18px',
             fontWeight: '800',
             position: 'relative',
@@ -348,7 +355,7 @@ const BottomBar = () => {
             boxShadow: launchStatus ? 'none' : undefined
           }}
         >
-          {launchPercent != null && (
+          {launchStatus && launchPercent !== null && (
             <div
               className="launch-progress-bar"
               style={{
