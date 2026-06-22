@@ -346,3 +346,14 @@ body { overflow: hidden !important; }
   color: #666666;
 }
 
+
+body.news-blur #background-video {
+  filter: blur(8px) brightness(0.6) !important;
+}
+
+
+body.news-blur #background-fallback-img {
+  filter: blur(8px) brightness(0.6) !important;
+}
+
+
