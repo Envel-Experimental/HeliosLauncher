@@ -106,9 +106,9 @@ const LoginScreen = () => {
         </div>
 
         <div style={{ fontSize: '11px', color: 'var(--react-text-dim)', textAlign: 'center', lineHeight: '1.4' }}>
-          {window.Lang.queryEJS('login.loginPasswordDisclaimer1')}
+          {window.Lang?.queryEJS('login.loginPasswordDisclaimer1') || ''}
           <br /><br />
-          {window.Lang.queryEJS('login.loginPasswordDisclaimer2')}
+          {window.Lang?.queryEJS('login.loginPasswordDisclaimer2') || ''}
         </div>
 
         {error && (

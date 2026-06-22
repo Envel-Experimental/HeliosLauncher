@@ -45,10 +45,23 @@ class IpcRegistry {
             event.returnValue = app.getAppPath()
         })
 
-        ipcMain.on('fs:statSync', (event, path) => {
+        ipcMain.on('fs:statSync', (event, targetPath) => {
+            const pathMod = require('path')
+            const ConfigManager = require('../assets/js/core/configmanager')
+            // Sandbox: must be within launcher or app dir
+            let safe = null
+            try {
+                const resolved = pathMod.resolve(targetPath)
+                const roots = []
+                try { roots.push(pathMod.resolve(app.getAppPath())) } catch {}
+                try { const d = ConfigManager.getLauncherDirectorySync(); if (d) roots.push(pathMod.resolve(d)) } catch {}
+                try { const d = ConfigManager.getDataDirectory(); if (d) roots.push(pathMod.resolve(d)) } catch {}
+                if (roots.some(r => resolved === r || resolved.startsWith(r + pathMod.sep))) safe = resolved
+            } catch {}
+            if (!safe) { event.returnValue = null; return }
             try {
                 const fsSync = require('fs')
-                const stats = fsSync.statSync(path)
+                const stats = fsSync.statSync(safe)
                 event.returnValue = {
                     isDirectory: stats.isDirectory(),
                     isFile: stats.isFile(),
@@ -103,7 +116,26 @@ class IpcRegistry {
         })
 
         ipcMain.handle('config:save', async (event, data) => {
-            ConfigManager.setConfig(data)
+            if (!data || typeof data !== 'object' || Array.isArray(data)) return false
+            // Protect against prototype pollution only.
+            // supportUrl and lastLauncherVersion are set by main process/server — renderer must not overwrite them.
+            // javaExecutable is legitimately set by the user via Settings UI, so it is NOT blocked.
+            const BLOCKED_TOP_LEVEL = ['supportUrl', 'lastLauncherVersion']
+            const sanitize = (obj) => {
+                if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return obj
+                const out = {}
+                for (const [k, v] of Object.entries(obj)) {
+                    if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
+                    out[k] = typeof v === 'object' && v !== null && !Array.isArray(v) ? sanitize(v) : v
+                }
+                return out
+            }
+            const safe = sanitize(data)
+            // Restore server-controlled fields from current in-memory config
+            const current = ConfigManager.getConfig()
+            if (current.supportUrl != null) safe.supportUrl = current.supportUrl
+            if (current.lastLauncherVersion != null) safe.lastLauncherVersion = current.lastLauncherVersion
+            ConfigManager.setConfig(safe)
             return await ConfigManager.save()
         })
 

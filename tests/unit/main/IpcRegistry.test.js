@@ -128,9 +128,17 @@ describe('IpcRegistry', () => {
             expect(SentryService.captureException).toHaveBeenCalledWith('test error')
         })
 
-        it('should handle fs:statSync', () => {
+        it('should return null for fs:statSync with path outside sandbox', () => {
+            // Paths outside launcher/app dir are blocked by sandbox — returns null
+            const event = { returnValue: 'initial' }
+            listeners['fs:statSync'](event, '/outside/secret.txt')
+            expect(event.returnValue).toBeNull()
+        })
+
+        it('should handle fs:statSync for path within app dir', () => {
+            // /app is mocked as app.getAppPath(), so /app/file.txt is within sandbox
             const event = { returnValue: null }
-            listeners['fs:statSync'](event, '/test.file')
+            listeners['fs:statSync'](event, '/app/file.txt')
             expect(event.returnValue).toHaveProperty('size', 100)
         })
 
@@ -162,8 +170,17 @@ describe('IpcRegistry', () => {
             
             await handlers['config:save'](null, mockData)
             
-            expect(ConfigManager.setConfig).toHaveBeenCalledWith(mockData)
+            // sanitize() returns a new object, so we check with objectContaining
+            expect(ConfigManager.setConfig).toHaveBeenCalledWith(expect.objectContaining({ a: 1 }))
             expect(ConfigManager.save).toHaveBeenCalled()
+        })
+
+        test('config:save rejects non-object data', async () => {
+            const ConfigManager = require('../../../app/assets/js/core/configmanager')
+            await handlers['config:save'](null, null)
+            expect(ConfigManager.setConfig).not.toHaveBeenCalled()
+            await handlers['config:save'](null, 'string')
+            expect(ConfigManager.setConfig).not.toHaveBeenCalled()
         })
 
         test('window-action handles various actions', () => {

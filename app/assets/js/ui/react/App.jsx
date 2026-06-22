@@ -4,6 +4,41 @@ import EventBanner from './components/EventBanner';
 import BottomBar from './components/BottomBar';
 import LoginScreen from './components/LoginScreen';
 
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, info) {
+    console.error('[React ErrorBoundary] Caught error:', error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{
+          position: 'fixed', bottom: 0, left: 0, right: 0, top: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.7)', color: 'white', flexDirection: 'column', gap: '12px', zIndex: 9999
+        }}>
+          <div style={{ fontSize: '18px', fontWeight: 700 }}>Что-то пошло не так в интерфейсе</div>
+          <div style={{ fontSize: '13px', opacity: 0.6 }}>Перезапустите лаунчер. Если ошибка повторяется — сообщите в поддержку.</div>
+          <button
+            onClick={() => this.setState({ hasError: false, error: null })}
+            style={{ padding: '8px 20px', borderRadius: '8px', border: 'none', background: 'rgba(255,255,255,0.15)', color: 'white', cursor: 'pointer', fontWeight: 600 }}
+          >Попробовать снова</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const App = () => {
   return (
     <div className="react-ui-container">
@@ -71,17 +106,17 @@ const App = () => {
         <div className="react-ui-logo" style={{ marginLeft: '40px', marginTop: '15px' }}>
           <img src="assets/images/full-icon.png" alt="Helios Logo" style={{ height: '80px', objectFit: 'contain' }} draggable="false" />
         </div>
-        <UserProfile />
+        <ErrorBoundary><UserProfile /></ErrorBoundary>
       </header>
 
       <main className="react-ui-main">
-        <EventBanner />
+        <ErrorBoundary><EventBanner /></ErrorBoundary>
       </main>
 
       <footer className="react-ui-footer">
-        <BottomBar />
+        <ErrorBoundary><BottomBar /></ErrorBoundary>
       </footer>
-      <LoginScreen />
+      <ErrorBoundary><LoginScreen /></ErrorBoundary>
     </div>
   );
 };

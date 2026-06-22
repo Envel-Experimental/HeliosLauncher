@@ -122,10 +122,10 @@ const BottomBar = () => {
 
       if (progressBar) {
         progressObserver = new MutationObserver(() => {
-          const currentProgress = document.getElementById('launch_progress');
-          if (currentProgress) setProgress(currentProgress.value);
-        });
-        progressObserver.observe(progressBar, { attributes: true });
+          const currentProgress = document.getElementById('launch_progress')
+          if (currentProgress) setLaunchPercent(Number(currentProgress.value) || null)
+        })
+        progressObserver.observe(progressBar, { attributes: true })
       }
 
       return () => {
@@ -143,9 +143,10 @@ const BottomBar = () => {
   const handleLaunch = () => {
     if (isPlaying || isCooldown || launchStatus) return;
 
-    // Cooldown protection for 3 seconds
-    setIsCooldown(true);
-    setTimeout(() => { if (!window.onReactLaunchDetails) setIsCooldown(false) }, 3000);
+    // Cooldown protection: block rapid re-clicks, always resets after 3s
+    // (safety net if launch fails before onReactLaunchComplete fires)
+    setIsCooldown(true)
+    setTimeout(() => setIsCooldown(false), 3000)
 
     // FORCE SET AND SAVE BEFORE LAUNCHING
     if (window.ConfigManager && selectedVersion) {
