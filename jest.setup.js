@@ -54,10 +54,13 @@ if (typeof window !== 'undefined') {
 }
 
 jest.mock('electron', () => {
+  const os = require('os');
+  const path = require('path');
+  const mockPath = path.join(os.tmpdir(), 'mock-path');
   return {
     app: {
-      getAppPath: jest.fn(() => '/mock/app/path'),
-      getPath: jest.fn(() => '/mock/path'),
+      getAppPath: jest.fn(() => path.join(os.tmpdir(), 'mock-app-path')),
+      getPath: jest.fn(() => mockPath),
       getVersion: jest.fn(() => '1.0.0'),
       isPackaged: false
     },
