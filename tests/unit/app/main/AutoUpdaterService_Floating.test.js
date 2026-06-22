@@ -6,7 +6,7 @@ jest.mock('electron', () => ({
         on: jest.fn()
     },
     app: {
-        getVersion: jest.fn().mockReturnValue('3.0.0'),
+        getVersion: jest.fn().mockReturnValue('3.1.0'),
         getAppPath: jest.fn().mockReturnValue('/app'),
         isPackaged: true
     }
@@ -68,7 +68,7 @@ describe('AutoUpdaterService: Multi-Channel Audit', () => {
         console.log('\n==================================================')
         console.log('         AUTO-UPDATER MULTI-CHANNEL AUDIT         ')
         console.log('==================================================')
-        console.log(`Current App Version: 3.0.0`)
+        console.log(`Current App Version: 3.1.0`)
         console.log(`Server Stable:   v${serverState.stable.version} (${serverState.stable.hash.substring(0, 8)})`)
         console.log(`Server Floating: v${serverState.floating.version} (${serverState.floating.hash.substring(0, 8)})`)
         console.log('--------------------------------------------------')
