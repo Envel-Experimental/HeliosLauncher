@@ -3116,7 +3116,7 @@ input:checked+.toggleSwitchSlider:before {
 .settingsBuildHash {
     font-size: 14px;
     font-weight: 400;
-    color: rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.6);
     font-family: 'JetBrains Mono', monospace;
 }
 

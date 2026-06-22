@@ -286,7 +286,7 @@ newReleaseTitle = "Доступен новый выпуск"
 newPreReleaseTitle = "Доступен плавающий релиз"
 downloadingButton = "Загрузка.."
 downloadButton = 'Скачать с GitHub<span style="font-size: 10px;color: gray;text-shadow: none !important;">Закройте лаунчер и запустите dmg для обновления.</span>'
-latestVersionTitle = "Вы используете последнюю версию"
+latestVersionTitle = "Новейшая версия"
 checkForUpdatesButton = "Проверить обновления"
 checkingForUpdatesButton = "Проверка обновлений.."
 

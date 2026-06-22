@@ -2482,7 +2482,7 @@ export function populateSettingsUpdateInformation(data) {
             settingsUpdateButtonStatus('Скачивание...', true)
         }
     } else {
-        els.settingsUpdateTitle.innerHTML = 'Обновления'
+        els.settingsUpdateTitle.innerHTML = Lang.queryJS('settings.updates.latestVersionTitle') || 'Новейшая версия'
         els.settingsUpdateChangelogCont.style.display = 'none'
         populateVersionInformation(window.appVersion, els.settingsUpdateVersionValue, els.settingsUpdateVersionTitle, els.settingsUpdateVersionCheck)
         settingsUpdateButtonStatus('Проверить обновления', false, () => {
