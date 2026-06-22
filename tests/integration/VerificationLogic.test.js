@@ -19,51 +19,37 @@ describe('End-to-End Signature Verification Logic', () => {
 
         // 2. Mock IPC bridge as it would be in the actual app
         // We simulate the Renderer -> Main IPC call
-        global.window = {
-            HeliosAPI: {
-                ipc: {
-                    invoke: async (channel, data) => {
-                        if (channel === 'crypto:verifyDistribution') {
-                            // In the real app, this goes to Main process
-                            // Here we call our CryptoService handler directly
-                            
-                            // We need to simulate the Electron IPC handler logic
-                            // CryptoService.js registers a handler that we can manually trigger
-                            
-                            // Since we can't easily access the internal 'handlers' map of CryptoService
-                            // without modifying it, we'll implement a tiny mock that replicates its logic
-                            // BUT using the REAL CryptoService verification logic.
-                            
-                            // Actually, let's just use the logic from CryptoService.js directly
-                            // to ensure we are testing exactly what's there.
-                            
-                            const { dataHex, signatureHex, trustedKeys } = data
-                            
-                            // Logic from CryptoService.js:
-                            for (const keyHex of trustedKeys) {
-                                try {
-                                    const spkiBuffer = Buffer.concat([
-                                        Buffer.from('302a300506032b6570032100', 'hex'),
-                                        Buffer.from(keyHex, 'hex')
-                                    ])
-                                    const publicKeyObj = crypto.createPublicKey({
-                                        key: spkiBuffer,
-                                        format: 'der',
-                                        type: 'spki'
-                                    })
-                                    const isValid = crypto.verify(
-                                        null,
-                                        Buffer.from(dataHex, 'hex'),
-                                        publicKeyObj,
-                                        Buffer.from(signatureHex, 'hex')
-                                    )
-                                    if (isValid) return true
-                                } catch (e) {
-                                    // continue
-                                }
+        if (typeof window === 'undefined') {
+            global.window = {}
+        }
+        window.HeliosAPI = {
+            ipc: {
+                invoke: async (channel, data) => {
+                    if (channel === 'crypto:verifyDistribution') {
+                        const { dataHex, signatureHex, trustedKeys } = data
+                        for (const keyHex of trustedKeys) {
+                            try {
+                                const spkiBuffer = Buffer.concat([
+                                    Buffer.from('302a300506032b6570032100', 'hex'),
+                                    Buffer.from(keyHex, 'hex')
+                                ])
+                                const publicKeyObj = crypto.createPublicKey({
+                                    key: spkiBuffer,
+                                    format: 'der',
+                                    type: 'spki'
+                                })
+                                const isValid = crypto.verify(
+                                    null,
+                                    Buffer.from(dataHex, 'hex'),
+                                    publicKeyObj,
+                                    Buffer.from(signatureHex, 'hex')
+                                )
+                                if (isValid) return true
+                            } catch (e) {
+                                // continue
                             }
-                            return false
                         }
+                        return false
                     }
                 }
             }

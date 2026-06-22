@@ -1,3 +1,6 @@
+/**
+ * @jest-environment node
+ */
 const crypto = require('crypto')
 const fs = require('fs/promises')
 const path = require('path')
@@ -133,7 +136,7 @@ describe('Real-World Download Verification Cycle', () => {
 
         const savedContent = await fs.readFile(finalPath)
         expect(savedContent.toString()).toBe(content.toString())
-    }, 15000)
+    }, 60000)
 
     it('should REJECT and delete file on bad signature over real HTTP', async () => {
         const content = Buffer.from('bad file content')

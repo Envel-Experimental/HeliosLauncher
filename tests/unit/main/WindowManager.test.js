@@ -24,7 +24,8 @@ jest.mock('electron', () => ({
         getVersion: jest.fn().mockReturnValue('1.0.0'),
         quit: jest.fn(),
         on: jest.fn(),
-        getPath: jest.fn().mockReturnValue('/mock/path')
+        getPath: jest.fn().mockReturnValue('/mock/path'),
+        getAppPath: jest.fn().mockReturnValue('/mock/appPath')
     },
     Menu: {
         buildFromTemplate: jest.fn(),

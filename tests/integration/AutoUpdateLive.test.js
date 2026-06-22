@@ -1,11 +1,16 @@
 const https = require('https')
 
 async function getRealReleases() {
-    const res = await fetch('https://api.github.com/repos/Envel-Experimental/Flauncher/releases?per_page=100', {
-        headers: { 'User-Agent': 'Flauncher-Integration-Test' }
+    return new Promise((resolve, reject) => {
+        https.get('https://api.github.com/repos/Envel-Experimental/Flauncher/releases?per_page=100', {
+            headers: { 'User-Agent': 'Flauncher-Integration-Test' }
+        }, (res) => {
+            if (res.statusCode !== 200) return reject(new Error(`GitHub Error: ${res.statusCode}`));
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => resolve(JSON.parse(data)));
+        }).on('error', reject);
     });
-    if (!res.ok) throw new Error(`GitHub Error: ${res.status}`);
-    return res.json();
 }
 
 describe('AutoUpdate REAL-WORLD Audit', () => {

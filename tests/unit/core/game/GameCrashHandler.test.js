@@ -1,4 +1,5 @@
 // Mock modules at the very top
+jest.mock('@sentry/electron/main')
 jest.mock('electron', () => ({
     shell: {
         openExternal: jest.fn(),

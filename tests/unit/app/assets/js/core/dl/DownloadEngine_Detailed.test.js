@@ -97,6 +97,12 @@ const FileUtils = require('@common/FileUtils')
 describe('DownloadEngine Detailed Tests', () => {
 
     beforeEach(() => {
+        global.Request = class Request {
+            constructor(url, options) {
+                this.url = url;
+                this.headers = options?.headers || {};
+            }
+        };
         jest.clearAllMocks()
         P2PEngine.peers = []
         if (global.__RESET_DL_ENGINE_COUNTERS__) global.__RESET_DL_ENGINE_COUNTERS__()
@@ -191,6 +197,7 @@ describe('DownloadEngine Detailed Tests', () => {
             fs.access.mockRejectedValue(new Error('ENOENT'))
             FileUtils.validateLocalFile.mockResolvedValue(true)
             fsSync.existsSync.mockReturnValue(true)
+            fsSync.createWriteStream.mockReturnValue({ on: jest.fn() })
 
             await DownloadEngine.downloadQueue(assets)
             expect(RaceManager.handle).toHaveBeenCalled()

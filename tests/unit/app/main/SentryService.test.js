@@ -4,7 +4,8 @@ jest.mock('@sentry/electron/main')
 jest.mock('electron', () => ({
     app: {
         isPackaged: false,
-        isReady: jest.fn().mockReturnValue(false)
+        isReady: jest.fn().mockReturnValue(false),
+        getAppPath: jest.fn().mockReturnValue('/mock/app/path')
     }
 }))
 

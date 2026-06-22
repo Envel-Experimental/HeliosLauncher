@@ -50,7 +50,7 @@ function getWriteRoots() {
  * @returns {string|null} resolved path on success, null on violation
  */
 function sandboxPath(targetPath, mode = 'write') {
-    if (typeof targetPath !== 'string' || !targetPath) return null
+    if (typeof targetPath !== 'string' || !targetPath || targetPath.includes('\0')) return null
 
     let resolved
     try {

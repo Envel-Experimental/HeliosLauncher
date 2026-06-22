@@ -12,7 +12,7 @@ exports.loadLanguage = function (id) {
         const isRenderer = (process.type === 'renderer' || typeof window !== 'undefined')
         
         if (isRenderer) {
-            const base = window.HeliosAPI?.app?.getAppPath() || window.HeliosAPI?.system?.cwd() || ''
+            const base = window.HeliosAPI?.app?.getAppPath?.() || window.HeliosAPI?.system?.cwd?.() || ''
             langPath = path.join(base, 'app', 'assets', 'lang', `${id}.toml`)
         } else {
             const { app } = require('electron')

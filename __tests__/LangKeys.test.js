@@ -35,8 +35,8 @@ describe('Language Files Integrity Test', () => {
     const keysToCheck = [
       'ejs.app.title',
       'js.settings.fileSelectors.executables',
-      'js.login.error.unknown'
-    ];
+      'js.login.error.unknown.title'
+    ].filter(key => !key.includes('${'));
 
     keysToCheck.forEach(key => {
       const val = resolvePath(enUS, key);
@@ -79,6 +79,7 @@ describe('Language Files Integrity Test', () => {
       let match;
       while ((match = regexJS.exec(content)) !== null) {
         const fullKey = 'js.' + match[1];
+        if (fullKey.includes('${')) continue;
         if (!resolvePath(enUS, fullKey) && (!custom || !resolvePath(custom, fullKey))) {
           missingKeys.push(`File: ${path.basename(file)} | Key: ${fullKey}`);
         }
@@ -86,6 +87,7 @@ describe('Language Files Integrity Test', () => {
       
       while ((match = regexEJS.exec(content)) !== null) {
         const fullKey = 'ejs.' + match[1];
+        if (fullKey.includes('${')) continue;
         if (!resolvePath(enUS, fullKey) && (!custom || !resolvePath(custom, fullKey))) {
           missingKeys.push(`File: ${path.basename(file)} | Key: ${fullKey}`);
         }

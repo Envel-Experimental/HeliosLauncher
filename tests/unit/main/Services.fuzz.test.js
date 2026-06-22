@@ -16,6 +16,9 @@ jest.mock('electron', () => ({
         on: jest.fn((channel, cb) => {
             syncHandlers[channel] = cb
         })
+    },
+    app: {
+        getAppPath: jest.fn().mockReturnValue('/mock/app/path')
     }
 }))
 

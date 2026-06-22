@@ -19,6 +19,9 @@ const SHADER_CONFIG = 'optionsshaders.txt'
  * @returns {string}
  */
 function assertWithinBase(baseDir, targetPath) {
+    if (typeof targetPath !== 'string' || targetPath.includes('\0')) {
+        throw new Error('Invalid path: null bytes are not allowed')
+    }
     const resolvedBase = path.resolve(baseDir)
     const resolved = path.resolve(baseDir, targetPath)
     if (resolved !== resolvedBase && !resolved.startsWith(resolvedBase + path.sep)) {
@@ -138,9 +141,13 @@ class ModService {
         // Security: ensure we stay within modsDir
         const oldPath = assertWithinBase(modsDir, fullName)
 
-        const baseName = enable
-            ? fullName.substring(0, fullName.indexOf(DISABLED_EXT))
-            : fullName + DISABLED_EXT
+        let baseName
+        if (enable) {
+            const idx = fullName.indexOf(DISABLED_EXT)
+            baseName = idx >= 0 ? fullName.substring(0, idx) : fullName
+        } else {
+            baseName = fullName.endsWith(DISABLED_EXT) ? fullName : fullName + DISABLED_EXT
+        }
         const newPath = assertWithinBase(modsDir, baseName)
 
         await fs.rename(oldPath, newPath)

@@ -12,6 +12,10 @@ jest.mock('lucide-react', () => ({
   ChevronDown: () => <div data-testid="chevron-down-icon" />
 }));
 
+jest.mock('fs', () => ({
+  existsSync: jest.fn()
+}));
+
 describe('BottomBar', () => {
   it('renders correctly', async () => {
     render(
@@ -21,21 +25,34 @@ describe('BottomBar', () => {
     );
 
     // Play button should be present
-    expect(screen.getByText('Играть')).toBeInTheDocument();
+    expect(screen.getByText('ИГРАТЬ')).toBeInTheDocument();
   });
 
-  it('calls openPath when Folder icon is clicked', async () => {
+  it('calls ipcRenderer openPath when Folder icon is clicked', async () => {
+    const { ipcRenderer } = require('electron');
+    const fs = require('fs');
+    fs.existsSync.mockReturnValue(true);
+    window.ConfigManager.getInstanceDirectory = jest.fn().mockResolvedValue('/mock/data/dir');
+
     render(
       <AppProvider>
         <BottomBar />
       </AppProvider>
     );
 
+    // Wait for the default server to be selected
+    await waitFor(() => {
+      expect(screen.getByText('Test Server (1.20.1)')).toBeInTheDocument();
+    });
+
     // Find the button with tooltip "Папка игры"
     const folderButton = screen.getByTestId('folder-icon').closest('button');
     fireEvent.click(folderButton);
 
-    expect(window.HeliosAPI.shell.openPath).toHaveBeenCalledWith('/mock/data/dir');
+    await waitFor(() => {
+      // It should call with instanceDir + selectedVersion ('test-server-id' from mock)
+      expect(ipcRenderer.invoke).toHaveBeenCalledWith('shell:openPath', expect.stringContaining('test-server-id'));
+    });
   });
 
   it('loads servers and displays the default selected version', async () => {

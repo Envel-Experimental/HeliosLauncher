@@ -25,6 +25,7 @@ describe('GameCrashHandler Detailed Tests', () => {
             }
         }))
 
+        jest.mock('@sentry/electron/main')
         jest.doMock('electron', () => ({
             shell: { openExternal: jest.fn() },
             ipcMain: { once: jest.fn(), emit: jest.fn() },

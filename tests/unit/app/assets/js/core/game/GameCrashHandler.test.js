@@ -1,8 +1,8 @@
-const GameCrashHandler = require('@app/assets/js/core/game/GameCrashHandler');
+const GameCrashHandler = require('@core/game/GameCrashHandler');
 
 
-jest.mock('@app/assets/js/configmanager');
-jest.mock('@app/assets/js/core/util/LoggerUtil', () => ({
+jest.mock('@core/configmanager');
+jest.mock('@core/util/LoggerUtil', () => ({
     LoggerUtil: {
         getLogger: jest.fn().mockReturnValue({
             info: jest.fn(),
@@ -11,14 +11,14 @@ jest.mock('@app/assets/js/core/util/LoggerUtil', () => ({
         })
     }
 }));
-jest.mock('@app/assets/js/preloader', () => ({
+jest.mock('../../../../../app/assets/js/preloader', () => ({
     sendToSentry: jest.fn()
-}));
-jest.mock('@app/assets/js/crash-handler');
-jest.mock('@app/assets/js/dropinmodutil');
-jest.mock('@app/assets/js/langloader', () => ({
+}), { virtual: true });
+jest.mock('../../../../../app/assets/js/crash-handler', () => ({}), { virtual: true });
+jest.mock('../../../../../app/assets/js/dropinmodutil', () => ({}), { virtual: true });
+jest.mock('../../../../../app/assets/js/langloader', () => ({
     queryJS: jest.fn((key) => key)
-}));
+}), { virtual: true });
 jest.mock('electron', () => ({
     shell: {
         openExternal: jest.fn()

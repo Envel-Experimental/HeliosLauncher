@@ -1,6 +1,9 @@
 [ejs.app]
 title = "ФЛАУНЧЕР"
 
+[js.app]
+title = "ФЛАУНЧЕР"
+
 [ejs.landing]
 updateAvailableTooltip = "Доступно обновление"
 usernamePlaceholder = "Имя пользователя"
@@ -172,9 +175,15 @@ okay = "Продолжить"
 serverUnavailableTitle = "Серверы недоступны"
 serverUnavailableDesc = "Серверы недоступны, будем пробовать запускать скачанную версию. Если не запустится - проверь подключение к Интернету и перезапусти приложение."
 serverUnavailableOkay = "ОК"
+noDistributionIndex = "Ошибка загрузки индекса дистрибутива."
+noServerSelected = "Пожалуйста, выберите сервер перед запуском."
+cancelButton = "Отмена"
 
 [js.landing.selectedAccount]
 noAccountSelected = "Аккаунт не выбран"
+
+[js.landing]
+noSelection = "Сервер не выбран"
 
 [js.landing.selectedServer]
 noSelection = "Сервер не выбран"
@@ -238,7 +247,7 @@ errorTitle = "Что-то пошло не так"
 errorMessage = "Ошибка аутентификации Microsoft. Пожалуйста, попробуйте еще раз."
 okButton = "ОК"
 
-[js.settings.mstfLogout]
+[js.settings.msftLogout]
 errorTitle = "Что-то пошло не так"
 errorMessage = "Ошибка выхода из учетной записи Microsoft. Пожалуйста, попробуйте еще раз."
 okButton = "ОК"

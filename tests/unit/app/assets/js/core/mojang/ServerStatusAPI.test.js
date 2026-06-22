@@ -7,18 +7,19 @@ jest.mock('dns/promises', () => ({
 }));
 
 // Mock net.connect
-const mockSocket = {
-    write: jest.fn(),
-    setTimeout: jest.fn(),
-    destroy: jest.fn(),
-    end: jest.fn(),
-    on: jest.fn().mockReturnThis(),
-    once: jest.fn().mockReturnThis(),
-};
-const mockConnect = jest.fn().mockReturnValue(mockSocket);
-jest.mock('net', () => ({
-    connect: mockConnect,
-}));
+jest.mock('net', () => {
+    const mockSocket = {
+        write: jest.fn(),
+        setTimeout: jest.fn(),
+        destroy: jest.fn(),
+        end: jest.fn(),
+        on: jest.fn().mockReturnThis(),
+        once: jest.fn().mockReturnThis(),
+    };
+    return {
+        connect: jest.fn().mockReturnValue(mockSocket),
+    };
+});
 
 // Mock Logger
 jest.mock('../../../../../../../app/assets/js/core/util/LoggerUtil', () => ({
@@ -78,7 +79,9 @@ describe('ServerStatusAPI', () => {
         await new Promise(resolve => setImmediate(resolve));
 
         // Trigger connect callback
+        const mockConnect = require('net').connect;
         expect(mockConnect).toHaveBeenCalled();
+        const mockSocket = mockConnect.mock.results[0].value;
         const connectCallback = mockConnect.mock.calls[0][2];
         connectCallback();
 
@@ -99,6 +102,8 @@ describe('ServerStatusAPI', () => {
         await new Promise(resolve => setImmediate(resolve));
 
         // Trigger timeout callback
+        const mockConnect = require('net').connect;
+        const mockSocket = mockConnect.mock.results[0].value;
         const timeoutHandler = mockSocket.setTimeout.mock.calls[0][1];
         timeoutHandler();
 
