@@ -11,6 +11,13 @@ describe('BandwidthManager', () => {
         jest.resetModules()
         jest.useFakeTimers()
 
+        const actualOs = jest.requireActual('os')
+        jest.doMock('os', () => ({
+            ...actualOs,
+            loadavg: jest.fn().mockReturnValue([0, 0, 0]),
+            cpus: jest.fn().mockReturnValue(new Array(4))
+        }))
+
         jest.doMock('@network/constants', () => ({
             MIN_UPLOAD_LIMIT_MBPS: 1,
             MAX_UPLOAD_LIMIT_MBPS: 15,

@@ -140,7 +140,8 @@ ConfigManager.load().then(async () => {
         console.warn('[Renderer] Failed to apply initial translations:', e)
     }
 
-    const bkid = Math.floor(Math.random() * 5) // roughly 5 backgrounds in assets
+    const backgrounds = [0, 4]
+    const bkid = backgrounds[Math.floor(Math.random() * backgrounds.length)]
     document.body.setAttribute('bkid', bkid.toString())
     document.body.setAttribute('data-platform', platform)
 
