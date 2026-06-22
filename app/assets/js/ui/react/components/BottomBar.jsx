@@ -95,8 +95,11 @@ const BottomBar = () => {
       setIsPlaying(launchBtn.disabled);
 
       const observer = new MutationObserver(() => {
-        setPlayText(launchBtn.innerText || t('landing.launchButton', 'ИГРАТЬ'));
-        setIsPlaying(launchBtn.disabled);
+        const currentBtn = document.getElementById('launch_button');
+        if (currentBtn) {
+          setPlayText(currentBtn.innerText || t('landing.launchButton', 'ИГРАТЬ'));
+          setIsPlaying(currentBtn.disabled);
+        }
       });
       observer.observe(launchBtn, { attributes: true, childList: true, subtree: true, characterData: true });
 
@@ -111,14 +114,16 @@ const BottomBar = () => {
 
       if (detailsText) {
         detailsObserver = new MutationObserver(() => {
-          setStatusText(detailsText.innerText);
+          const currentDetails = document.getElementById('launch_details_text');
+          if (currentDetails) setStatusText(currentDetails.innerText);
         });
         detailsObserver.observe(detailsText, { childList: true, characterData: true, subtree: true });
       }
 
       if (progressBar) {
         progressObserver = new MutationObserver(() => {
-          setProgress(progressBar.value);
+          const currentProgress = document.getElementById('launch_progress');
+          if (currentProgress) setProgress(currentProgress.value);
         });
         progressObserver.observe(progressBar, { attributes: true });
       }
