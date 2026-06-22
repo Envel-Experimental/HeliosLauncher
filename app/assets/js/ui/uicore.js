@@ -136,9 +136,9 @@ ipcRenderer.on('autoUpdateNotification', (event, arg, info) => {
             break
         case 'ready':
             updateCheckListener = setInterval(() => {
-                ipcRenderer.send('autoUpdateAction', 'checkForUpdate')
+                ipcRenderer.send('autoUpdateAction', 'checkForUpdate', window.ConfigManager?.getAllowPrerelease() || false)
             }, 1800000)
-            ipcRenderer.send('autoUpdateAction', 'checkForUpdate')
+            ipcRenderer.send('autoUpdateAction', 'checkForUpdate', window.ConfigManager?.getAllowPrerelease() || false)
             break
         case 'realerror':
             if (info != null && info.code != null) {

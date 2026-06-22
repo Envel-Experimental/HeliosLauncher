@@ -2488,7 +2488,7 @@ export function populateSettingsUpdateInformation(data) {
         settingsUpdateButtonStatus('Проверить обновления', false, () => {
             const _isDev = window.isDev || false
             if (!_isDev) {
-                ipcRenderer.send('autoUpdateAction', 'checkForUpdate')
+                ipcRenderer.send('autoUpdateAction', 'checkForUpdate', ConfigManager.getAllowPrerelease())
                 settingsUpdateButtonStatus('Проверка...', true)
 
                 // Safety timeout: reset button if no response within 15 seconds
