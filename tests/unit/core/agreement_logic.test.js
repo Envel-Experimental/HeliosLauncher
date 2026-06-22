@@ -1,11 +1,30 @@
+const fs = require('fs/promises')
+
+// Mock Electron app path
+jest.mock('electron', () => ({
+    app: {
+        getPath: jest.fn().mockReturnValue('/mock/user/data'),
+        getVersion: jest.fn().mockReturnValue('1.0.0')
+    }
+}))
+
+// Mock pathutil to return a mock directory
+jest.mock('../../../app/assets/js/core/pathutil', () => ({
+    resolveDataPathSync: jest.fn().mockReturnValue('/mock/launcher/dir')
+}))
+
+// Mock fs/promises to keep files in memory/mocked
+jest.mock('fs/promises', () => ({
+    access: jest.fn(),
+    writeFile: jest.fn(),
+    mkdir: jest.fn()
+}))
+
 const ConfigManager = require('../../../app/assets/js/core/configmanager')
-const fs = require('fs-extra')
-const path = require('path')
 
 describe('ConfigManager Agreement Logic', () => {
-    const testDir = path.join(__dirname, '../../../../temp_test_user_data')
-
     beforeEach(async () => {
+        jest.clearAllMocks()
         // Reset config to a clean state
         ConfigManager.setConfig({
             settings: {

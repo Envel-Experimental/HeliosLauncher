@@ -192,9 +192,18 @@
   transform: translateY(0);
 }
 
-.play-button:disabled {
-  opacity: 0.9;
+.play-button:disabled:not(.loading) {
+  opacity: 0.4;
   cursor: not-allowed;
+  box-shadow: none;
+  pointer-events: none;
+}
+
+.play-button:disabled.loading {
+  opacity: 1;
+  cursor: default;
+  box-shadow: none;
+  pointer-events: none;
 }
 
 .icon-button {
@@ -340,7 +349,7 @@ body {
   width: 100%;
   padding: 12px 16px;
   border-radius: var(--react-radius-md);
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 2px solid #cccccc;
   background: #ffffff;
   color: #000000;
   font-family: 'Nunito', sans-serif;
@@ -348,6 +357,9 @@ body {
   font-weight: 600;
   outline: none;
   transition: all 0.2s ease;
+}
+.react-input:hover {
+  border-color: #999999;
 }
 .react-input:focus {
   border-color: var(--react-accent);
@@ -366,6 +378,70 @@ body.news-blur #background-video {
 
 body.news-blur #background-fallback-img {
   filter: blur(8px) brightness(0.6) !important;
+}
+
+/* Light Theme Modal Overrides */
+.react-light-modal {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border: 1px solid rgba(0, 0, 0, 0.15) !important;
+  color: #000000 !important;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.react-light-modal h2 {
+  color: #000000 !important;
+}
+
+.react-light-modal p {
+  color: rgba(0, 0, 0, 0.7) !important;
+}
+
+.react-light-modal .disclaimer-text {
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+.react-light-modal .icon-button {
+  border: 1px solid rgba(0, 0, 0, 0.18) !important;
+  color: #000000 !important;
+}
+
+.react-light-modal .icon-button:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+  border-color: rgba(0, 0, 0, 0.3) !important;
+}
+
+.react-light-modal .course-card {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+.react-light-modal .course-card:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+
+.react-light-modal .course-card.selected {
+  background: rgba(249, 115, 22, 0.08) !important;
+  border: 2.5px solid var(--react-accent) !important;
+}
+
+.react-light-modal .course-title {
+  color: #000000 !important;
+}
+
+.react-light-modal .course-desc {
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+.react-light-modal .course-badge {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #000000 !important;
+}
+
+.react-light-modal .course-badge.selected {
+  background: var(--react-accent) !important;
+  color: #ffffff !important;
 }
 
 

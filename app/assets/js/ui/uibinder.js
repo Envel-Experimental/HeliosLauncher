@@ -45,6 +45,7 @@ window.VIEWS = VIEWS
 window.switchView = switchView
 window.getCurrentView = () => currentView
 window.fatalStartupError = fatalStartupError
+window.updateSelectedServer = updateSelectedServer
 // window.prepareSettings is handled in settings.js
 // Note: currentView update is handled in switchView function below
 
@@ -126,6 +127,8 @@ export async function updateSelectedServer(serv) {
         animateSettingsTabRefresh()
     }
     setLaunchEnabled(serv != null)
+
+    window.dispatchEvent(new CustomEvent('server-changed', { detail: serv != null ? serv.rawServer.id : null }));
 }
 
 /**

@@ -23,6 +23,19 @@ const BottomBar = () => {
   const linksDropdownRef = useRef(null);
 
   useEffect(() => {
+    const handleServerChanged = (e) => {
+      const newServerId = e.detail;
+      if (newServerId) {
+        setSelectedVersion(newServerId);
+      }
+    };
+    window.addEventListener('server-changed', handleServerChanged);
+    return () => {
+      window.removeEventListener('server-changed', handleServerChanged);
+    };
+  }, []);
+
+  useEffect(() => {
     window.onReactLaunchDetails = (details) => setLaunchStatus(details);
     window.onReactLaunchPercentage = (percent) => setLaunchPercent(percent);
     window.onReactLaunchComplete = () => {
@@ -336,7 +349,7 @@ const BottomBar = () => {
       {/* Center: Play Button */}
       <div className="bottom-bar-center" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
         <button
-          className="play-button"
+          className={`play-button ${launchStatus ? 'loading' : ''}`}
           onClick={handleLaunch}
           disabled={isCooldown || launchStatus != null}
           style={{
