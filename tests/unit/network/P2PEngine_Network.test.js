@@ -12,6 +12,13 @@ describe('P2PEngine - Network Orchestration Tests', () => {
         jest.resetModules()
         jest.useFakeTimers()
 
+        const actualOs = jest.requireActual('os')
+        jest.doMock('os', () => ({
+            ...actualOs,
+            loadavg: jest.fn().mockReturnValue([0, 0, 0]),
+            cpus: jest.fn().mockReturnValue(new Array(4))
+        }))
+
         // Mock Hyperswarm/DHT
         jest.doMock('hyperswarm', () => jest.fn().mockImplementation(() => ({
             on: jest.fn(),

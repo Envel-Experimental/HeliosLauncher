@@ -1,3 +1,6 @@
+/**
+ * @jest-environment node
+ */
 const PeerHandler = require('@network/PeerHandler')
 const { MSG_HELLO, MSG_PING, MSG_PONG } = require('@network/constants')
 const EventEmitter = require('events')

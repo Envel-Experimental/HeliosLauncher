@@ -25,11 +25,12 @@ console.log(`[Build] Generated version.json: ${versionData.release}`)
 
 
 esbuild.build({
-    entryPoints: [
-        path.join(__dirname, 'app', 'assets', 'js', 'renderer-entry.js')
-    ],
+    entryPoints: {
+        'renderer.bundle': path.join(__dirname, 'app', 'assets', 'js', 'renderer-entry.js'),
+        'ui/react/bundle': path.join(__dirname, 'app', 'assets', 'js', 'ui', 'react', 'index.jsx')
+    },
     bundle: true,
-    outfile: path.join(__dirname, 'app', 'dist', 'renderer.bundle.js'),
+    outdir: path.join(__dirname, 'app', 'dist'),
     platform: 'browser',
     target: 'chrome100',
     format: 'iife',
@@ -91,6 +92,16 @@ esbuild.build({
         '@common': path.resolve(__dirname, 'app/assets/js/core/common'),
         '@network': path.resolve(__dirname, 'network'),
         'helios-distribution-types': path.resolve(__dirname, 'app/assets/js/core/common/DistributionClasses.js')
+    },
+    loader: {
+        '.woff': 'file',
+        '.woff2': 'file',
+        '.eot': 'file',
+        '.ttf': 'file',
+        '.otf': 'file',
+        '.svg': 'file',
+        '.png': 'file',
+        '.jpg': 'file'
     },
     inject: [
         path.join(__dirname, 'app', 'assets', 'js', 'ui', 'views', 'inject-globals.js')

@@ -1,3 +1,6 @@
+/**
+ * @jest-environment node
+ */
 'use strict'
 
 describe('P2PEngine Detailed Tests', () => {

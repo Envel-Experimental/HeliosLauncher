@@ -1,3 +1,6 @@
+/**
+ * @jest-environment node
+ */
 const path = require('path')
 
 describe('PeerHandler Security', () => {

@@ -63,7 +63,10 @@ test.describe('Application Startup Smoke Test', () => {
 
         const loginUsername = window.locator('#loginUsername');
         const loginOptions = window.locator('#loginOptionsContainer');
-
+        
+        // React UI Selectors
+        const reactPlayButton = window.locator('.bottom-bar-center .play-button');
+        const reactLoginInput = window.locator('#loginContainer .react-input');
 
         while (Date.now() - startTime < timeout) {
             
@@ -76,7 +79,7 @@ test.describe('Application Startup Smoke Test', () => {
             }
 
             // 1. SUCCESS CHECK
-            if (await launchButton.isVisible() || await serverSelect.isVisible() || await loginUsername.isVisible() || await loginOptions.isVisible()) {
+            if (await launchButton.isVisible() || await serverSelect.isVisible() || await loginUsername.isVisible() || await loginOptions.isVisible() || await reactPlayButton.isVisible() || await reactLoginInput.isVisible()) {
                 console.log('PASS: Application reached a stable functional state (Landing or Login).');
                 return;
             }

@@ -80,9 +80,6 @@ const uibinder = require('./ui/uibinder.js')
 console.log('[Renderer] Stage Three: UI Views')
 const landing = require('./ui/views/landing.js')
 const settings = require('./ui/views/settings.js')
-const welcome = require('./ui/views/welcome.js')
-const login = require('./ui/views/login.js')
-const loginOptions = require('./ui/views/loginOptions.js')
 const overlay = require('./ui/views/overlay.js')
 const agreement = require('./ui/views/agreement.js')
 const p2pAgreement = require('./ui/views/p2pAgreement.js')
@@ -92,11 +89,8 @@ console.log('[Renderer] Stage Four: Merging Exports')
 Object.assign(window, uicore)
 Object.assign(window, uibinder)
 Object.assign(window, landing)
-Object.assign(window, loginOptions)
 Object.assign(window, overlay)
 Object.assign(window, settings)
-Object.assign(window, welcome)
-Object.assign(window, login)
 Object.assign(window, agreement)
 Object.assign(window, p2pAgreement)
 
@@ -146,7 +140,8 @@ ConfigManager.load().then(async () => {
         console.warn('[Renderer] Failed to apply initial translations:', e)
     }
 
-    const bkid = Math.floor(Math.random() * 5) // roughly 5 backgrounds in assets
+    const backgrounds = [0, 4]
+    const bkid = backgrounds[Math.floor(Math.random() * backgrounds.length)]
     document.body.setAttribute('bkid', bkid.toString())
     document.body.setAttribute('data-platform', platform)
 

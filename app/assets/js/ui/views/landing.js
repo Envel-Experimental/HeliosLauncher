@@ -42,6 +42,8 @@ export function toggleLaunchArea(loading) {
         if (lCenter) lCenter.style.display = 'none'
         if (lRight) lRight.style.display = 'none'
     } else {
+        if (window.onReactLaunchComplete) window.onReactLaunchComplete();
+
         if (lower) {
             lower.style.display = 'flex'
             lower.style.visibility = 'visible'
@@ -87,6 +89,7 @@ window.toggleLaunchArea = toggleLaunchArea
 export function setLaunchDetails(details) {
     const lDetailsText = document.getElementById('launch_details_text')
     if (lDetailsText) lDetailsText.innerHTML = details
+    if (window.onReactLaunchDetails) window.onReactLaunchDetails(details)
 }
 window.setLaunchDetails = setLaunchDetails
 
@@ -105,6 +108,7 @@ export function setLaunchPercentage(percent) {
     if (lProgressLabel) {
         lProgressLabel.innerHTML = Math.round(percent instanceof Number ? percent : parseFloat(percent)) + '%'
     }
+    if (window.onReactLaunchPercentage) window.onReactLaunchPercentage(percent)
 }
 window.setLaunchPercentage = setLaunchPercentage
 
@@ -151,18 +155,32 @@ const launchButton = document.getElementById('launch_button')
 if (launchButton) {
     launchButton.addEventListener('click', async e => {
         loggerLanding.info('Launching game..')
+        const vid = document.getElementById('background-video')
+        if (vid) vid.pause()
+
         try {
             const distro = await DistroAPI.getDistribution()
             if (distro == null) {
-                showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), Lang.queryJS('landing.launch.noDistributionIndex'))
+                showLaunchFailure(
+                    Lang.queryJS('landing.launch.failureTitle') || 'Ошибка при запуске', 
+                    Lang.queryJS('landing.launch.noDistributionIndex') || 'Не удалось получить список файлов игры. Проверьте подключение к интернету.'
+                )
+                if (vid && !window.ConfigManager.getBackgroundVideoPaused()) vid.play().catch(() => {})
                 return
             }
-            const server = distro.getServerById(ConfigManager.getSelectedServer())
+            const serverIdToLaunch = window.CURRENT_SELECTED_SERVER_ID || window.ConfigManager.getSelectedServer();
+            const server = distro.getServerById(serverIdToLaunch)
             if (server == null) {
-                showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), Lang.queryJS('landing.launch.noServerSelected'))
+                console.error(`[Landing] Failed to find server for ID: ${serverIdToLaunch}`);
+                console.error(`[Landing] Available servers: ${distro.servers.map(s => s.rawServer.id).join(', ')}`);
+                showLaunchFailure(
+                    Lang.queryJS('landing.launch.failureTitle') || 'Ошибка при запуске', 
+                    Lang.queryJS('landing.launch.noServerSelected') || 'Сервер не выбран. Пожалуйста, выберите сервер перед запуском игры.'
+                )
+                if (vid && !window.ConfigManager.getBackgroundVideoPaused()) vid.play().catch(() => {})
                 return
             }
-            const jExe = ConfigManager.getJavaExecutable(ConfigManager.getSelectedServer())
+            const jExe = window.ConfigManager.getJavaExecutable(serverIdToLaunch)
             if (jExe == null) {
                 await asyncSystemScan(server.effectiveJavaOptions)
             } else {
@@ -181,20 +199,26 @@ if (launchButton) {
                     await asyncSystemScan(server.effectiveJavaOptions)
                 }
             }
-            Analytics.capture('Game Launch Started', {
-                serverId: ConfigManager.getSelectedServer(),
-                server_name: typeof server.rawServer.name === 'string' ? server.rawServer.name : (server.rawServer.name?.value || 'Unknown'),
-                mc_version: server.rawServer.minecraftVersion,
-                module_count: server.modules.length
-            })
+            if (typeof Analytics !== 'undefined') {
+                Analytics.capture('Game Launch Started', {
+                    serverId: ConfigManager.getSelectedServer(),
+                    server_name: typeof server.rawServer.name === 'string' ? server.rawServer.name : (server.rawServer.name?.value || 'Unknown'),
+                    mc_version: server.rawServer.minecraftVersion,
+                    module_count: server.modules.length
+                })
+            }
         } catch (err) {
             loggerLanding.error('Unhandled error in during launch process.', err)
-            Analytics.capture('Game Launch Failed', {
-                serverId: ConfigManager.getSelectedServer(),
-                error: err.message || err.toString()
-            })
-            Analytics.captureException(err)
+            console.error('Launch error details:', err);
+            if (typeof Analytics !== 'undefined') {
+                Analytics.capture('Game Launch Failed', {
+                    serverId: serverIdToLaunch,
+                    error: err.message || err.toString()
+                })
+                Analytics.captureException(err)
+            }
             showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), Lang.queryJS('landing.launch.failureText'))
+            if (vid && !window.ConfigManager.getBackgroundVideoPaused()) vid.play().catch(() => {})
         }
     })
 }
@@ -340,7 +364,7 @@ export function showLaunchFailure(title, desc) {
     setOverlayContent(
         title,
         desc,
-        Lang.queryJS('landing.launch.okay')
+        Lang.queryJS('landing.launch.okay') || 'ОК'
     )
     setOverlayHandler(null)
     toggleOverlay(true)
@@ -566,8 +590,23 @@ async function dlAsync(login = true) {
     const serv = distro.getServerById(ConfigManager.getSelectedServer())
 
     if (login) {
-        if (ConfigManager.getSelectedAccount() == null) {
+        // Fallback: If getSelectedAccount() is null, try to get the first account from the auth database
+        let account = window.ConfigManager.getSelectedAccount();
+        if (account == null) {
+            const allAccounts = window.ConfigManager.getAuthAccounts();
+            if (allAccounts && Object.keys(allAccounts).length > 0) {
+                const firstId = Object.keys(allAccounts)[0];
+                account = allAccounts[firstId];
+                console.log(`[Landing] Auth fallback: using first available account ${firstId}`);
+            }
+        }
+
+        if (account == null) {
             loggerLanding.error('You must be logged into an account.')
+            showLaunchFailure(
+                Lang.queryJS('landing.launch.failureTitle') || 'Ошибка при запуске',
+                'Ты не авторизован. Войди в аккаунт перед запуском игры.'
+            )
             toggleLaunchArea(false) // FIX: Reset UI
             return
         }
@@ -581,10 +620,10 @@ async function dlAsync(login = true) {
     const progressListener = (event, status) => {
         if (status.type === 'verify') {
             setLaunchDetails(Lang.queryJS('landing.dlAsync.validatingFileIntegrity'))
-            setLaunchPercentage(status.progress)
+            setLaunchPercentage(status.progress * 0.40) // 0-40% for verification
         } else if (status.type === 'download') {
             setLaunchDetails(Lang.queryJS('landing.dlAsync.downloadingFiles'))
-            setDownloadPercentage(status.progress)
+            setDownloadPercentage(40 + (status.progress * 0.50)) // 40-90% for downloading
         }
     }
     ipcRenderer.on('dl:progress', progressListener)
@@ -597,7 +636,7 @@ async function dlAsync(login = true) {
         })
 
         // Success
-        setDownloadPercentage(100)
+        setDownloadPercentage(90)
         ipcRenderer.removeListener('dl:progress', progressListener)
 
     } catch (err) {
@@ -645,9 +684,17 @@ async function dlAsync(login = true) {
     } else {
         setLaunchDetails(Lang.queryJS('landing.dlAsync.preparingToLaunch'))
     }
+    setLaunchPercentage(100)
 
     if (login) {
-        const authUser = ConfigManager.getSelectedAccount()
+        let authUser = window.ConfigManager.getSelectedAccount();
+        if (authUser == null) {
+            const allAccounts = window.ConfigManager.getAuthAccounts();
+            if (allAccounts && Object.keys(allAccounts).length > 0) {
+                authUser = allAccounts[Object.keys(allAccounts)[0]];
+            }
+        }
+        loggerLanding.info('Game launch sequence started..')
         setLaunchDetails(Lang.queryJS('landing.dlAsync.launchingGame'))
 
         // Attach listeners for logs from Main

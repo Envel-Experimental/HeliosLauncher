@@ -1,4 +1,7 @@
-const PeerHandler = require('@network/PeerHandler')
+/**
+ * @jest-environment node
+ */
+const PeerHandler = require('../../../network/PeerHandler')
 const EventEmitter = require('events')
 const b4a = require('b4a')
 const crypto = require('crypto')

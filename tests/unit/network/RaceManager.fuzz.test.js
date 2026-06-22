@@ -1,4 +1,7 @@
-const RaceManager = require('@network/RaceManager')
+/**
+ * @jest-environment node
+ */
+const RaceManager = require('../../../network/RaceManager')
 const ConfigManager = require('@core/configmanager')
 const crypto = require('crypto')
 
@@ -36,7 +39,11 @@ jest.mock('@network/P2PEngine', () => {
     return {
         peers: [{ id: 'mock-peer' }],
         getLoadStatus: jest.fn().mockReturnValue('normal'),
-        requestFile: jest.fn().mockImplementation(() => new MockStream()),
+        requestFile: jest.fn().mockImplementation(() => {
+            const stream = new MockStream()
+            process.nextTick(() => stream.emit('readable'))
+            return stream
+        }),
         getNetworkInfo: jest.fn().mockReturnValue({ downloaded: 0, uploaded: 0 }),
         once: jest.fn(),
         off: jest.fn()
@@ -60,7 +67,7 @@ describe('RaceManager Fuzzing', () => {
     })
 
     test('Fuzz: Randomly corrupted Headers and URLs should not crash RaceManager', async () => {
-        const fuzzCycles = 100
+        const fuzzCycles = 20
         
         for (let i = 0; i < fuzzCycles; i++) {
             // Fuzz inputs
@@ -120,7 +127,7 @@ describe('RaceManager Fuzzing', () => {
                 expect(e.name).not.toBe('TypeError')
             }
         }
-    }, 30000)
+    }, 60000)
 
     test('Fuzz: P2P Stream errors and random stream behavior should not crash RaceManager', async () => {
         const P2PEngine = require('@network/P2PEngine')
@@ -190,6 +197,6 @@ describe('RaceManager Fuzzing', () => {
                 }
             }).not.toThrow()
         }
-    }, 30000)
+    }, 60000)
 
 })

@@ -22,13 +22,13 @@ jest.mock('fs/promises', () => ({
 
 // Use a more robust mock for crypto
 const { PassThrough } = require('stream')
-const mHash = new PassThrough()
-mHash.update = jest.fn().mockReturnThis()
-mHash.digest = jest.fn().mockReturnValue(Buffer.from('deadbeef', 'hex'))
-mHash.read = jest.fn().mockReturnValue(Buffer.from('deadbeef', 'hex'))
+const mockHash = new PassThrough()
+mockHash.update = jest.fn().mockReturnThis()
+mockHash.digest = jest.fn().mockReturnValue(Buffer.from('deadbeef', 'hex'))
+mockHash.read = jest.fn().mockReturnValue(Buffer.from('deadbeef', 'hex'))
 
 jest.mock('crypto', () => ({
-    createHash: jest.fn(() => mHash)
+    createHash: jest.fn(() => mockHash)
 }))
 
 jest.mock('../../../../../../../app/assets/js/core/configmanager')

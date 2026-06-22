@@ -46,12 +46,11 @@ describe('DistroManager', () => {
         DistributionAPI = require('../../../app/assets/js/core/common/DistributionAPI').DistributionAPI
 
         // Mock Globals for UI
-        const mockElement = () => ({ style: {} })
-        global.document = {
-            readyState: 'complete',
-            getElementById: jest.fn((id) => mockElement()),
-            addEventListener: jest.fn()
-        }
+        // Mock Globals for UI
+        document.body.innerHTML = `
+            <button id="overlayAcknowledge"></button>
+            <button id="overlayAcknowledgeMid"></button>
+        `
         global.toggleOverlay = jest.fn()
         global.setOverlayContent = jest.fn()
         global.setOverlayHandler = jest.fn()

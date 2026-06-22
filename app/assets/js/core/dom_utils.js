@@ -9,7 +9,10 @@
  * @param {Function} [callback] Callback after animation.
  */
 exports.fadeIn = function (el, duration = 400, callback) {
-    if (!el) return;
+    if (!el) {
+        if (callback) callback();
+        return;
+    }
     if (typeof duration === 'function') {
         callback = duration;
         duration = 400;
@@ -46,7 +49,10 @@ exports.fadeIn = function (el, duration = 400, callback) {
  * @param {Function} [callback] Callback after animation.
  */
 exports.fadeOut = function (el, duration = 400, callback) {
-    if (!el) return;
+    if (!el) {
+        if (callback) callback();
+        return;
+    }
     if (typeof duration === 'function') {
         callback = duration;
         duration = 400;

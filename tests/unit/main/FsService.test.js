@@ -48,15 +48,16 @@ jest.mock('../../../app/assets/js/core/util', () => ({
 }))
 
 const path = require('path')
+const os = require('os')
 
 // APP_ROOT = the app installation dir (readable, not writable)
 const APP_ROOT = path.resolve(__dirname, '../../..')
 // SANDBOX_ROOT = user data dir (readable + writable)
-const SANDBOX_ROOT = process.cwd()
+const mockSandboxRoot = path.join(os.tmpdir(), `helios_fs_test_${Date.now()}`)
 
 jest.mock('../../../app/assets/js/core/configmanager', () => ({
-    getLauncherDirectorySync: jest.fn().mockReturnValue(SANDBOX_ROOT),
-    getDataDirectory: jest.fn().mockReturnValue(SANDBOX_ROOT)
+    getLauncherDirectorySync: jest.fn().mockReturnValue(mockSandboxRoot),
+    getDataDirectory: jest.fn().mockReturnValue(mockSandboxRoot)
 }))
 
 const FsService = require('../../../app/main/FsService')
@@ -65,8 +66,8 @@ const fs = require('fs/promises')
 const fsSync = require('fs')
 
 // Test paths in both allowed zones
-const TEST_PATH = path.join(SANDBOX_ROOT, 'test-file.txt')        // writable data dir
-const TEST_PATH2 = path.join(SANDBOX_ROOT, 'test-file2.txt')
+const TEST_PATH = path.join(mockSandboxRoot, 'test-file.txt')        // writable data dir
+const TEST_PATH2 = path.join(mockSandboxRoot, 'test-file2.txt')
 const APP_ASSET_PATH = path.join(APP_ROOT, 'app', 'assets', 'lang', 'en_US.toml')  // app assets — read only
 
 describe('FsService', () => {

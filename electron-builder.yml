@@ -28,7 +28,7 @@ extraResources:
 publish:
   - provider: github
     owner: Envel-Experimental
-    repo: HeliosLauncher
+    repo: Flauncher
   - provider: generic
     url: 'https://f-launcher.ru/fox/new/updates'
 

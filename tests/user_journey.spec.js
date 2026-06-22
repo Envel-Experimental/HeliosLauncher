@@ -3,7 +3,7 @@ const { launchApp, handleInitialOverlays, setupMockDistro, FOXFORD_DATA_PATH } =
 const fs = require('fs');
 const path = require('path');
 
-test.describe('HeliosLauncher User Journey Hardening', () => {
+test.describe('Flauncher User Journey Hardening', () => {
     let electronApp;
     let window;
 
@@ -35,7 +35,7 @@ test.describe('HeliosLauncher User Journey Hardening', () => {
         const result = await launchApp(null, true);
         electronApp = result.electronApp;
         window = result.window;
-        
+
         await setupMockDistro(mockDistro);
         await handleInitialOverlays(window);
     });
@@ -54,7 +54,7 @@ test.describe('HeliosLauncher User Journey Hardening', () => {
 
         await test.step('Preparation: Create valid local file', async () => {
             fs.mkdirSync(path.dirname(filePath), { recursive: true });
-            fs.writeFileSync(filePath, ''); 
+            fs.writeFileSync(filePath, '');
             console.log(`Created dummy file at: ${filePath}`);
         });
 
@@ -74,7 +74,7 @@ test.describe('HeliosLauncher User Journey Hardening', () => {
             const launchDetails = window.locator('#launch_details_text');
 
             await launchBtn.click();
-            
+
             // Should show "Validating"
             await expect(launchDetails).toHaveText(/Validating|Проверка/i, { timeout: 15000 });
             console.log('Launcher detected missing file and entered repair state.');
@@ -85,18 +85,18 @@ test.describe('HeliosLauncher User Journey Hardening', () => {
         await test.step('UI: Verify P2P Stats Cards', async () => {
             const settingsBtn = window.locator('#settingsMediaButton');
             await settingsBtn.click();
-            
+
             const deliveryTab = window.locator('.settingsNavItem[rSc="settingsTabDelivery"]');
             await deliveryTab.click();
-            
+
             // Check for LAN/WAN status cards
             await expect(window.locator('#settingsP2PProfileLabel')).toBeVisible();
             await expect(window.locator('#settingsMirrorStatusContainer')).toBeVisible();
-            
+
             // Verify P2P Stats button exists
             const p2pStatsBtn = window.locator('#settingsP2PStatsButton');
             await expect(p2pStatsBtn).toBeVisible();
-            
+
             console.log('Network/P2P telemetry UI verified.');
         });
     });
@@ -105,23 +105,23 @@ test.describe('HeliosLauncher User Journey Hardening', () => {
         await test.step('Change RAM and Verify Persistence', async () => {
             const settingsBtn = window.locator('#settingsMediaButton');
             await settingsBtn.click();
-            
+
             const javaTab = window.locator('.settingsNavItem[rSc="settingsTabJava"]');
             await javaTab.click();
-            
+
             const maxRamSlider = window.locator('#settingsMaxRAMRange');
             // Set to 4GB (assuming slider range supports it)
             await maxRamSlider.evaluate(node => {
                 node.setAttribute('value', "4");
                 node.dispatchEvent(new Event('change'));
             });
-            
+
             await window.locator('#settingsNavDone').click();
-            
+
             // Re-open
             await window.locator('#settingsMediaButton').click();
             await javaTab.click();
-            
+
             await expect(maxRamSlider).toHaveAttribute('value', '4');
             console.log('Settings persistence verified.');
         });

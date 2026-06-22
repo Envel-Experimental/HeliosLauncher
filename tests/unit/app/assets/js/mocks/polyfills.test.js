@@ -98,6 +98,7 @@ describe('Renderer Polyfills Verification', () => {
         test('Readable.fromWeb should convert web stream to node stream', (done) => {
             const { Readable } = require('../../../../../../app/assets/js/mocks/stream-polyfill')
             
+            const { TextEncoder } = require('util')
             // Mock Web ReadableStream
             const webStream = {
                 getReader: () => ({
@@ -139,10 +140,18 @@ describe('Renderer Polyfills Verification', () => {
         let cryptoPolyfill
         
         beforeEach(() => {
-            global.window = {
-                HeliosAPI: {
+            if (typeof window !== 'undefined') {
+                window.HeliosAPI = {
                     ipc: {
                         sendSync: jest.fn().mockReturnValue(true)
+                    }
+                }
+            } else {
+                global.window = {
+                    HeliosAPI: {
+                        ipc: {
+                            sendSync: jest.fn().mockReturnValue(true)
+                        }
                     }
                 }
             }

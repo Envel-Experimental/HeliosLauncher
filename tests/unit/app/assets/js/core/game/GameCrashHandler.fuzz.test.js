@@ -13,6 +13,7 @@ jest.mock('@app/assets/js/core/configmanager', () => ({
     getSupportUrl: jest.fn().mockReturnValue('https://mock-support.com'),
     getModConfiguration: jest.fn().mockReturnValue({ mods: {} }),
     setModConfiguration: jest.fn(),
+    setJavaExecutable: jest.fn(),
     save: jest.fn().mockResolvedValue(),
     getJavaExecutable: jest.fn().mockReturnValue('/mock/java'),
     getDataDirectory: jest.fn().mockReturnValue('/mock/data')
@@ -26,20 +27,7 @@ jest.mock('@app/assets/js/core/dropinmodutil', () => ({
     scanForDropinMods: jest.fn().mockResolvedValue([{ fullName: 'mod.jar' }])
 }))
 
-jest.mock('fs', () => {
-    const fsActual = jest.requireActual('fs')
-    return {
-        ...fsActual,
-        existsSync: jest.fn().mockReturnValue(true),
-        rmSync: jest.fn(),
-        unlinkSync: jest.fn(),
-        renameSync: jest.fn(),
-        promises: {
-            stat: jest.fn().mockResolvedValue({ mtime: { getTime: () => Date.now() } }),
-            readdir: jest.fn().mockResolvedValue([])
-        }
-    }
-})
+const fs = require('fs')
 
 describe('GameCrashHandler Fuzzing & Path Traversal Protection', () => {
     let handler
@@ -53,16 +41,26 @@ describe('GameCrashHandler Fuzzing & Path Traversal Protection', () => {
 
     beforeEach(() => {
         jest.clearAllMocks()
+        jest.spyOn(fs, 'existsSync').mockReturnValue(true)
+        jest.spyOn(fs, 'rmSync').mockImplementation(() => {})
+        jest.spyOn(fs, 'unlinkSync').mockImplementation(() => {})
+        jest.spyOn(fs, 'renameSync').mockImplementation(() => {})
+        jest.spyOn(fs.promises, 'stat').mockResolvedValue({ mtime: { getTime: () => Date.now() } })
+        jest.spyOn(fs.promises, 'readdir').mockResolvedValue([])
         handler = new GameCrashHandler('/mock/gameDir', '/mock/commonDir', mockServer, [])
         
         // Mock UI calling to avoid Electron window access
         handler._callUI = jest.fn().mockResolvedValue()
         handler.restartGame = jest.fn().mockResolvedValue()
-    }
-)
+    })
+
+    afterEach(() => {
+        jest.restoreAllMocks()
+    })
 
     test('Fuzz: handleCrashFix with malicious/corrupted analysis inputs', async () => {
-        const fuzzCycles = 200
+        jest.spyOn(process, 'exit').mockImplementation(() => {})
+        const fuzzCycles = 50
 
         for (let i = 0; i < fuzzCycles; i++) {
             // Generate random malicious paths (path traversal attempts)

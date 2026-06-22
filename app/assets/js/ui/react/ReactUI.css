@@ -1,0 +1,371 @@
+@import '@fontsource/nunito/400.css';
+@import '@fontsource/nunito/600.css';
+@import '@fontsource/nunito/800.css';
+
+:root {
+  --react-panel-bg: rgba(20, 20, 20, 0.65);
+  --react-panel-border: rgba(255, 255, 255, 0.1);
+  --react-accent: #f97316;
+  --react-accent-hover: #ea580c;
+  --react-text: #f8fafc;
+  --react-text-dim: #94a3b8;
+  --react-radius-lg: 16px;
+  --react-radius-md: 12px;
+  --react-radius-sm: 8px;
+  --react-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.react-ui-root * {
+  box-sizing: border-box;
+}
+
+.react-ui-root {
+  font-family: 'Nunito', sans-serif;
+  color: var(--react-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+.react-ui-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+}
+
+.react-glass {
+  background: var(--react-panel-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--react-panel-border);
+  box-shadow: var(--react-shadow);
+}
+
+.react-ui-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 15px;
+}
+
+.react-ui-main {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2vh 0;
+  min-height: 0;
+}
+
+.react-ui-footer {
+  margin-top: auto;
+}
+
+/* User Profile */
+.user-profile-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px 8px 8px;
+  border-radius: 100px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.user-profile-wrapper:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
+}
+
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: rgba(0,0,0,0.5);
+}
+
+.user-name {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.user-arrow {
+  opacity: 0.5;
+  transition: transform 0.3s ease;
+}
+
+.user-profile-wrapper:hover .user-arrow {
+  opacity: 1;
+  transform: translateY(2px);
+}
+
+/* Event Banner */
+.event-banner-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 750px;
+  margin-bottom: 4vh; /* Push banner up slightly */
+  border-radius: var(--react-radius-lg);
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.event-banner-wrapper:hover {
+  transform: scale(1.02);
+}
+
+.event-banner-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: cover;
+  transition: transform 0.7s ease;
+}
+
+.event-banner-wrapper:hover .event-banner-img {
+  transform: scale(1.05);
+}
+
+.event-banner-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  padding: 40px 30px 20px;
+  background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 100%);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.event-banner-title {
+  font-size: 28px;
+  font-weight: 800;
+  margin-bottom: 4px;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+
+.event-banner-date {
+  font-size: 14px;
+  color: var(--react-text-dim);
+  font-weight: 600;
+  max-width: 70%;
+  line-height: 1.4;
+}
+
+.event-banner-badge {
+  background: var(--react-accent);
+  color: #000;
+  padding: 6px 14px;
+  border-radius: 100px;
+  font-weight: 800;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 4px 15px rgba(74, 222, 128, 0.3);
+}
+
+/* Bottom Bar */
+.bottom-bar-wrapper {
+  border-radius: var(--react-radius-lg);
+}
+
+.play-button {
+  background: var(--react-accent);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--react-radius-md);
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 15px rgba(249, 115, 22, 0.2);
+}
+
+.play-button:hover:not(:disabled) {
+  background: var(--react-accent-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(249, 115, 22, 0.3);
+}
+
+.play-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.play-button:disabled {
+  opacity: 0.9;
+  cursor: not-allowed;
+}
+
+.icon-button {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--react-radius-md);
+  color: var(--react-text);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.icon-button:hover {
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.2);
+  transform: translateY(-2px);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadeIn 0.4s ease forwards;
+}
+
+/* =========================================
+   GLASSMORPHISM OVERRIDES FOR VANILLA UI 
+   ========================================= */
+
+/* Make vanilla backgrounds glassmorphic instead of solid black */
+#main {
+  background: transparent !important;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+  overflow: hidden;
+}
+
+#settingsContainer, #loginOptionsContainer, #loginContainer {
+  background: rgba(20, 20, 20, 0.5) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+#frameBar {
+  background: rgba(0, 0, 0, 0.3) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+#overlayContainer {
+  background: rgba(0, 0, 0, 0.7) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+#upper, #lower, #launch_details { display: none !important; }
+
+body { 
+  overflow: hidden !important; 
+  border-radius: 12px;
+  background-color: transparent !important;
+}
+
+#background-video, #background-fallback-img {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* React UI Overlay Styles */
+#overlayContent {
+  background: var(--react-panel-bg) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--react-panel-border) !important;
+  box-shadow: var(--react-shadow) !important;
+  border-radius: var(--react-radius-lg);
+  padding: 30px !important;
+}
+
+#overlayTitle {
+  font-family: 'Inter', 'Nunito', sans-serif !important;
+  font-weight: 800 !important;
+  font-size: 28px !important;
+  color: #ff5e5e !important; /* Red color for error focus */
+  margin-bottom: 16px !important;
+  text-shadow: 0 4px 15px rgba(255, 94, 94, 0.4) !important;
+}
+
+#overlayDesc {
+  font-family: 'Inter', 'Nunito', sans-serif !important;
+  font-size: 18px !important;
+  color: #f0f0f0 !important;
+  line-height: 1.6 !important;
+  margin-bottom: 30px !important;
+}
+
+#launch_details {
+  z-index: 9999 !important;
+  position: absolute !important;
+  bottom: 120px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  width: 80% !important;
+  background: rgba(0, 0, 0, 0.7) !important;
+  border-radius: 12px !important;
+  padding: 10px !important;
+  backdrop-filter: blur(5px) !important;
+}
+
+.launch-progress-bar {
+  background-color: rgba(76, 175, 80, 0.9); /* Solid vivid green */
+  box-shadow: 0 0 10px rgba(76, 175, 80, 0.5); /* Glow effect */
+}
+
+#overlayActionContainer button {
+  background: var(--react-accent) !important;
+  color: white !important;
+  font-family: 'Nunito', sans-serif !important;
+  font-weight: 700 !important;
+  border: none !important;
+  border-radius: var(--react-radius-sm) !important;
+  padding: 10px 24px !important;
+  margin: 0 8px !important;
+  cursor: pointer;
+  transition: all 0.2s !important;
+}
+
+#overlayActionContainer button:hover {
+  background: var(--react-accent-hover) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3) !important;
+}
+
+.react-input {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: var(--react-radius-md);
+  border: 1px solid rgba(255,255,255,0.1);
+  background: #ffffff;
+  color: #000000;
+  font-family: 'Nunito', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  outline: none;
+  transition: all 0.2s ease;
+}
+.react-input:focus {
+  border-color: var(--react-accent);
+  background: #ffffff;
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.2);
+}
+.react-input::placeholder {
+  color: #666666;
+}
+
+
+body.news-blur #background-video {
+  filter: blur(8px) brightness(0.6) !important;
+}
+
+
+body.news-blur #background-fallback-img {
+  filter: blur(8px) brightness(0.6) !important;
+}
+
+

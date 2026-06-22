@@ -16,6 +16,9 @@ jest.mock('electron', () => ({
         on: jest.fn((channel, cb) => {
             syncHandlers[channel] = cb
         })
+    },
+    app: {
+        getAppPath: jest.fn().mockReturnValue('/mock/app/path')
     }
 }))
 
@@ -114,24 +117,27 @@ describe('Main Process Services Fuzzing', () => {
         test('Fuzz: ModService functions detect and reject traversal paths', async () => {
             const baseDir = '/mock/mods'
             
-            const unsafeForToggle = [
+            const isWin = process.platform === 'win32';
+            let unsafeForToggle = [
                 '../../evil.jar',
-                '..\\..\\evil.jar',
                 '/absolute/path/evil.jar',
-                'C:\\absolute\\path\\evil.jar',
                 '\x00evil.jar',
                 'valid.jar/../../../evil.jar',
                 '..'
             ]
+            if (isWin) {
+                unsafeForToggle.push('..\\..\\evil.jar', 'C:\\absolute\\path\\evil.jar');
+            }
 
-            const unsafeForShader = [
+            let unsafeForShader = [
                 '../../evil',
-                '..\\..\\evil',
                 '/absolute/path/evil',
-                'C:\\absolute\\path\\evil',
                 '..',
                 'valid/../../../evil'
             ]
+            if (isWin) {
+                unsafeForShader.push('..\\..\\evil', 'C:\\absolute\\path\\evil');
+            }
 
             for (const name of unsafeForToggle) {
                 // Test toggleDropinMod (should throw due to assertWithinBase)

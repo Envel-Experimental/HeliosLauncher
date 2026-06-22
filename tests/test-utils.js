@@ -4,7 +4,7 @@ const fs = require('fs');
 const os = require('os');
 
 /**
- * Common utilities for HeliosLauncher E2E tests
+ * Common utilities for Flauncher E2E tests
  */
 
 const TEST_USER_DATA = path.join(process.cwd(), 'temp_test_user_data');
@@ -73,7 +73,7 @@ async function setupMockDistro(distroData) {
 }
 
 /**
- * Launch the HeliosLauncher application
+ * Launch the Flauncher application
  */
 async function launchApp(onWindow = null, resetConfig = true) {
     if (resetConfig) {

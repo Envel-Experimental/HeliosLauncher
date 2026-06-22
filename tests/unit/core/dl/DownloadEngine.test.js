@@ -60,7 +60,7 @@ jest.mock('fs/promises', () => ({
 jest.mock('fs', () => ({
     existsSync: jest.fn().mockReturnValue(false),
     statSync: jest.fn(),
-    createWriteStream: jest.fn().mockReturnValue(new EventEmitter())
+    createWriteStream: jest.fn().mockReturnValue({ on: jest.fn(), once: jest.fn(), emit: jest.fn() })
 }))
 
 const DownloadEngine = require('../../../../app/assets/js/core/dl/DownloadEngine')

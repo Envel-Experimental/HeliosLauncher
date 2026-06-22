@@ -26,7 +26,7 @@ class IpcRegistry {
         require('./CryptoService').init()
         require('../assets/js/core/LaunchController').init()
         Analytics.init().catch(err => console.error('[Main] Failed to initialize Analytics:', err))
-        
+
         ipcMain.on('app:getVersionSync', (event) => {
             event.returnValue = app.getVersion()
         })
@@ -152,18 +152,18 @@ class IpcRegistry {
 
         ipcMain.on('app:restart', () => {
             try {
-                const args = process.argv.slice(1).filter(arg => 
-                    !arg.includes('--enable-logging') && 
+                const args = process.argv.slice(1).filter(arg =>
+                    !arg.includes('--enable-logging') &&
                     !arg.includes('--remote-debugging-port') &&
                     !arg.includes('--inspect') &&
                     !arg.includes('--debug')
                 )
-                
+
                 app.relaunch({
                     execPath: process.execPath,
                     args: args
                 })
-                
+
                 // Small delay to ensure the OS handles the relaunch request
                 setTimeout(() => {
                     app.quit()
@@ -208,7 +208,7 @@ class IpcRegistry {
             return MirrorManager.getMirrorStatus()
         })
         ipcMain.handle('p2p:getInfo', () => P2PEngine.getNetworkInfo())
-        
+
         ipcMain.handle('p2p:getStats', async () => {
             try {
                 const StatsManager = require('../../network/StatsManager')
@@ -344,7 +344,7 @@ class IpcRegistry {
                     method: 'GET',
                     signal: controller.signal,
                     headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 HeliosLauncher/1.0'
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Flauncher/1.0'
                     },
                     cache: 'no-store'
                 })
@@ -383,12 +383,12 @@ class IpcRegistry {
                 const output = stdout ? stdout.toString() : ''
                 // Standardize success detection: look for TTL or time= across platforms
                 const isOnline = !error && (
-                    output.includes('time=') || 
-                    output.includes('время=') || 
+                    output.includes('time=') ||
+                    output.includes('время=') ||
                     output.includes('TTL=') ||
                     (platform === 'darwin' && output.includes('bytes from'))
                 )
-                
+
                 resolve({
                     index,
                     isPrivate: !!node.publicKey,

@@ -5,6 +5,9 @@ export const sysPath = require('path')
 const { ipcRenderer, shell } = require('electron')
 
 export const DropinModUtil = require('@core/dropinmodutil')
+const { Type } = require('@core/common/DistributionClasses')
+const ConfigManager = require('@core/configmanager')
+const DistroAPI = require('@core/distromanager')
 
 const { MSFT_OPCODE, MSFT_REPLY_TYPE, MSFT_ERROR } = require('@core/ipcconstants')
 var { ensureJavaDirIsRoot } = require('@core/java/JavaUtils')
@@ -157,16 +160,19 @@ async function initSettingsValues() {
             if (v.tagName === 'INPUT') {
                 if (v.type === 'number' || v.type === 'text') {
                     // Special Conditions
+                    let rawVal = gFn.apply(null, gFnOpts)
+                    let safeVal = (rawVal === 'null' || rawVal === 'undefined' || rawVal == null) ? '' : rawVal;
+
                     if (cVal === 'JavaExecutable') {
-                        v.value = gFn.apply(null, gFnOpts)
+                        v.value = safeVal
                         await populateJavaExecDetails(v.value)
                     } else if (cVal === 'DataDirectory') {
-                        v.value = gFn.apply(null, gFnOpts)
+                        v.value = safeVal
                     } else if (cVal === 'JVMOptions') {
-                        const opts = gFn.apply(null, gFnOpts)
-                        v.value = Array.isArray(opts) ? opts.join(' ') : (typeof opts === 'string' ? opts : '')
+                        const opts = rawVal
+                        v.value = Array.isArray(opts) ? opts.join(' ') : (typeof opts === 'string' ? (opts === 'null' ? '' : opts) : '')
                     } else {
-                        v.value = gFn.apply(null, gFnOpts)
+                        v.value = safeVal
                     }
                 } else if (v.type === 'checkbox') {
                     v.checked = gFn.apply(null, gFnOpts)
@@ -607,18 +613,18 @@ function bindP2PStatsButton() {
                 // 10s timeout for IPC
                 const statsPromise = ipcRenderer.invoke('p2p:getStats')
                 const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('IPC Timeout')), 10000))
-                
+
                 const stats = await Promise.race([statsPromise, timeoutPromise])
                 console.log('[Settings] Stats received:', stats)
-                
+
                 setOverlayContent(
                     'Общая статистика P2P',
                     '',
                     'Закрыть'
                 )
-                
+
                 document.getElementById('overlayDesc').innerHTML = getP2PGlobalStatsMarkup(stats)
-                
+
                 const filter = document.getElementById('p2pStatsFilter')
                 if (filter) {
                     filter.onchange = (e) => {
@@ -661,11 +667,11 @@ function getP2PGlobalStatsMarkup(stats) {
 
 function getP2PStatsPeriodContent(stats, period) {
     const data = stats[period] || { up: 0, down: 0 }
-    
+
     // Calculate total as a sum if it's not present (should be present but for safety)
     const up = data.up || 0
     const down = data.down || 0
-    
+
     return `
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 10px;">
             <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; border-left: 4px solid #7dbb00;">
@@ -1198,11 +1204,11 @@ export function bindAuthAccountSelect() {
             for (let i = 0; i < selectBtns.length; i++) {
                 if (selectBtns[i].hasAttribute('selected')) {
                     selectBtns[i].removeAttribute('selected')
-                    selectBtns[i].innerHTML = Lang.queryJS('settings.authAccountSelect.selectButton')
+                    selectBtns[i].innerHTML = Lang.queryJS('settings.authAccountSelect.selectButton') || 'Выбрать аккаунт'
                 }
             }
             val.setAttribute('selected', '')
-            val.innerHTML = Lang.queryJS('settings.authAccountSelect.selectedButton')
+            val.innerHTML = Lang.queryJS('settings.authAccountSelect.selectedButton') || 'Выбран'
             ConfigManager.setSelectedAccount(val.closest('.settingsAuthAccount').getAttribute('uuid'))
         }
     })
@@ -1389,18 +1395,18 @@ export function populateAuthAccounts() {
             <div class="settingsAuthAccountRight">
                 <div class="settingsAuthAccountDetails">
                     <div class="settingsAuthAccountDetailPane">
-                        <div class="settingsAuthAccountDetailTitle">${Lang.queryJS('settings.authAccountPopulate.username')}</div>
+                        <div class="settingsAuthAccountDetailTitle">Имя пользователя</div>
                         <div class="settingsAuthAccountDetailValue">${acc.displayName}</div>
                     </div>
                     <div class="settingsAuthAccountDetailPane">
-                        <div class="settingsAuthAccountDetailTitle">${Lang.queryJS('settings.authAccountPopulate.uuid')}</div>
+                        <div class="settingsAuthAccountDetailTitle">UUID</div>
                         <div class="settingsAuthAccountDetailValue">${acc.uuid.replace(/-/g, '')}</div>
                     </div>
                 </div>
                 <div class="settingsAuthAccountActions">
-                    <button class="settingsAuthAccountSelect" ${selectedUUID === acc.uuid ? 'selected>' + Lang.queryJS('settings.authAccountPopulate.selectedAccount') : '>' + Lang.queryJS('settings.authAccountPopulate.selectAccount')}</button>
+                    <button class="settingsAuthAccountSelect" ${selectedUUID === acc.uuid ? 'selected>Выбран' : '>Выбрать аккаунт'}</button>
                     <div class="settingsAuthAccountWrapper">
-                        <button class="settingsAuthAccountLogOut">${Lang.queryJS('settings.authAccountPopulate.logout')}</button>
+                        <button class="settingsAuthAccountLogOut">Удалить аккаунт</button>
                     </div>
                 </div>
             </div>
@@ -1471,7 +1477,7 @@ export async function resolveModsForUI() {
     }
 
     console.log('[resolveModsForUI] Distro servers:', distro.servers.map(s => s.rawServer.id))
-    
+
     const serverObj = distro.getServerById(serv)
     if (!serverObj) {
         console.error('[resolveModsForUI] Server object not found for ID:', serv)
@@ -1486,7 +1492,7 @@ export async function resolveModsForUI() {
 
     if (reqContainer) reqContainer.innerHTML = modStr.reqMods
     if (optContainer) optContainer.innerHTML = modStr.optMods
-    
+
     console.log('[resolveModsForUI] UI Updated with mods.')
 }
 
@@ -1597,26 +1603,15 @@ export function saveModConfiguration() {
     const serv = ConfigManager.getSelectedServer()
     const modConf = ConfigManager.getModConfiguration(serv)
     const container = getSettingsModsContainer()
-    
+
     if (!container) return
 
     // Helper to recursively collect values from the DOM
     const saveFromDOM = (currentMods, parentElement) => {
-        // Query mods. In main containers they are nested, in sub-containers they are direct.
-        // We look for any .settingsBaseMod that is a descendant but not inside another .settingsBaseMod's content
-        const modElements = parentElement.querySelectorAll('.settingsBaseMod')
-        
         parentElement.querySelectorAll('.settingsBaseMod').forEach(modEl => {
-            // Find the DIRECT mod element within this parent (not nested in a sub-container)
-            // We can check if its parent is the content/container we are looking at
-            const isDirect = modEl.parentElement === parentElement || 
-                             (modEl.parentElement.classList.contains('settingsSubModContainer') && modEl.parentElement === parentElement) ||
-                             parentElement.contains(modEl) && !parentElement.querySelector('.settingsSubModContainer')?.contains(modEl);
-
-            // Simpler check: if it's a descendant of parentElement, but not a descendant of any .settingsSubModContainer that is ALSO a descendant of parentElement
             const subContainers = parentElement.querySelectorAll('.settingsSubModContainer');
             let isNestedDeeply = false;
-            for(let sc of subContainers) {
+            for (let sc of subContainers) {
                 if (sc !== parentElement && sc.contains(modEl)) {
                     isNestedDeeply = true;
                     break;
@@ -2263,7 +2258,7 @@ async function prepareJavaTab() {
     const serverId = ConfigManager.getSelectedServer()
     const distro = await DistroAPI.getDistribution()
     const server = distro.getServerById(serverId)
-    
+
     if (server != null) {
         bindMinMaxRam(server)
         bindRangeSlider(server)
@@ -2327,11 +2322,11 @@ export function isPrerelease(version) {
 export function populateVersionInformation(version, valueElement, titleElement, checkElement) {
     console.log('[Settings] populateVersionInformation:', version)
     version = version || window.appVersion || (window.HeliosAPI?.app?.getVersion ? window.HeliosAPI.app.getVersion() : '0.0.1')
-    
+
     if (valueElement) {
         const semverEl = valueElement.querySelector('#settingsAboutCurrentVersionValueSemver') || valueElement
         const hashEl = valueElement.querySelector('#settingsAboutBuildHash')
-        
+
         semverEl.innerHTML = version
         if (hashEl) {
             hashEl.innerHTML = process.env.BUILD_HASH ? `@${process.env.BUILD_HASH}` : ''
@@ -2402,11 +2397,12 @@ export function prepareAboutTab() {
     const supportBtn = document.getElementById('settingsAboutSupportButton')
     if (supportBtn) {
         supportBtn.onclick = () => {
+            const supportUrl = ConfigManager.getSupportUrl() || 'https://t.me/+1THtTcDneY9iYTVi'
             const hAPI = window.HeliosAPI || {}
             if (hAPI.shell) {
-                hAPI.shell.openExternal(ConfigManager.getSupportUrl())
+                hAPI.shell.openExternal(supportUrl)
             } else {
-                shell.openExternal(ConfigManager.getSupportUrl())
+                shell.openExternal(supportUrl)
             }
         }
     }
@@ -2461,29 +2457,29 @@ export function populateSettingsUpdateInformation(data) {
     if (!els) return
 
     if (data != null) {
-        els.settingsUpdateTitle.innerHTML = isPrerelease(data.version) ? Lang.queryJS('settings.updates.newPreReleaseTitle') : Lang.queryJS('settings.updates.newReleaseTitle')
+        els.settingsUpdateTitle.innerHTML = isPrerelease(data.version) ? 'Новая предрелизная версия' : 'Новое обновление'
         els.settingsUpdateChangelogCont.style.display = null
         els.settingsUpdateChangelogTitle.innerHTML = data.releaseName
         els.settingsUpdateChangelogText.innerHTML = data.releaseNotes
         populateVersionInformation(data.version, els.settingsUpdateVersionValue, els.settingsUpdateVersionTitle, els.settingsUpdateVersionCheck)
 
         if (process.platform === 'darwin') {
-            settingsUpdateButtonStatus(Lang.queryJS('settings.updates.downloadButton'), false, () => {
+            settingsUpdateButtonStatus('Скачать обновление', false, () => {
                 shell.openExternal(data.darwindownload)
             })
         } else {
-            settingsUpdateButtonStatus(Lang.queryJS('settings.updates.downloadingButton'), true)
+            settingsUpdateButtonStatus('Скачивание...', true)
         }
     } else {
-        els.settingsUpdateTitle.innerHTML = Lang.queryJS('settings.updates.latestVersionTitle')
+        els.settingsUpdateTitle.innerHTML = Lang.queryJS('settings.updates.latestVersionTitle') || 'Новейшая версия'
         els.settingsUpdateChangelogCont.style.display = 'none'
         populateVersionInformation(window.appVersion, els.settingsUpdateVersionValue, els.settingsUpdateVersionTitle, els.settingsUpdateVersionCheck)
-        settingsUpdateButtonStatus(Lang.queryJS('settings.updates.checkForUpdatesButton'), false, () => {
+        settingsUpdateButtonStatus('Проверить обновления', false, () => {
             const _isDev = window.isDev || false
             if (!_isDev) {
                 ipcRenderer.send('autoUpdateAction', 'checkForUpdate', ConfigManager.getAllowPrerelease())
-                settingsUpdateButtonStatus(Lang.queryJS('settings.updates.checkingForUpdatesButton'), true)
-                
+                settingsUpdateButtonStatus('Проверка...', true)
+
                 // Safety timeout: reset button if no response within 15 seconds
                 if (window._updateCheckTimeout) clearTimeout(window._updateCheckTimeout)
                 window._updateCheckTimeout = setTimeout(() => {
@@ -2496,7 +2492,7 @@ export function populateSettingsUpdateInformation(data) {
             } else {
                 console.log('Update check skipped in dev mode.')
                 settingsUpdateButtonStatus('Dev Mode: No Updates', true)
-                setTimeout(() => settingsUpdateButtonStatus(Lang.queryJS('settings.updates.checkForUpdatesButton'), false), 2000)
+                setTimeout(() => settingsUpdateButtonStatus('Проверить обновления', false), 2000)
             }
         })
     }
@@ -2529,7 +2525,7 @@ export async function prepareSettings(first = false) {
             try { initSettingsValidators() } catch (e) { console.error('Failed to init settings validators:', e) }
             try { prepareUpdateTab() } catch (e) { console.error('Failed to prepare update tab:', e) }
         }
-        
+
         console.log('[Settings] Preparing tabs...')
         try { await prepareModsTab() } catch (e) { console.error('Failed to prepare mods tab:', e) }
         try { await initSettingsValues() } catch (e) { console.error('Failed to init settings values:', e) }
@@ -2539,7 +2535,7 @@ export async function prepareSettings(first = false) {
         try { bindP2PInfoButton() } catch (e) { console.error('Failed to bind P2P info button:', e) }
         try { bindP2PStatsButton() } catch (e) { console.error('Failed to bind P2P stats button:', e) }
         try { bindRefreshButtons() } catch (e) { console.error('Failed to bind Refresh buttons:', e) }
-        
+
         console.log('[Settings] prepareSettings complete.')
     } catch (err) {
         console.error('[Settings] Critical error in prepareSettings:', err)
@@ -2611,7 +2607,7 @@ async function factoryReset() {
             null
         )
         toggleOverlay(true)
-        
+
         // Wait a bit for overlay to show
         await new Promise(resolve => setTimeout(resolve, 150))
 
@@ -2638,7 +2634,7 @@ async function factoryReset() {
                 } else if (stat && stat.mode) {
                     isDir = (stat.mode & 0o040000) !== 0
                 }
-                
+
                 if (isDir) {
                     if (typeof fs.rm === 'function') {
                         await fs.rm(fullPath, { recursive: true, force: true })
@@ -2658,7 +2654,7 @@ async function factoryReset() {
 
         const successTitle = Lang.queryEJS('settings.factoryReset.title') || 'Сброс завершен'
         const successDesc = Lang.queryEJS('settings.factoryReset.success') || 'Лаунчер будет перезапущен.'
-        
+
         // Success & Restart
         setOverlayContent(
             successTitle,
@@ -2667,7 +2663,7 @@ async function factoryReset() {
             null,
             null
         )
-        
+
         setOverlayHandler(() => {
             const ackBtn = document.getElementById('overlayAcknowledge')
             if (ackBtn) {

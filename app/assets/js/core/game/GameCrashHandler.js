@@ -398,7 +398,7 @@ class GameCrashHandler {
 
 
         } else if (crashAnalysis.type === 'java-corruption') {
-            this.handleJavaRepair()
+            await this.handleJavaRepair()
         } else {
             // Config file corruption
             const configPath = path.resolve(this.gameDir, 'config', crashAnalysis.file || '')

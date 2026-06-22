@@ -24,7 +24,7 @@ This section details the setup of a basic development environment.
 
 ```console
 > git clone https://github.com/Envel-Experimental/Flauncher.git
-> cd HeliosLauncher
+> cd Flauncher
 > npm install
 ```
 
