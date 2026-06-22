@@ -2408,11 +2408,12 @@ export function prepareAboutTab() {
     const supportBtn = document.getElementById('settingsAboutSupportButton')
     if (supportBtn) {
         supportBtn.onclick = () => {
+            const supportUrl = ConfigManager.getSupportUrl() || 'https://t.me/+1THtTcDneY9iYTVi'
             const hAPI = window.HeliosAPI || {}
             if (hAPI.shell) {
-                hAPI.shell.openExternal(ConfigManager.getSupportUrl())
+                hAPI.shell.openExternal(supportUrl)
             } else {
-                shell.openExternal(ConfigManager.getSupportUrl())
+                shell.openExternal(supportUrl)
             }
         }
     }

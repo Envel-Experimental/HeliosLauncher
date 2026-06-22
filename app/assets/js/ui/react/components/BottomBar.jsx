@@ -11,23 +11,25 @@ const BottomBar = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [playText, setPlayText] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isLinksDropdownOpen, setIsLinksDropdownOpen] = useState(false);
   const [showAllServers, setShowAllServers] = useState(false);
-  
+
   const [statusText, setStatusText] = useState('');
   const [progress, setProgress] = useState(0);
   const [isCooldown, setIsCooldown] = useState(false);
   const [launchStatus, setLaunchStatus] = useState(null);
   const [launchPercent, setLaunchPercent] = useState(null);
-  
+
   const dropdownRef = useRef(null);
+  const linksDropdownRef = useRef(null);
 
   useEffect(() => {
     window.onReactLaunchDetails = (details) => setLaunchStatus(details);
     window.onReactLaunchPercentage = (percent) => setLaunchPercent(percent);
     window.onReactLaunchComplete = () => {
-        setLaunchStatus(null);
-        setLaunchPercent(null);
-        setIsCooldown(false);
+      setLaunchStatus(null);
+      setLaunchPercent(null);
+      setIsCooldown(false);
     };
 
     // Attempt to load distributions from Helios ConfigManager/DistroAPI
@@ -38,10 +40,10 @@ const BottomBar = () => {
           const now = new Date();
           const month = now.getMonth(); // 0 = Jan, 11 = Dec
           const date = now.getDate();
-          
+
           const isAroundTheWorld = month >= 4 && month <= 7;
           const isNewYear = month === 11 || (month === 0 && date <= 30);
-          
+
           servs.sort((a, b) => {
             const aName = (a.rawServer.name || '').toLowerCase();
             const bName = (b.rawServer.name || '').toLowerCase();
@@ -59,7 +61,7 @@ const BottomBar = () => {
             }
             return 0; // maintain original order
           });
-          
+
           setServers(servs);
           const currentServ = window.ConfigManager?.getSelectedServer();
           if (currentServ) {
@@ -82,6 +84,9 @@ const BottomBar = () => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsDropdownOpen(false);
       }
+      if (linksDropdownRef.current && !linksDropdownRef.current.contains(event.target)) {
+        setIsLinksDropdownOpen(false);
+      }
     };
 
     // Sync with vanilla launch button
@@ -89,13 +94,13 @@ const BottomBar = () => {
     if (launchBtn) {
       setPlayText(launchBtn.innerText || t('landing.launchButton', 'ИГРАТЬ'));
       setIsPlaying(launchBtn.disabled);
-      
+
       const observer = new MutationObserver(() => {
         setPlayText(launchBtn.innerText || t('landing.launchButton', 'ИГРАТЬ'));
         setIsPlaying(launchBtn.disabled);
       });
       observer.observe(launchBtn, { attributes: true, childList: true, subtree: true, characterData: true });
-      
+
       // Cleanup
       const cleanupObserver = () => observer.disconnect();
       document.addEventListener("mousedown", handleClickOutside);
@@ -104,14 +109,14 @@ const BottomBar = () => {
       const detailsText = document.getElementById('launch_details_text');
       const progressBar = document.getElementById('launch_progress');
       let detailsObserver, progressObserver;
-      
+
       if (detailsText) {
         detailsObserver = new MutationObserver(() => {
           setStatusText(detailsText.innerText);
         });
         detailsObserver.observe(detailsText, { childList: true, characterData: true, subtree: true });
       }
-      
+
       if (progressBar) {
         progressObserver = new MutationObserver(() => {
           setProgress(progressBar.value);
@@ -133,7 +138,7 @@ const BottomBar = () => {
 
   const handleLaunch = () => {
     if (isPlaying || isCooldown || launchStatus) return;
-    
+
     // Cooldown protection for 3 seconds
     setIsCooldown(true);
     setTimeout(() => { if (!window.onReactLaunchDetails) setIsCooldown(false) }, 3000);
@@ -163,12 +168,12 @@ const BottomBar = () => {
     setSelectedVersion(newVal);
     setIsDropdownOpen(false);
     window.CURRENT_SELECTED_SERVER_ID = newVal;
-    
+
     if (window.ConfigManager) {
       window.ConfigManager.setSelectedServer(newVal);
       window.ConfigManager.save();
     }
-    
+
     if (window.updateSelectedServer) {
       if (window.DistroAPI) {
         window.DistroAPI.getDistribution().then(distro => {
@@ -181,16 +186,16 @@ const BottomBar = () => {
   };
 
   const selectedServerObj = servers.find(s => s.rawServer.id === selectedVersion);
-  const displayTitle = selectedServerObj 
-    ? `${selectedServerObj.rawServer.name} (${selectedServerObj.rawServer.minecraftVersion})` 
+  const displayTitle = selectedServerObj
+    ? `${selectedServerObj.rawServer.name} (${selectedServerObj.rawServer.minecraftVersion})`
     : 'Default (1.20.1)';
 
   return (
     <div className="bottom-bar-wrapper react-glass" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '15px 30px', position: 'relative', zIndex: 50 }}>
-      
+
       {/* Left side: Custom Version Selector */}
       <div className="bottom-bar-left" style={{ position: 'relative' }} ref={dropdownRef}>
-        <div 
+        <div
           className="version-dropdown-header"
           onClick={() => { setIsDropdownOpen(!isDropdownOpen); setShowAllServers(false); }}
           style={{
@@ -211,7 +216,7 @@ const BottomBar = () => {
         </div>
 
         {isDropdownOpen && (
-          <div 
+          <div
             className="version-dropdown-container"
             style={{
               position: 'absolute',
@@ -233,7 +238,7 @@ const BottomBar = () => {
             {servers.length > 0 ? (
               <>
                 {(showAllServers ? servers : servers.slice(0, 3)).map((serv) => (
-                  <div 
+                  <div
                     key={serv.rawServer.id}
                     className="server-item-container"
                     onClick={() => handleVersionChange(serv.rawServer.id)}
@@ -269,7 +274,7 @@ const BottomBar = () => {
                         <Image size={24} style={{ opacity: 0.5 }} />
                       )}
                     </div>
-                    
+
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px', overflow: 'hidden' }}>
                       <div className="server-item-title">
                         {serv.rawServer.name}
@@ -278,13 +283,13 @@ const BottomBar = () => {
                         {serv.rawServer.description || 'Описание отсутствует'}
                       </div>
                     </div>
-                    
-                    <div style={{ 
-                      background: 'var(--react-accent)', 
-                      color: 'black', 
-                      padding: '2px 8px', 
-                      borderRadius: '10px', 
-                      fontSize: '0.8em', 
+
+                    <div style={{
+                      background: 'var(--react-accent)',
+                      color: 'black',
+                      padding: '2px 8px',
+                      borderRadius: '10px',
+                      fontSize: '0.8em',
                       fontWeight: 'bold',
                       flexShrink: 0
                     }}>
@@ -293,7 +298,7 @@ const BottomBar = () => {
                   </div>
                 ))}
                 {!showAllServers && servers.length > 3 && (
-                  <div 
+                  <div
                     onClick={() => setShowAllServers(true)}
                     style={{
                       padding: '10px',
@@ -322,8 +327,8 @@ const BottomBar = () => {
 
       {/* Center: Play Button */}
       <div className="bottom-bar-center" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-        <button 
-          className="play-button" 
+        <button
+          className="play-button"
           onClick={handleLaunch}
           disabled={isCooldown || launchStatus != null}
           style={{
@@ -339,7 +344,7 @@ const BottomBar = () => {
           }}
         >
           {launchPercent != null && (
-            <div 
+            <div
               className="launch-progress-bar"
               style={{
                 position: 'absolute',
@@ -349,7 +354,7 @@ const BottomBar = () => {
                 width: `${launchPercent}%`,
                 transition: 'width 0.1s',
                 zIndex: 0
-              }} 
+              }}
             />
           )}
           <span style={{ position: 'relative', zIndex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}>
@@ -383,16 +388,67 @@ const BottomBar = () => {
         }}>
           <Image size={22} />
         </button>
-        <button className="icon-button" data-tooltip="Сайт" onClick={() => {
-          try {
-            const { shell } = require('electron');
-            shell.openExternal('https://f-launcher.ru/');
-          } catch (err) {
-            console.error('Failed to open site:', err);
-          }
-        }}>
-          <Globe size={22} />
-        </button>
+        <div style={{ position: 'relative' }} ref={linksDropdownRef}>
+          <button className="icon-button" data-tooltip={isLinksDropdownOpen ? "" : "Ссылки"} onClick={() => setIsLinksDropdownOpen(!isLinksDropdownOpen)}>
+            <Globe size={22} />
+          </button>
+          {isLinksDropdownOpen && (
+            <div
+              style={{
+                position: 'absolute',
+                bottom: 'calc(100% + 15px)',
+                right: 0,
+                width: '180px',
+                background: '#141414',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '16px',
+                padding: '8px',
+                boxShadow: '0 -10px 40px rgba(0,0,0,0.5)',
+                display: 'flex',
+                flexDirection: 'column',
+                zIndex: 100
+              }}
+            >
+              {[
+                { name: 'Сайт Фоксфорд', url: 'https://foxford.ru/' },
+                { name: 'Руководство по курсу', url: 'https://wiki.f-launcher.ru/' },
+                { name: 'Сайт лаунчера', url: 'https://f-launcher.ru/' },
+                { name: 'Поддержка', url: 'https://t.me/+1THtTcDneY9iYTVi' }
+              ].map(link => (
+                <div
+                  key={link.name}
+                  onClick={() => {
+                    try {
+                      const { shell } = require('electron');
+                      shell.openExternal(link.url);
+                    } catch (err) {
+                      console.error('Failed to open link:', err);
+                    }
+                    setIsLinksDropdownOpen(false);
+                  }}
+                  style={{
+                    padding: '10px 12px',
+                    cursor: 'pointer',
+                    borderRadius: '8px',
+                    transition: 'all 0.2s',
+                    color: 'white',
+                    fontWeight: 'bold',
+                    fontSize: '14px',
+                    textAlign: 'center'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                  }}
+                >
+                  {link.name}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         <button className="icon-button" data-tooltip="Папка игры" onClick={async () => {
           try {
             const path = require('path');
