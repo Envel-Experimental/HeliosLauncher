@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 const t = (key, fallback) => (window.Lang && window.Lang.queryJS(key)) || fallback;
 
 const LOCAL_EVENT_FALLBACK = {
+  show: false,
   title: 'Добро пожаловать!',
   date: 'Следите за новостями проекта',
   imageUrl: 'assets/images/backgrounds/0.jpg', // Path relative to index.html
@@ -30,20 +31,10 @@ const EventBanner = () => {
     // 2. Fetch fresh config from remote (simulated)
     const fetchRemoteEvent = async () => {
       try {
-        // Real fetch would be: const response = await fetch('https://api.example.com/event.json');
-        // const freshData = await response.json();
-
-        // Simulating a network delay
-        await new Promise(resolve => setTimeout(resolve, 1500));
-
-        // Mock fresh remote data
-        const freshData = {
-          title: 'Новогодний квест',
-          date: 'С 1 по 15 января',
-          imageUrl: 'https://images.unsplash.com/photo-1518182170546-07661607abaf?auto=format&fit=crop&q=80&w=1000', // Example remote URL
-          link: 'https://f-launcher.ru/ocean',
-          show: true // Remote flag to enable/disable the banner completely
-        };
+        const response = await fetch('https://f-launcher.ru/fox/new/launcher-news.json?t=' + Date.now());
+        if (!response.ok) throw new Error('News not found or error');
+        
+        const freshData = await response.json();
 
         // Cache the fresh data
         localStorage.setItem('helios_event_config', JSON.stringify(freshData));
@@ -59,7 +50,7 @@ const EventBanner = () => {
         }, 500); // 500ms matches the CSS transition
 
       } catch (err) {
-        console.error('Failed to load remote event:', err);
+        console.log('No active remote event or failed to fetch:', err);
       }
     };
 
