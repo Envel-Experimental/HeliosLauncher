@@ -3,7 +3,7 @@ import { ChevronDown } from 'lucide-react';
 import { useAppContext } from '../AppContext';
 
 const UserProfile = () => {
-  const { setCurrentView } = useAppContext();
+  useAppContext();
   const [userData, setUserData] = useState({
     displayName: 'Гость',
     avatarUrl: 'https://mc-heads.net/head/8667ba71b85a4004af54457a9734eed7/100' // MHF_Steve fallback

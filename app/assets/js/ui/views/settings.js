@@ -1608,18 +1608,7 @@ export function saveModConfiguration() {
 
     // Helper to recursively collect values from the DOM
     const saveFromDOM = (currentMods, parentElement) => {
-        // Query mods. In main containers they are nested, in sub-containers they are direct.
-        // We look for any .settingsBaseMod that is a descendant but not inside another .settingsBaseMod's content
-        const modElements = parentElement.querySelectorAll('.settingsBaseMod')
-
         parentElement.querySelectorAll('.settingsBaseMod').forEach(modEl => {
-            // Find the DIRECT mod element within this parent (not nested in a sub-container)
-            // We can check if its parent is the content/container we are looking at
-            const isDirect = modEl.parentElement === parentElement ||
-                (modEl.parentElement.classList.contains('settingsSubModContainer') && modEl.parentElement === parentElement) ||
-                parentElement.contains(modEl) && !parentElement.querySelector('.settingsSubModContainer')?.contains(modEl);
-
-            // Simpler check: if it's a descendant of parentElement, but not a descendant of any .settingsSubModContainer that is ALSO a descendant of parentElement
             const subContainers = parentElement.querySelectorAll('.settingsSubModContainer');
             let isNestedDeeply = false;
             for (let sc of subContainers) {

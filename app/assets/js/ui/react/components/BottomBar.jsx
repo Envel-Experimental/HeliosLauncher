@@ -5,7 +5,7 @@ import { useAppContext } from '../AppContext';
 const t = (key, fallback) => (window.Lang && window.Lang.queryJS(key)) || fallback;
 
 const BottomBar = () => {
-  const { setCurrentView } = useAppContext();
+  useAppContext();
   const [selectedVersion, setSelectedVersion] = useState('');
   const [servers, setServers] = useState([]);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -15,7 +15,6 @@ const BottomBar = () => {
   const [showAllServers, setShowAllServers] = useState(false);
 
   const [statusText, setStatusText] = useState('');
-  const [progress, setProgress] = useState(0);
   const [isCooldown, setIsCooldown] = useState(false);
   const [launchStatus, setLaunchStatus] = useState(null);
   const [launchPercent, setLaunchPercent] = useState(null);

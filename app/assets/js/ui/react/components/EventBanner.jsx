@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 
-const t = (key, fallback) => (window.Lang && window.Lang.queryJS(key)) || fallback;
-
 const LOCAL_EVENT_FALLBACK = {
   show: false,
   title: 'Добро пожаловать!',
@@ -12,7 +10,6 @@ const LOCAL_EVENT_FALLBACK = {
 
 const EventBanner = () => {
   const [eventData, setEventData] = useState(LOCAL_EVENT_FALLBACK);
-  const [nextEventData, setNextEventData] = useState(null);
   const [isFading, setIsFading] = useState(false);
   const [isHiddenByUser, setIsHiddenByUser] = useState(false);
 
@@ -40,7 +37,6 @@ const EventBanner = () => {
         localStorage.setItem('helios_event_config', JSON.stringify(freshData));
 
         // If data is different from current, trigger fade transition
-        setNextEventData(freshData);
         setIsFading(true);
 
         // Wait for fade out, then swap data and fade back in

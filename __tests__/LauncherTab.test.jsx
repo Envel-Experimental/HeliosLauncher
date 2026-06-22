@@ -26,7 +26,7 @@ describe('LauncherTab React UI', () => {
   });
 
   it('updates ConfigManager when prerelease toggle is clicked', () => {
-    const { container } = render(<LauncherTab />);
+    render(<LauncherTab />);
     
     // The toggle is a div since it doesn't have a specific role or label for the click target.
     // We can find it by looking for the prerelease text and getting the parent's next sibling or similar,

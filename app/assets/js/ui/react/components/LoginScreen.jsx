@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { UserPlus, ArrowLeft } from 'lucide-react';
-const { ipcRenderer } = require('electron');
 
 const LoginScreen = () => {
   const [username, setUsername] = useState('');

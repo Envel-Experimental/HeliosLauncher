@@ -49,8 +49,8 @@
     "udx-native": "^1.19.2"
   },
   "devDependencies": {
-    "@babel/preset-env": "^8.0.2",
-    "@babel/preset-react": "^8.0.1",
+    "@babel/preset-env": "^7.24.0",
+    "@babel/preset-react": "^7.24.0",
     "@emnapi/core": "^1.11.1",
     "@emnapi/runtime": "^1.11.1",
     "@eslint/js": "^10.0.1",
