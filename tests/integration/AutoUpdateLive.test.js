@@ -2,20 +2,11 @@ const https = require('https')
 
 // Helper to fetch real data from GitHub
 function getRealReleases() {
-    return new Promise((resolve, reject) => {
-        const options = {
-            hostname: 'api.github.com',
-            path: '/repos/Envel-Experimental/HeliosLauncher/releases?per_page=100',
-            headers: { 'User-Agent': 'HeliosLauncher-Integration-Test' }
-        }
-        https.get(options, (res) => {
-            let data = ''
-            res.on('data', d => data += d)
-            res.on('end', () => {
-                if (res.statusCode !== 200) reject(new Error(`GitHub Error: ${res.statusCode}`))
-                resolve(JSON.parse(data))
-            })
-        }).on('error', reject)
+    return fetch('https://api.github.com/repos/Envel-Experimental/Flauncher/releases?per_page=100', {
+        headers: { 'User-Agent': 'HeliosLauncher-Integration-Test' }
+    }).then(res => {
+        if (!res.ok) throw new Error(`GitHub Error: ${res.status}`)
+        return res.json()
     })
 }
 

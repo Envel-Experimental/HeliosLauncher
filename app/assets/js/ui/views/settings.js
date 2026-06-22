@@ -2362,7 +2362,7 @@ export function populateAboutVersionInformation() {
  * of the current version. This value is displayed on the UI.
  */
 export function populateReleaseNotes() {
-    fetch('https://github.com/Envel-Experimental/HeliosLauncher/releases.atom')
+    fetch('https://github.com/Envel-Experimental/Flauncher/releases.atom')
         .then(response => response.text())
         .then(data => {
             const version = 'v' + (window.appVersion || '0.0.1')

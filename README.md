@@ -2,7 +2,7 @@
 
 <h1 align="center">ФЛАУНЧЕР</h1>
 
-[<p align="center"><img src="https://img.shields.io/github/actions/workflow/status/Envel-Experimental/HeliosLauncher/build.yml?branch=master&style=for-the-badge" alt="gh actions">](https://github.com/Envel-Experimental/HeliosLauncher/actions) [<img src="https://img.shields.io/github/downloads/Envel-Experimental/HeliosLauncher/total.svg?style=for-the-badge" alt="downloads">](https://github.com/Envel-Experimental/HeliosLauncher/releases)</p>
+[<p align="center"><img src="https://img.shields.io/github/actions/workflow/status/Envel-Experimental/Flauncher/build.yml?branch=master&style=for-the-badge" alt="gh actions">](https://github.com/Envel-Experimental/Flauncher/actions) [<img src="https://img.shields.io/github/downloads/Envel-Experimental/Flauncher/total.svg?style=for-the-badge" alt="downloads">](https://github.com/Envel-Experimental/Flauncher/releases)</p>
 
 > **Disclaimer:** This software is a custom application manager designed for educational purposes. It does not contain, distribute, or bundle any third-party proprietary assets. The software is a tool for managing local environments. Users are solely responsible for ensuring they have the necessary rights to any third-party content they access through this tool.
 >
@@ -23,7 +23,7 @@ This section details the setup of a basic development environment.
 **Clone and Install Dependencies**
 
 ```console
-> git clone https://github.com/Envel-Experimental/HeliosLauncher.git
+> git clone https://github.com/Envel-Experimental/Flauncher.git
 > cd HeliosLauncher
 > npm install
 ```

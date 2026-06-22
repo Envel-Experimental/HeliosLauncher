@@ -5,9 +5,9 @@
   "description": "Modded Launcher",
   "author": "Nikita Gutsenkov (https://github.com/Envel-Experimental/)",
   "license": "UNLICENSED",
-  "homepage": "https://github.com/Envel-Experimental/HeliosLauncher",
+  "homepage": "https://github.com/Envel-Experimental/Flauncher",
   "bugs": {
-    "url": "https://github.com/Envel-Experimental/HeliosLauncher/issues"
+    "url": "https://github.com/Envel-Experimental/Flauncher/issues"
   },
   "private": true,
   "main": "index.js",
@@ -70,6 +70,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Envel-Experimental/HeliosLauncher.git"
+    "url": "git+https://github.com/Envel-Experimental/Flauncher.git"
   }
 }

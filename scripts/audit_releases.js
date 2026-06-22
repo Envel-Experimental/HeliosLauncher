@@ -1,6 +1,6 @@
 const https = require('https')
 
-const REPO = 'Envel-Experimental/HeliosLauncher'
+const REPO = 'Envel-Experimental/Flauncher'
 
 function fetchReleases() {
     return new Promise((resolve, reject) => {

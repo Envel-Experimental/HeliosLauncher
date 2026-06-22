@@ -115,7 +115,7 @@ ipcRenderer.on('autoUpdateNotification', (event, arg, info) => {
             loggerAutoUpdater.info('New update available', info.version)
 
             if (process.platform === 'darwin') {
-                info.darwindownload = `https://github.com/Envel-Experimental/HeliosLauncher/releases/download/v${info.version}/Foxford-Launcher-setup-${info.version}${process.arch === 'arm64' ? '-arm64' : '-x64'}.dmg`
+                info.darwindownload = `https://github.com/Envel-Experimental/Flauncher/releases/download/v${info.version}/Foxford-Launcher-setup-${info.version}${process.arch === 'arm64' ? '-arm64' : '-x64'}.dmg`
                 showUpdateUI(info)
             }
 
