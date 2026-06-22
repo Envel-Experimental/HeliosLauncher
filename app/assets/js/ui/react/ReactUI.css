@@ -234,6 +234,9 @@
 /* Make vanilla backgrounds glassmorphic instead of solid black */
 #main {
   background: transparent !important;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+  overflow: hidden;
 }
 
 #settingsContainer, #loginOptionsContainer, #loginContainer {
@@ -257,7 +260,16 @@
 
 #upper, #lower, #launch_details { display: none !important; }
 
-body { overflow: hidden !important; }
+body { 
+  overflow: hidden !important; 
+  border-radius: 12px;
+  background-color: transparent !important;
+}
+
+#background-video, #background-fallback-img {
+  border-radius: 12px;
+  overflow: hidden;
+}
 
 /* React UI Overlay Styles */
 #overlayContent {
