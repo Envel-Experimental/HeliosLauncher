@@ -208,9 +208,12 @@ export async function showMainUI(data) {
         const loadingStatusText = document.getElementById('loadingStatusText')
         if (loadingStatusText) loadingStatusText.style.display = 'none'
 
+        initBackgroundVideo()
         console.log('[UIBinder] Showing main container...')
-        document.getElementById('frameBar').style.backgroundColor = 'rgba(0, 0, 0, 0.5)'
-        document.body.style.backgroundImage = `url('assets/images/backgrounds/${document.body.getAttribute('bkid')}.jpg')`
+        document.body.classList.add('main-ui-active')
+        const fallbackImg = document.getElementById('background-fallback-img')
+        if (fallbackImg) fallbackImg.style.display = 'block'
+        document.getElementById('frameBar').style.backgroundColor = 'transparent'
         show(document.getElementById('main'))
         console.log('[UIBinder] Main container visibility set to show.')
         
@@ -802,3 +805,100 @@ async function devModeToggle() {
 window.validateSelectedAccount = validateSelectedAccount
 window.setSelectedAccount = setSelectedAccount
 window.updateSelectedAccount = updateSelectedAccount
+
+/**
+ * Initialize and bind the background video.
+ */
+function initBackgroundVideo() {
+    const vid = document.getElementById('background-video')
+    const btn = document.getElementById('background-video-toggle')
+    const pauseIcon = document.getElementById('vid-pause-icon')
+    const playIcon = document.getElementById('vid-play-icon')
+
+    if (!vid || !btn) return
+
+    // Setup video properties
+    vid.src = 'assets/images/backgrounds/background.webm'
+    vid.playbackRate = 0.5
+
+    // Performance check for initial state (RAM < 8GB OR CPU Cores < 4)
+    if (!ConfigManager.getBackgroundVideoInitialized()) {
+        const os = require('os')
+        const totalRamGb = os.totalmem() / (1024 * 1024 * 1024)
+        const cpuCount = os.cpus().length
+        
+        if (totalRamGb < 8 || cpuCount < 4) {
+            ConfigManager.setBackgroundVideoPaused(true)
+        }
+        ConfigManager.setBackgroundVideoInitialized(true)
+        ConfigManager.save()
+    }
+
+    let isPaused = ConfigManager.getBackgroundVideoPaused()
+
+    const updateUI = (paused) => {
+        if (paused) {
+            vid.pause()
+            pauseIcon.style.display = 'none'
+            playIcon.style.display = 'block'
+        } else {
+            // Only play if window is focused
+            if (document.hasFocus()) {
+                vid.play().catch(err => {
+                    console.warn('[UIBinder] Video play interrupted or failed:', err)
+                })
+            }
+            pauseIcon.style.display = 'block'
+            playIcon.style.display = 'none'
+        }
+    }
+
+    // Initial state
+    updateUI(isPaused)
+
+    btn.onclick = () => {
+        const nowPaused = !vid.paused
+        ConfigManager.setBackgroundVideoPaused(nowPaused)
+        ConfigManager.save()
+        updateUI(nowPaused)
+    }
+
+    // Auto-pause when window is hidden to save resources
+    window.addEventListener('blur', () => {
+        vid.pause()
+        // Removed display: none to prevent black screen on blur
+    })
+
+    window.addEventListener('focus', () => {
+        if (!ConfigManager.getBackgroundVideoPaused()) {
+            vid.play().catch(() => {})
+        }
+    })
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            vid.pause()
+        } else if (!ConfigManager.getBackgroundVideoPaused()) {
+            vid.play().catch(() => {})
+        }
+    })
+
+    // Battery optimization for laptops
+    if (navigator.getBattery) {
+        navigator.getBattery().then(battery => {
+            const checkBattery = () => {
+                const os = require('os')
+                // If on battery and below 15%, or just on battery and system is considered weak
+                const isWeak = (os.totalmem() / (1024**3)) < 8 || os.cpus().length < 4
+                if (!battery.charging && (battery.level < 0.15 || (isWeak && battery.level < 0.5)) && !ConfigManager.getBackgroundVideoPaused()) {
+                    console.log('[UIBinder] Resource saving mode: pausing background video.')
+                    ConfigManager.setBackgroundVideoPaused(true)
+                    updateUI(true)
+                }
+            }
+            battery.addEventListener('levelchange', checkBattery)
+            battery.addEventListener('chargingchange', checkBattery)
+            checkBattery()
+        })
+    }
+}

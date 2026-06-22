@@ -549,7 +549,7 @@ body[data-platform="darwin"] #frameContentDarwin {
     flex-shrink: 0;
 }
 
-.agreementCheckboxContainer input:checked ~ .agreementCheckmark {
+.agreementCheckboxContainer input:checked~.agreementCheckmark {
     background-color: #28a745;
     border-color: #28a745;
 }
@@ -567,7 +567,7 @@ body[data-platform="darwin"] #frameContentDarwin {
     transform: rotate(45deg);
 }
 
-.agreementCheckboxContainer input:checked ~ .agreementCheckmark:after {
+.agreementCheckboxContainer input:checked~.agreementCheckmark:after {
     display: block;
 }
 
@@ -4975,4 +4975,95 @@ input:checked+.toggleSwitchSlider:before {
 #settingsP2PRateLimit {
     width: 100px;
     padding: 5px 10px;
+}
+
+#background-video {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -100;
+    object-fit: cover;
+    object-position: center;
+    will-change: transform;
+    pointer-events: none;
+    background-color: #000;
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-position: center top;
+    display: none;
+    opacity: 0;
+    filter: brightness(0.8);
+}
+
+@keyframes backgroundFadeIn {
+    0% {
+        opacity: 0;
+        filter: blur(15px) brightness(0.3);
+        transform: scale(1.05);
+    }
+
+    100% {
+        opacity: 1;
+        filter: blur(0px) brightness(0.8);
+        transform: scale(1);
+    }
+}
+
+body.main-ui-active #background-video {
+    display: block;
+    animation: backgroundFadeIn 3s ease-out forwards;
+}
+
+#video-controls-overlay {
+    position: fixed;
+    bottom: 90px;
+    left: 15px;
+    z-index: 9999;
+    transition: opacity 0.3s ease;
+    display: none;
+}
+
+body.main-ui-active #video-controls-overlay {
+    display: block;
+}
+
+#background-video-toggle {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.6);
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(4px);
+    padding: 0;
+    outline: none;
+}
+
+#background-video-toggle:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    transform: scale(1.05);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+#background-video-toggle:active {
+    transform: scale(0.95);
+}
+
+#background-video-toggle svg {
+    width: 16px;
+    height: 16px;
+}
+
+body.main-ui-active #background-fallback-img {
+    animation: backgroundFadeIn 3s ease-out forwards;
+    opacity: 0;
+    filter: brightness(0.7);
 }

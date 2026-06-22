@@ -42,9 +42,7 @@
     <link type="text/css" rel="stylesheet" href="./assets/css/launcher.css">
     <style>
         body {
-            /*background: url('assets/images/backgrounds/.jpg') no-repeat center center fixed;*/
             transition: background-image 1s ease;
-            background-image: url('data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD//gA+Q1JFQVRPUjogZ2QtanBlZyB2MS4wICh1c2luZyBJSkcgSlBFRyB2ODApLCBkZWZhdWx0IHF1YWxpdHkK/9sAQwAIBgYHBgUIBwcHCQkICgwUDQwLCwwZEhMPFB0aHx4dGhwcICQuJyAiLCMcHCg3KSwwMTQ0NB8nOT04MjwuMzQy/9sAQwEJCQkMCwwYDQ0YMiEcITIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIy/8AAEQgAPwBwAwEiAAIRAQMRAf/EAB8AAAEFAQEBAQEBAAAAAAAAAAABAgMEBQYHCAkKC//EALUQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+v/EAB8BAAMBAQEBAQEBAQEAAAAAAAABAgMEBQYHCAkKC//EALURAAIBAgQEAwQHBQQEAAECdwABAgMRBAUhMQYSQVEHYXETIjKBCBRCkaGxwQkjM1LwFWJy0QoWJDThJfEXGBkaJicoKSo1Njc4OTpDREVGR0hJSlNUVVZXWFlaY2RlZmdoaWpzdHV2d3h5eoKDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uLj5OXm5+jp6vLz9PX29/j5+v/aAAwDAQACEQMRAD8A8VooopDCiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKAP/9k=');
             background-size: cover;
             -webkit-user-select: none;
         }
@@ -100,7 +98,22 @@
     </style>
 </head>
 
-<body bkid="">
+<body data-platform="win32">
+    <div id="background-fallback-img"
+        style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-image: url('assets/images/backgrounds/background_fallback.jpg'); background-size: cover; background-position: center; z-index: -110; display: none;">
+    </div>
+    <video id="background-video" preload="auto" loop muted playsinline disablepictureinpicture disableremoteplayback
+        poster="assets/images/backgrounds/background_fallback.jpg"></video>
+    <div id="video-controls-overlay">
+        <button id="background-video-toggle" title="Пауза/Воспроизведение фона">
+            <svg id="vid-pause-icon" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M14,19H18V5H14M6,19H10V5H6V19Z" />
+            </svg>
+            <svg id="vid-play-icon" viewBox="0 0 24 24" style="display: none;">
+                <path fill="currentColor" d="M8,5.14V19.14L19,12.14L8,5.14Z" />
+            </svg>
+        </button>
+    </div>
     <script>
         // Emergency Platform Stabilization - Runs before heavy CSS/JS
         if (typeof HeliosAPI !== 'undefined' && HeliosAPI.system) {

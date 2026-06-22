@@ -155,6 +155,9 @@ const launchButton = document.getElementById('launch_button')
 if (launchButton) {
     launchButton.addEventListener('click', async e => {
         loggerLanding.info('Launching game..')
+        const vid = document.getElementById('background-video')
+        if (vid) vid.pause()
+
         try {
             const distro = await DistroAPI.getDistribution()
             if (distro == null) {
@@ -162,6 +165,7 @@ if (launchButton) {
                     Lang.queryJS('landing.launch.failureTitle') || 'Ошибка при запуске', 
                     Lang.queryJS('landing.launch.noDistributionIndex') || 'Не удалось получить список файлов игры. Проверьте подключение к интернету.'
                 )
+                if (vid && !window.ConfigManager.getBackgroundVideoPaused()) vid.play().catch(() => {})
                 return
             }
             const serverIdToLaunch = window.CURRENT_SELECTED_SERVER_ID || window.ConfigManager.getSelectedServer();
@@ -173,6 +177,7 @@ if (launchButton) {
                     Lang.queryJS('landing.launch.failureTitle') || 'Ошибка при запуске', 
                     Lang.queryJS('landing.launch.noServerSelected') || 'Сервер не выбран. Пожалуйста, выберите сервер перед запуском игры.'
                 )
+                if (vid && !window.ConfigManager.getBackgroundVideoPaused()) vid.play().catch(() => {})
                 return
             }
             const jExe = window.ConfigManager.getJavaExecutable(serverIdToLaunch)
@@ -213,6 +218,7 @@ if (launchButton) {
                 Analytics.captureException(err)
             }
             showLaunchFailure(Lang.queryJS('landing.launch.failureTitle'), Lang.queryJS('landing.launch.failureText'))
+            if (vid && !window.ConfigManager.getBackgroundVideoPaused()) vid.play().catch(() => {})
         }
     })
 }
