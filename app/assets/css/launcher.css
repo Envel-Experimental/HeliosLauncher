@@ -5069,3 +5069,10 @@ body.main-ui-active #background-fallback-img {
     filter: brightness(0.7);
     border-radius: 8px;
 }
+#main:has(#agreementContainer:not([style*="display: none"])) ~ #background-video,
+#main:has(#agreementContainer:not([style*="display: none"])) ~ #video-controls-overlay,
+#main:has(#p2pAgreementContainer:not([style*="display: none"])) ~ #background-video,
+#main:has(#p2pAgreementContainer:not([style*="display: none"])) ~ #video-controls-overlay {
+    display: none !important;
+}
+

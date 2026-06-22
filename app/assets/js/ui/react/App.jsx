@@ -2,6 +2,7 @@ import React from 'react';
 import UserProfile from './components/UserProfile';
 import EventBanner from './components/EventBanner';
 import BottomBar from './components/BottomBar';
+import LoginScreen from './components/LoginScreen';
 
 const App = () => {
   return (
@@ -80,6 +81,7 @@ const App = () => {
       <footer className="react-ui-footer">
         <BottomBar />
       </footer>
+      <LoginScreen />
     </div>
   );
 };

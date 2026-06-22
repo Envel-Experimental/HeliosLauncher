@@ -57,6 +57,16 @@ const EventBanner = () => {
     fetchRemoteEvent();
   }, []);
 
+  useEffect(() => {
+    const isVisible = eventData.show !== false && !isHiddenByUser;
+    if (isVisible) {
+      document.body.classList.add('news-blur');
+    } else {
+      document.body.classList.remove('news-blur');
+    }
+    return () => document.body.classList.remove('news-blur');
+  }, [eventData.show, isHiddenByUser]);
+
   const handleClick = () => {
     if (eventData.link && window.HeliosAPI?.shell) {
       window.HeliosAPI.shell.openExternal(eventData.link);
@@ -75,7 +85,7 @@ const EventBanner = () => {
   }
 
   return (
-    <div className="event-banner-wrapper react-glass" onClick={handleClick} style={{ position: 'relative' }}>
+    <div className="event-banner-wrapper" onClick={handleClick} style={{ position: 'relative' }}>
       <button 
         onClick={handleHide}
         title="Скрыть новость"

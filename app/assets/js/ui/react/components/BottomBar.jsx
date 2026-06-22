@@ -410,7 +410,7 @@ const BottomBar = () => {
               }}
             >
               {[
-                { name: 'Сайт Фоксфорд', url: 'https://foxford.ru/' },
+                { name: 'Сайт Фоксфорд', url: 'https://foxford.ru/programming' },
                 { name: 'Руководство по курсу', url: 'https://wiki.f-launcher.ru/' },
                 { name: 'Сайт лаунчера', url: 'https://f-launcher.ru/' },
                 { name: 'Поддержка', url: 'https://t.me/+1THtTcDneY9iYTVi' }

@@ -98,3 +98,7 @@ const processHandler = {
 window.process = new Proxy(baseProcess, processHandler)
 
 console.log('Flauncher: Global Dependencies Injected (New Structure)')
+
+// Dummy function to fix ReferenceError: loginCancelEnabled is not defined
+window.loginCancelEnabled = (val) => { console.log('loginCancelEnabled called:', val) };
+
