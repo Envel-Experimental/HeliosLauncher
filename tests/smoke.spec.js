@@ -130,6 +130,13 @@ test.describe('Application Startup Smoke Test', () => {
                     await checkbox.check();
                     await window.waitForTimeout(200);
                 }
+                if (await checkbox.isChecked() && await button.isDisabled()) {
+                    console.log('Checkbox is checked but button is disabled. Toggling checkbox...');
+                    await checkbox.uncheck();
+                    await window.waitForTimeout(200);
+                    await checkbox.check();
+                    await window.waitForTimeout(200);
+                }
                 if (await button.isVisible() && !(await button.isDisabled())) {
                     await button.click();
                     await window.waitForTimeout(500);
