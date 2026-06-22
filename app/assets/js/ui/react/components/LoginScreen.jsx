@@ -14,13 +14,36 @@ const LoginScreen = () => {
       // but in React we just handle it via the cancel button directly.
     };
 
-    // Hide video controls while login screen is active
+    // Hide video controls only while login screen container is visible
     const videoControls = document.getElementById('video-controls-overlay');
-    if (videoControls) {
-      videoControls.style.display = 'none';
+    const loginContainer = document.getElementById('loginContainer');
+    
+    let observer = null;
+    if (loginContainer) {
+      const checkVisibility = () => {
+        if (loginContainer.style.display !== 'none') {
+          if (videoControls) videoControls.style.display = 'none';
+        } else {
+          if (videoControls) videoControls.style.display = '';
+        }
+      };
+
+      checkVisibility();
+
+      observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+            checkVisibility();
+          }
+        });
+      });
+      observer.observe(loginContainer, { attributes: true, attributeFilter: ['style'] });
     }
 
     return () => {
+      if (observer) {
+        observer.disconnect();
+      }
       if (videoControls) {
         videoControls.style.display = '';
       }
