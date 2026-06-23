@@ -126,18 +126,13 @@ test.describe('Application Startup Smoke Test', () => {
                 console.log('Agreement screen detected. Accepting...');
                 const checkbox = window.locator('#agreementCheckbox');
                 const button = window.locator('#agreementButton');
-                if (await checkbox.isVisible() && !(await checkbox.isChecked())) {
-                    await checkbox.check();
-                    await window.waitForTimeout(200);
-                }
-                if (await checkbox.isChecked() && await button.isDisabled()) {
-                    console.log('Checkbox is checked but button is disabled. Toggling checkbox...');
-                    await checkbox.uncheck();
-                    await window.waitForTimeout(200);
-                    await checkbox.check();
+                if (!(await checkbox.isChecked())) {
+                    console.log('Checking agreement checkbox...');
+                    await checkbox.check({ force: true });
                     await window.waitForTimeout(200);
                 }
                 if (await button.isVisible() && !(await button.isDisabled())) {
+                    console.log('Clicking agreement button...');
                     await button.click();
                     await window.waitForTimeout(500);
                 }
