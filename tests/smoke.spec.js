@@ -128,7 +128,7 @@ test.describe('Application Startup Smoke Test', () => {
                 const button = window.locator('#agreementButton');
                 if (!(await checkbox.isChecked())) {
                     console.log('Checking agreement checkbox...');
-                    await checkbox.check({ force: true });
+                    await window.locator('.agreementCheckboxContainer').click();
                     await window.waitForTimeout(200);
                 }
                 if (await button.isVisible() && !(await button.isDisabled())) {

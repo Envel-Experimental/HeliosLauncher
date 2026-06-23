@@ -21,6 +21,10 @@ const LoginScreen = () => {
       // but in React we just handle it via the cancel button directly.
     };
 
+    window.loginOptionsCancelEnabled = (enabled) => {
+      // Compatibility no-op
+    };
+
     // Hide video controls only while login screen container is visible
     const videoControls = document.getElementById('video-controls-overlay');
     const loginContainer = document.getElementById('loginContainer');

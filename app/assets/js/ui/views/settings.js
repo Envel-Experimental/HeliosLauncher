@@ -1844,6 +1844,10 @@ export function setShadersOptions(arr, selected) {
 }
 
 export async function saveShaderpackSettings() {
+    if (!CACHE_SETTINGS_INSTANCE_DIR) {
+        console.warn('[Settings] saveShaderpackSettings: CACHE_SETTINGS_INSTANCE_DIR is undefined, skipping.')
+        return
+    }
     let sel = 'OFF'
     const optionsContainer = document.getElementById('settingsShadersOptions')
     if (optionsContainer) {

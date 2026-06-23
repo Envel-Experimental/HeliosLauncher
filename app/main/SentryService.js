@@ -100,8 +100,17 @@ class SentryService {
 
     captureException(error) {
         if (typeof error === 'string') {
-            if (error.includes('\n') && error.includes('at ')) {
-                const firstLine = error.split('\n')[0]
+            let messagePart = error
+            let logTailPart = ''
+            
+            if (error.includes('\n\n--- Log Tail ---\n')) {
+                const parts = error.split('\n\n--- Log Tail ---\n')
+                messagePart = parts[0]
+                logTailPart = parts[1]
+            }
+
+            if (messagePart.includes('\n') && messagePart.includes('at ')) {
+                const firstLine = messagePart.split('\n')[0]
                 const msg = firstLine.replace(/^[a-zA-Z_$][a-zA-Z0-9_$]*Error:\s*/, '')
                 const reconstructedError = new Error(msg)
                 reconstructedError.stack = error
@@ -114,7 +123,11 @@ class SentryService {
                 Sentry.captureException(reconstructedError)
                 return
             } else {
-                Sentry.captureException(new Error(error))
+                const reconstructedError = new Error(messagePart)
+                if (logTailPart) {
+                    reconstructedError.stack = error
+                }
+                Sentry.captureException(reconstructedError)
                 return
             }
         }
