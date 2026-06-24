@@ -96,7 +96,8 @@ contextBridge.exposeInMainWorld('HeliosAPI', {
     shell: {
         openExternal: (url) => ipcRenderer.send('app:open-url', url),
         openPath: (path) => ipcRenderer.invoke('shell:openPath', path),
-        trashItem: (path) => ipcRenderer.invoke('shell:trashItem', path)
+        trashItem: (path) => ipcRenderer.invoke('shell:trashItem', path),
+        beep: () => ipcRenderer.send('shell:beep')
     },
     // Launcher Logic
     launcher: {

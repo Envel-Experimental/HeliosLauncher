@@ -64,6 +64,17 @@ window.updateSelectedServer = updateSelectedServer
 export function switchView(current, next, currentFadeTime = 500, nextFadeTime = 500, onCurrentFade = () => { }, onNextFade = () => { }) {
     console.log(`[UIBinder] Switching view: ${current} -> ${next}`)
     currentView = next
+
+    // Pause video when entering settings to save resources, resume when returning to landing
+    const vid = document.getElementById('background-video')
+    if (next === VIEWS.settings) {
+        if (vid) vid.pause()
+    } else if (next === VIEWS.landing) {
+        if (vid && !ConfigManager.getBackgroundVideoPaused()) {
+            vid.play().catch(() => {})
+        }
+    }
+
     fadeOut(document.querySelector(current), currentFadeTime, async () => {
         try {
             await onCurrentFade()

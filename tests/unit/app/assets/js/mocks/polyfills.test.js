@@ -179,4 +179,35 @@ describe('Renderer Polyfills Verification', () => {
             expect(res).toBe(true)
         })
     })
+
+    describe('Electron Mock', () => {
+        let originalHeliosAPI
+
+        beforeEach(() => {
+            if (!global.window) {
+                global.window = {}
+            }
+            originalHeliosAPI = global.window.HeliosAPI
+            global.window.HeliosAPI = {
+                shell: {
+                    beep: jest.fn()
+                }
+            }
+            jest.resetModules()
+        })
+
+        afterEach(() => {
+            if (originalHeliosAPI !== undefined) {
+                global.window.HeliosAPI = originalHeliosAPI
+            } else {
+                delete global.window.HeliosAPI
+            }
+        })
+
+        test('shell.beep should trigger window.HeliosAPI.shell.beep', () => {
+            const electronMock = require('../../../../../../app/assets/js/mocks/electron')
+            electronMock.shell.beep()
+            expect(global.window.HeliosAPI.shell.beep).toHaveBeenCalled()
+        })
+    })
 })

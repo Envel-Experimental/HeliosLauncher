@@ -40,7 +40,8 @@ if (typeof window !== 'undefined') {
   window.HeliosAPI = {
     shell: {
       openPath: jest.fn(),
-      openExternal: jest.fn()
+      openExternal: jest.fn(),
+      beep: jest.fn()
     },
     ipc: {
       invoke: jest.fn(),
@@ -62,7 +63,8 @@ jest.mock('electron', () => {
       getAppPath: jest.fn(() => path.join(os.tmpdir(), 'mock-app-path')),
       getPath: jest.fn(() => mockPath),
       getVersion: jest.fn(() => '1.0.0'),
-      isPackaged: false
+      isPackaged: false,
+      isReady: jest.fn().mockReturnValue(false)
     },
     ipcMain: {
       on: jest.fn(),
@@ -75,7 +77,8 @@ jest.mock('electron', () => {
       invoke: jest.fn()
     },
     shell: {
-      openExternal: jest.fn()
+      openExternal: jest.fn(),
+      beep: jest.fn()
     }
   };
 }, { virtual: true });

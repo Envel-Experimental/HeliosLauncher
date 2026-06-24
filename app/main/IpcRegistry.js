@@ -341,6 +341,11 @@ class IpcRegistry {
             }
         })
 
+        ipcMain.on('shell:beep', () => {
+            shell.beep()
+        })
+
+
         ipcMain.handle('mirrors:fetchHealth', async (event, url) => {
             // SSRF Protection: only allow HTTPS to external hosts
             if (typeof url !== 'string') return { ok: false, error: 'Invalid URL', latency: 9999 }

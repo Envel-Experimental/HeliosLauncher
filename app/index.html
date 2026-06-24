@@ -103,16 +103,6 @@
         style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-image: url('assets/images/backgrounds/background_fallback.jpg'); background-size: cover; background-position: center; z-index: -110; display: none;">
     </div>
     <video id="background-video" preload="auto" loop muted playsinline disablepictureinpicture disableremoteplayback></video>
-    <div id="video-controls-overlay">
-        <button id="background-video-toggle" title="Пауза/Воспроизведение фона">
-            <svg id="vid-pause-icon" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M14,19H18V5H14M6,19H10V5H6V19Z" />
-            </svg>
-            <svg id="vid-play-icon" viewBox="0 0 24 24" style="display: none;">
-                <path fill="currentColor" d="M8,5.14V19.14L19,12.14L8,5.14Z" />
-            </svg>
-        </button>
-    </div>
     <script>
         // Emergency Platform Stabilization - Runs before heavy CSS/JS
         if (typeof HeliosAPI !== 'undefined' && HeliosAPI.system) {
@@ -1030,6 +1020,16 @@
                 <span id="loadingStatusText" style="display: none;"></span>
             </div>
         </div>
+    </div>
+    <div id="video-controls-overlay">
+        <button id="background-video-toggle" title="Пауза/Воспроизведение фона">
+            <svg id="vid-pause-icon" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M14,19H18V5H14M6,19H10V5H6V19Z" />
+            </svg>
+            <svg id="vid-play-icon" viewBox="0 0 24 24" style="display: none;">
+                <path fill="currentColor" d="M8,5.14V19.14L19,12.14L8,5.14Z" />
+            </svg>
+        </button>
     </div>
     <script>console.log('[Failsafe] Attempting to load renderer.bundle.js...')</script>
     <script src="dist/renderer.bundle.js?t=1"

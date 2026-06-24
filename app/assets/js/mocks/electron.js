@@ -11,7 +11,8 @@ module.exports = {
         return {
             openExternal: (url) => window.HeliosAPI?.shell?.openExternal(url),
             openPath: (path) => window.HeliosAPI?.shell?.openPath(path),
-            trashItem: (path) => window.HeliosAPI?.shell?.trashItem(path)
+            trashItem: (path) => window.HeliosAPI?.shell?.trashItem(path),
+            beep: () => window.HeliosAPI?.shell?.beep()
         }
     },
     get webFrame() {

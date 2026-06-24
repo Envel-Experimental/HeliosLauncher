@@ -5025,7 +5025,7 @@ body.main-ui-active #background-video {
     position: fixed;
     bottom: 90px;
     left: 15px;
-    z-index: 9999;
+    z-index: 11;
     transition: opacity 0.3s ease;
     display: none;
 }
@@ -5075,8 +5075,14 @@ body.main-ui-active #background-fallback-img {
 }
 
 #main:has(#agreementContainer:not([style*="display: none"]))~#background-video,
-#main:has(#agreementContainer:not([style*="display: none"]))~#video-controls-overlay,
-#main:has(#p2pAgreementContainer:not([style*="display: none"]))~#background-video,
-#main:has(#p2pAgreementContainer:not([style*="display: none"]))~#video-controls-overlay {
+#main:has(#p2pAgreementContainer:not([style*="display: none"]))~#background-video {
+    display: none !important;
+}
+
+#main[overlay] ~ #video-controls-overlay,
+#overlayContainer:not([style*="display: none"]) ~ #video-controls-overlay,
+#main:has(#settingsContainer:not([style*="display: none"])) ~ #video-controls-overlay,
+#main:has(#agreementContainer:not([style*="display: none"])) ~ #video-controls-overlay,
+#main:has(#p2pAgreementContainer:not([style*="display: none"])) ~ #video-controls-overlay {
     display: none !important;
 }
