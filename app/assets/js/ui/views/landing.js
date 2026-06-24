@@ -560,7 +560,7 @@ async function downloadJava(effectiveJavaOptions, launchAfter = true) {
     } catch (err) {
         ipcRenderer.removeListener('dl:progress', progressListener)
         loggerLaunchSuite.error('Error downloading Java via Main Process.', err)
-        showLaunchFailure('Java Download Failed', err.message || 'Check console codes.')
+        showLaunchFailure(Lang.queryJS('landing.systemScan.javaDownloadFailureTitle'), `${Lang.queryJS('landing.systemScan.javaDownloadFailureText')}\n\n(${err.message})`)
     }
 }
 
