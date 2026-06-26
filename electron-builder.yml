@@ -9,8 +9,8 @@ compression: 'maximum'
 
 asarUnpack:
   - "**/@sentry-internal/node-cpu-profiler/lib/*.node"
-  - "**/sodium-native/**"
-  - "**/udx-native/**"
+  - "**/sodium-native/prebuilds/**"
+  - "**/udx-native/prebuilds/**"
 
 files:
   - 'index.js'
