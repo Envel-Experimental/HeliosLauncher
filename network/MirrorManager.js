@@ -154,6 +154,9 @@ class MirrorManager {
     }
 
     getSortedMirrors() {
+        if (!this.initialized && this.mirrors.length === 0) {
+            return require('./config').MOJANG_MIRRORS || []
+        }
         return this.mirrors.map(m => m.config)
     }
 
