@@ -4,11 +4,13 @@ artifactName: '${productName}-setup-${version}-${arch}.${ext}'
 
 copyright: 'Copyright © 2018-2026 Nikita Gutsenkov'
 
-asar: true
+asar:
+  smartUnpack: false
 compression: 'maximum'
 
 asarUnpack:
-  - "**/@sentry-internal/node-cpu-profiler/lib/*.node"
+  - "**/*.node"
+  - "**/*.bare"
   - "**/sodium-native/prebuilds/**"
   - "**/udx-native/prebuilds/**"
 
