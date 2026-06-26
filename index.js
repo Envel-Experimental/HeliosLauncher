@@ -1,27 +1,4 @@
-// Patch Module._resolveFilename for unpacked asar modules to prevent Node.js package_json_reader UNC path bugs on Windows
-const Module = require('module')
-const path = require('path')
-const { app } = require('electron')
 
-const originalResolveFilename = Module._resolveFilename
-const unpackedModules = [
-    'udx-native',
-    'sodium-native',
-    '@sentry-internal/node-cpu-profiler'
-]
-
-Module._resolveFilename = function (request, parent, isMain, options) {
-    const resolved = originalResolveFilename.apply(this, arguments)
-    if (app.isPackaged) {
-        const normalized = resolved.replace(/\\/g, '/')
-        for (const mod of unpackedModules) {
-            if (normalized.includes('app.asar/node_modules/' + mod)) {
-                return resolved.replace('app.asar', 'app.asar.unpacked')
-            }
-        }
-    }
-    return resolved
-}
 
 // 1. SENTRY INITIALIZATION (Must be first)
 const SentryService = require('./app/main/SentryService')
@@ -29,7 +6,7 @@ SentryService.init()
 
 
 console.log('[Main] Application entry point reached (index.js)')
-const { protocol, session, powerMonitor } = require('electron')
+const { app, protocol, session, powerMonitor } = require('electron')
 const WindowManager = require('./app/main/WindowManager')
 const IpcRegistry = require('./app/main/IpcRegistry')
 const ConfigManager = require('./app/assets/js/core/configmanager')
