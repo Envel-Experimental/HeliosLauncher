@@ -197,7 +197,11 @@ async function extractZip(archivePath, destDir, onEntry) {
 
 async function extractTarGz(archivePath, onEntry) {
     const destDir = path.dirname(archivePath);
-    await runCommand('tar', ['-xzf', archivePath, '-C', destDir]);
+    const args = ['-xzf', archivePath, '-C', destDir];
+    if (process.platform === 'darwin') {
+        args.push('--no-mac-metadata', '--no-xattrs');
+    }
+    await runCommand('tar', args);
 
     if (onEntry) {
         const { stdout } = await runCommand('tar', ['-tf', archivePath]);
