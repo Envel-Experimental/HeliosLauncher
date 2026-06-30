@@ -162,6 +162,14 @@ class ProcessBuilder {
             await crashHandler.handleExit(code)
         })
 
+        child.on('error', (err) => {
+            logger.error('Failed to start Minecraft process:', err)
+            // Emit an error string into the log buffer so the UI crash handler can see it
+            if (this.logBuffer) {
+                this.logBuffer.push(`[Process Error]: Failed to start Java process: ${err.message}`)
+            }
+        })
+
         return child
     }
 

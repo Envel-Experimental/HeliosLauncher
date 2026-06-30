@@ -695,6 +695,10 @@ async function dlAsync(login = true) {
             }
         }
         loggerLanding.info('Game launch sequence started..')
+        
+        const javaPathToUse = window.ConfigManager.getJavaExecutable(ConfigManager.getSelectedServer())
+        console.log(`[Landing] Launch initialization. Selected Java: ${javaPathToUse}`)
+        
         setLaunchDetails(Lang.queryJS('landing.dlAsync.launchingGame'))
 
         // Attach listeners for logs from Main
