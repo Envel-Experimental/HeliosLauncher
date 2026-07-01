@@ -2548,6 +2548,7 @@ export async function prepareSettings(first = false) {
 
 let isResetting = false
 window.isResetting = false
+window.prepareSettings = prepareSettings
 
 /**
  * Bind Factory Reset Buttons

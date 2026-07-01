@@ -179,7 +179,10 @@ const BottomBar = () => {
     }
   };
 
-  const handleSettingsClick = () => {
+  const handleSettingsClick = async () => {
+    if (typeof window.prepareSettings === 'function') {
+      await window.prepareSettings();
+    }
     if (window.switchView && window.VIEWS) {
       window.switchView(window.getCurrentView(), window.VIEWS.settings);
     }
