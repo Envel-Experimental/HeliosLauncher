@@ -46,6 +46,30 @@ class SentryService {
                         }
                     }
 
+                    // Sanitize huge error messages to prevent them from becoming massive titles
+                    if (event.exception && event.exception.values && event.exception.values.length > 0) {
+                        for (let ex of event.exception.values) {
+                            if (ex.value && typeof ex.value === 'string') {
+                                let cleanValue = ex.value
+                                if (cleanValue.includes('Require stack:')) cleanValue = cleanValue.split('Require stack:')[0]
+                                if (cleanValue.includes('--- Log Tail ---')) cleanValue = cleanValue.split('--- Log Tail ---')[0]
+                                if (cleanValue.includes('\n')) cleanValue = cleanValue.split('\n')[0]
+                                cleanValue = cleanValue.trim()
+                                if (cleanValue.length > 150) cleanValue = cleanValue.substring(0, 150) + '...'
+                                ex.value = cleanValue
+                            }
+                        }
+                    }
+                    if (event.message && typeof event.message === 'string') {
+                        let cleanMessage = event.message
+                        if (cleanMessage.includes('Require stack:')) cleanMessage = cleanMessage.split('Require stack:')[0]
+                        if (cleanMessage.includes('--- Log Tail ---')) cleanMessage = cleanMessage.split('--- Log Tail ---')[0]
+                        if (cleanMessage.includes('\n')) cleanMessage = cleanMessage.split('\n')[0]
+                        cleanMessage = cleanMessage.trim()
+                        if (cleanMessage.length > 150) cleanMessage = cleanMessage.substring(0, 150) + '...'
+                        event.message = cleanMessage
+                    }
+
                     // Duplicate Sentry events to FortenLog (Client DSN)
                     try {
                         const eventStr = JSON.stringify(event)
